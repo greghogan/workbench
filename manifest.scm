@@ -1,0 +1,21 @@
+;; Development tools for the Workbench source checkout.
+(specifications->manifest
+ '(
+   "bash"
+   "cargo-nextest"
+   "coreutils"
+   "curl"
+   "direnv"
+   "findutils"
+   "gawk"
+   "gcc-toolchain"
+   "git"
+   "nss-certs"
+   "node"
+   "ripgrep"
+   "ruff"
+   "rust"
+   "rust:cargo"
+   "rust:tools"
+   "shellcheck"
+   "shfmt"))

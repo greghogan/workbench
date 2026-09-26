@@ -1,0 +1,29 @@
+{
+  "name": "workbench-typescript-reference",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "node node_modules/@typescript/native/bin/tsc",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check src test package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json",
+    "lint": "node node_modules/eslint/bin/eslint.js src test --max-warnings 0",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.9",
+    "typescript-eslint": "8.70.1",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vitest": "5.0.1"
+  }
+}

@@ -1,0 +1,81 @@
+schema_version = 1
+
+[[language]]
+id = "typescript"
+name = "TypeScript"
+summary = "strict TypeScript 7, locked pnpm dependencies, typed ESLint, Prettier, and Vitest"
+reference = "examples/languages/typescript"
+manifests = ["tsconfig.json"]
+
+[[language.check]]
+role = "setup"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "install", "--frozen-lockfile"]
+heavy = true
+
+[[language.check]]
+role = "format"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "format:check"]
+
+[[language.check]]
+role = "lint"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "lint"]
+
+[[language.check]]
+role = "type"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "typecheck"]
+heavy = true
+
+[[language.check]]
+role = "test"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "test"]
+heavy = true
+
+[[language]]
+id = "rust"
+name = "Rust"
+summary = "rustfmt, strict Clippy, Nextest, doctests for libraries, and portable cross-built releases"
+reference = "examples/languages/rust"
+manifests = ["Cargo.toml"]
+
+[[language.check]]
+role = "format"
+command = ["cargo", "fmt", "--all", "--check"]
+
+[[language.check]]
+role = "lint"
+command = ["cargo", "clippy", "--all-targets", "--locked", "--", "-D", "warnings"]
+heavy = true
+
+[[language.check]]
+role = "test"
+command = ["cargo", "nextest", "run", "--all-targets", "--locked", "--no-fail-fast"]
+heavy = true
+
+[[language.check]]
+role = "docs"
+command = ["cargo", "test", "--doc", "--locked"]
+heavy = true
+
+[[language]]
+id = "python"
+name = "Python"
+summary = "locked uv environments, Ruff formatting and linting, strict mypy, and unittest"
+reference = "examples/languages/python"
+manifests = ["pyproject.toml", "setup.py", "setup.cfg"]
+
+[[language.check]]
+role = "format"
+command = ["uv", "run", "--locked", "ruff", "format", "--check", "."]
+
+[[language.check]]
+role = "lint"
+command = ["uv", "run", "--locked", "ruff", "check", "."]
+
+[[language.check]]
+role = "type"
+command = ["uv", "run", "--locked", "mypy", "src", "tests"]
+
+[[language.check]]
+role = "test"
+command = ["uv", "run", "--locked", "python", "-m", "unittest", "discover", "-s", "tests"]
+heavy = true

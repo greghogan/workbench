@@ -1,0 +1,90 @@
+schema_version = 1
+
+[markdown]
+wrap_width = 120
+
+[checks]
+environment = "none"
+nix_docker_image = "nixos/nix@sha256:0d9c872db1ca2f3eaa4a095baa57ed9b72c09d53a0905a4428813f61f0ea98db"
+
+[compatibility]
+required = false
+
+[commit]
+style = "conventional"
+subject_width = 50
+body_width = 72
+
+[citations]
+library_dir = "library/citations"
+
+[[check]]
+name = "Locked pnpm dependencies"
+role = "setup"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "install", "--frozen-lockfile"]
+heavy = true
+
+[[check]]
+name = "TypeScript format"
+role = "format"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "format:check"]
+
+[[check]]
+name = "TypeScript lint"
+role = "lint"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "lint"]
+heavy = true
+
+[[check]]
+name = "TypeScript types"
+role = "type"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "typecheck"]
+heavy = true
+
+[[check]]
+name = "Bundle parity"
+role = "lint"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "bundle:check"]
+heavy = true
+
+[[check]]
+name = "Workbench validation"
+role = "lint"
+project = "workbench"
+command = ["bin/workbench", "validate", "."]
+
+[[check]]
+name = "TypeScript tests"
+role = "test"
+project = "workbench"
+command = ["npm", "exec", "--yes", "--package=pnpm@12.6.0", "--", "pnpm", "run", "test"]
+heavy = true
+
+[[check]]
+name = "Shell format"
+role = "format"
+project = "workbench"
+command = ["scripts/check-shell", "format"]
+
+[[check]]
+name = "Shell lint"
+role = "lint"
+project = "workbench"
+command = ["scripts/check-shell", "lint"]
+
+[[check]]
+name = "Language references"
+role = "test"
+project = "workbench"
+command = ["bin/workbench", "language", "check", "--all"]
+heavy = true
+
+[[documentation]]
+project = "workbench"
+source_map = "workbench/source-map.md"
+source_paths = ["ts", "tests-ts", "scripts", "bin/workbench", ".githooks", "examples/languages", "skills", "bundle", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "eslint.config.mjs", "vitest.config.mjs", ".prettierrc.json", "Makefile", "channels.scm", "manifest.scm"]

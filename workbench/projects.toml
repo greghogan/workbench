@@ -1,0 +1,9 @@
+schema_version = 1
+
+[[project]]
+id = "workbench"
+path = "."
+
+[[language_root]]
+language = "typescript"
+path = "."

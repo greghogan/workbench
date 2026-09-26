@@ -1,0 +1,39 @@
+{
+  "name": "@workbench/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "description": "Shared agentic software-development context, records, and change gates",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "pnpm run typecheck && node scripts/build-bundle.mjs",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check ts tests-ts scripts/*.mjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write ts tests-ts scripts/*.mjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json",
+    "lint": "node node_modules/eslint/bin/eslint.js ts tests-ts scripts --max-warnings 0",
+    "bundle:check": "node scripts/check-bundle.mjs",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "check": "pnpm run typecheck && pnpm run format:check && pnpm run lint && pnpm run bundle:check && pnpm run test"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "smol-toml": "^1.9.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "esbuild": "^0.28.2",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "typescript-eslint": "8.70.1",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vitest": "5.0.1"
+  }
+}

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root=$(git rev-parse --show-toplevel)
+hook_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+staged_snapshot=$(mktemp -d)
+trap 'rm -rf -- "$staged_snapshot"' EXIT
+
+git -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+git -C "$repository_root" diff --cached --check
+
+if rg -n '^(<<<<<<<|=======|>>>>>>>)( |$)' "$staged_snapshot"; then
+    echo 'workbench: staged content contains an unresolved merge marker' >&2
+    exit 1
+fi
+if rg -n --hidden --glob '!.git/**' -- '-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----' "$staged_snapshot"; then
+    echo 'workbench: staged content appears to contain a private key' >&2
+    exit 1
+fi
+if [[ -d "$repository_root/.workbench" && ! -f "$staged_snapshot/.workbench/bundle/main.cjs" ]]; then
+    if [[ -d "$staged_snapshot/.workbench" ]]; then
+        rmdir -- "$staged_snapshot/.workbench"
+    fi
+    ln -s -- "$repository_root/.workbench" "$staged_snapshot/.workbench"
+fi
+"$hook_directory/../bin/workbench" validate "$staged_snapshot"
+
+"$hook_directory/../bin/workbench" checks run "$staged_snapshot"
