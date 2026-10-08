@@ -1,0 +1,10 @@
+[store]
+dir = "coverage/nextest"
+
+[profile.default]
+# Advisory only: slow machines and instrumented runs must still finish.
+slow-timeout = "2s"
+
+[profile.default.junit]
+path = "tests.xml"
+store-success-output = true

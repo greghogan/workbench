@@ -1,0 +1,32 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+# Build outputs and reports across language roots
+build/
+**/coverage/*
+!**/coverage/coverage-summary.json
+dist/
+htmlcov/
+target/
+
+# Node.js / TypeScript dependencies and compiler state; node_modules may be a link
+*.tsbuildinfo
+.pnpm-store/
+node_modules
+
+# Python dependencies and caches; virtual environments may be links
+*.egg-info/
+*.pyc
+.coverage
+.coverage.*
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv
+.venv.workbench-backup
+__pycache__/
+
+# LLVM instrumentation
+*.profdata
+*.profraw

@@ -1,0 +1,32 @@
+# Project choices. Commands and source-map wiring live in automation.toml.
+schema_version = 1
+
+[bundle]
+compression = "brotli"
+
+[markdown]
+wrap_width = 120
+
+[checks]
+environment = "native"
+nix_docker_image = "nixos/nix@sha256:0d9c872db1ca2f3eaa4a095baa57ed9b72c09d53a0905a4428813f61f0ea98db"
+
+[ci]
+operating_systems = [ "linux", "macos", "windows" ]
+architectures = { linux = [ "x64", "arm64" ], macos = [ "arm64" ], windows = [ "x64" ] }
+environments = [ "guix", "nix-docker", "devcontainer" ]
+
+[compatibility]
+required = false
+
+[commit]
+style = "conventional"
+subject_width = 50
+body_width = 72
+
+[citations]
+library_dir = "library/citations"
+
+# Accepted SPDX expressions for dependencies bundled in distributed executables.
+[licenses]
+allow = [ "MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "0BSD" ]

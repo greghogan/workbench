@@ -1,0 +1,8 @@
+{
+  "coverage": {
+    "branches": 80,
+    "functions": 100,
+    "lines": 90
+  },
+  "slow_test_seconds": 2
+}

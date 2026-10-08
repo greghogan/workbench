@@ -1,0 +1,450 @@
+schema_version = 1
+
+[[language]]
+id = "typescript"
+name = "TypeScript"
+summary = "strict TypeScript 7, locked pnpm dependencies, typed ESLint, Prettier, and Vitest"
+reference = "examples/languages/typescript"
+manifests = [ "tsconfig.json" ]
+
+[[language.command]]
+role = "setup"
+command = [ "{packageManager}", "install", "--frozen-lockfile" ]
+heavy = true
+
+[[language.command]]
+role = "format"
+command = [ "{packageManager}", "run", "format:check" ]
+
+[[language.command]]
+role = "lint"
+command = [ "{packageManager}", "run", "lint" ]
+
+[[language.command]]
+role = "type"
+command = [ "{packageManager}", "run", "typecheck" ]
+heavy = true
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "{packageManager}", "run", "test" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "{packageManager}", "run", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "build"
+command = [ "{packageManager}", "run", "build" ]
+heavy = true
+stages = [ "commit", "ci" ]
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "{packageManager}", "run", "release" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "{packageManager}", "run", "format" ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "node_modules" ]
+stages = []
+
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "typescript" ]
+stages = [ "ci" ]
+heavy = true
+
+[[language]]
+id = "rust"
+name = "Rust"
+summary = "rustfmt, strict Clippy, Nextest, doctests for libraries, and portable cross-built releases"
+reference = "examples/languages/rust"
+manifests = [ "Cargo.toml" ]
+
+[[language.command]]
+role = "format"
+command = [ "cargo", "fmt", "--all", "--check" ]
+
+[[language.command]]
+role = "lint"
+command = [ "cargo", "clippy", "--all-targets", "--locked", "--", "-D", "warnings" ]
+heavy = true
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "cargo", "nextest", "run", "--all-targets", "--locked", "--no-fail-fast" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "node", "{workbench}/scripts/check-rust.mjs" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "build"
+command = [ "cargo", "build", "--locked" ]
+heavy = true
+stages = []
+
+[[language.command]]
+name = "doctests"
+role = "docs"
+command = [ "cargo", "test", "--doc", "--locked" ]
+heavy = true
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/release-rust.mjs" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "cargo", "fmt", "--all" ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "dist", "coverage" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "dist", "coverage" ]
+stages = []
+
+[[language.command]]
+name = "miri portable"
+role = "miri"
+command = [ "env", "RUSTFLAGS=-Ctarget-feature=-avx2", "MIRIFLAGS=", "node", "{workbench}/bin/workbench.mjs", "miri-exec", "--", "test", "--locked", "--target", "x86_64-unknown-linux-gnu", "--test", "count", "--", "--nocapture" ]
+heavy = true
+stages = []
+environment = "native"
+
+[[language.command]]
+name = "miri avx2"
+role = "miri"
+command = [ "env", "RUSTFLAGS=-Ctarget-feature=+avx2", "MIRIFLAGS=", "node", "{workbench}/bin/workbench.mjs", "miri-exec", "--", "test", "--locked", "--target", "x86_64-unknown-linux-gnu", "--test", "count", "--", "--nocapture" ]
+heavy = true
+stages = []
+environment = "native"
+
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "rust" ]
+stages = [ "ci" ]
+heavy = true
+
+[[language]]
+id = "python"
+name = "Python"
+summary = "locked uv environments, Ruff formatting and linting, strict mypy, and pytest coverage"
+reference = "examples/languages/python"
+manifests = [ "pyproject.toml", "setup.py", "setup.cfg" ]
+
+[[language.command]]
+role = "setup"
+command = [ "uv", "sync", "--locked" ]
+heavy = true
+
+[[language.command]]
+role = "format"
+command = [ "uv", "run", "--locked", "ruff", "format", "--check", "." ]
+
+[[language.command]]
+role = "lint"
+command = [ "uv", "run", "--locked", "ruff", "check", "." ]
+
+[[language.command]]
+role = "type"
+command = [ "uv", "run", "--locked", "mypy", "src", "tests" ]
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "uv", "run", "--locked", "pytest", "--durations=10", "--durations-min=2" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "uv", "run", "--locked", "pytest", "--cov", "--cov-report=term-missing", "--cov-report=json:coverage/report.json" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "build"
+command = [ "node", "{workbench}/scripts/check-python.mjs", "build" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/check-python.mjs", "release" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "uv", "run", "--locked", "ruff", "format", "." ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "htmlcov", ".coverage", ".pytest_cache", ".mypy_cache", ".ruff_cache", "--python-caches" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "htmlcov", ".coverage", ".pytest_cache", ".mypy_cache", ".ruff_cache", "--python-caches", ".venv" ]
+stages = []
+
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "python" ]
+stages = [ "ci" ]
+heavy = true
+
+[[language]]
+id = "c"
+name = "C"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/c"
+manifests = [ "CMakeLists.txt" ]
+
+[[language.command]]
+role = "format"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "format" ]
+heavy = true
+
+[[language.command]]
+role = "lint"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "lint" ]
+heavy = true
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "node", "{workbench}/scripts/check-native.mjs", "test" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "node", "{workbench}/scripts/check-native.mjs", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "sanitizers"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "sanitizers" ]
+heavy = true
+warn_seconds = 120
+
+[[language.command]]
+role = "build"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "build" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "release" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "format-write" ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "default.profraw" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "default.profraw" ]
+stages = []
+
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "c" ]
+stages = [ "ci" ]
+heavy = true
+
+[[language]]
+id = "cpp"
+name = "C++"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/cpp"
+manifests = [ "CMakeLists.txt" ]
+
+[[language.command]]
+role = "format"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "format" ]
+heavy = true
+
+[[language.command]]
+role = "lint"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "lint" ]
+heavy = true
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "node", "{workbench}/scripts/check-native.mjs", "test" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "node", "{workbench}/scripts/check-native.mjs", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "sanitizers"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "sanitizers" ]
+heavy = true
+warn_seconds = 120
+
+[[language.command]]
+role = "build"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "build" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "release" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "node", "{workbench}/scripts/check-native.mjs", "format-write" ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "default.profraw" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "default.profraw" ]
+stages = []
+
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "cpp" ]
+stages = [ "ci" ]
+heavy = true
+
+[[language]]
+id = "go"
+name = "Go"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/go"
+manifests = [ "go.mod" ]
+
+[[language.command]]
+role = "format"
+command = [ "node", "{workbench}/scripts/check-go.mjs", "format" ]
+heavy = true
+
+[[language.command]]
+role = "lint"
+command = [ "node", "{workbench}/scripts/check-go.mjs", "lint" ]
+heavy = true
+
+[[language.command]]
+role = "test"
+warn_seconds = 120
+command = [ "node", "{workbench}/scripts/check-go.mjs", "test" ]
+heavy = true
+
+[language.command.coverage]
+command = [ "node", "{workbench}/scripts/check-go.mjs", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[language.command]]
+role = "build"
+command = [ "node", "{workbench}/scripts/check-go.mjs", "build" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[language.command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/check-go.mjs", "release" ]
+heavy = true
+stages = []
+
+[[language.command]]
+role = "format-write"
+command = [ "node", "{workbench}/scripts/check-go.mjs", "format-write" ]
+stages = []
+
+[[language.command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[language.command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[language.command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "go" ]
+stages = [ "ci" ]
+heavy = true

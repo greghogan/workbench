@@ -1,0 +1,54 @@
+import { resolve, relative, sep } from "node:path";
+import { realpathSync } from "node:fs";
+import { readConfig, readLanguageRoots, distributionRoot } from "./core.js";
+import { activeEnvironment, developmentEnvironment, executionPreference } from "./environments.js";
+import { available, runCommand } from "./checks.js";
+import { quote, resolveCheckCommand } from "./toolchains.js";
+
+export function developmentShell(root: string, path: string, explicit?: string, command: string[] = []): void {
+  if (!readLanguageRoots(root).some((entry) => entry.path === path))
+    throw new Error(`--path must name a registered language root: '${path}'`);
+  const config = readConfig(root);
+  const selected = developmentEnvironment(
+    executionPreference(root, explicit) ?? config.checks?.environment ?? "native",
+    "shell environment",
+  );
+  const directory = realpathSync(resolve(root, path));
+  const active = activeEnvironment();
+  if (active && active.environment !== "native")
+    throw new Error("already inside a managed Workbench shell; run commands here or exit before opening another shell");
+  const interactive = command.length === 0;
+  if (interactive && !process.stdin.isTTY)
+    throw new Error("an interactive shell needs a terminal; use 'workbench shell -- COMMAND ...' for automation");
+  const distribution = distributionRoot(root);
+  const shellCommand = interactive ? ["bash", "--noprofile", "--norc", "-i"] : resolveCheckCommand(directory, command);
+  const script = [
+    ...(selected === "devcontainer" ? [] : [`export WORKBENCH_PROJECT_ROOT=${quote(realpathSync(root))}`]),
+    selected === "devcontainer"
+      ? `export WORKBENCH_DISTRIBUTION_ROOT="$WORKBENCH_PROJECT_ROOT"/${quote(relative(root, distribution).split(sep).join("/") || ".")}`
+      : `export WORKBENCH_DISTRIBUTION_ROOT=${quote(distribution)}`,
+    `export WORKBENCH_SHELL_ENVIRONMENT=${quote(selected)}`,
+    selected === "devcontainer"
+      ? `export WORKBENCH_SHELL_ROOT="$WORKBENCH_PROJECT_ROOT"/${quote(path)}`
+      : `export WORKBENCH_SHELL_ROOT=${quote(directory)}`,
+    `export WORKBENCH_REQUIRE_BENCHCTL=${quote(available("benchctl") ? "1" : "0")}`,
+    `export PS1=${quote(`workbench[${selected}] \\w\\$ `)}`,
+    'workbench() { node "$WORKBENCH_DISTRIBUTION_ROOT/bundle/main.cjs" "$@"; }',
+    "export -f workbench",
+    'exec "$@"',
+  ].join("\n");
+  console.log(`Local environment: ${selected}; root: ${path}`);
+  if (interactive && selected !== "native") {
+    // Realize and verify the environment through the scheduler before giving a terminal to the user.
+    // Idle interactive sessions must not retain a scheduler reservation.
+    runCommand(directory, "prepare development environment", ["true"], true, selected, root);
+  }
+  runCommand(
+    directory,
+    "development shell",
+    ["bash", "--noprofile", "--norc", "-eu", "-c", script, "workbench-shell", ...shellCommand],
+    !interactive,
+    selected,
+    root,
+  );
+}

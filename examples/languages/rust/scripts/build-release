@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+project_root=$(cd -- "$script_dir/.." && pwd -P)
+default_target=$(awk -F '=' '
+    /^[[:space:]]*default-target[[:space:]]*=/ {
+        value = $2
+        gsub(/[[:space:]"]/, "", value)
+        print value
+        exit
+    }
+' "$project_root/Cross.toml")
+target=${1:-$default_target}
+[[ -n "$target" ]] || {
+    printf 'build-release: Cross.toml has no default target\n' >&2
+    exit 1
+}
+
+command -v cross >/dev/null || {
+    printf 'build-release: cross is required\n' >&2
+    exit 1
+}
+command -v sha256sum >/dev/null || {
+    printf 'build-release: sha256sum is required\n' >&2
+    exit 1
+}
+
+version=$(awk -F ' *= *' '
+    /^version[[:space:]]*=/ {
+        value = $2
+        gsub(/[[:space:]"]/, "", value)
+        print value
+        exit
+    }
+' "$project_root/Cargo.toml")
+[[ -n "$version" ]] || {
+    printf 'build-release: Cargo.toml has no package version\n' >&2
+    exit 1
+}
+
+build_root=${CARGO_TARGET_DIR:-"$project_root/target"}
+if [[ "$build_root" != /* ]]; then
+    build_root="$project_root/$build_root"
+fi
+artifact="$project_root/dist/rust-reference-$version-$target"
+
+mkdir -p -- "$project_root/dist"
+(
+    cd -- "$project_root"
+    unset AR CC CFLAGS CXX CXXFLAGS LDFLAGS RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+    unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER
+    cross build --release --locked --target "$target" --target-dir "$build_root"
+)
+install -m 755 -- "$build_root/$target/release/rust-reference" "$artifact"
+sha256sum -- "$artifact"

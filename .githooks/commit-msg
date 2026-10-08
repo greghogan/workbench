@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_file=${1:?commit message path is required}
+hook_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+"$hook_directory/../bin/workbench" commit check "$message_file"

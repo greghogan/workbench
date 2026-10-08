@@ -1,0 +1,250 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Git Bash provides the same shell commands on Windows. Toolchain pins stay in each root.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - id: plan
+        run: |
+          matrix=$(node bin/workbench.mjs checks matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  native:
+    name: ${{ matrix.os }} ${{ matrix.architecture }} / ${{ matrix.path }}
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).native }}
+    steps:
+      - name: Preserve canonical text and skill symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.architecture }}
+      - name: Verify native runtime architecture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: node -e 'if (process.arch !== process.env.EXPECTED_ARCHITECTURE) throw new Error("Expected " + process.env.EXPECTED_ARCHITECTURE + ", got " + process.arch)'
+      - uses: ilammy/msvc-dev-cmd@460a772e4cf7358f9f2f23773240813e40e7a894
+        if: (matrix.llvm != '' || matrix.rust != '') && runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Install declared native tools
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+        run: node bin/workbench.mjs tools install --path "$CHECK_ROOT"
+      - name: Run the root's configured native checks
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+          WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+        run: node bin/workbench.mjs checks run --stage ci --path "$CHECK_ROOT" --environment native
+
+      - name: Prepare and verify local release artifacts
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+        run: |
+          node bin/workbench.mjs checks run --role release --path "$CHECK_ROOT" --environment native
+          node bin/workbench.mjs native-exec "$CHECK_ROOT" -- node "$GITHUB_WORKSPACE/scripts/check-release.mjs"
+          tar -czf release-artifacts.tar.gz -C "$CHECK_ROOT/dist" .
+          mv release-artifacts.tar.gz "$RUNNER_TEMP/release-artifacts.tar.gz"
+      - name: Retain verified release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-release-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/release-artifacts.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain timing and coverage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-reports-${{ strategy.job-index }}
+          path: |
+            ${{ matrix.path }}/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  devcontainer:
+    name: Dev Container
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).devcontainer.paths[0] != null
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Install the locked Dev Container CLI
+        run: node bin/workbench.mjs tools install --devcontainer
+      - name: Run configured container roots in one workspace
+        env:
+          CHECK_ROOTS: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer.paths) }}
+        run: node scripts/check-devcontainer.mjs
+      - name: Retain container reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: devcontainer-reports
+          path: |
+            coverage/
+            examples/languages/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  compatibility:
+    name: Compatibility ${{ matrix.runtime }} ${{ matrix.version }} / ${{ matrix.architecture || 'x64' }} / ${{ matrix.path }}
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).compatibility.include[0] != null
+    runs-on: ${{ matrix.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).compatibility }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        if: matrix.runtime == 'node'
+        with:
+          node-version: ${{ matrix.version }}
+      - name: Verify supported Node independently of the development pin
+        if: matrix.runtime == 'node'
+        working-directory: ${{ matrix.path }}
+        run: |
+          package_manager=$(node -p 'require("./package.json").packageManager')
+          npm exec --yes --package="$package_manager" -- pnpm install --frozen-lockfile
+          node --version
+          npm exec --yes --package="$package_manager" -- pnpm run test
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        if: matrix.runtime == 'go'
+        with:
+          go-version: ${{ matrix.version }}
+          cache-dependency-path: ${{ matrix.path }}/go.sum
+      - name: Verify supported Go independently of the development pin
+        if: matrix.runtime == 'go'
+        working-directory: ${{ matrix.path }}
+        env:
+          GOTOOLCHAIN: local
+          GOFLAGS: -mod=readonly
+        run: go test -race -count=1 -timeout=0 ./...
+      - name: Verify supported Python independently of the development pin
+        if: matrix.runtime == 'python'
+        working-directory: ${{ matrix.path }}
+        env:
+          PYTHON_VERSION: ${{ matrix.version }}
+        run: |
+          uv_version=$(awk '$1 == "uv" {print $2}' .tool-versions)
+          python3 -m pip install "uv==$uv_version"
+          uv python install "$PYTHON_VERSION"
+          uv sync --locked --python "$PYTHON_VERSION"
+          UV_PYTHON_DOWNLOADS=never uv run --no-sync --python "$PYTHON_VERSION" python -m pytest
+      - name: Verify minimum Rust independently of the development pin
+        if: matrix.runtime == 'rust'
+        working-directory: ${{ matrix.path }}
+        env:
+          TOOLCHAIN: ${{ matrix.version }}
+        run: |
+          rustup toolchain install "$TOOLCHAIN" --profile minimal
+          rustc +"$TOOLCHAIN" --version
+          cargo +"$TOOLCHAIN" test --all-targets --locked
+          cargo +"$TOOLCHAIN" test --doc --locked
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install LLVM and the selected compatibility compiler
+        if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+          COMPILER: ${{ matrix.runtime }}
+          COMPILER_VERSION: ${{ matrix.version }}
+        run: node bin/workbench.mjs tools install --path "$CHECK_ROOT" --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
+      - name: Verify supported C/C++ compilers
+        if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+          COMPILER: ${{ matrix.runtime }}
+          COMPILER_VERSION: ${{ matrix.version }}
+        run: |
+          node bin/workbench.mjs checks run --role test --path "$CHECK_ROOT" --environment native --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
+          node bin/workbench.mjs checks run --role sanitizers --path "$CHECK_ROOT" --environment native --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
+
+  environments:
+    name: ${{ matrix.environment }} / ${{ matrix.path }}
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).environments.include[0] != null
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).environments }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install Guix bootstrap
+        if: matrix.environment == 'guix'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y guix=1.4.0-6build1
+          sudo systemctl start guix-daemon
+          for key in /usr/share/guix/*.pub; do
+            sudo sh -c 'guix archive --authorize < "$1"' authorize-key "$key"
+          done
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Require an installed Nix bootstrap for direct Nix mode
+        if: matrix.environment == 'nix'
+        run: nix --version
+      - name: Run the root's checks in its pinned environment
+        env:
+          CHECK_ROOT: ${{ matrix.path }}
+          CHECK_ENVIRONMENT: ${{ matrix.environment }}
+        run: node bin/workbench.mjs checks run --stage ci --path "$CHECK_ROOT" --environment "$CHECK_ENVIRONMENT"
+      - name: Retain environment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: environment-reports-${{ strategy.job-index }}
+          path: |
+            ${{ matrix.path }}/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
