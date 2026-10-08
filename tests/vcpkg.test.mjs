@@ -88,7 +88,8 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
   const analyzer = readFileSync(join(analysis, "workbench-compiler.cmake"), "utf8");
   expect(analyzer).toContain("clang++");
   expect(analyzer).toContain("--gcc-toolchain=");
-  expect(analyzer).toContain("CMAKE_CXX_STANDARD [=[23]=]");
+  expect(analyzer).not.toContain("CMAKE_CXX_STANDARD");
+  expect(analyzer).not.toContain("CMAKE_C_STANDARD");
   expect(existsSync(join(build, "workbench-vcpkg.cmake"))).toBe(true);
   expect(execute("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: installation, capture: true })).toBe(
     "",

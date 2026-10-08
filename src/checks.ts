@@ -1,6 +1,16 @@
 import { required } from "./invariants.js";
 import { ownedPath } from "./paths.js";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { delimiter, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
@@ -458,6 +468,7 @@ export function listChecks(root: string, options: CheckSelection = {}): void {
 }
 
 export function runChecks(root: string, options: CheckSelection = {}): void {
+  root = realpathSync(root);
   if ((options.compiler !== undefined || options.compilerVersion !== undefined) && options.path === undefined)
     throw new Error("compiler overrides require --path");
   const selectedEnvironment = executionPreference(root, options.environment);

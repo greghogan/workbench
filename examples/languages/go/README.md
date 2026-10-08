@@ -8,7 +8,8 @@ disabled. The minimum selects the latest patch of the older upstream-maintained 
 Run the configured checks with `workbench checks run --path examples/languages/go`. The shared adapters in
 `../../../scripts` implement the reference checks. Consumer commands locate them through `{workbench}/scripts/`; adapt
 them when project behavior differs. Guix and Nix are optional and retain their independent channel/flake pins. They do
-not replace language dependency locks.
+not replace language dependency locks. Nix selects `go_latest` from its pinned package set; `go.mod` continues to
+define the compatibility minimum.
 
 `workbench/quality.json` owns the coverage floors and advisory per-test cap. Workbench configuration owns the
 whole-command soft cap, which includes any build and setup inside that command. Slow execution prints a warning and

@@ -18,7 +18,7 @@ import skills from "../bundle/skills.cjs";
 const { syncSkills } = skills;
 
 function fixture(run) {
-  const directory = mkdtempSync(join(tmpdir(), "workbench-skills-"));
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "workbench-skills-")));
   const root = join(directory, "project");
   const distribution = join(directory, "distribution");
   mkdirSync(join(root, "workbench"), { recursive: true });

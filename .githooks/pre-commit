@@ -15,9 +15,15 @@ while IFS= read -r -d '' removed_path; do
     fi
 done < <(git -C "$repository_root" diff --cached --no-renames --diff-filter=D --name-only -z)
 
-if rg -n --hidden --glob '!.git/**' '^(<<<<<<<|=======|>>>>>>>)( |$)' "$staged_snapshot"; then
+if git -C "$repository_root" grep --cached -n -I -E '^(<<<<<<<|=======|>>>>>>>)( |$)' --; then
     echo 'workbench: staged content contains an unresolved merge marker' >&2
     exit 1
+else
+    scan_status=$?
+    if [[ "$scan_status" != 1 ]]; then
+        echo 'workbench: could not inspect staged content for merge markers' >&2
+        exit "$scan_status"
+    fi
 fi
 if [[ -d "$repository_root/.workbench" && ! -f "$staged_snapshot/.workbench/bundle/main.cjs" ]]; then
     if ! read -r dependency_mode dependency_revision dependency_stage dependency_path < <(

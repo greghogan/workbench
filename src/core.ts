@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -80,7 +81,10 @@ export function detail(kind: Kind) {
 }
 
 export function projectRoot(): string {
-  if (process.env.WORKBENCH_PROJECT_ROOT) return resolve(process.env.WORKBENCH_PROJECT_ROOT);
+  if (process.env.WORKBENCH_PROJECT_ROOT) {
+    const root = resolve(process.env.WORKBENCH_PROJECT_ROOT);
+    return existsSync(root) ? realpathSync(root) : root;
+  }
   let current = process.cwd();
   for (;;) {
     if (existsSync(join(current, "workbench/projects.toml"))) return current;
@@ -92,7 +96,7 @@ export function projectRoot(): string {
 
 export function distributionRoot(root: string): string {
   for (const candidate of [process.env.WORKBENCH_DISTRIBUTION_ROOT, root, join(root, ".workbench")]) {
-    if (candidate && existsSync(join(candidate, "examples/languages/index.toml"))) return resolve(candidate);
+    if (candidate && existsSync(join(candidate, "examples/languages/index.toml"))) return realpathSync(candidate);
   }
   throw new Error("could not locate Workbench distribution");
 }

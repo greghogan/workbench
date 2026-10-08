@@ -1,4 +1,14 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+  copyFileSync,
+  existsSync,
+  realpathSync,
+  symlinkSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,6 +17,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { runChecks, readChecks } from "../src/checks.ts";
 import { planChecks } from "../src/check-plan.ts";
 import { ciMatrix } from "../src/ci.ts";
+import { quote } from "../src/toolchains.ts";
 
 const distribution = resolve(import.meta.dirname, "..");
 const temporary = [];
@@ -16,7 +27,7 @@ afterEach(() => {
 });
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-stages-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-stages-")));
   temporary.push(root);
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   mkdirSync(join(root, "workbench"));
@@ -91,6 +102,11 @@ test("commit, CI and manual runs execute one test variant with fresh setup", () 
   runChecks(root, { path: "." });
   expect(events()).toEqual(["setup", "test"]);
   clear();
+  const alias = join(root, "checkout-alias");
+  symlinkSync(root, alias, "junction");
+  runChecks(alias, { path: "." });
+  expect(events()).toEqual(["setup", "test"]);
+  clear();
   runChecks(root, { path: ".", stage: "ci", operatingSystem: "linux" });
   expect(events()).toEqual(["setup", "coverage"]);
   expect(
@@ -149,7 +165,7 @@ test.skipIf(process.platform === "win32")(
         "make",
         [
           "--no-print-directory",
-          `WORKBENCH=${process.execPath} ${join(distribution, "bundle/main.cjs")}`,
+          `WORKBENCH=${quote(process.execPath)} ${quote(join(distribution, "bundle/main.cjs"))}`,
           "ROOT=web",
           role,
         ],
@@ -222,7 +238,11 @@ test.skipIf(process.platform === "win32")(
     const make = (...args) => {
       const result = spawnSync(
         "make",
-        ["--no-print-directory", `WORKBENCH=${process.execPath} ${join(distribution, "bundle/main.cjs")}`, ...args],
+        [
+          "--no-print-directory",
+          `WORKBENCH=${quote(process.execPath)} ${quote(join(distribution, "bundle/main.cjs"))}`,
+          ...args,
+        ],
         {
           cwd: root,
           env: { ...process.env, WORKBENCH_PROJECT_ROOT: root },

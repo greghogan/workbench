@@ -105,12 +105,7 @@ export function prepareVcpkg(
     [
       `set(CMAKE_C_COMPILER ${cmake(compiler(family === process.env.WORKBENCH_COMPILER && process.env.WORKBENCH_CC ? process.env.WORKBENCH_CC : family === "gcc" ? "gcc" : "clang"))})`,
       `set(CMAKE_CXX_COMPILER ${cmake(compiler(family === process.env.WORKBENCH_COMPILER && process.env.WORKBENCH_CXX ? process.env.WORKBENCH_CXX : family === "gcc" ? "g++" : "clang++"))})`,
-      ...(process.env.WORKBENCH_C_STANDARD
-        ? [`set(CMAKE_C_STANDARD ${cmake(process.env.WORKBENCH_C_STANDARD)} CACHE STRING "")`]
-        : []),
-      ...(process.env.WORKBENCH_CXX_STANDARD
-        ? [`set(CMAKE_CXX_STANDARD ${cmake(process.env.WORKBENCH_CXX_STANDARD)} CACHE STRING "")`]
-        : []),
+      // Each dependency chooses its own standard; the language root sets its target standard.
       ...(gccSdk
         ? [
             `set(CMAKE_C_FLAGS_INIT ${cmake(`"--gcc-toolchain=${gccSdk}"`)})`,

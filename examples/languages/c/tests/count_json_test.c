@@ -33,7 +33,8 @@ static void tracked_free(void *context, void *allocation) {
     allocation_state *state = context;
     if (allocation != NULL) {
         if (state->live == 0) {
-            abort();
+            // The allocator ownership invariant has failed; stop without leaking later callbacks.
+            exit(EXIT_FAILURE);
         }
         --state->live;
     }

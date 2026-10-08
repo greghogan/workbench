@@ -27,7 +27,7 @@ schedule when updating pins; a newer Current release does not automatically repl
 The gate verifies this console example (after building where required):
 
 ```console
-$ node --input-type=module -e 'import { pathToFileURL } from "node:url"; const { countByte } = await import(process.env.WORKBENCH_BUILD_DIR ? pathToFileURL(`${process.env.WORKBENCH_BUILD_DIR}/typescript/build/src/arithmetic.js`) : "./build/src/arithmetic.js"); console.log(countByte(new TextEncoder().encode("banana"), 97));'
+$ node --input-type=module -e 'import { pathToFileURL } from "node:url"; const { countByte } = await import(process.env.WORKBENCH_STORAGE_EXTERNAL === "true" ? pathToFileURL(`${process.env.WORKBENCH_BUILD_DIR}/typescript/build/src/arithmetic.js`) : "./build/src/arithmetic.js"); console.log(countByte(new TextEncoder().encode("banana"), 97));'
 3
 ```
 

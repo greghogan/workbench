@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,7 +19,7 @@ import { runCoverage, subprocessCoverage } from "../scripts/test-coverage.mjs";
 import { bundleOptions } from "../scripts/bundle-options.mjs";
 
 test("coverage keeps final evidence and cleans selected scratch storage after success or failure", async () => {
-  const temporary = mkdtempSync(join(tmpdir(), "workbench-coverage-storage-"));
+  const temporary = realpathSync(mkdtempSync(join(tmpdir(), "workbench-coverage-storage-")));
   const root = join(temporary, "project");
   const external = join(temporary, "external");
   try {
@@ -110,8 +111,8 @@ test("coverage keeps final evidence and cleans selected scratch storage after su
 });
 
 test("coverage merges direct imports and disposable CLI copies without crediting changed sources", async () => {
-  const root = mkdtempSync(join(tmpdir(), "workbench-coverage-merge-"));
-  const copy = mkdtempSync(join(tmpdir(), "workbench-coverage-copy-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-coverage-merge-")));
+  const copy = realpathSync(mkdtempSync(join(tmpdir(), "workbench-coverage-copy-")));
   const { mergeCoverage } = await import("../scripts/test-coverage.mjs");
   const run = (args, env = {}) => {
     const result = spawnSync(process.execPath, args, {

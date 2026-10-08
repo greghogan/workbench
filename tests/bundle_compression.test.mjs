@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as zlib from "node:zlib";
@@ -8,7 +8,7 @@ import { test } from "vitest";
 import { bundleArtifacts, bundleCompression, bundleFormats } from "../scripts/bundle-artifacts.mjs";
 
 test("compressed bundles execute offline with ordinary CommonJS exports, resolution, and caching", () => {
-  const root = mkdtempSync(join(tmpdir(), "workbench-bundle-compression-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-bundle-compression-")));
   try {
     mkdirSync(join(root, "bin"));
     mkdirSync(join(root, "bundle"));

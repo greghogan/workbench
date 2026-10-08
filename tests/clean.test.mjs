@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { quote } from "../src/toolchains.ts";
 import { afterEach, describe, expect, test } from "vitest";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -80,7 +81,7 @@ function make(directory, target, external) {
       "-C",
       directory,
       target,
-      `WORKBENCH=${process.execPath} ${join(repository, "bundle/main.cjs")}`,
+      `WORKBENCH=${quote(process.execPath)} ${quote(join(repository, "bundle/main.cjs"))}`,
     ],
     {
       env: {

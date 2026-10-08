@@ -141,13 +141,13 @@ function ownedSymlink(path: string, distribution: string): boolean {
 
 /** Expose only configured skills; never replace a user-owned skill. */
 export function syncSkills(rootInput: string, distributionInput: string, checkOnly = false): string[] {
-  const root = resolve(rootInput);
+  const root = realpathSync(rootInput);
   const embedded = join(root, ".workbench");
   // Staged snapshots may mount the verified dependency through a symlink. Keep links checkout-relative.
   const distribution =
     existsSync(embedded) && realpathSync(embedded) === realpathSync(distributionInput)
       ? embedded
-      : resolve(distributionInput);
+      : realpathSync(distributionInput);
   const links = desiredLinks(root, distribution);
   const desired = new Map(links.map(({ destination, source }) => [destination, source]));
   const folders = [join(root, ".agents/skills"), join(root, ".claude/skills")];

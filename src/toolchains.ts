@@ -175,6 +175,7 @@ export function guardToolchains(
     if (!managed)
       lines.push(
         `tool_actual=$(${probe.map(quote).join(" ")})`,
+        'tool_actual=$(printf "%s" "$tool_actual" | tr -d "\\r")',
         "tool_match=false",
         "set -f",
         // The pinned PyPI Ninja wheel reports its upstream version plus Kitware's build suffix.

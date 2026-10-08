@@ -12,6 +12,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -185,6 +186,7 @@ export function mergeCoverage(paths, directory, thresholds, sourceRoot, reportRo
 }
 
 export async function runCoverage(root, builds = join(root, "build")) {
+  root = realpathSync(root);
   const output = join(root, "coverage");
   if (existsSync(output) && lstatSync(output).isSymbolicLink()) throw new Error("coverage must be a real directory");
   mkdirSync(output, { recursive: true });
@@ -195,7 +197,7 @@ export async function runCoverage(root, builds = join(root, "build")) {
   if (existsSync(summaryPath) && lstatSync(summaryPath).isSymbolicLink())
     throw new Error("coverage summary must be a regular file");
   mkdirSync(builds, { recursive: true });
-  const temporary = mkdtempSync(join(resolve(builds), "coverage-"));
+  const temporary = mkdtempSync(join(realpathSync(builds), "coverage-"));
   try {
     const workspace = await coverageWorkspace(resolve(root), temporary);
     const raw = join(temporary, "raw");

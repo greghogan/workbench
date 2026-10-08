@@ -36,7 +36,12 @@ export function execute(
   options: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean; maxBuffer?: number } = {},
 ): string {
   const { capture, ...rest } = options;
-  const result = spawnSync(command, args, {
+  // Git Bash supplies literal argument forwarding for Windows package-manager shims.
+  const invocation =
+    process.platform === "win32"
+      ? ["sh", "-eu", "-c", 'exec "$@"', "workbench-command", command.replaceAll("\\", "/"), ...args]
+      : [command, ...args];
+  const result = spawnSync(required(invocation[0], "tool execution needs a command"), invocation.slice(1), {
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,

@@ -13,15 +13,16 @@ pub enum Backend {
 
 /// Whether this process can safely execute the AVX2 implementation.
 #[must_use]
+#[cfg(target_arch = "x86_64")]
 pub fn avx2_available() -> bool {
-    #[cfg(target_arch = "x86_64")]
-    {
-        std::arch::is_x86_feature_detected!("avx2")
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        false
-    }
+    std::arch::is_x86_feature_detected!("avx2")
+}
+
+/// AVX2 is unavailable on non-x86 architectures.
+#[must_use]
+#[cfg(not(target_arch = "x86_64"))]
+pub const fn avx2_available() -> bool {
+    false
 }
 
 /// Count occurrences of a byte, including any partial vector at the end.

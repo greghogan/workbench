@@ -1,11 +1,11 @@
 #include "count.hpp"
 #include <algorithm>
-#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
 #if defined(__x86_64__) && !defined(WORKBENCH_PORTABLE_ONLY)
+#include <bit>
 #include <immintrin.h>
 #define WB_HAS_AVX2 1 // NOLINT(cppcoreguidelines-macro-usage): used in preprocessing.
 #else

@@ -103,6 +103,10 @@ test("standalone tools use one exact host pin and reject ambiguous declarations"
     assert.notEqual(run(["true"]).status, 0);
     stub("checker", 'echo "checker 1.2.3 (build)"');
     assert.equal(run(["true"]).status, 0);
+    stub("checker", 'printf "checker 1.2.3\\r\\n"');
+    assert.equal(run(["true"]).status, 0);
+    stub("checker", 'printf "checker 1.2.4\\r\\n"');
+    assert.notEqual(run(["true"]).status, 0);
     writeFileSync(pin, "checker 1.2.3\nchecker 1.2.4\n");
     assert.throws(() => run(["true"]), /unique name/);
   }));
