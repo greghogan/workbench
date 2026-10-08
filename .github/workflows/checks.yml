@@ -30,11 +30,11 @@ jobs:
           persist-credentials: false
       - id: plan
         run: |
-          matrix=$(node bin/workbench.mjs checks matrix)
+          matrix=$(node bin/workbench.mjs checks matrix | node scripts/ci-plan.mjs)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   native:
-    name: ${{ matrix.os }} ${{ matrix.architecture }} / ${{ matrix.path }}
+    name: ${{ matrix.os }} ${{ matrix.architecture }} / all roots
     needs: plan
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -59,7 +59,7 @@ jobs:
           EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
         run: node -e 'if (process.arch !== process.env.EXPECTED_ARCHITECTURE) throw new Error("Expected " + process.env.EXPECTED_ARCHITECTURE + ", got " + process.arch)'
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-        if: (matrix.llvm != '' || matrix.rust != '') && runner.os == 'Windows'
+        if: matrix.msvc && runner.os == 'Windows'
         with:
           arch: ${{ matrix.architecture }}
       - name: Make room for LLVM and native build dependencies
@@ -68,29 +68,39 @@ jobs:
           # These hosted-runner SDKs are unused by the declared language roots.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
-      - name: Install declared native tools
+      - name: Select isolated CI cache paths
+        id: cache-plan
         env:
-          CHECK_ROOT: ${{ matrix.path }}
-        run: node bin/workbench.mjs tools install --path "$CHECK_ROOT"
-      - name: Run the root's configured native checks
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Reuse small native tool installations
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      - name: Reuse dependencies and incremental builds
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.dependencies-paths }}
+          key: ${{ steps.cache-plan.outputs.dependencies-key }}
+      - name: Run every root's configured native checks
+        id: native-checks
         env:
-          CHECK_ROOT: ${{ matrix.path }}
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
           WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
-        run: node bin/workbench.mjs checks run --stage ci --path "$CHECK_ROOT" --environment native
-
-      - name: Prepare and verify local release artifacts
+        run: node scripts/ci-run.mjs native
+      - name: Prepare and verify passing roots' local release artifacts
+        id: release-checks
+        if: ${{ !cancelled() && steps.native-checks.outputs.roots != '' && fromJSON(steps.native-checks.outputs.roots)[0] != null }}
         env:
-          CHECK_ROOT: ${{ matrix.path }}
-        run: |
-          node bin/workbench.mjs checks run --role release --path "$CHECK_ROOT" --environment native
-          node bin/workbench.mjs native-exec "$CHECK_ROOT" -- node "$GITHUB_WORKSPACE/scripts/check-release.mjs"
-          tar -czf release-artifacts.tar.gz -C "$CHECK_ROOT/dist" .
-          mv release-artifacts.tar.gz "$RUNNER_TEMP/release-artifacts.tar.gz"
+          CHECK_ROOTS: ${{ steps.native-checks.outputs.roots }}
+        run: node scripts/ci-run.mjs release
       - name: Retain verified release artifacts
+        if: ${{ !cancelled() && steps.release-checks.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: native-release-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/release-artifacts.tar.gz
+          path: ${{ runner.temp }}/release-artifacts/
           compression-level: 0
           if-no-files-found: error
           retention-days: 14
@@ -101,7 +111,8 @@ jobs:
         with:
           name: native-reports-${{ strategy.job-index }}
           path: |
-            ${{ matrix.path }}/coverage/
+            coverage/
+            examples/languages/*/coverage/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -121,6 +132,21 @@ jobs:
           # These hosted-runner SDKs are unused by the declared language roots.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer) }}
+        run: node scripts/ci-cache.mjs
+      - name: Reuse small native tool installations
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      - name: Reuse dependencies and incremental builds
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.dependencies-paths }}
+          key: ${{ steps.cache-plan.outputs.dependencies-key }}
       - name: Install the locked Dev Container CLI
         run: node bin/workbench.mjs tools install --devcontainer
       - name: Run configured container roots in one workspace
@@ -139,7 +165,7 @@ jobs:
           retention-days: 14
 
   compatibility:
-    name: Compatibility ${{ matrix.runtime }} ${{ matrix.version }} / ${{ matrix.architecture || 'x64' }} / ${{ matrix.path }}
+    name: Compatibility ${{ matrix.runtime }} ${{ matrix.version }} / ${{ matrix.architecture || 'x64' }} / all selected roots
     needs: plan
     if: fromJSON(needs.plan.outputs.matrix).compatibility.include[0] != null
     runs-on: ${{ matrix.runner || 'ubuntu-24.04' }}
@@ -151,23 +177,35 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Reuse small native tool installations
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      - name: Reuse dependencies and incremental builds
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.dependencies-paths }}
+          key: ${{ steps.cache-plan.outputs.dependencies-key }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         if: matrix.runtime == 'node'
         with:
           node-version: ${{ matrix.version }}
-      - name: Verify supported Node independently of the development pin
+      - name: Verify every selected Node root independently of the development pin
         if: matrix.runtime == 'node'
-        working-directory: ${{ matrix.path }}
-        run: |
-          package_manager=$(node -p 'require("./package.json").packageManager')
-          npm exec --yes --package="$package_manager" -- pnpm install --frozen-lockfile
-          node --version
-          npm exec --yes --package="$package_manager" -- pnpm run test
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-run.mjs node
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         if: matrix.runtime == 'go'
         with:
           go-version: ${{ matrix.version }}
-          cache-dependency-path: ${{ matrix.path }}/go.sum
+          cache: false
       - name: Verify supported Go independently of the development pin
         if: matrix.runtime == 'go'
         working-directory: ${{ matrix.path }}
@@ -206,25 +244,37 @@ jobs:
           # These hosted-runner SDKs are unused by the declared language roots.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
-      - name: Install LLVM and the selected compatibility compiler
+      - name: Restore the compiled GCC installation
+        id: gcc-cache
+        if: matrix.runtime == 'gcc'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.gcc-path }}
+          key: ${{ steps.cache-plan.outputs.gcc-key }}
+      - name: Install and verify LLVM and the selected compatibility compiler
+        id: compiler-setup
         if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
         env:
-          CHECK_ROOT: ${{ matrix.path }}
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
           COMPILER: ${{ matrix.runtime }}
           COMPILER_VERSION: ${{ matrix.version }}
-        run: node bin/workbench.mjs tools install --path "$CHECK_ROOT" --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
-      - name: Verify supported C/C++ compilers
+        run: node scripts/ci-run.mjs compiler-install
+      - name: Save the verified GCC installation before project checks
+        if: matrix.runtime == 'gcc' && steps.compiler-setup.conclusion == 'success' && steps.gcc-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.gcc-path }}
+          key: ${{ steps.cache-plan.outputs.gcc-key }}
+      - name: Verify every selected C/C++ root
         if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
         env:
-          CHECK_ROOT: ${{ matrix.path }}
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
           COMPILER: ${{ matrix.runtime }}
           COMPILER_VERSION: ${{ matrix.version }}
-        run: |
-          node bin/workbench.mjs checks run --role test --path "$CHECK_ROOT" --environment native --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
-          node bin/workbench.mjs checks run --role sanitizers --path "$CHECK_ROOT" --environment native --compiler "$COMPILER" --compiler-version "$COMPILER_VERSION"
+        run: node scripts/ci-run.mjs compiler
 
   environments:
-    name: ${{ matrix.environment }} / ${{ matrix.path }}
+    name: ${{ matrix.environment }} / all selected roots
     needs: plan
     if: fromJSON(needs.plan.outputs.matrix).environments.include[0] != null
     runs-on: ubuntu-24.04
@@ -244,6 +294,21 @@ jobs:
           # These hosted-runner SDKs are unused by the declared language roots.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Reuse small native tool installations
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      - name: Reuse dependencies and incremental builds
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.dependencies-paths }}
+          key: ${{ steps.cache-plan.outputs.dependencies-key }}
       - name: Install Guix bootstrap
         if: matrix.environment == 'guix'
         run: |
@@ -257,11 +322,24 @@ jobs:
       - name: Require an installed Nix bootstrap for direct Nix mode
         if: matrix.environment == 'nix'
         run: nix --version
-      - name: Run the root's checks in its pinned environment
+      - name: Restore authenticated Guix source history
+        id: guix-cache
+        if: matrix.environment == 'guix'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-paths }}
+          key: ${{ steps.cache-plan.outputs.guix-key }}
+      - name: Run every root in its own pinned environment
         env:
-          CHECK_ROOT: ${{ matrix.path }}
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
           CHECK_ENVIRONMENT: ${{ matrix.environment }}
-        run: node bin/workbench.mjs checks run --stage ci --path "$CHECK_ROOT" --environment "$CHECK_ENVIRONMENT"
+        run: node scripts/ci-run.mjs environment
+      - name: Save Guix source history for subsequent bootstraps
+        if: always() && matrix.environment == 'guix' && steps.guix-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-paths }}
+          key: ${{ steps.cache-plan.outputs.guix-key }}
       - name: Diagnose Guix bootstrap failures
         if: failure() && matrix.environment == 'guix'
         run: |
@@ -275,6 +353,7 @@ jobs:
         with:
           name: environment-reports-${{ strategy.job-index }}
           path: |
-            ${{ matrix.path }}/coverage/
+            coverage/
+            examples/languages/*/coverage/
           if-no-files-found: ignore
           retention-days: 14

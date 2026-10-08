@@ -720,10 +720,25 @@ Windows checks require Git Bash and enabled directory symlinks. Use `node bin/wo
 launcher from a native Windows terminal. GNU Make helpers are optional POSIX conveniences; their tests run on Linux and
 macOS. Managed environment jobs run on Linux. The CLI integration suite runs on every selected native OS.
 
-Jobs have no path filters and keep running after sibling failures. Failures appear as GitHub checks and through the
-repository's configured GitHub notifications. These workflows have not yet run on hosted macOS or Windows runners; a
-local Linux pass does not establish their results. Branch protection and notification preferences are repository
-settings.
+Jobs have no path filters and keep checking other roots after a root fails. The full matrix runs on every push.
+Roots share native jobs by platform, compiler compatibility jobs by compiler/version/architecture, and managed jobs
+by environment. Each root still uses its own declared pins and complete checks, including release verification.
+
+CI caches small installed tools, dependency downloads, incremental builds, and verified compiled GCC installations.
+GCC is compiled once per version and architecture and reused for both C and C++; its installation is saved after tool
+verification so a later project-test failure does not discard the expensive compiler build. Guix caches authenticated
+source history; roots share its bootstrap and store within one job. Nix roots similarly share a job-local store and use
+upstream binary substitutes. Lockfiles, tool pins, platform, runtime selection, and the compiler installer determine
+cache keys. Cache hits still run configured checks; caches do not store test results as evidence of a passing run.
+
+The workflow does not raise GitHub's default 10 GB cache limit. Large LLVM distributions and whole Nix/Guix stores are
+excluded from GitHub caches to leave room for expensive compiled tools and reusable dependencies. New pins and cache
+misses require fresh setup; cached runs remain subject to runner-minute billing. Release artifacts and coverage reports
+have their own storage allowance and a 14-day retention period.
+
+Failures appear as GitHub checks and through the repository's configured GitHub notifications. Hosted verification is
+in progress; a local Linux pass does not establish another platform's results. Branch protection, spending budgets, and
+notification preferences are repository settings.
 
 To reproduce an environment job locally when that environment is installed:
 

@@ -35,6 +35,12 @@ test("slow commands finish successfully and real failures remain failures", () =
     });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /exit status 7/);
+    const npm = spawnSync(process.execPath, [cli, "observe", "5", "--", "npm", "--version"], {
+      cwd: temporary,
+      encoding: "utf8",
+    });
+    assert.equal(npm.status, 0, npm.stderr);
+    assert.match(npm.stdout, /^\d+\.\d+\.\d+/);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

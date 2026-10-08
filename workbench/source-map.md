@@ -88,6 +88,8 @@ unfinished work. The first decision set remains uncommitted pending human review
 - `src/devcontainers.ts` adapts the locked Dev Container CLI; `.devcontainer` defines the workspace and its OS
   prerequisites.
 - `scripts/check-devcontainer.mjs` runs the configured CI roots in that shared container.
+- `scripts/ci-plan.mjs`, `scripts/ci-run.mjs`, and `scripts/ci-cache.mjs` share CI setup while retaining all configured
+  roots, and reuse pinned tools, dependency downloads, compiled GCC, and Guix source history.
 - `workbench/quality.json` declares coverage floors for Workbench TypeScript, including CLI subprocess execution.
 - `scripts/test-coverage.mjs`: combine Vitest and copied CLI coverage using the same AST converter and enforce unchanged
   floors.

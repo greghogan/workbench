@@ -30,6 +30,12 @@ export interface ToolAsset {
   build?: "gcc";
 }
 
+export function commandInvocation(command: string, args: string[]): string[] {
+  return process.platform === "win32"
+    ? ["sh", "-eu", "-c", 'exec "$@"', "workbench-command", command.replaceAll("\\", "/"), ...args]
+    : [command, ...args];
+}
+
 export function execute(
   command: string,
   args: string[],
@@ -37,10 +43,7 @@ export function execute(
 ): string {
   const { capture, ...rest } = options;
   // Git Bash supplies literal argument forwarding for Windows package-manager shims.
-  const invocation =
-    process.platform === "win32"
-      ? ["sh", "-eu", "-c", 'exec "$@"', "workbench-command", command.replaceAll("\\", "/"), ...args]
-      : [command, ...args];
+  const invocation = commandInvocation(command, args);
   const result = spawnSync(required(invocation[0], "tool execution needs a command"), invocation.slice(1), {
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
     encoding: "utf8",

@@ -6,7 +6,7 @@ import { approveReview, checkReview, reviewStatus } from "./review.js";
 import { observeCommand } from "./test-timing.js";
 import { Command, Option } from "commander";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { projectRoot, distributionRoot, readConfig } from "./core.js";
 import { syncMaps } from "./maps.js";
@@ -283,7 +283,7 @@ program
     updateWorkbench(root, revision);
   });
 program.command("update-prepare", { hidden: true }).action(async () => {
-  if (process.env.WORKBENCH_UPDATE_PREPARATION !== root)
+  if (!process.env.WORKBENCH_UPDATE_PREPARATION || realpathSync(process.env.WORKBENCH_UPDATE_PREPARATION) !== root)
     throw new Error("update-prepare is an internal operation; use 'workbench update REVISION'");
   await prepareUpdate(root);
 });
