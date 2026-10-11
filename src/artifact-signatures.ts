@@ -87,14 +87,17 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
     chunks.push(chunk as Buffer);
   }
   writeFileSync(signaturePath, Buffer.concat(chunks), { mode: 0o600 });
-  const arguments_ = ["--batch", "--no-options", "--homedir", home, "--no-auto-key-retrieve", "--no-autostart"];
+  const arguments_ = ["--batch", "--no-options", "--homedir", ".", "--no-auto-key-retrieve", "--no-autostart"];
   // A dedicated read-only keyring avoids importing keys or consulting an agent socket.
-  const keyring = join(home, "keys.gpg");
-  execute("gpg", [...arguments_, "--dearmor", "--output", keyring, keys], { capture: true, timeout: 30_000 });
-  // GnuPG under Git Bash treats a drive-letter keyring path as a resource URL.
-  // Resolve the read-only keyring within the verifier's private working directory instead.
+  execute("gpg", [...arguments_, "--dearmor", "--output", "keys.gpg", "keys.asc"], {
+    cwd: home,
+    capture: true,
+    timeout: 30_000,
+  });
+  // GnuPG under Git Bash misinterprets drive-letter home/keyring paths.
+  // Resolve verifier paths within its private working directory instead.
   arguments_.push("--no-default-keyring", "--keyring", "./keys.gpg", "--no-auto-check-trustdb");
-  const invocation = commandInvocation("gpg", [...arguments_, "--status-fd", "2", "--verify", signaturePath, "-"]);
+  const invocation = commandInvocation("gpg", [...arguments_, "--status-fd", "2", "--verify", "artifact.sig", "-"]);
   const child = spawn(required(invocation[0], "signature verification needs a command"), invocation.slice(1), {
     cwd: home,
     stdio: ["pipe", "ignore", "pipe"],
