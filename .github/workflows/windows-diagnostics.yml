@@ -12,7 +12,7 @@ defaults:
     shell: bash
 jobs:
   native:
-    name: Windows C++ sanitizer verification
+    name: Windows cache cold/warm verification
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -32,7 +32,10 @@ jobs:
             llvm: ""
             java: ""
             paths:
-              - examples/languages/cpp
+              - .
+              - examples/languages/typescript
+              - examples/languages/javascript
+              - examples/languages/python
             msvc: true
             runtime: ""
     steps:
@@ -127,7 +130,7 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
-      - name: Run every installed root's configured native checks
+      - name: Recreate dependency links and verify Python
         id: native-checks
         if: ${{ !cancelled() && steps.native-setup.outputs.roots != '' &&
           fromJSON(steps.native-setup.outputs.roots)[0] != null }}
@@ -135,25 +138,16 @@ jobs:
           CHECK_ROOTS: ${{ steps.native-setup.outputs.roots }}
           WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha ||
             github.event.before || 'HEAD' }}
-        run: node bin/workbench.mjs checks run --role sanitizers --path
-          examples/languages/cpp --environment native
-      - name: Prepare and verify passing roots' local release artifacts
-        id: release-checks
-        if: ${{ !cancelled() && steps.native-checks.outputs.roots != '' &&
-          fromJSON(steps.native-checks.outputs.roots)[0] != null }}
-        env:
-          CHECK_ROOTS: ${{ steps.native-checks.outputs.roots }}
-        run: node scripts/ci-run.mjs release
-      - name: Retain verified release artifacts
-        if: ${{ !cancelled() && steps.release-checks.outputs.roots != '' &&
-          fromJSON(steps.release-checks.outputs.roots)[0] != null }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: native-release-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/release-artifacts/
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 14
+        run: |-
+          node --input-type=module <<'NODE'
+          import {spawnSync} from 'node:child_process';
+          for(const root of JSON.parse(process.env.CHECK_ROOTS)) {
+           const r=spawnSync(process.execPath,['bin/workbench.mjs','checks','run','--role','setup','--path',root,'--environment','native'],{stdio:'inherit'});
+           if(r.status!==0)process.exit(r.status??1);
+          }
+          const r=spawnSync(process.execPath,['bin/workbench.mjs','checks','run','--role','test','--path','examples/languages/python','--environment','native'],{stdio:'inherit'});
+          process.exit(r.status??1);
+          NODE
       - name: Retain timing and coverage evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -175,17 +169,6 @@ jobs:
           name: cache-measurement-native-${{ strategy.job-index || 'single' }}
           path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
           if-no-files-found: error
-          retention-days: 14
-      - name: Retain failed Ruby build diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ruby-build-diagnostics
-          path: |-
-            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/mkmf.log
-            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/Makefile
-            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/*.def
-          if-no-files-found: ignore
           retention-days: 14
   core:
     name: Windows core diagnostics

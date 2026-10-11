@@ -145,7 +145,10 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   expect(readFileSync(environment, "utf8")).toContain(
     `UV_PYTHON_INSTALL_DIR=${join(root, "workbench-ci", "cache", "uv-python", "python")}`,
   );
-  expect(oldest["builds-paths"]).toContain(join(root, "workbench-ci", "cache", "dependencies"));
+  if (process.platform === "win32") {
+    expect(oldest["builds-paths"]).toBe(join(root, "workbench-ci", "cache", "go-build"));
+    expect(oldest["downloads-paths"]).toContain(join(root, "workbench-ci", "cache", "downloads", "uv-python"));
+  } else expect(oldest["builds-paths"]).toContain(join(root, "workbench-ci", "cache", "dependencies"));
   expect(oldest["builds-paths"]).not.toMatch(/\/nix\/store|\/gnu\/store/);
   expect(oldest["builds-paths"]).not.toContain("package-managers");
   expect(oldest["downloads-key"]).toBe(newest["downloads-key"]);

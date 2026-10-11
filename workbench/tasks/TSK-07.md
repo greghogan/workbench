@@ -18,22 +18,22 @@ depends_on:
 
 ## Review summary
 
-Verify the hosted OS/architecture matrix, cache restoration, and requested registry publication after changed-root
-selection, additional ADR source integration, language additions, and consumer portability. Implement the explicit
-publication workflow before testing it: registry publication is currently absent, not merely unverified. The CI push is
-the final verification phase. Earlier complete and incremental Linux x64 rehearsals are recorded below. These results do
-not establish hosted permissions, registry behavior, or macOS/Windows/ARM64 execution. On 2026-10-11 the human made the
-repository public and authorized further testing on `ci/draft-functionality-20261008` or a similarly named temporary
-branch before ADR acceptance. Deployment still requires review.
+The complete hosted matrix passes on every configured native platform, compatibility selection, and managed environment.
+ADR-only hosted changes pass validation without example jobs. Cold/warm cache measurements confirm useful restoration
+and expose cache eviction under the full matrix. The separate Nix/Guix registry publication workflow is implemented and
+under verification on the exact passing revision. Temporary draft-document CI testing is authorized; document acceptance
+and deployment remain pending human review.
 
 ## Progress
 
 - [x] Obtain renewed authorization for temporary CI-branch verification while ADR acceptance remains pending.
 - [x] Finish the approved implementation follow-ups and local verification before the next push.
-- [ ] Verify the complete hosted OS/architecture and managed-environment matrix.
-- [ ] Improve selected Rust and Dev Container tool caches; measure cold/warm runtime, restored bytes, and disk use.
+- [x] Verify the complete hosted OS/architecture and managed-environment matrix.
+- [x] Improve selected Rust and Dev Container tool caches; measure cold/warm runtime, restored bytes, and disk use.
 - [ ] Implement an explicitly selected publication workflow and test authorized GitHub Container Registry publication
       and artifact identity.
+  - [x] Verify Nix push, digest pull, image identity, and offline behavior.
+  - [ ] Verify Guix push, digest pull, image identity, and offline behavior.
 
 ## Outcome
 
@@ -42,11 +42,11 @@ runtime/storage, useful caches, and explicit publication evidence under its sepa
 
 ## Current state
 
-Earlier draft CI was canceled at human request to stop expensive GCC builds. Prior Nix and several compatibility jobs
-passed, while native/Dev Container failures still need hosted verification. No full passing hosted matrix establishes
-current behavior. Runner labels have draft Ubuntu 26.04 updates; SDK prerequisites and the Guix bootstrap package still
-require verification. Temporary draft-branch testing is authorized by the latest human instruction; document acceptance
-and deployment remain separate.
+[Checks run 38122790825](https://github.com/greghogan/workbench/actions/runs/38122790825) passes all 34 jobs on revision
+`af33536c26f63cfeaa47ddfe28aea1e577b01bcf`. Native Linux x64/ARM64, macOS ARM64, Windows x64, every compatibility
+selection, Guix, Nix Docker, and every Dev Container root pass. The separately selected registry workflow is active on
+that exact revision. Nix/Guix pins and the primary checkout's staged index are unchanged. Earlier findings and
+verification history follow.
 
 The C/C++ declarations now cover Clang's three-major window (21, 22, 23) and every upstream-maintained GCC branch (14,
 15, 16), with exact patch selections. ADR-14 distinguishes this Clang compatibility promise from upstream maintenance.
@@ -211,3 +211,30 @@ explicitly skipped. All macOS example gates and release preparations passed sepa
 gate passes 372 tests and 13 checks, and both Linux C/C++ gates pass after the Windows portability corrections. Hosted
 Windows verification remains active. Temporary diagnostic workflows stay outside the primary checkout; the original
 index and review receipts remain unchanged.
+
+The next hosted run passes Linux x64, Linux ARM64, macOS, Nix Docker, and every compatibility job; Guix remains active.
+Windows C++ sanitizer checks pass in focused hosted verification after aligning dependency instrumentation, selecting
+the matching LLVM runtime, and using the release CRT with debug symbols. Dev Container checks exposed guest dependency
+links invalidating the host CLI; its locked installation now lives independently in the user cache. Focused isolation
+checks and the complete local gate pass (373 tests, 13 checks); sequential real-container verification passes for
+Workbench and TypeScript. A final full hosted rerun, cold/warm measurements, ADR-only selection, and registry
+publication verification remain.
+
+The final hosted run [38122790825](https://github.com/greghogan/workbench/actions/runs/38122790825) passes all 34 jobs
+on revision `af33536c26f63cfeaa47ddfe28aea1e577b01bcf`, including every configured native platform, compatibility
+selection, managed environment, and aggregate gate. Windows passes 326 applicable core tests with 47 platform skips;
+macOS passes 351 with 22 platform skips. Every Dev Container root passes after isolating the host CLI. An ADR-text-only
+hosted push passes validation and aggregate status with zero selected roots and no example jobs.
+
+Cold/warm compiler measurements show all six GCC selections falling from approximately 17–24 minutes to 3–4 minutes,
+with stripped archives of approximately 77–91 MB. Guix takes approximately 35 minutes with restored authenticated source
+history and 52 minutes after that cache is evicted; the compiled runtime and package store are not retained. The full
+matrix exceeds the observed cache working capacity, so restoration is useful but cannot be assumed on every run.
+Publication verification is now active on the exact fully tested revision, on its separately selected branch. No
+deployment or document acceptance is included. Detailed measurements and logs are recorded in the hosted preflight
+evidence.
+
+Publication receipt review identified a missing clean-source guard. The publisher now rejects dirty or unknown source
+state before Docker or registry effects; the actual Nix receipt is clean. The complete local gate passes 374 tests and
+all 13 checks after this correction. Additional affected-root hosted verification is being prepared while the Guix image
+build continues on the fully tested revision.

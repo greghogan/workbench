@@ -22,7 +22,7 @@ function fixture() {
     emulation: false,
     builder: "nix",
     profile: { name: "go-nix-docker" },
-    source: { revision: "1".repeat(40) },
+    source: { revision: "1".repeat(40), dirty: false },
     artifacts: [
       {
         path: "docker.tar.gz",
@@ -81,4 +81,16 @@ test("unverified or changed publication artifacts fail before Docker or registry
   writeFileSync(f.record, JSON.stringify(f.receipt));
   await expect(verifyRegistryPublication(f.root, "nix", f.env, f.backend)).rejects.toThrow(/differs/);
   expect(f.calls).toEqual([]);
+});
+
+test("publication rejects dirty or unknown source state before Docker or registry effects", async () => {
+  for (const dirty of [true, null, undefined]) {
+    const f = fixture();
+    f.receipt.source.dirty = dirty;
+    writeFileSync(f.record, JSON.stringify(f.receipt));
+    await expect(verifyRegistryPublication(f.root, "nix", f.env, f.backend)).rejects.toThrow(
+      /verified native release receipt/,
+    );
+    expect(f.calls).toEqual([]);
+  }
 });
