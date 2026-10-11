@@ -1,5 +1,5 @@
 ---
-summary: OS/environment matrices, example coverage, minima, runner isolation.
+summary: OS/environment matrices, example coverage, minima, isolated runners.
 ---
 
 # ADR-10: GitHub continuous integration
