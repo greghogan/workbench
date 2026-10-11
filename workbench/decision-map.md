@@ -65,7 +65,7 @@ Scope charter: [CHARTER.md](CHARTER.md).
 - [workbench:ADR-Z](decisions/ADR-0Z.md): Release records and verified artifacts — Immutable artifacts, digests,
   yanking.
 - [workbench:ADR-10](decisions/ADR-10.md): GitHub continuous integration — OS/environment matrices, example coverage,
-  minima, runner isolation.
+  minima, isolated runners.
 - [workbench:ADR-11](decisions/ADR-11.md): Rust implementation — Errors, unsafe code, stable and Miri toolchains, MSRV,
   portability.
 - [workbench:ADR-12](decisions/ADR-12.md): Python implementation — Supported interpreters and strict tools.
