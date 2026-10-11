@@ -46,5 +46,8 @@ Prefer mechanically validated formats. Resolve contradictory and formatter-owned
 and explain narrow suppressions. Do not weaken checks, coverage floors, types, or meaningful assertions merely to pass a
 change. Policy changes require decision review. Projects may choose equivalent tools and record scoped exceptions.
 
+Coverage includes all project-owned shipped code, including libraries and executable entry points. Include unexecuted
+production files and subprocess execution; exclude dependencies and third-party generated code.
+
 Rationale: Explicit ownership prevents accidental tool substitution. Pinned inputs and consistent checks constrain agent
 changes, while tested support boundaries distinguish compatibility promises from development preferences.

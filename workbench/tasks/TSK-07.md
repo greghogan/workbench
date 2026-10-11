@@ -1,5 +1,5 @@
 ---
-status: Active
+status: Done
 parent: null
 depends_on:
   - workbench:TSK-8
@@ -18,12 +18,12 @@ depends_on:
 
 ## Review summary
 
-The complete hosted matrix passes on every configured native platform, compatibility selection, and managed environment.
-ADR-only hosted changes pass validation without example jobs. Cold/warm cache measurements confirm useful restoration
-and expose cache eviction under the full matrix. The separate Nix/Guix registry publication workflow passes on the exact
-passing revision. A subsequent Windows warm-cache restore failure is corrected locally and undergoing cold/warm hosted
-verification. Temporary draft-document CI testing is authorized; document acceptance and deployment remain pending human
-review.
+The final hosted matrix passes all 34 jobs: every declared native platform, compatibility selection, managed
+environment, and standalone release gate. ADR-only changes select no example jobs. Both Nix and Guix registry
+publication checks pass with digest pulls, image identity, and offline behavior. Windows cache restoration is corrected
+and verified cold/warm; its job lifetime allows final cache archiving and cleanup. Measurements record useful
+restoration and cache eviction. Draft ADR acceptance and deployment remain pending human review. The approved Ruby
+follow-up measures all shipped application code and passes locally with either build storage selection.
 
 ## Progress
 
@@ -32,7 +32,7 @@ review.
 - [x] Verify the complete hosted OS/architecture and managed-environment matrix.
 - [x] Improve selected Rust and Dev Container tool caches; measure cold/warm runtime, restored bytes, and disk use.
   - [x] Verify the corrected Windows cache layout on cold and restored-cache runs.
-  - [ ] Complete the full hosted matrix with the final cache correction.
+  - [x] Complete the full hosted matrix with the final cache correction.
 - [x] Implement an explicitly selected publication workflow and test authorized GitHub Container Registry publication
       and artifact identity.
   - [x] Verify Nix push, digest pull, image identity, and offline behavior.
@@ -45,11 +45,18 @@ runtime/storage, useful caches, and explicit publication evidence under its sepa
 
 ## Current state
 
-[Checks run 38122790825](https://github.com/greghogan/workbench/actions/runs/38122790825) passes all 34 jobs on revision
-`af33536c26f63cfeaa47ddfe28aea1e577b01bcf`. Native Linux x64/ARM64, macOS ARM64, Windows x64, every compatibility
-selection, Guix, Nix Docker, and every Dev Container root pass. The separately selected registry workflow passes on that
-exact revision. A follow-up Windows warm-cache failure requires final cache restoration verification. Nix/Guix pins and
-the primary checkout's staged index are unchanged. Earlier findings and verification history follow.
+[Final Checks run 38131699407](https://github.com/greghogan/workbench/actions/runs/38131699407) passes all 34 jobs on
+revision `3ec83af0857c16d2d2102452fd96873217ab6956`. Native Linux x64/ARM64, macOS ARM64, Windows x64, every
+compatibility selection, Guix, Nix Docker, every Dev Container root, and the aggregate gate pass. Windows restores all
+selected cache groups successfully, passes 328 applicable core tests with 47 platform skips, and finishes its complete
+job in 17.5 minutes. The latest local root gate passes 375 tests and 13 configured checks.
+
+[Publication run 38126046951](https://github.com/greghogan/workbench/actions/runs/38126046951) passes both Nix and Guix
+on the earlier fully tested revision `af33536c26f63cfeaa47ddfe28aea1e577b01bcf`. Subsequent changes reject dirty or
+unknown publication source state, repair Windows cache restoration, and allow Windows final cleanup; their applicable
+tests and final full matrix pass. No deployment or ADR acceptance occurred. Environment pins, review receipts, and the
+primary checkout's staged index remain unchanged. Detailed results are in
+[hosted evidence](../evidence/hosted-preflight-20261011.json).
 
 The C/C++ declarations now cover Clang's three-major window (21, 22, 23) and every upstream-maintained GCC branch (14,
 15, 16), with exact patch selections. ADR-14 distinguishes this Clang compatibility promise from upstream maintenance.
@@ -261,3 +268,20 @@ In [run 38129743227](https://github.com/greghogan/workbench/actions/runs/3812974
 release passes. Windows successfully saves its corrected caches, then reaches the 30-minute job limit during final
 cleanup. Its infrastructure lifetime is now 40 minutes; other native jobs retain 30 minutes and all checks are
 unchanged. Final aggregate verification remains pending.
+
+Final verification is complete on 2026-10-11. All 34 hosted jobs pass, both registry builders pass their separate
+publication checks, and the original index remains unchanged. Cache measurements retain both successful restoration and
+eviction-driven cold installation; no cache hit is assumed. ADR review remains a human decision.
+
+The human subsequently approved measuring all shipped project-owned code while excluding dependencies, with the shared
+policy in ADR-9. Ruby now merges executable subprocess coverage into its library report and retains both 100% floors: 11
+lines and four branches. The Linux native gate, ordinary tests, and coverage with local build storage pass; standalone
+dependencies default to an external cache rather than `vendor/`. The root gate passes 375 tests and 13 checks. These
+follow-up changes have not been pushed to hosted CI.
+
+A subsequent cache reduction preserves independent C/C++ inclusion filters and removes LLVM static development libraries
+and Fortran resources. On Linux x64, both LLVM 23 installations together shrink from 3.20 GB to 2.49 GB; their measured
+Zstandard archive shrinks from 818 MB to 674 MB. Separate older-Clang archives and matching native/Dev Container LLVM
+keys avoid repeating the development SDK. Both native example gates and standalone releases pass. Rust-managed files
+remain intact, and hosted cache savings await review and a later push. Measurements and limitations are in
+`workbench/evidence/cache-reduction-20261011.json`.

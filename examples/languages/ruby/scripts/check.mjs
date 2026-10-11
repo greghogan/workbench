@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -11,12 +12,13 @@ const { writeRubyCoverage } = await import(pathToFileURL(join(distribution, "scr
 const role = process.argv[2];
 const source = process.cwd();
 const build = resolve(process.env.WORKBENCH_BUILD_DIR ?? "build", "ruby");
-const deps = resolve(process.env.WORKBENCH_DEPENDENCIES_DIR ?? "vendor", "ruby");
 
 const environment = {
   ...process.env,
   BUNDLE_GEMFILE: join(source, "Gemfile"),
-  BUNDLE_PATH: deps,
+  ...(process.env.WORKBENCH_DEPENDENCIES_DIR
+    ? { BUNDLE_PATH: resolve(process.env.WORKBENCH_DEPENDENCIES_DIR, "ruby") }
+    : {}),
   BUNDLE_APP_CONFIG: join(build, "bundle-config"),
   BUNDLE_USER_HOME: join(build, "bundle-user"),
   BUNDLE_FROZEN: role === "dependency-lock" ? "false" : "true",
@@ -71,8 +73,9 @@ switch (role) {
     // A previous suite must never fill gaps in the current run.
     rmSync("coverage", { recursive: true, force: true });
     environment.WORKBENCH_COVERAGE = "true";
+    environment.SIMPLECOV_RUN_ID = randomUUID();
     bundle(["exec", "rake", "test"]);
-    writeRubyCoverage(JSON.parse(readFileSync("coverage/.resultset.json", "utf8")), source);
+    writeRubyCoverage(JSON.parse(readFileSync("coverage/merged-result.json", "utf8")), source);
     break;
   case "build":
   case "release": {

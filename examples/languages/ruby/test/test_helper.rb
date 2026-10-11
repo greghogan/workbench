@@ -1,14 +1,6 @@
 # frozen_string_literal: true
 
-if ENV["WORKBENCH_COVERAGE"] == "true"
-  require "simplecov"
-  SimpleCov.start do
-    enable_coverage :branch
-    track_files "lib/**/*.rb"
-    add_filter "/test/"
-    minimum_coverage line: 100, branch: 100
-  end
-end
+require_relative "coverage_helper" if ENV["WORKBENCH_COVERAGE"] == "true"
 
 require "minitest/autorun"
 require "workbench_ruby_reference"

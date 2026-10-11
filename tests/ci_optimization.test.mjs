@@ -312,14 +312,15 @@ test.skipIf(process.platform !== "linux")(
         ),
       );
       keys.push(fields["llvm-key"]);
-      expect(fields["llvm-key"]).toMatch(/^llvm-v2-/);
+      expect(fields["llvm-key"]).toMatch(/^llvm-v3-/);
       expect(fields["llvm-paths"]).toContain(join(root, "workbench-ci", "cache", "toolchains", "llvm"));
       expect(fields["llvm-paths"]).not.toContain("downloads");
       expect(fields["llvm-paths"].split("\n").filter((path) => path.includes("toolchains/llvm/"))).toHaveLength(1);
-      if (version !== "23.1.3") expect(fields["llvm-paths"]).toContain(join("toolchains", "clang", version));
-      else expect(fields["llvm-paths"]).not.toContain(join("toolchains", "clang"));
+      if (version !== "23.1.3") expect(fields["clang-paths"]).toContain(join("toolchains", "clang", version));
+      else expect(fields["clang-key"]).toBeUndefined();
+      expect(fields["llvm-paths"]).not.toContain(join("toolchains", "clang"));
     }
-    expect(new Set(keys).size).toBe(keys.length);
+    expect(new Set(keys).size).toBe(1);
     const workflow = parse(readFileSync(join(repository, ".github/workflows/checks.yml"), "utf8"));
     for (const [job, setup, check] of [
       ["native", "native-install", "native-check"],
@@ -452,7 +453,9 @@ test("CI retains selected Rust versions and the tool versions installed inside D
     paths: ["examples/languages/cpp", "examples/languages/java", "examples/languages/python"],
     environment: "devcontainer",
   });
-  for (const tool of ["llvm", "cmake", "ninja", "java", "maven", "uv"])
+  expect(guest["llvm-paths"]).toContain(join(root, "workbench-ci/cache/toolchains/llvm"));
+  expect(guest["tools-paths"]).not.toContain(join(root, "workbench-ci/cache/toolchains/llvm"));
+  for (const tool of ["cmake", "ninja", "java", "maven", "uv"])
     expect(guest["tools-paths"]).toContain(join(root, "workbench-ci/cache/toolchains", tool));
   const pythonInstall = join(root, "workbench-ci/cache/uv-python/python");
   if (process.platform === "win32") expect(guest["tools-paths"]).not.toContain(pythonInstall);

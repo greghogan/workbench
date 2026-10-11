@@ -113,7 +113,11 @@ const devcontainerRuntimes =
     : [];
 // Guest OS identities are resolved after startup; retain only selected tool versions across those identities.
 const devcontainerRuntimePaths = [
-  ...new Set(devcontainerRuntimes.map((entry) => join(cache, "toolchains", entry.tool, entry.version))),
+  ...new Set(
+    devcontainerRuntimes
+      .filter((entry) => !entry.filtered && !["llvm-runtime", "llvm-xml-runtime"].includes(entry.tool))
+      .map((entry) => join(cache, "toolchains", entry.tool, entry.version)),
+  ),
 ];
 const tools = hash([
   policies(devcontainerRuntimes),
@@ -262,13 +266,21 @@ if (target.runtime === "gcc") {
 output("guix-key", `guix-source-v1-${platform}-${hash(inputs(["channels.scm"]))}`);
 output("guix-paths", ["checkouts", "authentication"].map((name) => join(homedir(), ".cache", "guix", name)).join("\n"));
 
-const llvm = plan.filter((entry) => entry.filtered || ["llvm-runtime", "llvm-xml-runtime"].includes(entry.tool));
-if (llvm.length) {
+// Keep the development SDK reusable when an older compatibility compiler is selected.
+// Dev Containers use the same immutable LLVM artifacts and language-owned filters.
+const llvm = [...plan, ...devcontainerRuntimes].filter(
+  (entry) => entry.filtered || ["llvm-runtime", "llvm-xml-runtime"].includes(entry.tool),
+);
+for (const [group, entries] of [
+  ["llvm", llvm.filter((entry) => !["clang", "llvm-xml-runtime"].includes(entry.tool))],
+  ["clang", llvm.filter((entry) => ["clang", "llvm-xml-runtime"].includes(entry.tool))],
+]) {
+  if (!entries.length) continue;
   output(
-    "llvm-key",
-    `llvm-v2-${platform}-${hash([policies(llvm), acquisitionCode, sourceInputs(["src/filtered-artifacts.ts"])])}`,
+    `${group}-key`,
+    `${group}-v3-${platform}-${hash([policies(entries), acquisitionCode, sourceInputs(["src/filtered-artifacts.ts"])])}`,
   );
-  output("llvm-paths", [...new Set(llvm.map((entry) => entry.directory))].join("\n"));
+  output(`${group}-paths`, [...new Set(entries.map((entry) => entry.directory))].join("\n"));
 }
 
 const rustPins = managed

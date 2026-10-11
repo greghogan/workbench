@@ -12,7 +12,9 @@ and must include GCC if selecting it.
 On native Linux, Workbench installs LLVM 23's required ICU 70 runtime privately in its toolchain cache, authenticating
 Ubuntu's signed package metadata and the pinned package. The host's system ICU and SDK remain selected normally. GnuPG,
 binutils, and XZ utilities are installation prerequisites. Filtered LLVM caches retain the required tools and runtime;
-cache deletion requires explicit tool installation again.
+cache deletion requires explicit tool installation again. Each language owns its LLVM inclusion filter under the
+Workbench language definitions. Filters omit LLVM static development libraries and Fortran resources, retaining C/C++
+runtimes and the tools needed for linting, sanitizers, coverage, and LTO.
 
 The lint gate validates clang-tidy configuration before compiling and analyzing every C/C++ source and test translation
 unit. All enabled diagnostics are errors. The selected groups cover bugprone code, CERT, the Clang analyzer,

@@ -314,6 +314,14 @@ jobs:
           path: ${{ steps.cache-plan.outputs.builds-paths }}
           key: ${{ steps.cache-plan.outputs.builds-key }}
 
+      # LLVM is cached independently so container checks reuse the native SDK archive.
+      - name: Reuse filtered LLVM installations
+        if: steps.cache-plan.outputs.llvm-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+
       # Enter the workspace only after restoring the selected shared caches.
       - name: Install the locked Dev Container CLI
         run: node bin/workbench.mjs tools install --devcontainer
@@ -452,6 +460,15 @@ jobs:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
 
+      # Older Clang versions do not repeat the development LLVM installation in their archive.
+      - name: Restore the selected older Clang installation
+        id: clang-cache
+        if: steps.cache-plan.outputs.clang-key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.clang-paths }}
+          key: ${{ steps.cache-plan.outputs.clang-key }}
+
       # Verify the selected compiler before project tests or installation-cache writes.
       - name: Install and verify LLVM and the selected compatibility compiler
         id: compiler-setup
@@ -476,6 +493,13 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
+
+      - name: Save the verified older Clang installation before compatibility checks
+        if: steps.cache-plan.outputs.clang-key != '' && steps.compiler-setup.conclusion == 'success' && steps.clang-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.clang-paths }}
+          key: ${{ steps.cache-plan.outputs.clang-key }}
 
       # Exercise ordinary tests, sanitizers, and configured LTO for every selected root.
       - name: Verify every selected C/C++ root

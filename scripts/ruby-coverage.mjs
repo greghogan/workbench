@@ -17,7 +17,7 @@ export function rubyCoverageSummary(report, root) {
   for (const [absolute, counters] of Object.entries(runs[0].coverage)) {
     const path = relative(root, absolute).replaceAll("\\", "/");
     if (isAbsolute(path) || path.startsWith("../")) throw new Error("Ruby coverage source outside root");
-    if (!path.startsWith("lib/")) continue;
+    if (!path.startsWith("lib/") && !path.startsWith("bin/")) continue;
     const fileLines = counters.lines.filter((hits) => hits !== null);
     const fileBranches = Object.values(counters.branches ?? {}).flatMap((branch) => Object.values(branch));
     if ([...fileLines, ...fileBranches].some((hits) => !Number.isSafeInteger(hits) || hits < 0))

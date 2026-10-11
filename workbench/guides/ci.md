@@ -94,13 +94,16 @@ installation is saved after tool verification so a later project-test failure do
 build. Guix caches authenticated source history; roots share its bootstrap and store within one job. Nix roots similarly
 share a job-local store and use upstream binary substitutes. Lockfiles, tool pins, platform, runtime selection, and the
 compiler installer determine cache keys. LLVM caches contain the selected language components and private runtime, with
-separate keys covering the source, filter, authentication policy, trust material, and installer. Restored filtered
-contents are verified before reuse, and newly verified installations are saved before project checks. Cache hits still
-run configured checks; caches do not store test results as evidence of a passing run. Package download stores have
-separate keys from installed dependencies and compiled outputs. Installer changes and runtime patch selections
-invalidate the compiled-output cache without invalidating the download cache. Compatibility jobs include only the native
-artifacts required by their execution phases; package managers still validate reused downloads through their lockfiles
-and integrity checks.
+separate keys covering the source, filter, authentication policy, trust material, and installer. Older Clang
+compatibility installations have their own archives; they reuse the development LLVM cache rather than storing another
+copy. Native and Dev Container jobs share LLVM cache entries when their selected artifacts and filters match. Each
+language retains its independent filter; LLVM development libraries and Fortran resources are omitted, while compiler
+tools, C/C++ runtimes, sanitizer and coverage resources, and LTO support remain. Restored filtered contents are verified
+before reuse, and newly verified installations are saved before project checks. Cache hits still run configured checks;
+caches do not store test results as evidence of a passing run. Package download stores have separate keys from installed
+dependencies and compiled outputs. Installer changes and runtime patch selections invalidate the compiled-output cache
+without invalidating the download cache. Compatibility jobs include only the native artifacts required by their
+execution phases; package managers still validate reused downloads through their lockfiles and integrity checks.
 
 Windows jobs cache Python download archives and recreate managed Python installations, virtual environments, and pnpm
 dependency links. These installed trees contain Windows junctions that do not survive the Actions archive round trip.

@@ -7,8 +7,9 @@ Runtime tests establish API compatibility on each supported line; type signature
 ## Commands
 
 Run `make check`, `make test`, `make coverage`, `make fmt`, `make lint`, `make build`, `make release`, or `make ci`.
-`make coverage` enforces 100% line and branch coverage and presents changes against the committed compact summary. The
-uninstrumented suite exercises both the library and executable. Test workers use the configured CPU allocation.
+`make coverage` enforces 100% line and branch coverage across the library and executable, merging subprocess coverage,
+and presents changes against the committed compact summary. Dependencies are excluded regardless of installation
+location. The uninstrumented suite exercises the same behavior. Test workers use the configured CPU allocation.
 `make release` produces a gem under `dist/`; installation requires Ruby but no Workbench runtime or repository files.
 
 Copy this directory into a consuming project, register its Ruby root, and reference or replace the shared Ruby
@@ -19,8 +20,11 @@ definition. The Makefile discovers an installed Workbench or accepts `WORKBENCH=
 
 `Gemfile.lock` pins development dependencies and Bundler, including gem SHA-256 checksums. Setup installs the verified
 Bundler bootstrap privately and uses frozen Bundler installs; ordinary checks never resolve new dependency versions.
-Dependencies, native extensions, Bundler configuration, and tool installations use external Workbench caches.
-`make distclean` removes owned dependency installations; shared verified tools survive cleanup.
+Dependency gems, native extensions, bootstrap tools, and downloads use external Workbench caches. Bundler configuration
+follows the selected build storage.
+Configured external storage keeps dependency installations under the root's owned cache; standalone commands also
+default to an external Bundler dependency cache rather than a local `vendor/` directory. `make distclean` removes owned
+dependency installations; shared Bundler caches and verified tools survive cleanup.
 
 `workbench tools install --path examples/languages/ruby` builds verified Ruby sources on Linux x64/arm64 and macOS
 arm64. Install a C compiler, make, pkg-config, OpenSSL and libyaml development headers first. On macOS use the selected

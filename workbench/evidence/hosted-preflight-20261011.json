@@ -28,7 +28,7 @@
     "url": "https://github.com/greghogan/workbench/actions/runs/38114097093",
     "status": "completed; failures inspected; Guix, Nix Docker and all GCC compatibility jobs passed; platform corrections under verification"
   },
-  "deployment": "not authorized or performed",
+  "deployment": false,
   "document_acceptance": "pending human review",
   "windows_signature_diagnostic": {
     "passed": true,
@@ -195,24 +195,429 @@
     "scope": "authenticated source history restored; compiled runtime and package store are not cached"
   },
   "hosted_final_verification": {
-    "run": 38122790825,
-    "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+    "run": 38131699407,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38131699407",
+    "revision": "3ec83af0857c16d2d2102452fd96873217ab6956",
+    "status": "complete success",
     "branch": "ci/draft-functionality-20261011",
-    "status": "complete; all 34 jobs passed, including aggregate status",
-    "url": "https://github.com/greghogan/workbench/actions/runs/38122790825",
-    "passed_platforms": [
-      "Linux x64",
-      "Linux ARM64",
-      "macOS ARM64",
-      "Windows x64",
-      "Nix Docker",
-      "Dev Containers"
-    ],
-    "compatibility": "all declared selections passed",
     "passed": true,
     "job_count": 34,
-    "log_guix": "/tmp/workbench-7-guix-final.log",
-    "measurements": "/tmp/workbench-7-cache-final-complete"
+    "jobs": [
+      {
+        "name": "Validate records and documentation",
+        "job": 114447184793,
+        "passed": true,
+        "seconds": 12
+      },
+      {
+        "name": "Plan checks",
+        "job": 114447184919,
+        "passed": true,
+        "seconds": 12
+      },
+      {
+        "name": "Dev Container",
+        "job": 114447230766,
+        "passed": true,
+        "seconds": 1152
+      },
+      {
+        "name": "nix-docker / all selected roots",
+        "job": 114447230797,
+        "passed": true,
+        "seconds": 440
+      },
+      {
+        "name": "linux x64 / selected roots",
+        "job": 114447230798,
+        "passed": true,
+        "seconds": 582
+      },
+      {
+        "name": "linux arm64 / selected roots",
+        "job": 114447230827,
+        "passed": true,
+        "seconds": 521
+      },
+      {
+        "name": "macos arm64 / selected roots",
+        "job": 114447230844,
+        "passed": true,
+        "seconds": 567
+      },
+      {
+        "name": "guix / all selected roots",
+        "job": 114447230878,
+        "passed": true,
+        "seconds": 2382
+      },
+      {
+        "name": "windows x64 / selected roots",
+        "job": 114447230919,
+        "passed": true,
+        "seconds": 1050
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / arm64 / all selected roots",
+        "job": 114447231047,
+        "passed": true,
+        "seconds": 834
+      },
+      {
+        "name": "Compatibility node 24.21.0 / x64 / all selected roots",
+        "job": 114447231054,
+        "passed": true,
+        "seconds": 119
+      },
+      {
+        "name": "Compatibility python 3.13.16 / x64 / all selected roots",
+        "job": 114447231058,
+        "passed": true,
+        "seconds": 23
+      },
+      {
+        "name": "Compatibility node 22.23.3 / x64 / all selected roots",
+        "job": 114447231072,
+        "passed": true,
+        "seconds": 95
+      },
+      {
+        "name": "Compatibility ruby 3.4.11 / x64 / all selected roots",
+        "job": 114447231073,
+        "passed": true,
+        "seconds": 248
+      },
+      {
+        "name": "Compatibility clang 21.1.8 / x64 / all selected roots",
+        "job": 114447231075,
+        "passed": true,
+        "seconds": 369
+      },
+      {
+        "name": "Compatibility rust 1.93.0 / x64 / all selected roots",
+        "job": 114447231076,
+        "passed": true,
+        "seconds": 46
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / x64 / all selected roots",
+        "job": 114447231081,
+        "passed": true,
+        "seconds": 194
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / x64 / all selected roots",
+        "job": 114447231083,
+        "passed": true,
+        "seconds": 1631
+      },
+      {
+        "name": "Compatibility php 8.3.35 / x64 / all selected roots",
+        "job": 114447231088,
+        "passed": true,
+        "seconds": 232
+      },
+      {
+        "name": "Compatibility java 21.0.12.1+1 / x64 / all selected roots",
+        "job": 114447231093,
+        "passed": true,
+        "seconds": 28
+      },
+      {
+        "name": "Compatibility python 3.12.15 / x64 / all selected roots",
+        "job": 114447231095,
+        "passed": true,
+        "seconds": 26
+      },
+      {
+        "name": "Compatibility go 1.26.8 / x64 / all selected roots",
+        "job": 114447231099,
+        "passed": true,
+        "seconds": 35
+      },
+      {
+        "name": "Compatibility python 3.14.8 / x64 / all selected roots",
+        "job": 114447231114,
+        "passed": true,
+        "seconds": 21
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+        "job": 114447231117,
+        "passed": true,
+        "seconds": 997
+      },
+      {
+        "name": "Compatibility clang 22.1.8 / x64 / all selected roots",
+        "job": 114447231124,
+        "passed": true,
+        "seconds": 125
+      },
+      {
+        "name": "Compatibility ruby 3.3.12 / x64 / all selected roots",
+        "job": 114447231140,
+        "passed": true,
+        "seconds": 170
+      },
+      {
+        "name": "Compatibility java 17.0.20.1+1 / x64 / all selected roots",
+        "job": 114447231141,
+        "passed": true,
+        "seconds": 32
+      },
+      {
+        "name": "Compatibility python 3.11.17 / x64 / all selected roots",
+        "job": 114447231146,
+        "passed": true,
+        "seconds": 21
+      },
+      {
+        "name": "Compatibility php 8.4.26 / x64 / all selected roots",
+        "job": 114447231153,
+        "passed": true,
+        "seconds": 45
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / x64 / all selected roots",
+        "job": 114447231166,
+        "passed": true,
+        "seconds": 1501
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+        "job": 114447231169,
+        "passed": true,
+        "seconds": 1142
+      },
+      {
+        "name": "Compatibility php 8.2.34 / x64 / all selected roots",
+        "job": 114447231194,
+        "passed": true,
+        "seconds": 207
+      },
+      {
+        "name": "Compatibility java 27+35 / x64 / all selected roots",
+        "job": 114447231225,
+        "passed": true,
+        "seconds": 29
+      },
+      {
+        "name": "Checks passed",
+        "job": 114454355605,
+        "passed": true,
+        "seconds": 8
+      }
+    ],
+    "metrics": "/tmp/workbench-7-final-complete-metrics",
+    "gcc_cache_results": [
+      {
+        "name": "Compatibility gcc 15.3.0 / arm64 / all selected roots",
+        "job": 114447231047,
+        "passed": true,
+        "seconds": 834,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231047.log"
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / x64 / all selected roots",
+        "job": 114447231081,
+        "passed": true,
+        "seconds": 194,
+        "compiler_cache_hit": true,
+        "log": "/tmp/workbench-7-final-gcc-114447231081.log"
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / x64 / all selected roots",
+        "job": 114447231083,
+        "passed": true,
+        "seconds": 1631,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231083.log"
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+        "job": 114447231117,
+        "passed": true,
+        "seconds": 997,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231117.log"
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / x64 / all selected roots",
+        "job": 114447231166,
+        "passed": true,
+        "seconds": 1501,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231166.log"
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+        "job": 114447231169,
+        "passed": true,
+        "seconds": 1142,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231169.log"
+      }
+    ],
+    "cache_measurements": [
+      {
+        "artifact": "cache-measurement-compatibility-1",
+        "elapsed_seconds": 98.047,
+        "measured_group_file_bytes": 868022109
+      },
+      {
+        "artifact": "cache-measurement-compatibility-10",
+        "elapsed_seconds": 981.373,
+        "measured_group_file_bytes": 4099249982
+      },
+      {
+        "artifact": "cache-measurement-compatibility-11",
+        "elapsed_seconds": 1485.224,
+        "measured_group_file_bytes": 4233230734
+      },
+      {
+        "artifact": "cache-measurement-compatibility-12",
+        "elapsed_seconds": 817.247,
+        "measured_group_file_bytes": 4118563029
+      },
+      {
+        "artifact": "cache-measurement-compatibility-13",
+        "elapsed_seconds": 1612.848,
+        "measured_group_file_bytes": 4246891372
+      },
+      {
+        "artifact": "cache-measurement-compatibility-14",
+        "elapsed_seconds": 1127.591,
+        "measured_group_file_bytes": 4137416169
+      },
+      {
+        "artifact": "cache-measurement-compatibility-15",
+        "elapsed_seconds": 20.284,
+        "measured_group_file_bytes": 293662931
+      },
+      {
+        "artifact": "cache-measurement-compatibility-16",
+        "elapsed_seconds": 18.207,
+        "measured_group_file_bytes": 355535037
+      },
+      {
+        "artifact": "cache-measurement-compatibility-17",
+        "elapsed_seconds": 13.019,
+        "measured_group_file_bytes": 384572749
+      },
+      {
+        "artifact": "cache-measurement-compatibility-18",
+        "elapsed_seconds": 15.614,
+        "measured_group_file_bytes": 340671784
+      },
+      {
+        "artifact": "cache-measurement-compatibility-19",
+        "elapsed_seconds": 154.737,
+        "measured_group_file_bytes": 284845203
+      },
+      {
+        "artifact": "cache-measurement-compatibility-2",
+        "elapsed_seconds": 26.248,
+        "measured_group_file_bytes": 735177003
+      },
+      {
+        "artifact": "cache-measurement-compatibility-20",
+        "elapsed_seconds": 233.702,
+        "measured_group_file_bytes": 303843029
+      },
+      {
+        "artifact": "cache-measurement-compatibility-21",
+        "elapsed_seconds": 189.778,
+        "measured_group_file_bytes": 61495665
+      },
+      {
+        "artifact": "cache-measurement-compatibility-22",
+        "elapsed_seconds": 220.319,
+        "measured_group_file_bytes": 64264283
+      },
+      {
+        "artifact": "cache-measurement-compatibility-23",
+        "elapsed_seconds": 29.867,
+        "measured_group_file_bytes": 68514105
+      },
+      {
+        "artifact": "cache-measurement-compatibility-3",
+        "elapsed_seconds": 7.058,
+        "measured_group_file_bytes": 372016753
+      },
+      {
+        "artifact": "cache-measurement-compatibility-4",
+        "elapsed_seconds": 6.704,
+        "measured_group_file_bytes": 335104878
+      },
+      {
+        "artifact": "cache-measurement-compatibility-5",
+        "elapsed_seconds": 5.344,
+        "measured_group_file_bytes": 335661877
+      },
+      {
+        "artifact": "cache-measurement-compatibility-6",
+        "elapsed_seconds": 6.888,
+        "measured_group_file_bytes": 339617378
+      },
+      {
+        "artifact": "cache-measurement-compatibility-7",
+        "elapsed_seconds": 353.805,
+        "measured_group_file_bytes": 7136958265
+      },
+      {
+        "artifact": "cache-measurement-compatibility-8",
+        "elapsed_seconds": 109.752,
+        "measured_group_file_bytes": 7125636952
+      },
+      {
+        "artifact": "cache-measurement-compatibility-9",
+        "elapsed_seconds": 176.529,
+        "measured_group_file_bytes": 4212801072
+      },
+      {
+        "artifact": "cache-measurement-compatibility-single",
+        "elapsed_seconds": 71.991,
+        "measured_group_file_bytes": 863033639
+      },
+      {
+        "artifact": "cache-measurement-devcontainer-single",
+        "elapsed_seconds": 1051.022,
+        "measured_group_file_bytes": 8853813112
+      },
+      {
+        "artifact": "cache-measurement-environments-1",
+        "elapsed_seconds": 325.356,
+        "measured_group_file_bytes": 1377939973
+      },
+      {
+        "artifact": "cache-measurement-environments-single",
+        "elapsed_seconds": 2282.077,
+        "measured_group_file_bytes": 1859844270
+      },
+      {
+        "artifact": "cache-measurement-native-1",
+        "elapsed_seconds": 475.106,
+        "measured_group_file_bytes": 8726983649
+      },
+      {
+        "artifact": "cache-measurement-native-2",
+        "elapsed_seconds": 479.62,
+        "measured_group_file_bytes": 7832369659
+      },
+      {
+        "artifact": "cache-measurement-native-3",
+        "elapsed_seconds": 1005.934,
+        "measured_group_file_bytes": 7427119387
+      },
+      {
+        "artifact": "cache-measurement-native-single",
+        "elapsed_seconds": 491.89,
+        "measured_group_file_bytes": 9324002562
+      }
+    ],
+    "measurement_scope": "Measured group file bytes exclude links, Nix/Guix stores and Docker images; not filesystem allocated blocks or GitHub compressed cache storage.",
+    "artifact_inventory": "/tmp/workbench-7-final-artifacts.json"
   },
   "pruned_completed_diagnostic_caches": {
     "count": 4,
@@ -344,14 +749,17 @@
       "revision": "cd22791e5a2a6c9c0a41bf1916c7c1db56b3aea8",
       "branch": "ci/draft-functionality-20261011",
       "selection": "full matrix; two shared or unclassified inputs",
-      "status": "active",
+      "status": "complete; Windows cache restoration failed, all other targets passed; repaired in the final successful full matrix",
       "url": "https://github.com/greghogan/workbench/actions/runs/38127320951"
     },
-    "production_guix_receipt_clean": true
+    "production_guix_receipt_clean": true,
+    "status": "local rejection tests and full hosted verification passed",
+    "final_hosted_run": 38131699407,
+    "final_hosted_revision": "3ec83af0857c16d2d2102452fd96873217ab6956"
   },
   "cache_comparison": "workbench/evidence/hosted-cache-comparison-20261011.json",
   "windows_cache_restoration": {
-    "status": "cold and warm hosted setup/Python verification passed; full final matrix pending",
+    "status": "Focused cold/warm and full Windows warm-cache verification passed; complete final hosted matrix passed",
     "failed_run": 38127320951,
     "failed_job": 114434316045,
     "failed_log": "/tmp/workbench-7-windows-guard-failure.log",
@@ -419,7 +827,62 @@
       "root/TypeScript/JavaScript/Python dependency setup",
       "Python ordinary tests: 5 passed"
     ],
-    "diagnostic_workflow": "temporary CI branch only"
+    "diagnostic_workflow": "temporary CI branch only",
+    "full_warm": {
+      "passed": true,
+      "run": 38131699407,
+      "revision": "3ec83af0857c16d2d2102452fd96873217ab6956",
+      "job": 114447230919,
+      "tests_passed": 328,
+      "platform_skips": 47,
+      "elapsed_seconds": 1050,
+      "log": "/tmp/workbench-7-full-windows-warm.log",
+      "restored_groups": [
+        "tools-v7",
+        "rust-v1",
+        "package-managers-v1",
+        "downloads-v2",
+        "builds-v2",
+        "llvm-v2"
+      ],
+      "steps": [
+        {
+          "completedAt": "2026-10-11T10:23:11Z",
+          "conclusion": "success",
+          "name": "Reuse small native tool installations",
+          "startedAt": "2026-10-11T10:22:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-11T10:24:59Z",
+          "conclusion": "success",
+          "name": "Install and verify native tool installations",
+          "startedAt": "2026-10-11T10:24:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-11T10:37:57Z",
+          "conclusion": "success",
+          "name": "Run every installed root's configured native checks",
+          "startedAt": "2026-10-11T10:24:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-11T10:39:34Z",
+          "conclusion": "success",
+          "name": "Prepare and verify passing roots' local release artifacts",
+          "startedAt": "2026-10-11T10:37:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-11T10:39:42Z",
+          "conclusion": "success",
+          "name": "Post Reuse small native tool installations",
+          "startedAt": "2026-10-11T10:39:42Z",
+          "status": "completed"
+        }
+      ]
+    }
   },
   "final_cache_fix_verification": {
     "run": 38129743227,
@@ -449,7 +912,492 @@
     "reason": "Allow Windows cache archiving and final cleanup after all checks and release verification.",
     "checks_unchanged": true,
     "lint_job": "01a12a7b29cc7ec3ab97baf601f845b0",
-    "status": "lint and structural validation passed; final hosted rerun pending",
+    "status": "Verified by the complete final hosted matrix",
     "lint_passed": true
+  },
+  "final_timeout_verification": {
+    "run": 38131699407,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38131699407",
+    "revision": "3ec83af0857c16d2d2102452fd96873217ab6956",
+    "status": "complete success",
+    "branch": "ci/draft-functionality-20261011",
+    "passed": true,
+    "job_count": 34,
+    "jobs": [
+      {
+        "name": "Validate records and documentation",
+        "job": 114447184793,
+        "passed": true,
+        "seconds": 12
+      },
+      {
+        "name": "Plan checks",
+        "job": 114447184919,
+        "passed": true,
+        "seconds": 12
+      },
+      {
+        "name": "Dev Container",
+        "job": 114447230766,
+        "passed": true,
+        "seconds": 1152
+      },
+      {
+        "name": "nix-docker / all selected roots",
+        "job": 114447230797,
+        "passed": true,
+        "seconds": 440
+      },
+      {
+        "name": "linux x64 / selected roots",
+        "job": 114447230798,
+        "passed": true,
+        "seconds": 582
+      },
+      {
+        "name": "linux arm64 / selected roots",
+        "job": 114447230827,
+        "passed": true,
+        "seconds": 521
+      },
+      {
+        "name": "macos arm64 / selected roots",
+        "job": 114447230844,
+        "passed": true,
+        "seconds": 567
+      },
+      {
+        "name": "guix / all selected roots",
+        "job": 114447230878,
+        "passed": true,
+        "seconds": 2382
+      },
+      {
+        "name": "windows x64 / selected roots",
+        "job": 114447230919,
+        "passed": true,
+        "seconds": 1050
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / arm64 / all selected roots",
+        "job": 114447231047,
+        "passed": true,
+        "seconds": 834
+      },
+      {
+        "name": "Compatibility node 24.21.0 / x64 / all selected roots",
+        "job": 114447231054,
+        "passed": true,
+        "seconds": 119
+      },
+      {
+        "name": "Compatibility python 3.13.16 / x64 / all selected roots",
+        "job": 114447231058,
+        "passed": true,
+        "seconds": 23
+      },
+      {
+        "name": "Compatibility node 22.23.3 / x64 / all selected roots",
+        "job": 114447231072,
+        "passed": true,
+        "seconds": 95
+      },
+      {
+        "name": "Compatibility ruby 3.4.11 / x64 / all selected roots",
+        "job": 114447231073,
+        "passed": true,
+        "seconds": 248
+      },
+      {
+        "name": "Compatibility clang 21.1.8 / x64 / all selected roots",
+        "job": 114447231075,
+        "passed": true,
+        "seconds": 369
+      },
+      {
+        "name": "Compatibility rust 1.93.0 / x64 / all selected roots",
+        "job": 114447231076,
+        "passed": true,
+        "seconds": 46
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / x64 / all selected roots",
+        "job": 114447231081,
+        "passed": true,
+        "seconds": 194
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / x64 / all selected roots",
+        "job": 114447231083,
+        "passed": true,
+        "seconds": 1631
+      },
+      {
+        "name": "Compatibility php 8.3.35 / x64 / all selected roots",
+        "job": 114447231088,
+        "passed": true,
+        "seconds": 232
+      },
+      {
+        "name": "Compatibility java 21.0.12.1+1 / x64 / all selected roots",
+        "job": 114447231093,
+        "passed": true,
+        "seconds": 28
+      },
+      {
+        "name": "Compatibility python 3.12.15 / x64 / all selected roots",
+        "job": 114447231095,
+        "passed": true,
+        "seconds": 26
+      },
+      {
+        "name": "Compatibility go 1.26.8 / x64 / all selected roots",
+        "job": 114447231099,
+        "passed": true,
+        "seconds": 35
+      },
+      {
+        "name": "Compatibility python 3.14.8 / x64 / all selected roots",
+        "job": 114447231114,
+        "passed": true,
+        "seconds": 21
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+        "job": 114447231117,
+        "passed": true,
+        "seconds": 997
+      },
+      {
+        "name": "Compatibility clang 22.1.8 / x64 / all selected roots",
+        "job": 114447231124,
+        "passed": true,
+        "seconds": 125
+      },
+      {
+        "name": "Compatibility ruby 3.3.12 / x64 / all selected roots",
+        "job": 114447231140,
+        "passed": true,
+        "seconds": 170
+      },
+      {
+        "name": "Compatibility java 17.0.20.1+1 / x64 / all selected roots",
+        "job": 114447231141,
+        "passed": true,
+        "seconds": 32
+      },
+      {
+        "name": "Compatibility python 3.11.17 / x64 / all selected roots",
+        "job": 114447231146,
+        "passed": true,
+        "seconds": 21
+      },
+      {
+        "name": "Compatibility php 8.4.26 / x64 / all selected roots",
+        "job": 114447231153,
+        "passed": true,
+        "seconds": 45
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / x64 / all selected roots",
+        "job": 114447231166,
+        "passed": true,
+        "seconds": 1501
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+        "job": 114447231169,
+        "passed": true,
+        "seconds": 1142
+      },
+      {
+        "name": "Compatibility php 8.2.34 / x64 / all selected roots",
+        "job": 114447231194,
+        "passed": true,
+        "seconds": 207
+      },
+      {
+        "name": "Compatibility java 27+35 / x64 / all selected roots",
+        "job": 114447231225,
+        "passed": true,
+        "seconds": 29
+      },
+      {
+        "name": "Checks passed",
+        "job": 114454355605,
+        "passed": true,
+        "seconds": 8
+      }
+    ],
+    "metrics": "/tmp/workbench-7-final-complete-metrics",
+    "gcc_cache_results": [
+      {
+        "name": "Compatibility gcc 15.3.0 / arm64 / all selected roots",
+        "job": 114447231047,
+        "passed": true,
+        "seconds": 834,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231047.log"
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / x64 / all selected roots",
+        "job": 114447231081,
+        "passed": true,
+        "seconds": 194,
+        "compiler_cache_hit": true,
+        "log": "/tmp/workbench-7-final-gcc-114447231081.log"
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / x64 / all selected roots",
+        "job": 114447231083,
+        "passed": true,
+        "seconds": 1631,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231083.log"
+      },
+      {
+        "name": "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+        "job": 114447231117,
+        "passed": true,
+        "seconds": 997,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231117.log"
+      },
+      {
+        "name": "Compatibility gcc 15.3.0 / x64 / all selected roots",
+        "job": 114447231166,
+        "passed": true,
+        "seconds": 1501,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231166.log"
+      },
+      {
+        "name": "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+        "job": 114447231169,
+        "passed": true,
+        "seconds": 1142,
+        "compiler_cache_hit": false,
+        "log": "/tmp/workbench-7-final-gcc-114447231169.log"
+      }
+    ],
+    "cache_measurements": [
+      {
+        "artifact": "cache-measurement-compatibility-1",
+        "elapsed_seconds": 98.047,
+        "measured_group_file_bytes": 868022109
+      },
+      {
+        "artifact": "cache-measurement-compatibility-10",
+        "elapsed_seconds": 981.373,
+        "measured_group_file_bytes": 4099249982
+      },
+      {
+        "artifact": "cache-measurement-compatibility-11",
+        "elapsed_seconds": 1485.224,
+        "measured_group_file_bytes": 4233230734
+      },
+      {
+        "artifact": "cache-measurement-compatibility-12",
+        "elapsed_seconds": 817.247,
+        "measured_group_file_bytes": 4118563029
+      },
+      {
+        "artifact": "cache-measurement-compatibility-13",
+        "elapsed_seconds": 1612.848,
+        "measured_group_file_bytes": 4246891372
+      },
+      {
+        "artifact": "cache-measurement-compatibility-14",
+        "elapsed_seconds": 1127.591,
+        "measured_group_file_bytes": 4137416169
+      },
+      {
+        "artifact": "cache-measurement-compatibility-15",
+        "elapsed_seconds": 20.284,
+        "measured_group_file_bytes": 293662931
+      },
+      {
+        "artifact": "cache-measurement-compatibility-16",
+        "elapsed_seconds": 18.207,
+        "measured_group_file_bytes": 355535037
+      },
+      {
+        "artifact": "cache-measurement-compatibility-17",
+        "elapsed_seconds": 13.019,
+        "measured_group_file_bytes": 384572749
+      },
+      {
+        "artifact": "cache-measurement-compatibility-18",
+        "elapsed_seconds": 15.614,
+        "measured_group_file_bytes": 340671784
+      },
+      {
+        "artifact": "cache-measurement-compatibility-19",
+        "elapsed_seconds": 154.737,
+        "measured_group_file_bytes": 284845203
+      },
+      {
+        "artifact": "cache-measurement-compatibility-2",
+        "elapsed_seconds": 26.248,
+        "measured_group_file_bytes": 735177003
+      },
+      {
+        "artifact": "cache-measurement-compatibility-20",
+        "elapsed_seconds": 233.702,
+        "measured_group_file_bytes": 303843029
+      },
+      {
+        "artifact": "cache-measurement-compatibility-21",
+        "elapsed_seconds": 189.778,
+        "measured_group_file_bytes": 61495665
+      },
+      {
+        "artifact": "cache-measurement-compatibility-22",
+        "elapsed_seconds": 220.319,
+        "measured_group_file_bytes": 64264283
+      },
+      {
+        "artifact": "cache-measurement-compatibility-23",
+        "elapsed_seconds": 29.867,
+        "measured_group_file_bytes": 68514105
+      },
+      {
+        "artifact": "cache-measurement-compatibility-3",
+        "elapsed_seconds": 7.058,
+        "measured_group_file_bytes": 372016753
+      },
+      {
+        "artifact": "cache-measurement-compatibility-4",
+        "elapsed_seconds": 6.704,
+        "measured_group_file_bytes": 335104878
+      },
+      {
+        "artifact": "cache-measurement-compatibility-5",
+        "elapsed_seconds": 5.344,
+        "measured_group_file_bytes": 335661877
+      },
+      {
+        "artifact": "cache-measurement-compatibility-6",
+        "elapsed_seconds": 6.888,
+        "measured_group_file_bytes": 339617378
+      },
+      {
+        "artifact": "cache-measurement-compatibility-7",
+        "elapsed_seconds": 353.805,
+        "measured_group_file_bytes": 7136958265
+      },
+      {
+        "artifact": "cache-measurement-compatibility-8",
+        "elapsed_seconds": 109.752,
+        "measured_group_file_bytes": 7125636952
+      },
+      {
+        "artifact": "cache-measurement-compatibility-9",
+        "elapsed_seconds": 176.529,
+        "measured_group_file_bytes": 4212801072
+      },
+      {
+        "artifact": "cache-measurement-compatibility-single",
+        "elapsed_seconds": 71.991,
+        "measured_group_file_bytes": 863033639
+      },
+      {
+        "artifact": "cache-measurement-devcontainer-single",
+        "elapsed_seconds": 1051.022,
+        "measured_group_file_bytes": 8853813112
+      },
+      {
+        "artifact": "cache-measurement-environments-1",
+        "elapsed_seconds": 325.356,
+        "measured_group_file_bytes": 1377939973
+      },
+      {
+        "artifact": "cache-measurement-environments-single",
+        "elapsed_seconds": 2282.077,
+        "measured_group_file_bytes": 1859844270
+      },
+      {
+        "artifact": "cache-measurement-native-1",
+        "elapsed_seconds": 475.106,
+        "measured_group_file_bytes": 8726983649
+      },
+      {
+        "artifact": "cache-measurement-native-2",
+        "elapsed_seconds": 479.62,
+        "measured_group_file_bytes": 7832369659
+      },
+      {
+        "artifact": "cache-measurement-native-3",
+        "elapsed_seconds": 1005.934,
+        "measured_group_file_bytes": 7427119387
+      },
+      {
+        "artifact": "cache-measurement-native-single",
+        "elapsed_seconds": 491.89,
+        "measured_group_file_bytes": 9324002562
+      }
+    ],
+    "measurement_scope": "Measured group file bytes exclude links, Nix/Guix stores and Docker images; not filesystem allocated blocks or GitHub compressed cache storage.",
+    "artifact_inventory": "/tmp/workbench-7-final-artifacts.json"
+  },
+  "hosted_initial_complete_verification": {
+    "run": 38122790825,
+    "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+    "branch": "ci/draft-functionality-20261011",
+    "status": "complete; all 34 jobs passed, including aggregate status",
+    "url": "https://github.com/greghogan/workbench/actions/runs/38122790825",
+    "passed_platforms": [
+      "Linux x64",
+      "Linux ARM64",
+      "macOS ARM64",
+      "Windows x64",
+      "Nix Docker",
+      "Dev Containers"
+    ],
+    "compatibility": "all declared selections passed",
+    "passed": true,
+    "job_count": 34,
+    "log_guix": "/tmp/workbench-7-guix-final.log",
+    "measurements": "/tmp/workbench-7-cache-final-complete"
+  },
+  "ruby_coverage_followup": {
+    "approval": "2026-10-11: all shipped project-owned code; exclude dependencies; shared policy in ADR-9",
+    "verification": "local Linux x64; not pushed to hosted CI",
+    "ci_gate": {
+      "job": "01a12b3360ae7dc39d126e11b2a0b98e",
+      "passed": true,
+      "log": "/tmp/workbench-ruby-shipped-gate.log"
+    },
+    "ordinary_and_local_storage": {
+      "job": "01a12b317ae578b1abaf36fcbad52cb6",
+      "passed": true,
+      "log": "/tmp/workbench-ruby-storage-verification.log"
+    },
+    "coverage": {
+      "lines": {
+        "covered": 11,
+        "total": 11
+      },
+      "branches": {
+        "covered": 4,
+        "total": 4
+      },
+      "files": [
+        "bin/count",
+        "lib/workbench_ruby_reference.rb"
+      ],
+      "minimum": {
+        "lines": 100,
+        "branches": 100
+      }
+    },
+    "root_gate": {
+      "job": "01a12b2c1c837002881002f25096e001",
+      "passed": true,
+      "tests": 375,
+      "checks": 13,
+      "log": "/tmp/workbench-shipped-coverage-root-gate.log"
+    },
+    "dependencies": "external cache for either build storage selection; local vendor fallback removed"
   }
 }

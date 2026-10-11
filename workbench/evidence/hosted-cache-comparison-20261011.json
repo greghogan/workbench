@@ -603,5 +603,58 @@
         "rust-paths": 2456449830
       }
     }
-  ]
+  ],
+  "latest_working_set": {
+    "run": 38131699407,
+    "retained_inventory": {
+      "keys": 44,
+      "compressed_bytes": 9993427397
+    },
+    "full_matrix_estimate": {
+      "distinct_keys": 91,
+      "compressed_bytes": 18262465457,
+      "groups": {
+        "builds": {
+          "keys": 31,
+          "compressed_bytes": 2428297955
+        },
+        "downloads": {
+          "keys": 14,
+          "compressed_bytes": 745360265
+        },
+        "gcc": {
+          "keys": 6,
+          "compressed_bytes": 509875604
+        },
+        "guix-source": {
+          "keys": 1,
+          "compressed_bytes": 483679585
+        },
+        "llvm": {
+          "keys": 6,
+          "compressed_bytes": 6849105548
+        },
+        "package-managers": {
+          "keys": 6,
+          "compressed_bytes": 111793994
+        },
+        "rust": {
+          "keys": 5,
+          "compressed_bytes": 2239205821
+        },
+        "tools": {
+          "keys": 22,
+          "compressed_bytes": 4895146685
+        }
+      }
+    },
+    "method": "Unique cache keys selected in the complete run, using recorded restore/upload byte sizes and cache inventories. Excludes superseded keys; no sum of overlapping per-job uncompressed measurements.",
+    "limitations": "One branch and one complete matrix; changed target subsets, keys and additional branches can add entries. Category tools includes Dev Container LLVM.",
+    "optimization_observations": {
+      "llvm_static_libraries_per_linux_filtered_installation_bytes": 342051010,
+      "rust_duplicate_llvm_library_bytes": 208094144,
+      "rust_duplicate_llvm_sha256": "7c2c7ebb79211f07e3b32e408a1a65b4d205656792f9c51bdbefcb21c0868cbd",
+      "scope": "Read-only inspection; filters and hosted cache layout unchanged."
+    }
+  }
 }
