@@ -79,7 +79,9 @@ export function prepareVcpkg(
     capture: true,
   }).trim();
   if (head !== revision || changed || !existsSync(executable))
-    throw new Error(`${installation}: vcpkg must match its pinned checkout; refusing modified or incomplete tools`);
+    throw new Error(
+      `${installation}: vcpkg must match its pinned checkout; refusing modified or incomplete tools (HEAD ${head}; changes ${changed.slice(0, 4096) || "none"}; executable ${existsSync(executable) ? "present" : "missing"})`,
+    );
   const architecture = ({ x64: "x64", arm64: "arm64" } as Record<string, string>)[process.arch];
   const system = ({ linux: "linux", darwin: "osx", win32: "windows" } as Record<string, string>)[process.platform];
   if (!architecture || !system) throw new Error(`no vcpkg reference target for ${process.platform}/${process.arch}`);

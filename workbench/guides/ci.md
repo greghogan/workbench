@@ -233,7 +233,8 @@ The separate [publication workflow](../../.github/workflows/publication.yml) pre
 and Guix Docker profiles, publishes unique CI tags to GitHub Container Registry, removes the local image, then pulls by
 registry digest and verifies image identity and offline behavior. It preserves release receipts and publication
 evidence. It does not create release records, tags, or deployments. Ordinary checks have read-only permissions and never
-publish. The selected workflow grants only repository reads and package writes.
+publish. The selected workflow grants repository/action reads and package writes, and requires a successful Checks run
+for the exact source revision. Publication branches reuse that verified revision without launching its matrix again.
 
 Use its manual GitHub Actions invocation after the workflow is present on the default branch. Before this repository's
 initial commit, an intentionally selected `ci/publication-verification-*` branch also triggers this workflow; other

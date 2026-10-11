@@ -2,11 +2,11 @@
   "date": "2026-10-11",
   "root_gate": {
     "passed": true,
-    "tests": 370,
+    "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a129579ccf734291f7504a4e35612e",
-    "log": "/tmp/workbench-7-root-gate-r2.log"
+    "job": "01a1296ffdf470e394d6653d3af22c38",
+    "log": "/tmp/workbench-7-root-gate-r3.log"
   },
   "focused": {
     "passed": 25,
@@ -29,5 +29,29 @@
     "status": "in progress"
   },
   "deployment": "not authorized or performed",
-  "document_acceptance": "pending human review"
+  "document_acceptance": "pending human review",
+  "windows_signature_diagnostic": {
+    "passed": true,
+    "run": 38114877693,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38114877693"
+  },
+  "devcontainer_regression": {
+    "passed": true,
+    "job": "01a1296ec9e57a00b0331510b799d8ab",
+    "log": "/tmp/workbench-7-devcontainer-r2.log",
+    "results": "/tmp/workbench-ci-reports-vc4Czi/reports/results.json"
+  },
+  "portability_focused": {
+    "passed": 83,
+    "files": 7,
+    "job": "01a12972d9cd7d83bd1d59ad9076bcd4",
+    "log": "/tmp/workbench-7-portability-focused.log"
+  },
+  "cache_inventory_partial": {
+    "compressed_bytes": 9233287280,
+    "count": 65,
+    "inventory": "/tmp/workbench-7-cache-inventory.tsv",
+    "measurements": "/tmp/workbench-7-cache-first",
+    "warm_verification": "pending"
+  }
 }

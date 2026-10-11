@@ -39,7 +39,18 @@ if (process.platform === "linux") {
     "autoconf",
   ]);
 } else if (process.platform === "darwin") {
-  run("brew", ["install", "pkg-config", "openssl@3", "libyaml", "libffi", "oniguruma", "autoconf", "libxml2", "curl"]);
+  run("brew", [
+    "install",
+    "pkg-config",
+    "openssl@3",
+    "libyaml",
+    "libffi",
+    "oniguruma",
+    "autoconf",
+    "libxml2",
+    "libiconv",
+    "curl",
+  ]);
   const { appendFileSync } = await import("node:fs");
   if (process.env.GITHUB_ENV) {
     const packages = ["openssl@3", "libyaml", "libffi", "oniguruma", "libxml2", "curl"];

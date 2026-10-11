@@ -87,8 +87,12 @@ export function nativeTools(
   return tools;
 }
 
-export function assetFor(distribution: string, tool: Tool, directory?: string): ToolAsset | undefined {
-  const platform = `${process.platform}-${process.arch}`;
+export function assetFor(
+  distribution: string,
+  tool: Tool,
+  directory?: string,
+  platform = `${process.platform}-${process.arch}`,
+): ToolAsset | undefined {
   if (tool.name === "llvm" || tool.name === "clang") {
     const assets = JSON.parse(readText(join(distribution, "scripts/llvm-assets.json"))) as Record<
       string,

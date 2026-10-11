@@ -20,7 +20,8 @@ function artifact(extension) {
   return join(artifacts, matches[0]);
 }
 try {
-  run("tar", ["-xzf", artifact(".tgz"), "-C", temporary]);
+  const tar = process.platform === "win32" ? join(process.env.SystemRoot, "System32", "tar.exe") : "tar";
+  run(tar, ["-xzf", artifact(".tgz"), "-C", temporary]);
   const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   run(
     process.execPath,

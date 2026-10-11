@@ -130,12 +130,22 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
   };
   signal.addEventListener("abort", abort, { once: true });
   if (signal.aborted) abort();
+  const verificationFailure = () =>
+    new Error(
+      `${failure?.message ?? "upstream artifact signature verification failed"}${status ? `\n${status.trim().slice(-8192)}` : ""}`,
+      { cause: failure },
+    );
   return {
     relay: new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         child.stdin.write(chunk, (error) => {
-          if (error) failure ??= new Error("upstream artifact signature verification failed", { cause: error });
-          callback(error ? failure : undefined, error ? undefined : chunk);
+          if (error) {
+            failure ??= new Error("upstream artifact signature verification failed", { cause: error });
+            child.kill();
+            void completed.then(() => {
+              callback(verificationFailure());
+            });
+          } else callback(undefined, chunk);
         });
       },
       flush(callback) {
@@ -146,8 +156,7 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
     async finish() {
       await completed;
       signal.removeEventListener("abort", abort);
-      if (failure)
-        throw new Error(`${failure.message}${status ? `\n${status.trim().slice(-8192)}` : ""}`, { cause: failure });
+      if (failure) throw verificationFailure();
       const valid = [...status.replaceAll("\r", "").matchAll(/^\[GNUPG:\] VALIDSIG ([A-F0-9]+) .+$/gm)];
       if (
         !valid.some(

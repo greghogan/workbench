@@ -50,7 +50,9 @@ export function buildPhp(source: string, staging: string, destination: string, r
       "--enable-ctype",
       "--enable-fileinfo",
       "--enable-simplexml",
-      "--with-iconv",
+      process.platform === "darwin"
+        ? `--with-iconv=${run("brew", ["--prefix", "libiconv"], { capture: true }).trim()}`
+        : "--with-iconv",
       "--disable-opcache-jit",
       "--with-openssl",
       "--with-zlib",

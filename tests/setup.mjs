@@ -3,6 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll } from "vitest";
 
+// Worker environments are case-sensitive, including on Windows; native child processes require a canonical PATH.
+if (process.platform === "win32") {
+  const path = Object.entries(process.env).find(([name]) => name.toUpperCase() === "PATH")?.[1];
+  if (path !== undefined) process.env.PATH = path;
+}
+
 // Node reads this setting at startup: changing it here captures child CLIs without a second worker report.
 if (process.env.WORKBENCH_SUBPROCESS_COVERAGE) process.env.NODE_V8_COVERAGE = process.env.WORKBENCH_SUBPROCESS_COVERAGE;
 

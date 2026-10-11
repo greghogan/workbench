@@ -19,6 +19,9 @@ verified GNU source archives on Linux, with prerequisites verified by GCC's pinn
 installation additionally needs a working C/C++ bootstrap compiler, Make, and curl or wget. It installs rustup when
 absent and each Rust root's declared components, including rust-analyzer. Rust roots may also declare
 `rust-toolchain-miri.toml` for a separately pinned Miri nightly; see the Rust reference for its explicit check role.
+GitHub API downloads use `GH_TOKEN` or `GITHUB_TOKEN` when supplied, solely for `api.github.com`; redirects to asset
+hosts do not receive those credentials. Signature and attestation verification still applies.
+
 Installations do not replace system packages or change the parent shell's `PATH`. Checks and `workbench shell` select
 the installed pins; ordinary checks never install or repair compiler versions. Package setup still uses the configured
 dependency locks.

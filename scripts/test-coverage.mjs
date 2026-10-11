@@ -141,6 +141,8 @@ export async function runCoverage(root, builds = join(root, "build")) {
   const temporary = mkdtempSync(join(realpathSync(builds), "coverage-"));
   try {
     const workspace = await coverageWorkspace(resolve(root), temporary);
+    const source = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+    const revision = process.env.WORKBENCH_SOURCE_REVISION ?? (source.status === 0 ? source.stdout.trim() : undefined);
     const raw = join(temporary, "raw");
     const unit = join(temporary, "unit");
     const tests = spawnSync(
@@ -150,7 +152,12 @@ export async function runCoverage(root, builds = join(root, "build")) {
         cwd: workspace,
         stdio: "inherit",
         // Vitest already measures its workers. Their setup enables native V8 capture only for CLI children.
-        env: { ...process.env, NODE_V8_COVERAGE: "", WORKBENCH_SUBPROCESS_COVERAGE: raw },
+        env: {
+          ...process.env,
+          NODE_V8_COVERAGE: "",
+          WORKBENCH_SUBPROCESS_COVERAGE: raw,
+          ...(revision === undefined ? {} : { WORKBENCH_SOURCE_REVISION: revision }),
+        },
       },
     );
     const resultsPath = join(workspace, "coverage/tests.json");

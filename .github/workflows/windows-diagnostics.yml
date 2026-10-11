@@ -184,3 +184,14 @@ jobs:
           path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
           if-no-files-found: error
           retention-days: 14
+      - name: Retain failed Ruby build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ruby-build-diagnostics
+          path: |-
+            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/mkmf.log
+            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/Makefile
+            ${{ runner.temp }}/workbench-ci/cache/dependencies/**/*.def
+          if-no-files-found: ignore
+          retention-days: 14

@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "vitest";
 import { parse } from "yaml";
 import { groupedCIMatrix } from "../src/ci-targets.ts";
 import { ciMatrix } from "../src/ci.ts";
+import { copySourceCheckout } from "../scripts/source-checkout.mjs";
 
 const repository = resolve(import.meta.dirname, "..");
 const temporary = [];
@@ -97,13 +98,22 @@ test("grouped execution continues checking other roots after one fails", () => {
 
 test("CI cache keys isolate runtime targets and exclude oversized installations", () => {
   const root = fixture();
+  const checkout = join(root, "checkout");
+  copySourceCheckout(repository, checkout);
+  // This planning fixture never executes tools. Supply the selected Linux x64 artifacts on any test host.
+  const assetsPath = join(checkout, "scripts/native-assets.json");
+  const assets = JSON.parse(readFileSync(assetsPath, "utf8"));
+  for (const versions of Object.values(assets))
+    for (const platforms of Object.values(versions))
+      if (platforms["linux-x64"]) platforms[`${process.platform}-${process.arch}`] = platforms["linux-x64"];
+  writeFileSync(assetsPath, JSON.stringify(assets));
   const environment = join(root, "environment");
   const output = join(root, "output");
   const run = (version) => {
     writeFileSync(environment, "");
     writeFileSync(output, "");
-    const result = spawnSync(process.execPath, [join(repository, "scripts/ci-cache.mjs")], {
-      cwd: repository,
+    const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mjs")], {
+      cwd: checkout,
       env: {
         ...process.env,
         RUNNER_TEMP: root,

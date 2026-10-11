@@ -172,4 +172,17 @@ included. Focused checks pass all 25 tests across cache planning, publication bo
 workflow lint passes. The full local gate passes all 370 tests and 13 configured checks. Review of the previous hosted
 logs identified Windows long-path checkout and Git Bash linker selection failures; the preflight now enables long paths
 and selects the MSVC linker explicitly. Focused vcpkg verification, type checking, and workflow lint pass after those
-corrections. Hosted verification is next.
+corrections.
+
+The first hosted full run is [38114097093](https://github.com/greghogan/workbench/actions/runs/38114097093) on
+`ci/draft-functionality-20261011`; draft documents remain unaccepted. Nix Docker, maintained runtime checks except one
+rate-limited Python acquisition, Clang compatibility, and all three Linux ARM64 GCC selections pass. Native platform
+failures exposed unauthenticated GitHub API limits, Git Bash GnuPG path interpretation, missing guest decompressors,
+Linux-x64 assumptions in test fixtures, lost Git revision metadata under coverage, and incomplete Ruby platform locks.
+The Windows signature repair passes its dedicated hosted diagnostic. Follow-up full platform verification is pending.
+The repaired local C Dev Container gate passes; the latest complete root gate passes 372 tests and all 13 checks.
+
+Cache measurements retain compressed GitHub inventory separately from uncompressed per-job footprints. The first partial
+run reached approximately 9.2 GB across 65 caches; complete cold/warm comparison and eviction behavior remain pending.
+Publication now requires a successful Checks run for the exact revision and its retained plan covering every configured
+root. No registry publication or deployment has occurred.
