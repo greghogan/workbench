@@ -1,0 +1,1733 @@
+{
+  "node": {
+    "24.21.0": {
+      "linux-x64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+        "sha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt",
+          "subject": "node-v24.21.0-linux-x64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+        "sha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt",
+          "subject": "node-v24.21.0-darwin-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "win32-x64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip",
+        "sha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+        "format": "zip",
+        "strip": 1,
+        "bin": ".",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt",
+          "subject": "node-v24.21.0-win-x64.zip",
+          "signature": {
+            "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "linux-arm64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
+        "sha256": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt",
+          "subject": "node-v24.21.0-linux-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      }
+    },
+    "22.23.3": {
+      "linux-x64": {
+        "url": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.gz",
+        "sha256": "1084aa36196bba4c3a5e69a1ee388a6e4ff729dad09445fbcd434b28fe3c24af",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v22.23.3/SHASUMS256.txt",
+          "subject": "node-v22.23.3-linux-x64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v22.23.3/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      }
+    },
+    "26.11.1": {
+      "linux-x64": {
+        "url": "https://nodejs.org/dist/v26.11.1/node-v26.11.1-linux-x64.tar.gz",
+        "sha256": "15fc043a51a5783f2f4b634561091658f5a7f0e3db03f997dca3a8033a33e45b",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt",
+          "subject": "node-v26.11.1-linux-x64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://nodejs.org/dist/v26.11.1/node-v26.11.1-darwin-arm64.tar.gz",
+        "sha256": "d916511b55965e91be7a88e17f88d895b6793ceaba3e6c9b194aefe51c2c65ac",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt",
+          "subject": "node-v26.11.1-darwin-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "win32-x64": {
+        "url": "https://nodejs.org/dist/v26.11.1/node-v26.11.1-win-x64.zip",
+        "sha256": "97f36a8a9684ff0d3e35758b4610fef5b628a5880e96f2ccc11240e5daf9934e",
+        "format": "zip",
+        "strip": 1,
+        "bin": ".",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt",
+          "subject": "node-v26.11.1-win-x64.zip",
+          "signature": {
+            "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      },
+      "linux-arm64": {
+        "url": "https://nodejs.org/dist/v26.11.1/node-v26.11.1-linux-arm64.tar.gz",
+        "sha256": "170454fb022f5e9b5f6cc76c25fa32ef5100895be44eb04e92f9780591491bbf",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt",
+          "subject": "node-v26.11.1-linux-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"]
+          }
+        }
+      }
+    }
+  },
+  "go": {
+    "1.27.1": {
+      "linux-x64": {
+        "url": "https://go.dev/dl/go1.27.1.linux-amd64.tar.gz",
+        "sha256": "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://go.dev/dl/go1.27.1.linux-amd64.tar.gz.asc",
+          "keys": "scripts/keys/google.asc",
+          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz",
+        "sha256": "ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz.asc",
+          "keys": "scripts/keys/google.asc",
+          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip",
+        "sha256": "a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip.asc",
+          "keys": "scripts/keys/google.asc",
+          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://go.dev/dl/go1.27.1.linux-arm64.tar.gz",
+        "sha256": "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://go.dev/dl/go1.27.1.linux-arm64.tar.gz.asc",
+          "keys": "scripts/keys/google.asc",
+          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        }
+      }
+    },
+    "1.26.8": {
+      "linux-x64": {
+        "url": "https://go.dev/dl/go1.26.8.linux-amd64.tar.gz",
+        "sha256": "d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://go.dev/dl/go1.26.8.linux-amd64.tar.gz.asc",
+          "keys": "scripts/keys/google.asc",
+          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        }
+      }
+    }
+  },
+  "cmake": {
+    "4.4.4": {
+      "linux-x64": {
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz",
+        "sha256": "e5bb807f7728cb60cd8b27ebc97a2edb469b68655f21e844a600c3575b76f5bb",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt",
+          "subject": "cmake-4.4.4-linux-x86_64.tar.gz",
+          "signature": {
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt.asc",
+            "keys": "scripts/keys/cmake.asc",
+            "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
+          }
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-macos-universal.tar.gz",
+        "sha256": "4b7b73704b1db9b374e5c9ab8e17ac6148b817b6396ee75cd94a852cbac9d305",
+        "format": "tar",
+        "strip": 1,
+        "bin": "CMake.app/Contents/bin",
+        "checksums": {
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt",
+          "subject": "cmake-4.4.4-macos-universal.tar.gz",
+          "signature": {
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt.asc",
+            "keys": "scripts/keys/cmake.asc",
+            "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
+          }
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-windows-x86_64.zip",
+        "sha256": "bace36e94b31c68ab6fa295f26dfa11219e0701cf7c94b0284a7d1cb13dac536",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt",
+          "subject": "cmake-4.4.4-windows-x86_64.zip",
+          "signature": {
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt.asc",
+            "keys": "scripts/keys/cmake.asc",
+            "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
+          }
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-aarch64.tar.gz",
+        "sha256": "a1b6cc63636a0e55c63257cf3315a8a5f129e42fade25db1afea4ff8ab06f25e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt",
+          "subject": "cmake-4.4.4-linux-aarch64.tar.gz",
+          "signature": {
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt.asc",
+            "keys": "scripts/keys/cmake.asc",
+            "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
+          }
+        }
+      }
+    }
+  },
+  "ninja": {
+    "1.13.2": {
+      "linux-x64": {
+        "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux.zip",
+        "sha256": "5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/ninja-build/ninja/releases/tag/v1.13.2",
+          "checked": "2026-10-09"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip",
+        "sha256": "c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/ninja-build/ninja/releases/tag/v1.13.2",
+          "checked": "2026-10-09"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
+        "sha256": "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/ninja-build/ninja/releases/tag/v1.13.2",
+          "checked": "2026-10-09"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux-aarch64.zip",
+        "sha256": "fd2cacc8050a7f12a16a2e48f9e06fca5c14fc4c2bee2babb67b58be17a607fc",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/ninja-build/ninja/releases/tag/v1.13.2",
+          "checked": "2026-10-09"
+        }
+      }
+    }
+  },
+  "uv": {
+    "0.13.0": {
+      "linux-x64": {
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "b0828fc4cdc47d65951e94b5f0a15a5364420e8dcd88723f3b21e7a2eb30bbc3",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:b0828fc4cdc47d65951e94b5f0a15a5364420e8dcd88723f3b21e7a2eb30bbc3",
+          "subject": "uv-x86_64-unknown-linux-musl.tar.gz",
+          "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-aarch64-apple-darwin.tar.gz",
+        "sha256": "a9c1b29002cf3c83f07fa9cd8a887a3be0107d90e23189721221e7257db8e3d6",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:a9c1b29002cf3c83f07fa9cd8a887a3be0107d90e23189721221e7257db8e3d6",
+          "subject": "uv-aarch64-apple-darwin.tar.gz",
+          "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c",
+          "subject": "uv-x86_64-pc-windows-msvc.zip",
+          "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "281ca6cf43f4e26e35474839ad4861be86de42af2682f74134460f5b2071b96d",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:281ca6cf43f4e26e35474839ad4861be86de42af2682f74134460f5b2071b96d",
+          "subject": "uv-aarch64-unknown-linux-musl.tar.gz",
+          "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      }
+    }
+  },
+  "shfmt": {
+    "3.12.0": {
+      "linux-x64": {
+        "url": "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64",
+        "sha256": "d9fbb2a9c33d13f47e7618cf362a914d029d02a6df124064fff04fd688a745ea",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "shfmt",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/mvdan/sh/releases/tag/v3.12.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_darwin_arm64",
+        "sha256": "d903802e0ce3ecbc82b98512f55ba370b0d37a93f3f78de394f5b657052b33dd",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "shfmt",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/mvdan/sh/releases/tag/v3.12.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_windows_amd64.exe",
+        "sha256": "c8bda517ba1c640ce4a715c0fa665439ddbe4357ba5e9b77b0e51e70e2b9c94b",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "shfmt.exe",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/mvdan/sh/releases/tag/v3.12.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_arm64",
+        "sha256": "5f3fe3fa6a9f766e6a182ba79a94bef8afedafc57db0b1ad32b0f67fae971ba4",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "shfmt",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/mvdan/sh/releases/tag/v3.12.0",
+          "checked": "2026-10-09"
+        }
+      }
+    }
+  },
+  "shellcheck": {
+    "0.10.0": {
+      "linux-x64": {
+        "url": "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz",
+        "sha256": "6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/koalaman/shellcheck/releases/tag/v0.10.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.darwin.aarch64.tar.xz",
+        "sha256": "bbd2f14826328eee7679da7221f2bc3afb011f6a928b848c80c321f6046ddf81",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/koalaman/shellcheck/releases/tag/v0.10.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.zip",
+        "sha256": "eb6cd53a54ea97a56540e9d296ce7e2fa68715aa507ff23574646c1e12b2e143",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/koalaman/shellcheck/releases/tag/v0.10.0",
+          "checked": "2026-10-09"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.aarch64.tar.xz",
+        "sha256": "324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb",
+        "format": "tar",
+        "strip": 1,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://github.com/koalaman/shellcheck/releases/tag/v0.10.0",
+          "checked": "2026-10-09"
+        }
+      }
+    }
+  },
+  "actionlint": {
+    "1.7.12": {
+      "linux-x64": {
+        "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+        "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/rhysd/actionlint/attestations/sha256:8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+          "subject": "actionlint_1.7.12_linux_amd64.tar.gz",
+          "signer": "https://github.com/rhysd/actionlint/.github/workflows/release.yaml@refs/tags/v1.7.12",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
+        "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/rhysd/actionlint/attestations/sha256:aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+          "subject": "actionlint_1.7.12_darwin_arm64.tar.gz",
+          "signer": "https://github.com/rhysd/actionlint/.github/workflows/release.yaml@refs/tags/v1.7.12",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip",
+        "sha256": "6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/rhysd/actionlint/attestations/sha256:6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
+          "subject": "actionlint_1.7.12_windows_amd64.zip",
+          "signer": "https://github.com/rhysd/actionlint/.github/workflows/release.yaml@refs/tags/v1.7.12",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz",
+        "sha256": "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/rhysd/actionlint/attestations/sha256:325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+          "subject": "actionlint_1.7.12_linux_arm64.tar.gz",
+          "signer": "https://github.com/rhysd/actionlint/.github/workflows/release.yaml@refs/tags/v1.7.12",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      }
+    }
+  },
+  "cargo-nextest": {
+    "0.9.140": {
+      "linux-x64": {
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "bc2a998567816eef7b087b920036f49fb89aa2a8a603f6a3d84098be160b62c5",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:bc2a998567816eef7b087b920036f49fb89aa2a8a603f6a3d84098be160b62c5",
+          "subject": "cargo-nextest-0.9.140-x86_64-unknown-linux-musl.tar.gz",
+          "signer": "https://dotcom.releases.github.com",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl",
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.140" }
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz",
+        "sha256": "58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9",
+          "subject": "cargo-nextest-0.9.140-universal-apple-darwin.tar.gz",
+          "signer": "https://dotcom.releases.github.com",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl",
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.140" }
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-x86_64-pc-windows-msvc.zip",
+        "sha256": "ec39698dfe5bcfffb7d5da037f226bc1670584ba247123f4e684a0f224fe828d",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:ec39698dfe5bcfffb7d5da037f226bc1670584ba247123f4e684a0f224fe828d",
+          "subject": "cargo-nextest-0.9.140-x86_64-pc-windows-msvc.zip",
+          "signer": "https://dotcom.releases.github.com",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl",
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.140" }
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "81fe08bda065ae74fa9092c444d797c31e12c245080bfb9f4dc207e21def4b98",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:81fe08bda065ae74fa9092c444d797c31e12c245080bfb9f4dc207e21def4b98",
+          "subject": "cargo-nextest-0.9.140-aarch64-unknown-linux-musl.tar.gz",
+          "signer": "https://dotcom.releases.github.com",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl",
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.140" }
+        }
+      }
+    }
+  },
+  "cargo-llvm-cov": {
+    "0.8.5": {
+      "linux-x64": {
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.8.5/cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "e9fc23dbbdc502ee9267544f8c6e8e162c6d7df8fb2e3f62d8289a4c0bd240ce",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:e9fc23dbbdc502ee9267544f8c6e8e162c6d7df8fb2e3f62d8289a4c0bd240ce",
+          "subject": "cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
+          "signer": "https://github.com/taiki-e/github-actions/.github/workflows/rust-release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.8.5/cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
+        "sha256": "816b6ff2c23ba569327d153189d7434afd501fc873cc0f5fbb0cfe412b97bc22",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:816b6ff2c23ba569327d153189d7434afd501fc873cc0f5fbb0cfe412b97bc22",
+          "subject": "cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
+          "signer": "https://github.com/taiki-e/github-actions/.github/workflows/rust-release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.8.5/cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
+        "sha256": "62d3265ea30455fedc42eef4a7164cc3389195fa6fe97edf87caa102c0739bcd",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:62d3265ea30455fedc42eef4a7164cc3389195fa6fe97edf87caa102c0739bcd",
+          "subject": "cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
+          "signer": "https://github.com/taiki-e/github-actions/.github/workflows/rust-release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.8.5/cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "bc14a4551e633b12ec89bb15469e6099b4ddc998a5d1bcad0fd95320b148a40f",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:bc14a4551e633b12ec89bb15469e6099b4ddc998a5d1bcad0fd95320b148a40f",
+          "subject": "cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
+          "signer": "https://github.com/taiki-e/github-actions/.github/workflows/rust-release.yml@refs/heads/main",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl"
+        }
+      }
+    }
+  },
+  "rustup-init": {
+    "1.29.1": {
+      "linux-x64": {
+        "url": "https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init",
+        "sha256": "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "rustup-init",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://rust-lang.github.io/rustup/installation/other.html",
+          "checked": "2026-10-09"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://static.rust-lang.org/rustup/archive/1.29.1/aarch64-apple-darwin/rustup-init",
+        "sha256": "ec1b9233e7f72990ecd8e62063fa7f6c3dfc2bec8e97f88bff165f9100ac696a",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "rustup-init",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://rust-lang.github.io/rustup/installation/other.html",
+          "checked": "2026-10-09"
+        }
+      },
+      "win32-x64": {
+        "url": "https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-pc-windows-msvc/rustup-init.exe",
+        "sha256": "6f4bef66261261fcb43131be8720bab817d403a09edec7455c371974b90bdb7e",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "rustup-init.exe",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://rust-lang.github.io/rustup/installation/other.html",
+          "checked": "2026-10-09"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://static.rust-lang.org/rustup/archive/1.29.1/aarch64-unknown-linux-gnu/rustup-init",
+        "sha256": "15f6e4ce9f583b929c996c91562bad6d4454f3281de858b02cdfdef615fac433",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "rustup-init",
+        "authenticationUnavailable": {
+          "reason": "Upstream publishes no detached signature or artifact attestation for this pinned asset.",
+          "source": "https://rust-lang.github.io/rustup/installation/other.html",
+          "checked": "2026-10-09"
+        }
+      }
+    }
+  },
+  "gcc": {
+    "14.4.0": {
+      "linux-x64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-14.4.0/gcc-14.4.0.tar.xz",
+        "sha256": "752b6f567beac83159c77a7680b1316bdd784738bff9a9d070112c09da90f6d9",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-14.4.0/gcc-14.4.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc.asc",
+          "signers": ["D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62"]
+        },
+        "archiveLimits": { "entries": 200000 }
+      },
+      "linux-arm64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-14.4.0/gcc-14.4.0.tar.xz",
+        "sha256": "752b6f567beac83159c77a7680b1316bdd784738bff9a9d070112c09da90f6d9",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-14.4.0/gcc-14.4.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc.asc",
+          "signers": ["D3A93CAD751C2AF4F8C7AD516C35B99309B5FA62"]
+        },
+        "archiveLimits": { "entries": 200000 }
+      }
+    },
+    "15.3.0": {
+      "linux-x64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-15.3.0/gcc-15.3.0.tar.xz",
+        "sha256": "fa59c1beef8995f27c4d71c1df227587189315d3e6faff1bb4306e61b0c530eb",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-15.3.0/gcc-15.3.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc15.asc",
+          "signers": ["7F74F97C103468EE5D750B583AB00996FC26A641"]
+        },
+        "archiveLimits": { "entries": 400000 }
+      },
+      "linux-arm64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-15.3.0/gcc-15.3.0.tar.xz",
+        "sha256": "fa59c1beef8995f27c4d71c1df227587189315d3e6faff1bb4306e61b0c530eb",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-15.3.0/gcc-15.3.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc15.asc",
+          "signers": ["7F74F97C103468EE5D750B583AB00996FC26A641"]
+        },
+        "archiveLimits": { "entries": 400000 }
+      }
+    },
+    "16.2.0": {
+      "linux-x64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-16.2.0/gcc-16.2.0.tar.xz",
+        "sha256": "e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-16.2.0/gcc-16.2.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc15.asc",
+          "signers": ["7F74F97C103468EE5D750B583AB00996FC26A641"]
+        },
+        "archiveLimits": { "entries": 400000 }
+      },
+      "linux-arm64": {
+        "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-16.2.0/gcc-16.2.0.tar.xz",
+        "sha256": "e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "gcc",
+        "signature": {
+          "url": "https://gcc.gnu.org/pub/gcc/releases/gcc-16.2.0/gcc-16.2.0.tar.xz.sig",
+          "keys": "scripts/keys/gcc15.asc",
+          "signers": ["7F74F97C103468EE5D750B583AB00996FC26A641"]
+        },
+        "archiveLimits": { "entries": 400000 }
+      }
+    }
+  },
+  "llvm-runtime": {
+    "70.1-2": {
+      "linux-x64": {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu70_70.1-2_amd64.deb",
+        "sha256": "58a154f6307289813da2276f900498ef536ae7c0522d2cf31a3c3c5cf62dfd9a",
+        "format": "deb",
+        "strip": 0,
+        "bin": "usr/lib/x86_64-linux-gnu",
+        "repository": {
+          "url": "https://archive.ubuntu.com/ubuntu/dists/jammy/Release",
+          "signature": {
+            "url": "https://archive.ubuntu.com/ubuntu/dists/jammy/Release.gpg",
+            "keys": "scripts/keys/ubuntu.asc",
+            "signers": ["F6ECB3762474EDA9D21B7022871920D1991BC93C"]
+          },
+          "index": "main/binary-amd64/Packages.xz",
+          "indexSha256": "37cb57f1554cbfa71c5a29ee9ffee18a9a8c1782bb0568e0874b7ff4ce8f9c11",
+          "package": "libicu70",
+          "version": "70.1-2",
+          "architecture": "amd64"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://ports.ubuntu.com/ubuntu-ports/pool/main/i/icu/libicu70_70.1-2_arm64.deb",
+        "sha256": "ac68372cf4a976e6a206858fd9b28c68e49d37d650b9b8653270038a6e7bc174",
+        "format": "deb",
+        "strip": 0,
+        "bin": "usr/lib/aarch64-linux-gnu",
+        "repository": {
+          "url": "https://ports.ubuntu.com/ubuntu-ports/dists/jammy/Release",
+          "signature": {
+            "url": "https://ports.ubuntu.com/ubuntu-ports/dists/jammy/Release.gpg",
+            "keys": "scripts/keys/ubuntu.asc",
+            "signers": ["F6ECB3762474EDA9D21B7022871920D1991BC93C"]
+          },
+          "index": "main/binary-arm64/Packages.xz",
+          "indexSha256": "b80d1f097198f4a2d80f84db0252263d902051a695040acbc085f033048bc9bb",
+          "package": "libicu70",
+          "version": "70.1-2",
+          "architecture": "arm64"
+        }
+      }
+    }
+  },
+  "llvm-xml-runtime": {
+    "2.9.13+dfsg-1ubuntu0.14": {
+      "linux-x64": {
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/pool/main/libx/libxml2/libxml2_2.9.13+dfsg-1ubuntu0.14_amd64.deb",
+        "sha256": "16e395b2c52d6ab232053468febc69f0876956ec2fae357a941a2a8dab36574f",
+        "format": "deb",
+        "strip": 0,
+        "bin": "usr/lib/x86_64-linux-gnu",
+        "repository": {
+          "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/dists/jammy-updates/Release",
+          "signature": {
+            "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/dists/jammy-updates/Release.gpg",
+            "keys": "scripts/keys/ubuntu.asc",
+            "signers": ["F6ECB3762474EDA9D21B7022871920D1991BC93C"]
+          },
+          "index": "main/binary-amd64/Packages.xz",
+          "indexSha256": "68d9f0d67fbc308f0e4c5d29913a6129f0cfd121e61924a255950f72d1a84b78",
+          "package": "libxml2",
+          "version": "2.9.13+dfsg-1ubuntu0.14",
+          "architecture": "amd64"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/pool/main/libx/libxml2/libxml2_2.9.13+dfsg-1ubuntu0.14_arm64.deb",
+        "sha256": "1e85b731baabd51331d70a6392c652bc39fa2c231ff784555bd6a61631009387",
+        "format": "deb",
+        "strip": 0,
+        "bin": "usr/lib/aarch64-linux-gnu",
+        "repository": {
+          "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/dists/jammy-updates/Release",
+          "signature": {
+            "url": "https://snapshot.ubuntu.com/ubuntu/20261010T000000Z/dists/jammy-updates/Release.gpg",
+            "keys": "scripts/keys/ubuntu.asc",
+            "signers": ["F6ECB3762474EDA9D21B7022871920D1991BC93C"]
+          },
+          "index": "main/binary-arm64/Packages.xz",
+          "indexSha256": "e0519f161211f45d16fc5e9bca32c4fe5a0b4adac4cf1d6324960e72ddedcc7e",
+          "package": "libxml2",
+          "version": "2.9.13+dfsg-1ubuntu0.14",
+          "architecture": "arm64"
+        }
+      }
+    }
+  },
+  "java": {
+    "17.0.20.1+1": {
+      "linux-x64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz",
+        "sha256": "3808d1d15e3ec6bd5b84057fb5d84c33d8a1536a258146bcea2e603fc726e08e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20.1_1.tar.gz",
+        "sha256": "457b57af8f9c93ec39080bb8c764f559dc8c89a6da1a39d718a400b7890d3e41",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.20.1_1.tar.gz",
+        "sha256": "196d13ba5f10414bef7f6a05a9b3f00edacb18ebacef2b99485db9e2ee18f0e8",
+        "format": "tar",
+        "strip": 1,
+        "bin": "Contents/Home/bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.20.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip",
+        "sha256": "e53a79c3c3d86865bd7e787903884331068e71321714ffd44f145785affc7cb0",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      }
+    },
+    "21.0.12.1+1": {
+      "linux-x64": {
+        "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz",
+        "sha256": "ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.12.1_1.tar.gz",
+        "sha256": "23e37e026f12f3e706f18938ff611db3032d075b09d0879a25d06718c773e223",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.12.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.12.1_1.tar.gz",
+        "sha256": "3623232f33a9c3baadf304480b2535f9a3cba8a58d42ecbb438ba267315d9998",
+        "format": "tar",
+        "strip": 1,
+        "bin": "Contents/Home/bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.12.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.zip",
+        "sha256": "f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.zip.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      }
+    },
+    "25.0.4.1+1": {
+      "linux-x64": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.4.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.4.1_1.tar.gz",
+        "sha256": "61979887f7506a24a57439ff99adb8b3a7fc89977d9cfe3b8984f58a981b7b9d",
+        "format": "tar",
+        "strip": 1,
+        "bin": "Contents/Home/bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.4.1_1.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip",
+        "sha256": "00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      }
+    },
+    "27+35": {
+      "linux-x64": {
+        "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_x64_linux_hotspot_27_35.tar.gz",
+        "sha256": "1cf69a4848ffb728b3b260dfd45206a51566ab571a02a30092271d4c580bccbc",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_x64_linux_hotspot_27_35.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_aarch64_linux_hotspot_27_35.tar.gz",
+        "sha256": "e4ec5c7276290c7bde0baecba9a29be4962f5388684296406a9799d465936087",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_aarch64_linux_hotspot_27_35.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_aarch64_mac_hotspot_27_35.tar.gz",
+        "sha256": "a59626c926f0146a286cb535fc9a46499d6c46b3d79ae72168bbf18438fe49dd",
+        "format": "tar",
+        "strip": 1,
+        "bin": "Contents/Home/bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_aarch64_mac_hotspot_27_35.tar.gz.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_x64_windows_hotspot_27_35.zip",
+        "sha256": "2031c9c5c624737ed29a0624caaf5bcc25e74235834c28b4bfa88f7ba7a40e4a",
+        "format": "zip",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/adoptium/temurin27-binaries/releases/download/jdk-27%2B35/OpenJDK27U-jdk_x64_windows_hotspot_27_35.zip.sig",
+          "keys": "scripts/keys/temurin.asc",
+          "signers": ["3B04D753C9050D9A5D343F39843C48A565F8F04B"]
+        }
+      }
+    }
+  },
+  "maven": {
+    "3.10.0": {
+      "linux-x64": {
+        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "keys": "scripts/keys/maven.asc",
+          "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "keys": "scripts/keys/maven.asc",
+          "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "keys": "scripts/keys/maven.asc",
+          "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "keys": "scripts/keys/maven.asc",
+          "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+        }
+      }
+    }
+  },
+  "ruby": {
+    "4.0.7": {
+      "linux-x64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.7.tar.gz",
+        "sha256": "911ace20f90d068ca0e4dda6d0e4f0f81e52e52f2dd4f4004c721e253412e82d",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.7.tar.gz",
+        "sha256": "911ace20f90d068ca0e4dda6d0e4f0f81e52e52f2dd4f4004c721e253412e82d",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.7.tar.gz",
+        "sha256": "911ace20f90d068ca0e4dda6d0e4f0f81e52e52f2dd4f4004c721e253412e82d",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.7-1/rubyinstaller-4.0.7-1-x64.7z",
+        "sha256": "7a9be96d3448ecbd9a81eccae1f619131dfcc761f2c98dded03ece6c05d0474f",
+        "format": "7z",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.7-1/rubyinstaller-4.0.7-1-x64.7z.asc",
+          "keys": "scripts/keys/rubyinstaller.asc",
+          "signers": ["79D1D4E12FF93365DEAA8DCEF98B8484BE8BF1C5"]
+        }
+      }
+    },
+    "3.4.11": {
+      "linux-x64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.11.tar.gz",
+        "sha256": "5c22be44524312b3d433d68739bcc530633b1da5ef8ba0afa0a37680da17d3de",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.11.tar.gz",
+        "sha256": "5c22be44524312b3d433d68739bcc530633b1da5ef8ba0afa0a37680da17d3de",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.11.tar.gz",
+        "sha256": "5c22be44524312b3d433d68739bcc530633b1da5ef8ba0afa0a37680da17d3de",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.4.11-1/rubyinstaller-3.4.11-1-x64.7z",
+        "sha256": "a9aca84326a90422c0905bcb47be629b687a881dcad96149604c2cb074d03154",
+        "format": "7z",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.4.11-1/rubyinstaller-3.4.11-1-x64.7z.asc",
+          "keys": "scripts/keys/rubyinstaller.asc",
+          "signers": ["79D1D4E12FF93365DEAA8DCEF98B8484BE8BF1C5"]
+        }
+      }
+    },
+    "3.3.12": {
+      "linux-x64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.3/ruby-3.3.12.tar.gz",
+        "sha256": "b06d63beae271933033e27f0a389bc582a009e7845357d44365c39de525a051b",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.3/ruby-3.3.12.tar.gz",
+        "sha256": "b06d63beae271933033e27f0a389bc582a009e7845357d44365c39de525a051b",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://cache.ruby-lang.org/pub/ruby/3.3/ruby-3.3.12.tar.gz",
+        "sha256": "b06d63beae271933033e27f0a389bc582a009e7845357d44365c39de525a051b",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "ruby",
+        "authenticationUnavailable": {
+          "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
+          "source": "https://www.ruby-lang.org/en/downloads/",
+          "checked": "2026-10-11"
+        }
+      },
+      "win32-x64": {
+        "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.12-1/rubyinstaller-3.3.12-1-x64.7z",
+        "sha256": "f8d534a44e47e5b72abe557497763128b93e9356bd91397a3d7b9e0a11572943",
+        "format": "7z",
+        "strip": 1,
+        "bin": "bin",
+        "signature": {
+          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.12-1/rubyinstaller-3.3.12-1-x64.7z.asc",
+          "keys": "scripts/keys/rubyinstaller.asc",
+          "signers": ["79D1D4E12FF93365DEAA8DCEF98B8484BE8BF1C5"]
+        }
+      }
+    }
+  },
+  "bundler": {
+    "4.0.22": {
+      "linux-x64": {
+        "url": "https://rubygems.org/downloads/bundler-4.0.22.gem",
+        "sha256": "d8d5ec84c8555e0af71db63ed7aee4d1a8fb839ec46d84212d61979242a5d75a",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "bundler.gem",
+        "authenticationUnavailable": {
+          "reason": "RubyGems publishes a SHA-256 digest; the Bundler gem is not signed and has no published provenance attestation.",
+          "source": "https://rubygems.org/api/v1/gems/bundler.json",
+          "checked": "2026-10-11"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://rubygems.org/downloads/bundler-4.0.22.gem",
+        "sha256": "d8d5ec84c8555e0af71db63ed7aee4d1a8fb839ec46d84212d61979242a5d75a",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "bundler.gem",
+        "authenticationUnavailable": {
+          "reason": "RubyGems publishes a SHA-256 digest; the Bundler gem is not signed and has no published provenance attestation.",
+          "source": "https://rubygems.org/api/v1/gems/bundler.json",
+          "checked": "2026-10-11"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://rubygems.org/downloads/bundler-4.0.22.gem",
+        "sha256": "d8d5ec84c8555e0af71db63ed7aee4d1a8fb839ec46d84212d61979242a5d75a",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "bundler.gem",
+        "authenticationUnavailable": {
+          "reason": "RubyGems publishes a SHA-256 digest; the Bundler gem is not signed and has no published provenance attestation.",
+          "source": "https://rubygems.org/api/v1/gems/bundler.json",
+          "checked": "2026-10-11"
+        }
+      },
+      "win32-x64": {
+        "url": "https://rubygems.org/downloads/bundler-4.0.22.gem",
+        "sha256": "d8d5ec84c8555e0af71db63ed7aee4d1a8fb839ec46d84212d61979242a5d75a",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "bundler.gem",
+        "authenticationUnavailable": {
+          "reason": "RubyGems publishes a SHA-256 digest; the Bundler gem is not signed and has no published provenance attestation.",
+          "source": "https://rubygems.org/api/v1/gems/bundler.json",
+          "checked": "2026-10-11"
+        }
+      }
+    }
+  },
+  "php": {
+    "8.5.11": {
+      "linux-x64": {
+        "url": "https://www.php.net/distributions/php-8.5.11.tar.xz",
+        "sha256": "d9be75c08e8c316f4c8f4194d8fbe1750a15f6a6d9d4e3fe72082abeeb800360",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.5.11.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "49D9AF6BC72A80D6691719C8AA23F5BE9C7097D4",
+            "D95C03BC702BE9515344AE3374E44BC9067701A5"
+          ]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://www.php.net/distributions/php-8.5.11.tar.xz",
+        "sha256": "d9be75c08e8c316f4c8f4194d8fbe1750a15f6a6d9d4e3fe72082abeeb800360",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.5.11.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "49D9AF6BC72A80D6691719C8AA23F5BE9C7097D4",
+            "D95C03BC702BE9515344AE3374E44BC9067701A5"
+          ]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://www.php.net/distributions/php-8.5.11.tar.xz",
+        "sha256": "d9be75c08e8c316f4c8f4194d8fbe1750a15f6a6d9d4e3fe72082abeeb800360",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.5.11.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "49D9AF6BC72A80D6691719C8AA23F5BE9C7097D4",
+            "D95C03BC702BE9515344AE3374E44BC9067701A5"
+          ]
+        }
+      },
+      "win32-x64": {
+        "url": "https://downloads.php.net/~windows/releases/php-8.5.11-nts-Win32-vs17-x64.zip",
+        "sha256": "0ea96e0d2b9b737a6036f05cf4e95c49313faa6d0f27bd97edb2742503f0c043",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Official Windows release catalog records SHA-256 but publishes no detached signatures or attestations for its ZIP archives. Source release signatures are enforced separately.",
+          "source": "https://windows.php.net/downloads/releases/releases.json",
+          "checked": "2026-10-11"
+        },
+        "phpExtensions": ["mbstring", "openssl", "curl", "fileinfo"]
+      }
+    },
+    "8.4.26": {
+      "linux-x64": {
+        "url": "https://www.php.net/distributions/php-8.4.26.tar.xz",
+        "sha256": "32a2de53862ad44ed4a5005244ce4f1b50c271e74dced215449a4443b40569f1",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.4.26.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "9D7F99A0CB8F05C8A6958D6256A97AF7600A39A6",
+            "0616E93D95AF471243E26761770426E17EBBB3DD"
+          ]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://www.php.net/distributions/php-8.4.26.tar.xz",
+        "sha256": "32a2de53862ad44ed4a5005244ce4f1b50c271e74dced215449a4443b40569f1",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.4.26.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "9D7F99A0CB8F05C8A6958D6256A97AF7600A39A6",
+            "0616E93D95AF471243E26761770426E17EBBB3DD"
+          ]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://www.php.net/distributions/php-8.4.26.tar.xz",
+        "sha256": "32a2de53862ad44ed4a5005244ce4f1b50c271e74dced215449a4443b40569f1",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.4.26.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "9D7F99A0CB8F05C8A6958D6256A97AF7600A39A6",
+            "0616E93D95AF471243E26761770426E17EBBB3DD"
+          ]
+        }
+      },
+      "win32-x64": {
+        "url": "https://downloads.php.net/~windows/releases/php-8.4.26-nts-Win32-vs17-x64.zip",
+        "sha256": "da68394f9193b7f6b89d0c76861a4034ae10efee7fd55a7255d8118c2acf70d7",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Official Windows release catalog records SHA-256 but publishes no detached signatures or attestations for its ZIP archives. Source release signatures are enforced separately.",
+          "source": "https://windows.php.net/downloads/releases/releases.json",
+          "checked": "2026-10-11"
+        },
+        "phpExtensions": ["mbstring", "openssl", "curl", "fileinfo"]
+      }
+    },
+    "8.3.35": {
+      "linux-x64": {
+        "url": "https://www.php.net/distributions/php-8.3.35.tar.xz",
+        "sha256": "ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.3.35.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "C28D937575603EB4ABB725861C0779DC5C0A9DE4"
+          ]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://www.php.net/distributions/php-8.3.35.tar.xz",
+        "sha256": "ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.3.35.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "C28D937575603EB4ABB725861C0779DC5C0A9DE4"
+          ]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://www.php.net/distributions/php-8.3.35.tar.xz",
+        "sha256": "ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.3.35.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": [
+            "1198C0117593497A5EC5C199286AF1F9897469DC",
+            "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+            "C28D937575603EB4ABB725861C0779DC5C0A9DE4"
+          ]
+        }
+      },
+      "win32-x64": {
+        "url": "https://downloads.php.net/~windows/releases/php-8.3.35-nts-Win32-vs16-x64.zip",
+        "sha256": "25a8e2ac9ff30f1d768d1447c09a600617fa6e6082729f6e95f008b59c91fe45",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Official Windows release catalog records SHA-256 but publishes no detached signatures or attestations for its ZIP archives. Source release signatures are enforced separately.",
+          "source": "https://windows.php.net/downloads/releases/releases.json",
+          "checked": "2026-10-11"
+        },
+        "phpExtensions": ["mbstring", "openssl", "curl", "fileinfo"]
+      }
+    },
+    "8.2.34": {
+      "linux-x64": {
+        "url": "https://www.php.net/distributions/php-8.2.34.tar.xz",
+        "sha256": "5351330c54de240f54f7527c26ef292e239749e6fe11db0330acb5317e02bb39",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.2.34.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": ["1198C0117593497A5EC5C199286AF1F9897469DC", "E60913E4DF209907D8E30D96659A97C9CF2A795A"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://www.php.net/distributions/php-8.2.34.tar.xz",
+        "sha256": "5351330c54de240f54f7527c26ef292e239749e6fe11db0330acb5317e02bb39",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.2.34.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": ["1198C0117593497A5EC5C199286AF1F9897469DC", "E60913E4DF209907D8E30D96659A97C9CF2A795A"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://www.php.net/distributions/php-8.2.34.tar.xz",
+        "sha256": "5351330c54de240f54f7527c26ef292e239749e6fe11db0330acb5317e02bb39",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "build": "php",
+        "signature": {
+          "url": "https://www.php.net/distributions/php-8.2.34.tar.xz.asc",
+          "keys": "scripts/keys/php.asc",
+          "signers": ["1198C0117593497A5EC5C199286AF1F9897469DC", "E60913E4DF209907D8E30D96659A97C9CF2A795A"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://downloads.php.net/~windows/releases/php-8.2.34-nts-Win32-vs16-x64.zip",
+        "sha256": "03249b5c9414c6dbe30276f4a7598bd9d2a7417ee81f709b06b99e9c4a2aff4f",
+        "format": "zip",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Official Windows release catalog records SHA-256 but publishes no detached signatures or attestations for its ZIP archives. Source release signatures are enforced separately.",
+          "source": "https://windows.php.net/downloads/releases/releases.json",
+          "checked": "2026-10-11"
+        },
+        "phpExtensions": ["mbstring", "openssl", "curl", "fileinfo"]
+      }
+    }
+  },
+  "composer": {
+    "2.10.3": {
+      "linux-x64": {
+        "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+        "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "composer.phar",
+        "signature": {
+          "url": "https://getcomposer.org/download/2.10.3/composer.phar.asc",
+          "keys": "scripts/keys/composer.asc",
+          "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
+        }
+      },
+      "linux-arm64": {
+        "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+        "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "composer.phar",
+        "signature": {
+          "url": "https://getcomposer.org/download/2.10.3/composer.phar.asc",
+          "keys": "scripts/keys/composer.asc",
+          "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+        "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "composer.phar",
+        "signature": {
+          "url": "https://getcomposer.org/download/2.10.3/composer.phar.asc",
+          "keys": "scripts/keys/composer.asc",
+          "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
+        }
+      },
+      "win32-x64": {
+        "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+        "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+        "format": "binary",
+        "strip": 0,
+        "bin": ".",
+        "executable": "composer.phar",
+        "signature": {
+          "url": "https://getcomposer.org/download/2.10.3/composer.phar.asc",
+          "keys": "scripts/keys/composer.asc",
+          "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
+        }
+      }
+    }
+  },
+  "xdebug": {
+    "3.5.3": {
+      "linux-x64": {
+        "url": "https://xdebug.org/files/xdebug-3.5.3.tgz",
+        "sha256": "f073de91bea046106abf4d6071c963ea71e58571df6ce58948ceca89d121cb2d",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream download page publishes SHA-256 digests but no detached signatures or attestations for source archives; the .tgz.asc endpoint returns 404.",
+          "source": "https://xdebug.org/download",
+          "checked": "2026-10-11"
+        }
+      },
+      "linux-arm64": {
+        "url": "https://xdebug.org/files/xdebug-3.5.3.tgz",
+        "sha256": "f073de91bea046106abf4d6071c963ea71e58571df6ce58948ceca89d121cb2d",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream download page publishes SHA-256 digests but no detached signatures or attestations for source archives; the .tgz.asc endpoint returns 404.",
+          "source": "https://xdebug.org/download",
+          "checked": "2026-10-11"
+        }
+      },
+      "darwin-arm64": {
+        "url": "https://xdebug.org/files/xdebug-3.5.3.tgz",
+        "sha256": "f073de91bea046106abf4d6071c963ea71e58571df6ce58948ceca89d121cb2d",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "authenticationUnavailable": {
+          "reason": "Upstream download page publishes SHA-256 digests but no detached signatures or attestations for source archives; the .tgz.asc endpoint returns 404.",
+          "source": "https://xdebug.org/download",
+          "checked": "2026-10-11"
+        }
+      }
+    }
+  }
+}

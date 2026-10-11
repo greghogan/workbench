@@ -1,0 +1,73 @@
+schema_version = 1
+
+[[command]]
+role = "format"
+command = [ "node", "scripts/check.mjs", "format" ]
+heavy = true
+
+[[command]]
+role = "lint"
+command = [ "node", "scripts/check.mjs", "lint" ]
+heavy = true
+
+[[command]]
+role = "test"
+warn_seconds = 120
+command = [ "node", "scripts/check.mjs", "test" ]
+heavy = true
+
+[command.coverage]
+command = [ "node", "scripts/check.mjs", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[command]]
+role = "build"
+command = [ "node", "scripts/check.mjs", "build" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "node", "scripts/check.mjs", "release" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "node", "scripts/check.mjs", "format-write" ]
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "go" ]
+stages = [ "ci" ]
+heavy = true
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-1"
+role = "compatibility-test"
+command = ["node", "scripts/check.mjs", "test"]
+heavy = true
+stages = []

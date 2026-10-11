@@ -1,0 +1,89 @@
+schema_version = 1
+
+[[command]]
+role = "setup"
+command = [ "{packageManager}", "install", "--frozen-lockfile" ]
+heavy = true
+
+[[command]]
+role = "format"
+command = [ "{packageManager}", "run", "format:check" ]
+
+[[command]]
+role = "lint"
+command = [ "{packageManager}", "run", "lint" ]
+
+[[command]]
+role = "type"
+command = [ "{packageManager}", "run", "typecheck" ]
+heavy = true
+
+[[command]]
+role = "test"
+warn_seconds = 120
+command = [ "{packageManager}", "run", "test" ]
+heavy = true
+
+[command.coverage]
+command = [ "{packageManager}", "run", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[command]]
+role = "build"
+command = [ "{packageManager}", "run", "build" ]
+heavy = true
+stages = [ "commit", "ci" ]
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "{packageManager}", "run", "release" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "{packageManager}", "run", "format" ]
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "node_modules" ]
+stages = []
+
+
+[[command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "typescript" ]
+stages = [ "ci" ]
+heavy = true
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-setup-1"
+role = "compatibility-setup"
+command = ["{packageManager}", "install", "--frozen-lockfile"]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-2"
+role = "compatibility-test"
+command = ["{packageManager}", "run", "test"]
+heavy = true
+stages = []

@@ -1,0 +1,10 @@
+{
+  "name": "Workbench with Nix",
+  "remoteUser": "workbench",
+  "remoteEnv": { "NIX_REMOTE": "daemon" },
+  "build": { "dockerfile": "Dockerfile", "context": "../.." },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "overrideCommand": false,
+  "containerEnv": { "WORKBENCH_DEVCONTAINER": "1" }
+}

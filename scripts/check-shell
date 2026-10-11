@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+files=(
+    .envrc
+    bin/workbench
+    examples/languages/rust/scripts/build-release
+    scripts/check-shell
+    .githooks/pre-commit
+    .githooks/commit-msg
+)
+
+case "${1:-}" in
+format)
+    command -v shfmt >/dev/null || {
+        printf 'check-shell: shfmt is required\n' >&2
+        exit 1
+    }
+    shfmt -i 4 -d -- "${files[@]}"
+    ;;
+lint)
+    command -v shellcheck >/dev/null || {
+        printf 'check-shell: shellcheck is required\n' >&2
+        exit 1
+    }
+    for file in "${files[@]}"; do
+        bash -n -- "$file"
+    done
+    shellcheck -s bash -- "${files[@]}"
+    ;;
+*)
+    printf 'Usage: check-shell format|lint\n' >&2
+    exit 2
+    ;;
+esac

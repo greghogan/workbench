@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-10",
+  "task": "workbench:TSK-A",
+  "platform": "linux-x64",
+  "resources": {
+    "availableCpus": 64,
+    "cpusPerJob": 4,
+    "maxJobs": 16
+  },
+  "observedPeakConcurrentJobs": 16,
+  "targetAllocationsVerified": 49,
+  "fullMatrix": {
+    "targets": 49,
+    "passed": 49,
+    "infrastructureErrors": 0,
+    "results": "/tmp/workbench-ci-reports-MbD7DD/reports/results.json",
+    "resultsSha256": "1c2f871c434f1ed0b0059e3722c247780eabe8e6b9444d2efe935c2e4f25b553",
+    "sourceTrees": [
+      {
+        "path": ".",
+        "tree": "7ef6a5fd4038f88d0b25e6d51c2518afefaf7179"
+      }
+    ]
+  },
+  "matrixKinds": {
+    "native": 8,
+    "compatibility": 19,
+    "environment": 22
+  },
+  "finalRegression": {
+    "targets": 5,
+    "passed": 5,
+    "infrastructureErrors": 0,
+    "results": "/tmp/workbench-ci-reports-w8IIx0/reports/results.json",
+    "resultsSha256": "f3c54768091e3356c2bcc63d277bff021bba5c4dbf0277bb2d14d1ab9368fc08",
+    "sourceTrees": [
+      {
+        "path": ".",
+        "tree": "7c2342189a2fb41f95cfe88bc808376b16376555"
+      }
+    ]
+  },
+  "rootGate": {
+    "stage": "ci",
+    "passed": true,
+    "testFiles": 51,
+    "tests": 242,
+    "coveragePercent": {
+      "lines": 88.04,
+      "statements": 81.93,
+      "functions": 89.87,
+      "branches": 75.14
+    }
+  },
+  "releaseProfiles": [
+    {
+      "name": "go-nix-portable",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "56e9b08dbe682053636704d1b93288844f909bfdf91049f043f7c0cd852b1cd9",
+      "currentSourceVerified": true
+    },
+    {
+      "name": "go-guix-portable",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "e691aedfd172d3e0369e5f05826018333fd71c5fdc717690324bf51327a03df1",
+      "currentSourceVerified": true
+    },
+    {
+      "name": "go-guix-apptainer",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "da7f98a3e3f33ec8643c8bbbb3e06d528c2bfecd1bb14687036669fa58a9c073",
+      "currentSourceVerified": true
+    }
+  ],
+  "notes": [
+    "The complete matrix passed. After a Nix packaging CLI syntax correction, the root and all four Go environment targets passed again, and all three changed managed packaging paths were regenerated and verified.",
+    "Local runs reused warm shared caches; installer locking, failure release, uncertain ownership, CPU propagation, and bounded independent workers have focused behavioral tests.",
+    "The Nix packaging verification used the scoped Docker host-network adapter for this host DNS limitation; runtime artifact verification remained offline.",
+    "Prior release outputs were preserved under /tmp/workbench-cpu-release-backups-20261010."
+  ],
+  "logs": [
+    {
+      "path": "/tmp/workbench-cpu-ci-verified.log",
+      "sha256": "063c78169adbf588e5fc4676e729e96ebe74c483ab96d21c98dea100faba3152"
+    },
+    {
+      "path": "/tmp/workbench-cpu-ci-followup.log",
+      "sha256": "1cc0848ea13006b37d2f7aadc9290ae4a642cea407c66493b051d3c443639b88"
+    },
+    {
+      "path": "/tmp/workbench-cpu-release-final.log",
+      "sha256": "88c89c35b546a596fbdacd7cf0c064bbe0d05621cfc92d36cf5e887f5c54d320"
+    }
+  ],
+  "limitations": [
+    "Worker counts are budgets, not hard CPU quotas.",
+    "Memory budgeting was deferred by the human.",
+    "Hosted and other-platform behavior remains pending; no push, deployment, or publication."
+  ],
+  "environmentPinsChanged": false
+}

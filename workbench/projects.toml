@@ -1,0 +1,74 @@
+
+[[project]]
+id = "workbench"
+path = "."
+
+[[language_root]]
+language = "typescript"
+path = "."
+ci_versions = [ "22.23.3", "24.21.0", "26.11.1" ]
+ci_environments = [ "devcontainer" ]
+
+[[language_root]]
+language = "typescript"
+path = "examples/languages/typescript"
+ci_versions = [ "22.23.3", "24.21.0", "26.11.1" ]
+
+[[language_root]]
+language = "rust"
+path = "examples/languages/rust"
+
+[[language_root]]
+language = "typescript"
+path = "examples/frameworks/react"
+ci_platforms = [ "linux-x64" ]
+ci_environments = [ "guix", "nix-docker", "devcontainer" ]
+ci_compatibility = false
+
+[[language_root]]
+language = "python"
+path = "examples/languages/python"
+ci_versions = [ "3.11.17", "3.12.15", "3.13.16", "3.14.8", "3.15.0" ]
+
+[[language_root]]
+language = "c"
+path = "examples/languages/c"
+lto = "full"
+standard = "17"
+compiler = "clang"
+compilers.clang = { minimum = "21.1.8", ci_versions = [ "21.1.8", "22.1.8", "23.1.3" ] }
+compilers.gcc = { minimum = "14.4.0", ci_versions = [ "14.4.0", "15.3.0", "16.2.0" ], ci_architectures = [ "x64", "arm64" ] }
+
+[[language_root]]
+language = "cpp"
+path = "examples/languages/cpp"
+lto = "full"
+standard = "20"
+compiler = "clang"
+compilers.clang = { minimum = "21.1.8", ci_versions = [ "21.1.8", "22.1.8", "23.1.3" ] }
+compilers.gcc = { minimum = "14.4.0", ci_versions = [ "14.4.0", "15.3.0", "16.2.0" ], ci_architectures = [ "x64", "arm64" ] }
+
+[[language_root]]
+language = "go"
+path = "examples/languages/go"
+ci_versions = [ "1.26.8", "1.27.1" ]
+
+[[language_root]]
+language = "javascript"
+path = "examples/languages/javascript"
+ci_versions = [ "22.23.3", "24.21.0", "26.11.1" ]
+
+[[language_root]]
+language = "java"
+path = "examples/languages/java"
+ci_versions = [ "17.0.20.1+1", "21.0.12.1+1", "25.0.4.1+1", "27+35" ]
+
+[[language_root]]
+language = "ruby"
+path = "examples/languages/ruby"
+ci_versions = [ "3.3.12", "3.4.11", "4.0.7" ]
+
+[[language_root]]
+path = "examples/languages/php"
+language = "php"
+ci_versions = [ "8.2.34", "8.3.35", "8.4.26", "8.5.11" ]

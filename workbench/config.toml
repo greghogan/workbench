@@ -1,0 +1,154 @@
+schema_version = 1
+
+[execution]
+cpus_per_job = 4
+
+[bundle]
+compression = "brotli"
+
+[markdown]
+wrap_width = 120
+
+[checks]
+environment = "native"
+nix_docker_image = "nixos/nix@sha256:0d9c872db1ca2f3eaa4a095baa57ed9b72c09d53a0905a4428813f61f0ea98db"
+
+[ci]
+operating_systems = [ "linux", "macos", "windows" ]
+environments = [ "guix", "nix-docker", "devcontainer" ]
+
+[ci.architectures]
+linux = [ "x64", "arm64" ]
+macos = [ "arm64" ]
+windows = [ "x64" ]
+
+[compatibility]
+required = false
+
+[commit]
+style = "conventional"
+subject_width = 50
+body_width = 72
+
+[citations]
+library_dir = "library/citations"
+
+[licenses]
+allow = [ "MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "0BSD" ]
+
+[development]
+default = "native"
+
+[[development.profiles]]
+name = "native"
+builder = "native"
+workspace = "host"
+
+[[development.profiles]]
+name = "nix"
+builder = "nix"
+workspace = "host"
+
+[[development.profiles]]
+name = "guix"
+builder = "guix"
+workspace = "host"
+
+[[development.profiles]]
+name = "container"
+builder = "native"
+workspace = "devcontainer"
+container_config = ".devcontainer/devcontainer.json"
+
+[[development.profiles]]
+name = "nix-container"
+builder = "nix"
+workspace = "devcontainer"
+container_config = ".devcontainer/nix/devcontainer.json"
+
+[[development.profiles]]
+name = "guix-container"
+builder = "guix"
+workspace = "devcontainer"
+container_config = ".devcontainer/guix/devcontainer.json"
+
+[[release.profiles]]
+name = "go-native"
+path = "examples/languages/go"
+builder = "native"
+format = "directory"
+platform = "linux-x64"
+prepare = [ "node", "scripts/check.mjs", "release" ]
+verify = [ "node", "{source}/scripts/release-verify.mjs", "{artifact}", "{source}" ]
+
+[[release.profiles]]
+name = "go-nix-closure"
+path = "examples/languages/go"
+builder = "nix"
+format = "closure"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "nix-docker", "closure", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "nix", "closure", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-nix-portable"
+path = "examples/languages/go"
+builder = "nix"
+format = "portable"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "nix-docker", "portable", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "nix", "portable", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-nix-docker"
+path = "examples/languages/go"
+builder = "nix"
+format = "docker"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "nix-docker", "docker", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "nix", "docker", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-guix-relocatable"
+path = "examples/languages/go"
+builder = "guix"
+format = "relocatable"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "guix", "relocatable", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "relocatable", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-guix-portable"
+path = "examples/languages/go"
+builder = "guix"
+format = "portable"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "guix", "portable", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "portable", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-guix-docker"
+path = "examples/languages/go"
+builder = "guix"
+format = "docker"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "guix", "docker", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "docker", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-guix-squashfs"
+path = "examples/languages/go"
+builder = "guix"
+format = "squashfs"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "guix", "squashfs", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "squashfs", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+[[release.profiles]]
+name = "go-guix-apptainer"
+path = "examples/languages/go"
+builder = "guix"
+format = "apptainer"
+platform = "linux-x64"
+prepare = [ "node", "scripts/package-managed.mjs", "guix", "apptainer", "{nix_image}" ]
+verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "apptainer", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]

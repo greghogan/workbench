@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-11",
+  "scope": [
+    "workbench",
+    "typescript",
+    "javascript",
+    "react",
+    "python"
+  ],
+  "policy": {
+    "development": "Newest suitable stable runtime, including Node Current",
+    "api_baselines": {
+      "node": "22",
+      "python": "3.11"
+    },
+    "production_node_default": "Newest LTS"
+  },
+  "native": {
+    "node": "26.11.1",
+    "pnpm": "12.11.2",
+    "python": "3.15.0",
+    "uv": "0.13.0"
+  },
+  "ci_release_versions": {
+    "node": [
+      "22.23.3",
+      "24.21.0",
+      "26.11.1"
+    ],
+    "python": [
+      "3.11.17",
+      "3.12.15",
+      "3.13.16",
+      "3.14.8",
+      "3.15.0"
+    ]
+  },
+  "managed": {
+    "nix": {
+      "revision": "20b1ddd1aa5ace70c9468305030aa4f9ef79671b",
+      "node_examples": {
+        "package": "nodejs_latest",
+        "version": "26.9.0"
+      },
+      "python": "3.14.7",
+      "python_315_excluded": "The locked package is 3.15.0rc2"
+    },
+    "guix": {
+      "revision": "d434a41bf79b822bf186e457ec98893acdde78f2",
+      "node": "24.18.0",
+      "python": "3.13.13"
+    },
+    "input_revisions_changed": false
+  },
+  "verification": {
+    "linux_x64_targets": {
+      "selected": 28,
+      "passed": 28,
+      "infrastructure_errors": 0,
+      "reports": "/tmp/workbench-ci-reports-iYs4oL/reports",
+      "source_trees": [
+        {
+          "path": ".",
+          "tree": "78c561411b1d3142232ad4f9ab0e22aa69d62f1d"
+        }
+      ]
+    },
+    "root_regressions": 319,
+    "native_gate_roots": 10,
+    "all_configured_linux_x64_targets": 63,
+    "all_63_run_together": false,
+    "baseline_probes": {
+      "node_runtime_accepts_crypto_encapsulate": true,
+      "node_22_types_reject_crypto_encapsulate": true,
+      "python_315_runtime_accepts_sentinel": true,
+      "python_311_mypy_target_rejects_sentinel": true,
+      "valid_controls_passed": true,
+      "log": "/tmp/workbench-runtime-refresh/baseline-probes.log"
+    },
+    "acquisition": {
+      "node": "Recorded SHA-256 and approved OpenPGP signer over upstream catalog",
+      "uv": "Recorded SHA-256 and upstream GitHub attestation",
+      "pnpm": "Committed npm integrity lock; two installed packages passed registry signatures and attestations"
+    },
+    "application_dependencies_changed": false,
+    "python_lock_changed": false
+  },
+  "resolved_failures": [
+    "Refreshed pnpm manager lock documents; retained application lock documents unchanged",
+    "Removed stale bootstrap and compatibility cache fixture assumptions",
+    "Raised bounded bootstrap entry allowance from 128 to 256 MiB for the 144 MiB Node executable; retained other limits and added exact-boundary regressions",
+    "Isolated Dev Container startup temporary directories to prevent concurrent upstream updateUID Dockerfile renames; verified cleanup on success and failure"
+  ],
+  "sources": [
+    "https://nodejs.org/en/download/current",
+    "https://nodejs.org/dist/v26.11.1/SHASUMS256.txt",
+    "https://registry.npmjs.org/pnpm/12.11.2",
+    "https://www.python.org/downloads/release/python-3150/",
+    "https://github.com/astral-sh/uv/releases/tag/0.13.0"
+  ],
+  "limitations": [
+    "Other native operating systems and architectures require hosted execution",
+    "Hosted CI and registry publication remain pending human review",
+    "Draft ADR-13 is prepared for review; no commit, push, or publication occurred"
+  ]
+}

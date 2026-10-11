@@ -1,0 +1,7 @@
+schema_version = 1
+id = "php"
+name = "PHP"
+summary = "Maintained PHP baselines, verified Composer locks, strict PHPStan and portable packages."
+reference = "examples/languages/php"
+manifests = [ "composer.json" ]
+starter = ["scripts/release-verify.mjs", "scripts/check.mjs", ".phpstan-bootstrap.php", "composer.lock", "tools/composer.lock", "tools/compat/composer.lock", ".composer/verify/composer.json", ".composer/verify/src/VerifyPlugin.php", "composer.json", ".xdebug-version", "phpunit-compat.xml", "phpstan.neon", ".php-cs-fixer.dist.php", ".gitignore", ".php-version", ".composer-version", "README.md", "LICENSE", "phpunit.xml", "src/Arithmetic.php", ".composer/checksums.json", "tools/composer.json", "tools/compat/composer.json", "tools/compat/.composer/checksums.json", "tools/.composer/checksums.json", "bin/count", "tests/ArithmeticTest.php", "tests/bootstrap.php", "tests/VerifyPluginTest.php", "tests/CliTest.php", "workbench/quality.json"]

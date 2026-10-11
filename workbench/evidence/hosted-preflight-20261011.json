@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-11",
+  "root_gate": {
+    "passed": true,
+    "tests": 370,
+    "files": 68,
+    "checks": 13,
+    "job": "01a129579ccf734291f7504a4e35612e",
+    "log": "/tmp/workbench-7-root-gate-r2.log"
+  },
+  "focused": {
+    "passed": 25,
+    "job": "01a129561037701380eba6efa6a4d46c",
+    "log": "/tmp/workbench-7-focused-r2.log"
+  },
+  "windows_preflight": {
+    "typecheck": true,
+    "workflow_lint": true,
+    "vcpkg_test": true,
+    "job": "01a1295e97d974108e8861730d08ed58",
+    "log": "/tmp/workbench-7-windows-preflight.log"
+  },
+  "previous_hosted_run_inspected": 37834795016,
+  "hosted_verification": "pending",
+  "deployment": "not authorized or performed",
+  "document_acceptance": "pending human review"
+}

@@ -1,0 +1,214 @@
+{
+  "report_version": 1,
+  "date": "2026-10-10",
+  "task": "workbench:TSK-9",
+  "scope": "Revised automatic local applicability and portable shared project collection installations",
+  "supersedes_for_current_design": "workbench/evidence/collections-20261010.json",
+  "installation_cases": {
+    "local": "System, user, and ignored checkout-local registries automatically select verified immutable revisions; tracked project configuration and context remain unchanged.",
+    "shared_project": "Tracked contents and portable pins apply to every contributor and CI within declared scopes; host installations cannot satisfy missing shared dependencies.",
+    "inheritance": "ADR integration with explicit conflicts; installation location grants no override precedence."
+  },
+  "first_collection": {
+    "id": "benchd",
+    "revision": "1",
+    "sha256": "6165f63d1e5ea6ac8fac53a50302ce94e4eb3f280c4c0aa98816b716bbd99a5d",
+    "visibility": "public",
+    "scopes": [
+      "."
+    ],
+    "installation": "ignored checkout-local",
+    "required_by_workbench": false
+  },
+  "root_ci_gate": {
+    "command": "workbench checks run --path . --stage ci",
+    "status": "passed",
+    "tests": 309,
+    "test_files": 60,
+    "platform": "linux-x64",
+    "coverage": {
+      "lines": {
+        "total": 6369,
+        "covered": 5677,
+        "skipped": 0,
+        "pct": 89.13
+      },
+      "statements": {
+        "total": 7654,
+        "covered": 6440,
+        "skipped": 0,
+        "pct": 84.13
+      },
+      "functions": {
+        "total": 1141,
+        "covered": 1033,
+        "skipped": 0,
+        "pct": 90.53
+      },
+      "branches": {
+        "total": 5993,
+        "covered": 4599,
+        "skipped": 0,
+        "pct": 76.73
+      }
+    },
+    "coverage_floors": "unchanged; passed",
+    "coverage_baseline": "No committed coverage summary at HEAD; committed-baseline comparison unavailable.",
+    "locked_advisory_identities": 261,
+    "log": "/tmp/workbench-collections-applicability-root-ci.log"
+  },
+  "collection_regressions": {
+    "command": "node node_modules/vitest/vitest.mjs run tests/collections.test.mjs",
+    "status": "passed",
+    "tests": 31,
+    "log": "/tmp/workbench-collections-applicability-collections.log",
+    "cases": [
+      "optional benchd export and automatic checkout-local installation",
+      "user, system, and explicit local directories with verified duplicate resolution",
+      "automatic local upgrades preserve shared files and older immutable revisions",
+      "shared upgrades retain declared project scopes",
+      "fresh clone resolves shared policies without original exports or host installations",
+      "shared dependencies, references, and overrides cannot rely on optional local policies",
+      "identical local/shared selections deduplicate; differing revisions or scopes fail",
+      "dynamic local context follows installation location without rewriting tracked maps or context",
+      "private local standards stay outside provider export dependencies and collection bundles",
+      "local CI freezes registry and verified files and resolves them after host installation removal",
+      "synthetic staged hooks retain local policies outside committed files",
+      "standalone package contains available benchd export and excludes ignored local installations",
+      "immutable verified inventories, bounded reads, symlinks, unsafe paths, conflicts, cycles, scoped references, and private audience guards"
+    ]
+  },
+  "update_regressions": {
+    "tests": 4,
+    "status": "passed within both complete gates",
+    "private_local_context_preserved": true,
+    "shared_context_and_report_exclude_private_local_policy": true
+  },
+  "native_commit_stage_gate": {
+    "command": "workbench checks run --stage commit",
+    "status": "passed",
+    "roots": [
+      ".",
+      "examples/languages/typescript",
+      "examples/languages/rust",
+      "examples/frameworks/react",
+      "examples/languages/python",
+      "examples/languages/c",
+      "examples/languages/cpp",
+      "examples/languages/go"
+    ],
+    "platform": "linux-x64",
+    "root_tests": 309,
+    "root_test_files": 60,
+    "log": "/tmp/workbench-collections-applicability-native-gate.log",
+    "includes": [
+      "C and C++ LTO and sanitizer checks",
+      "Go race tests",
+      "ordinary uninstrumented root suite",
+      "configured example format, lint, type, test and documentation roles"
+    ],
+    "expected_skips": "Portable C/C++ builds skip AVX2-only execution; native and optimized AVX2 tests passed."
+  },
+  "verification_fixes": [
+    "Collection CLI fixtures invoke the bundle with explicit project identity; actual launcher ownership is unchanged and covered by staged-hook and packaging fixtures.",
+    "Shared-upgrade pin assertions compare semantic fields independently of TOML object prototypes.",
+    "Private local-context assertions accept canonical line wrapping.",
+    "Routine Linux system collection discovery uses isolated fixture directories."
+  ],
+  "boundaries": {
+    "private_sources": "Synthetic fixtures only.",
+    "provider_installer": "Actual benchd application integration remains part of its future Workbench adoption.",
+    "full_linux_matrix_rerun": false,
+    "github_actions_run": false,
+    "other_platforms_executed": false,
+    "commit": false,
+    "push": false,
+    "publication": false,
+    "draft_adrs_accepted": false,
+    "review_receipts": "unchanged",
+    "logs": "Disposable /tmp files; compact results and tested source hashes retained here."
+  },
+  "log_sha256": {
+    "/tmp/workbench-collections-applicability-root-ci.log": "0e3b8bec068bb6f603c135821ad4a4c7d786f94762d5a03d5d1c4852dc8a0c55",
+    "/tmp/workbench-collections-applicability-collections.log": "b9fc1f625e930a74ab3ecc3eb761d497fda63aad3aafeb81f765536201046e8e",
+    "/tmp/workbench-collections-applicability-native-gate.log": "0fcb999faa612a9a3851cf166bb0ae2c3c0f5c44edf448b50068631cb8f39e25"
+  },
+  "source_sha256": {
+    ".githooks/pre-commit": "c4eea4d237c72cf6cec27e89ee52cbe54c4192a8fd80ea656bef742cf994f768",
+    "AGENTS.md": "d5d3479e49c6157a1439adcde5c37a69b02fbd54342202d542be1b11ef13c2fa",
+    "README.md": "2d23d474add681360d733db64186083848b8ccc04e373c1a2cf07ec7f3830d0a",
+    "bundle/THIRD_PARTY_NOTICES.txt": "78b701feaeedea48222fb10d73bf730f12ed88405b6cd0f085d6826c8666f721",
+    "bundle/main.cjs.br": "b3a23c4724da434152a8c5d6574db867d23f06bd538fa2f65626944900fd4150",
+    "bundle/skills.cjs.br": "82f8594ab161b192ab5639cfbc4d4a1f7daa004d307d17d17a3a9c734e4b2c17",
+    "collections/benchd/1/workbench/collection.toml": "6165f63d1e5ea6ac8fac53a50302ce94e4eb3f280c4c0aa98816b716bbd99a5d",
+    "collections/benchd/1/workbench/decision-map.md": "f598d262f8f3a55f6d839766b508be18343fbfb64f4db4a98c0cb61575b10877",
+    "collections/benchd/1/workbench/decisions/ADR-00.md": "7a36df0c288c9ad0f81e8e37dc2dfa2a1788c4c1fad0edecb2ca4560b28a42af",
+    "collections/index.toml": "440420c112f0bda015193a6d2abd7048e4ad31f245fe125ce770caa9e1f3d37f",
+    "coverage/coverage-summary.json": "f67985c972dd85bb1f1e80b4035bca8ae507cdf7f5db1a41f96c926e7269883e",
+    "scripts/package-workbench.mjs": "b5f8307442405594f9b845bb7e4ffa62a1be26e10ed5b5bf15a188bf341cb79b",
+    "scripts/skill-evaluation-cases.mjs": "cf94ebd50932542273bf8cdf76a1264c86442d4674b0defb9076b1b37ec4ae24",
+    "scripts/source-checkout.mjs": "354322b9be7835b5ca11eb49e007ecea064aee07d50665d10aef24da416a88dc",
+    "src/agents.ts": "01ecc6747a6c8b6587156e51dc80128fe6aacfbf6d0b60e896e45b3c97fee340",
+    "src/ci-inputs.ts": "c7cf169154551917f89eeb081dae20876d178ca1b35c963d0ac8d9de0fc22a04",
+    "src/collection-commands.ts": "28042382fd83f58045a68e6b7badf22326dc047b9129e5530cc4d8a13c0b6e78",
+    "src/collection-links.ts": "3fb748738cbee80fbb98caa91a49c61b247245c33face0aac0c23ab49f4abfe4",
+    "src/collection-maps.ts": "c1c663882140dfd6f26593a8e8132c10894f8a59885c543392b167fda509805b",
+    "src/collection-provision.ts": "43a458948ad609dd1f8ff6f25ddbd5c8d907d38cbe1610c15945afd92f417dac",
+    "src/collection-schema.ts": "85087f493e0b510db8072c553629e3d53f4e05b9cf45de1bf311d34b9a46945d",
+    "src/collections.ts": "9d2f1e4e2f568854207b69ea46976653dcf7b83c678328e43493cf69674ee13d",
+    "src/config-command.ts": "5f0ac9a77a60bc8abed9c96f50ead2a362b463f702176acc1ef9edbea1e86ed8",
+    "src/config-schema.ts": "3859ff373c22b64316b84ca419e47aec4367bb494ba39d6cb7bf05696792f5e3",
+    "src/core.ts": "05427e27704a040cac1fc714ede09c49d6fc38e7407111fa0673dbbc0b4764fd",
+    "src/decision-record.ts": "90a65f2a225dbfe02566155049899f8b8de0645bb19c1946a42dc1841456f291",
+    "src/decisions.ts": "4abd93680a213d042320b6e53e6cf036872d17b28c7e133252d2b4fe79b7c926",
+    "src/documentation.ts": "f1acac80e95d0094069fd7a4fcff84cc80606ef25073d8511fd83779bad59c06",
+    "src/environments.ts": "fb9128f72d78f800e1e449c724834f217ac7358bd8902b79465d3af19b566121",
+    "src/formatting.ts": "046d94a169363f05303c35621c6aaf85366211102768dba8432fc085f5f0b641",
+    "src/local-ci.ts": "5a676f18bd6b20ad5f95fd9bc57b9a0e65016af5c916db0575de3d1e74da8d19",
+    "src/main.ts": "ca57c7bb6fc5084627324a163e6665340f7ef5f37791732d979f4d7746c0f028",
+    "src/maps.ts": "17bfe52ecc4c200617dcc2f5a1487fb01302ca562944b5b841d46da920af4c53",
+    "src/record-commands.ts": "9a481b90016542ed73e20859794f8036462bc0d547bae686e6efa51f163ab037",
+    "src/record-resolver.ts": "1c929eb8c4af4aeab5e78840cc2a1b01715cb903986f893f8a756101f4e39d0b",
+    "src/records.ts": "006ff419d573aaf2d8d3a4831aaa40966b5a83bf0bc98e05ec769e090a1baa55",
+    "src/review.ts": "2bda4ec02aab429c716a69e8ac6b58a46bef7dd0866f684aa2b5dffe6d1d1e00",
+    "src/sync.ts": "725385a90b22e8e01cc5af1229385592e992825596c83b84603945836291bebc",
+    "src/update.ts": "2d36c9f5626bf8b9dc3eae4fc0c150a9f45fbeb181ad33c8aab27adbe2316c6c",
+    "src/user-config.ts": "f4c7d607564d9e1f316af8578d96121f82234f5d287354612d32b9f1316d30e8",
+    "src/validation.ts": "204034cabbf960901e265602c4cfe304a334a9c316bd2bf41851163cb70b60fe",
+    "tests/ci_optimization.test.mjs": "ef59d0593d3870164a01da4b6466b0665ac332b056c8dd7c446fe4c8ffaa6c61",
+    "tests/ci_selection.test.mjs": "bf9f114923f913a998dfe4e3ca779a601403461d0bdf3d8009b33b4928a2d096",
+    "tests/collections.test.mjs": "f92d582ebd7011e75db65c922669da57e0f1f98de1bd592065f7f8129bfcb7a7",
+    "tests/context_records.test.mjs": "8064d09557d9536b6df779c7da7aff2dbfab569c52e7911de894f447084ebe13",
+    "tests/coverage.test.mjs": "1eaee33fceb78af547e3436cdbc2e53c00363e9455e8beca9f73198dd7c5feb8",
+    "tests/git_gate.test.mjs": "52b7dd537da2dbf759929fa2dd35d6f630cf57f0333ba7a6b245f59944ec7189",
+    "tests/review_timing_docs.test.mjs": "2722abf8c97b1bee98ae41e495fb7239773b590eaf3b246305abf710596865f3",
+    "tests/setup.mjs": "ea92aa885f7416e5cd32c6e9b29603aeae231687c6182b109969ad656885e303",
+    "tests/update.test.mjs": "e4cd754cea6871ecd5846596bf46f31d21778802fb723337c57eafffa59e0376",
+    "tests/user_config.test.mjs": "8eb80c93d0e633f9c97aeb9c20e7382839d9bad73ff1d6f3fef4589094581e42",
+    "workbench/automation.toml": "bae03856e98760e301b4a4a3654a6a411c5624c878bcc7e73b147fe1e6c4b3af",
+    "workbench/config.toml": "1320ba07ea5c4be75425e2797953cb159bc43fa9e4fd33c490f7549ceb3991d5",
+    "workbench/decision-map.md": "0f841e5a5f84f4197deb0112c50cc2294441294ca90088b6fbb46cade6db7262",
+    "workbench/decisions/ADR-05.md": "4b164707ddcb13e77a914dd0c98d9963b9601055bffe6692177a4924e1d606fc",
+    "workbench/decisions/ADR-0M.md": "e0ac62c3189d9e033c28e3c5f8289813a874d47b8c1cbdb1de43291b1ad28f50",
+    "workbench/decisions/ADR-0T.md": "b5e14710e6393b83af9a1159c4e0029e17cde9078db9b2a792531f0e40267ad6",
+    "workbench/decisions/ADR-0U.md": "9742ef16200685ca2274473a964671a509a3b9b3e6940a19608f3a0053a413a1",
+    "workbench/decisions/ADR-18.md": "f97385f64a8246f05689792f1f3603da5f42b1e4df1a40cc26824daadb41430b",
+    "workbench/quality.json": "ac42cfe2ae56e8438970adb07b606a67162eb8ab8525d8b083780b6273e6effd",
+    "workbench/source-map.md": "9c34c60f08b662156990befa1b111bacdc1579d06cff7be33ed0333b19f737f7",
+    "workbench/task-map.md": "fca1d54484ec1eaa2039a47092b5098f9d045d694b696493d7e1bede77b8319f",
+    "workbench/tasks/TSK-01.md": "70c28435cf2abf8962da756fd0bc18ab1c4810490619acb509556fbb643219a3",
+    "workbench/tasks/TSK-09.md": "3e106a024da6a04395f3d52dc05995bcc391040697bb046b82dc4cb12d09b227"
+  },
+  "completion_metadata_checks": {
+    "status": "passed after task completion, formatting, and synchronization",
+    "commands": [
+      "workbench validate .",
+      "workbench docs README.md",
+      "workbench secrets .",
+      "workbench format --check workbench/tasks/TSK-09.md",
+      "workbench format --check workbench/tasks/TSK-01.md"
+    ],
+    "markdown_files": 72,
+    "gate_scope": "Complete gates verified the implementation; only task completion metadata and this evidence were written afterward."
+  }
+}

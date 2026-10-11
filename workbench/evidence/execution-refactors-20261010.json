@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-10",
+  "task": "workbench:TSK-B",
+  "platform": "linux-x64",
+  "resources": {
+    "availableCpus": 64,
+    "cpusPerJob": 4,
+    "maxJobs": 16
+  },
+  "fullMatrix": {
+    "targets": 49,
+    "passed": 49,
+    "infrastructureErrors": 0,
+    "kinds": {
+      "native": 8,
+      "compatibility": 19,
+      "environment": 22
+    },
+    "results": "/tmp/workbench-ci-reports-4p0HLQ/reports/results.json",
+    "resultsSha256": "47bc0f95776047e8ce0cbd50db853f2b32b557d56fd89679c2278a1d369c6bb6",
+    "sourceTrees": [
+      {
+        "path": ".",
+        "tree": "1656107d6df38934437e2bde5ada6fe3b8333958"
+      }
+    ],
+    "workerRequestsValidated": 49,
+    "observedPeakConcurrentJobs": 16
+  },
+  "workspaceMonitor": {
+    "peakJobWorkspaces": 16,
+    "samples": 469,
+    "coordinatorLockPresent": false,
+    "remainingJobWorkspaces": 0
+  },
+  "rootGate": {
+    "passed": true,
+    "stage": "ci",
+    "testFiles": 55,
+    "tests": 255,
+    "coveragePercent": {
+      "lines": 88.16,
+      "statements": 82.08,
+      "functions": 89.83,
+      "branches": 75.21
+    }
+  },
+  "behavioralVerification": [
+    "Pure CPU allocation on one-, two-, six-, and 64-CPU hosts; job caps, override precedence, and invalid values.",
+    "Nix/Guix argument syntax and parity with the standalone Go helper.",
+    "Separate synchronous/asynchronous cache writers exclude each other and reuse one accepted installation without FIFO assumptions.",
+    "Installation and lock release failures preserve both causes and changed ownership.",
+    "Malformed worker requests fail before filesystem/subprocess effects.",
+    "Signals during preparation stop admission; admitted preparations, commands, and cleanup drain; listeners restore.",
+    "Bounded admission creates and releases workspaces before admitting the next job; reports survive.",
+    "Uncertain cleanup preserves affected workspaces and coordinator claims.",
+    "Failed log sinks drain verbose child output and retain the failure.",
+    "Shared cache ownership skips disappeared children, rejects missing roots/permission errors, and does not traverse symlink entries."
+  ],
+  "releaseProfiles": [
+    {
+      "name": "go-nix-portable",
+      "verified": true,
+      "emulation": false,
+      "currentSourceVerified": true,
+      "receiptSha256": "c746e6a142f0527595e85020cf1075a5448b2734e90aafc32cdea131862b2406"
+    },
+    {
+      "name": "go-guix-portable",
+      "verified": true,
+      "emulation": false,
+      "currentSourceVerified": true,
+      "receiptSha256": "34b1ebfae2b0f7344f95afda8026d640178cc2bb0c4e029957871545b3981792"
+    },
+    {
+      "name": "go-guix-apptainer",
+      "verified": true,
+      "emulation": false,
+      "currentSourceVerified": true,
+      "receiptSha256": "8373f629c39eef09b23e44b272d9a2554f5f494e1734463ef49f065739bcb7d9"
+    }
+  ],
+  "initialFailure": {
+    "target": "environment:linux:x64:nix-docker:examples%2Fframeworks%2Freact",
+    "reason": "Checks passed, then recursive shared-store ownership restoration encountered SQLite entries removed by another pnpm job.",
+    "fix": "Restore shared cache ownership inside the managed shell, tolerating only ENOENT for child entries; preserve root/permission/I/O failures.",
+    "results": "/tmp/workbench-ci-reports-cwAw4j/reports/results.json",
+    "resultsSha256": "80050b53bc288743710fe19e35bdbd5b09069636f9652f62e2566942efd0cfcf"
+  },
+  "logs": [
+    {
+      "path": "/tmp/workbench-six-refactors-ci-final.log",
+      "sha256": "621bf95575ed86652b71dca646b2dee6f7b0ea6a561ba4a772a68ff7eeada284"
+    },
+    {
+      "path": "/tmp/workbench-six-refactors-releases.log",
+      "sha256": "c61293c80b6d34cbced3bf5c93549df0c26e16dbb4c46c1e5844ed677eae741c"
+    }
+  ],
+  "notes": [
+    "Prior accepted release outputs were preserved under /tmp/workbench-six-refactors-release-backups-20261010.",
+    "Scoped Docker host networking was used for this host acquisition DNS limitation; package runtime verification remained offline."
+  ],
+  "limitations": [
+    "CPU worker counts remain budgets rather than hard CPU quotas; memory budgeting remains deferred.",
+    "Hosted/other-platform verification remains pending; nothing pushed, deployed, or published."
+  ],
+  "environmentPinsChanged": false
+}

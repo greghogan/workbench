@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-11",
+  "task": "workbench:TSK-J",
+  "scope": "Collection selection preflight and related dependency batches; shared Workbench installation design remains planned in TSK-I.",
+  "platform": "linux-x64",
+  "node": "26.11.1",
+  "files_sha256": {
+    "src/collection-install.ts": "6c570686ffc9849025b2917b6fc7103bdaf72927e954816d917c210fcb9cd786",
+    "src/collections.ts": "8c0f08660bc3b3883387dd34019364c6ce2ff96fe03cb13da35b34c2518c248f",
+    "src/collection-commands.ts": "4a2bdafc7fa0627791bc055e8f8e5768b7b9decf4df551e59768dd373d261a2e",
+    "src/decisions.ts": "b77ae9ab1ad5576c4cf1ee5a16f4f6fd93662730bcb495b1f3ba025b1058a9c8",
+    "tests/collections.test.mjs": "1880f2b37e8ed8118889d0d7ba7a2554c6b69a952f24037d98a7762df25da760"
+  },
+  "verification": {
+    "root_ci_job": "01a128ed7e097301ba6fd4ff61ce3f32",
+    "command": "node bin/workbench.mjs checks run --stage ci --path . --environment native",
+    "status": "passed",
+    "exit_code": 0,
+    "checks": 13,
+    "tests": 354,
+    "test_files": 64,
+    "job_elapsed_seconds_including_rebuild": 259.42,
+    "coverage_percent": {
+      "lines": 89.58,
+      "statements": 84.61,
+      "functions": 90.71,
+      "branches": 77.33
+    },
+    "log_sha256": "0bc4793272957ca21065768071af550cf0ca49b8f61af00415cb571cf64a2c00",
+    "subsequent_test_change": "The system-installation fixture now supplies an explicit temporary directory and registers it for lookup on every platform; production implementation is unchanged.",
+    "final_collection_job": "01a128f0a3aa71908b969bf838621ec5",
+    "final_collection_checks": "Prettier, ESLint, and all 44 collection tests passed under pinned Node 26.11.1.",
+    "initial_gate_correction": "Fixed a no-confusing-void-expression lint error in the selection callback before the successful full gate."
+  },
+  "shared_installation_manager_implemented": false,
+  "adr_acceptance": false,
+  "committed": false,
+  "pushed": false
+}

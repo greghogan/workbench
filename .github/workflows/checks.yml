@@ -1,0 +1,642 @@
+name: Checks
+
+# Always start the workflow. Root selection happens in the planner, so documentation
+# changes still receive validation and a final required status.
+on:
+  push:
+  pull_request:
+
+  # Use the full matrix for initial verification; ordinary pushes/PRs select affected roots.
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run the complete matrix (required for initial verification)
+        type: boolean
+        default: true
+      base:
+        description: Comparison revision when full is false (missing history runs everything)
+        type: string
+        default: ""
+
+  # Release verification covers every configured root. This workflow does not publish.
+  release:
+    types: [published]
+
+# Pull request code runs with read-only repository access.
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Git Bash provides the same shell commands on Windows. Toolchain pins stay in each root.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve roots before grouping jobs. Pushes compare before/after revisions;
+  # pull requests compare from their merge base. Missing history selects all roots.
+  # The JSON output contains native, compatibility, environment, and container groups.
+  # ---------------------------------------------------------------------------
+  plan:
+    name: Plan checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: .node-version
+
+      # The adapter reads the event payload as data and writes the selection summary.
+      - id: plan
+        run: node scripts/ci-plan.mjs
+
+  # Small, unconditional checks: no example dependency or compiler installations.
+  # Keep this job independent of planning so invalid records remain visible.
+  validation:
+    name: Validate records and documentation
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .node-version
+      - run: node bin/workbench.mjs validate
+      - run: node bin/workbench.mjs docs README.md
+
+  # ---------------------------------------------------------------------------
+  # Native platform matrix. Each job runs all selected roots sharing that runner.
+  # The job-level condition skips an empty matrix before matrix expansion.
+  # ---------------------------------------------------------------------------
+  native:
+    name: ${{ matrix.os }} ${{ matrix.architecture }} / selected roots
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).native.include[0] != null
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).native }}
+    steps:
+      - name: Preserve canonical text and skill symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.architecture }}
+      - name: Verify native runtime architecture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: node -e 'if (process.arch !== process.env.EXPECTED_ARCHITECTURE) throw new Error("Expected " + process.env.EXPECTED_ARCHITECTURE + ", got " + process.arch)'
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: matrix.msvc && runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Make room for LLVM and native build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          # These hosted-runner SDKs are unused by the declared language roots.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      # Derive cache paths and keys from the selected roots, platform, and tool pins.
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        run: node scripts/ci-cache-metrics.mjs start
+      - name: Reuse small native tool installations
+        if: steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+      - name: Reuse selected Rust toolchains
+        if: steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+      - name: Reuse package download stores
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+      - name: Reuse installed dependencies and compiled outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+
+      # Restore compact compiler installations separately from dependency/build caches.
+      - name: Restore filtered LLVM installations
+        id: llvm-cache
+        if: steps.cache-plan.outputs.llvm-key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+
+      # Authenticate/install tools before using or saving their filtered installations.
+      # Ruby/PHP source builds and Ruby native gems use the runner's development SDK.
+      - name: Prepare native runtime build prerequisites
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: node scripts/ci-native-prerequisites.mjs
+
+      - name: Install and verify native tool installations
+        id: native-setup
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-run.mjs native-install
+
+      # Save verified tools before project checks, allowing reuse after a project failure.
+      - name: Save verified filtered LLVM before project checks
+        if: steps.cache-plan.outputs.llvm-key != '' && steps.native-setup.conclusion == 'success' && steps.llvm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+
+      # Run complete CI-stage suites for successfully installed roots; failures stay visible.
+      - name: Run every installed root's configured native checks
+        id: native-checks
+        if: ${{ !cancelled() && steps.native-setup.outputs.roots != '' && fromJSON(steps.native-setup.outputs.roots)[0] != null }}
+        env:
+          CHECK_ROOTS: ${{ steps.native-setup.outputs.roots }}
+          WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+        run: node scripts/ci-run.mjs native-check
+
+      # Release smoke tests use passing roots and do not publish artifacts.
+      - name: Prepare and verify passing roots' local release artifacts
+        id: release-checks
+        if: ${{ !cancelled() && steps.native-checks.outputs.roots != '' && fromJSON(steps.native-checks.outputs.roots)[0] != null }}
+        env:
+          CHECK_ROOTS: ${{ steps.native-checks.outputs.roots }}
+        run: node scripts/ci-run.mjs release
+      - name: Retain verified release artifacts
+        if: ${{ !cancelled() && steps.release-checks.outputs.roots != '' && fromJSON(steps.release-checks.outputs.roots)[0] != null }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-release-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/release-artifacts/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      # Retain diagnostics even when a previous step fails.
+      - name: Retain timing and coverage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-reports-${{ strategy.job-index }}
+          path: |
+            coverage/
+            examples/languages/*/coverage/
+            examples/frameworks/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Measure retained cache footprint
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Retain cache measurements
+        if: always() && steps.cache-plan.conclusion == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cache-measurement-native-${{ strategy.job-index || 'single' }}
+          path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Selected roots share one disposable Dev Container workspace. The locked CLI
+  # controls container setup; language definitions still own the tools and checks.
+  # ---------------------------------------------------------------------------
+  devcontainer:
+    name: Dev Container
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).devcontainer.paths[0] != null
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: .node-version
+      - name: Make room for LLVM and native build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          # These hosted-runner SDKs are unused by the declared language roots.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      # Derive cache paths and keys from the selected roots, platform, and tool pins.
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer) }}
+          CHECK_CACHE_ENVIRONMENT: devcontainer
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        run: node scripts/ci-cache-metrics.mjs start
+      - name: Reuse small native tool installations
+        if: steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+      - name: Reuse selected Rust toolchains
+        if: steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+      - name: Reuse package download stores
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+      - name: Reuse installed dependencies and compiled outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+
+      # Enter the workspace only after restoring the selected shared caches.
+      - name: Install the locked Dev Container CLI
+        run: node bin/workbench.mjs tools install --devcontainer
+      - name: Run configured container roots in one workspace
+        env:
+          CHECK_ROOTS: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer.paths) }}
+          CHECK_ENVIRONMENT: devcontainer
+        run: node scripts/ci-run.mjs environment
+      - name: Retain container reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: devcontainer-reports
+          path: |
+            coverage/
+            examples/languages/*/coverage/
+            examples/frameworks/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Measure retained cache footprint
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Retain cache measurements
+        if: always() && steps.cache-plan.conclusion == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cache-measurement-devcontainer-${{ strategy.job-index || 'single' }}
+          path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Compatibility targets verify supported versions independently of development
+  # pins. Roots with the same runtime/version share setup, retaining complete suites.
+
+  # ---------------------------------------------------------------------------
+  compatibility:
+    name: Compatibility ${{ matrix.runtime }} ${{ matrix.version }} / ${{ matrix.architecture || 'x64' }} / all selected roots
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).compatibility.include[0] != null
+    runs-on: ${{ matrix.runner || 'ubuntu-26.04' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).compatibility }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: .node-version
+
+      # Derive cache paths and keys from the selected roots, platform, and tool pins.
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        run: node scripts/ci-cache-metrics.mjs start
+      - name: Reuse small native tool installations
+        if: steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+      - name: Reuse selected Rust toolchains
+        if: steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+      - name: Reuse package download stores
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+      - name: Reuse installed dependencies and compiled outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+
+      # Ruby/PHP source builds and Ruby native gems use the runner's development SDK.
+      - name: Prepare native runtime build prerequisites
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: node scripts/ci-native-prerequisites.mjs
+
+      # Runtime-specific adapters select the compatibility version without changing pins.
+      - name: Verify selected runtimes independently of development pins
+        if: matrix.runtime != 'python' && matrix.runtime != 'clang' && matrix.runtime != 'gcc'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          RUNTIME: ${{ matrix.runtime }}
+          RUNTIME_VERSION: ${{ matrix.version }}
+        run: node scripts/ci-run.mjs compatibility
+      - name: Verify supported Python independently of the development pin
+        if: matrix.runtime == 'python'
+        env:
+          PYTHON_VERSION: ${{ matrix.version }}
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-run.mjs python
+      - name: Make room for LLVM and native build dependencies
+        if: runner.os == 'Linux' && (matrix.runtime == 'clang' || matrix.runtime == 'gcc')
+        run: |
+          # These hosted-runner SDKs are unused by the declared language roots.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      # GCC and LLVM use independent installation caches; GCC builds are expensive.
+      - name: Restore the compiled GCC installation
+        id: gcc-cache
+        if: matrix.runtime == 'gcc'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.gcc-path }}
+          key: ${{ steps.cache-plan.outputs.gcc-key }}
+
+      # Restore compact compiler installations separately from dependency/build caches.
+      - name: Restore filtered LLVM installations
+        id: llvm-cache
+        if: steps.cache-plan.outputs.llvm-key != '' && (matrix.runtime == 'clang' || matrix.runtime == 'gcc')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+
+      # Verify the selected compiler before project tests or installation-cache writes.
+      - name: Install and verify LLVM and the selected compatibility compiler
+        id: compiler-setup
+        if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          COMPILER: ${{ matrix.runtime }}
+          COMPILER_VERSION: ${{ matrix.version }}
+          CHECK_ROLES: ${{ toJSON(matrix.roles) }}
+        run: node scripts/ci-run.mjs compiler-install
+
+      # Cache verified compiler setup before tests so failures do not discard that work.
+      - name: Save the verified GCC installation before project checks
+        if: matrix.runtime == 'gcc' && steps.compiler-setup.conclusion == 'success' && steps.gcc-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.gcc-path }}
+          key: ${{ steps.cache-plan.outputs.gcc-key }}
+      - name: Save verified filtered LLVM before compatibility checks
+        if: steps.cache-plan.outputs.llvm-key != '' && steps.compiler-setup.conclusion == 'success' && steps.llvm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+
+      # Exercise ordinary tests, sanitizers, and configured LTO for every selected root.
+      - name: Verify every selected C/C++ root
+        if: matrix.runtime == 'clang' || matrix.runtime == 'gcc'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          COMPILER: ${{ matrix.runtime }}
+          COMPILER_VERSION: ${{ matrix.version }}
+          CHECK_ROLES: ${{ toJSON(matrix.roles) }}
+        run: node scripts/ci-run.mjs compiler
+
+      - name: Measure retained cache footprint
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Retain cache measurements
+        if: always() && steps.cache-plan.conclusion == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cache-measurement-compatibility-${{ strategy.job-index || 'single' }}
+          path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Managed environments: each root uses its own pinned Nix or Guix definition.
+  # The workflow installs only the bootstrap needed to enter that environment.
+  # ---------------------------------------------------------------------------
+  environments:
+    name: ${{ matrix.environment }} / all selected roots
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).environments.include[0] != null
+    # Ubuntu 24.04 provides the signed Guix bootstrap package; project channels remain pinned.
+    runs-on: ${{ matrix.environment == 'guix' && 'ubuntu-24.04' || 'ubuntu-26.04' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).environments }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Make room for package stores and build dependencies
+        run: |
+          # These hosted-runner SDKs are unused by the declared language roots.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      # Derive cache paths and keys from the selected roots, platform, and tool pins.
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        run: node scripts/ci-cache-metrics.mjs start
+      - name: Reuse small native tool installations
+        if: steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+      - name: Reuse selected Rust toolchains
+        if: steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+      - name: Reuse package download stores
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+      - name: Reuse installed dependencies and compiled outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+
+      # Bootstrap Guix, then restore authenticated source history for pinned channels.
+      - name: Install Guix bootstrap
+        if: matrix.environment == 'guix'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y guix=1.4.0-6build1
+          sudo systemctl start guix-daemon
+          for key in /usr/share/guix/*.pub; do
+            sudo sh -c 'guix archive --authorize < "$1"' authorize-key "$key"
+          done
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Require an installed Nix bootstrap for direct Nix mode
+        if: matrix.environment == 'nix'
+        run: nix --version
+      - name: Restore authenticated Guix source history
+        id: guix-cache
+        if: matrix.environment == 'guix'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-paths }}
+          key: ${{ steps.cache-plan.outputs.guix-key }}
+
+      # Run complete configured suites inside each root's declared environment.
+      - name: Run every root in its own pinned environment
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          CHECK_ENVIRONMENT: ${{ matrix.environment }}
+        run: node scripts/ci-run.mjs environment
+      - name: Save Guix source history for subsequent bootstraps
+        if: always() && matrix.environment == 'guix' && steps.guix-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-paths }}
+          key: ${{ steps.cache-plan.outputs.guix-key }}
+      - name: Diagnose Guix bootstrap failures
+        if: failure() && matrix.environment == 'guix'
+        run: |
+          df -h /
+          free -h
+          sudo journalctl -u guix-daemon --no-pager -n 100
+          sudo dmesg --ctime | tail -50
+
+      # Preserve reports on failure; this does not publish release artifacts.
+      - name: Retain environment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: environment-reports-${{ strategy.job-index }}
+          path: |
+            coverage/
+            examples/languages/*/coverage/
+            examples/frameworks/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Measure retained cache footprint
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Retain cache measurements
+        if: always() && steps.cache-plan.conclusion == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cache-measurement-environments-${{ strategy.job-index || 'single' }}
+          path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Stable status for branch protection, including documentation-only changes.
+  # Always inspect upstream results: selected jobs must succeed; only empty groups
+  # may be skipped. Planning, validation, cancellation, or selected-job failures fail.
+  # ---------------------------------------------------------------------------
+  status:
+    name: Checks passed
+    needs: [plan, validation, native, compatibility, environments, devcontainer]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .node-version
+      - name: Require validation and every selected job
+        env:
+          WORKBENCH_CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-status.mjs

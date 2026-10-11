@@ -1,0 +1,240 @@
+# Agent-maintained commands, documentation wiring, and additional review protection.
+
+[[check]]
+name = "Locked pnpm dependencies"
+role = "setup"
+project = "workbench"
+command = [ "{packageManager}", "install", "--frozen-lockfile" ]
+heavy = true
+
+[[check]]
+name = "TypeScript format"
+role = "format"
+project = "workbench"
+command = [ "{packageManager}", "run", "format:check" ]
+
+[[check]]
+name = "TypeScript lint"
+role = "lint"
+project = "workbench"
+command = [ "{packageManager}", "run", "lint" ]
+heavy = true
+
+[[check]]
+name = "TypeScript types"
+role = "type"
+project = "workbench"
+command = [ "{packageManager}", "run", "typecheck" ]
+heavy = true
+
+[[check]]
+name = "Bundle parity and license policy"
+role = "license"
+project = "workbench"
+command = [ "{packageManager}", "run", "bundle:check" ]
+heavy = true
+
+[[check]]
+name = "Workbench validation"
+role = "lint"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "validate", "." ]
+
+[[check]]
+name = "TypeScript tests"
+role = "test"
+warn_seconds = 120
+project = "workbench"
+command = [ "{packageManager}", "run", "test" ]
+heavy = true
+
+[check.coverage]
+command = [ "{packageManager}", "run", "coverage" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[check]]
+name = "Shell format"
+role = "format"
+project = "workbench"
+command = [ "scripts/check-shell", "format" ]
+
+[[check]]
+name = "Shell lint"
+role = "lint"
+project = "workbench"
+command = [ "scripts/check-shell", "lint" ]
+
+[[check]]
+name = "GitHub workflow validation"
+role = "lint"
+project = "workbench"
+command = [ "actionlint" ]
+
+[[check]]
+name = "Workbench README examples"
+role = "docs"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "docs", "README.md" ]
+
+[[check]]
+name = "Workbench build"
+role = "build"
+project = "workbench"
+command = [ "{packageManager}", "run", "build" ]
+heavy = true
+stages = []
+
+[[check]]
+name = "Workbench release"
+role = "release"
+project = "workbench"
+command = [ "{packageManager}", "run", "release" ]
+heavy = true
+stages = []
+
+[[check]]
+name = "Workbench format files"
+role = "format-write"
+project = "workbench"
+command = [ "{packageManager}", "run", "format" ]
+stages = []
+
+[[check]]
+name = "Workbench clean"
+role = "clean"
+project = "workbench"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "build", "dist", "coverage" ]
+stages = []
+
+[[check]]
+name = "Workbench distclean"
+role = "distclean"
+project = "workbench"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "build", "dist", "coverage", "node_modules" ]
+stages = []
+
+[[check]]
+name = "Locked dependency advisories"
+role = "advisory"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "advisories", "typescript" ]
+stages = [ "ci" ]
+heavy = true
+
+[[check]]
+name = "Recognized credentials"
+role = "secret"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "secrets", "." ]
+
+[[check_suite]]
+language = "typescript"
+path = "examples/languages/typescript"
+
+[[check_suite]]
+language = "rust"
+path = "examples/languages/rust"
+
+[[check_suite]]
+language = "typescript"
+path = "examples/frameworks/react"
+
+[[check_suite]]
+language = "python"
+path = "examples/languages/python"
+
+[[check_suite]]
+language = "c"
+path = "examples/languages/c"
+
+[[check_suite]]
+language = "cpp"
+path = "examples/languages/cpp"
+
+[[check_suite]]
+language = "go"
+path = "examples/languages/go"
+
+[[documentation]]
+project = "workbench"
+source_map = "workbench/source-map.md"
+source_paths = [
+  "src",
+  "tests",
+  "scripts",
+  "bin",
+  ".githooks",
+  "examples/languages",
+  "examples/frameworks",
+  "languages",
+  "collections",
+  "skills",
+  "bundle",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "tsconfig.json",
+  "eslint.config.mjs",
+  "vitest.config.mjs",
+  "workbench/quality.json",
+  ".prettierrc.json",
+  "Makefile",
+  "channels.scm",
+  "manifest.scm",
+  ".github",
+  ".devcontainer",
+  ".node-version",
+  ".tool-versions",
+]
+
+[review]
+# Workbench-specific implementations of the gate; conventional policy files are protected automatically.
+paths = [
+  "src/checks.ts",
+  "src/check-plan.ts",
+  "src/review.ts",
+  "src/test-timing.ts",
+  "scripts/",
+]
+
+[[check_suite]]
+language = "javascript"
+path = "examples/languages/javascript"
+
+[[check_suite]]
+language = "java"
+path = "examples/languages/java"
+
+[[check_suite]]
+language = "ruby"
+path = "examples/languages/ruby"
+
+[[check_suite]]
+path = "examples/languages/php"
+language = "php"
+
+[[check]]
+name = "Verify release: ."
+role = "release-verify"
+path = "."
+command = [ "node", "{workbench}/scripts/check-release.mjs" ]
+heavy = true
+stages = []
+
+[[check]]
+name = "Root compatibility-setup"
+role = "compatibility-setup"
+project = "workbench"
+command = ["{packageManager}", "install", "--frozen-lockfile"]
+heavy = true
+stages = []
+
+[[check]]
+name = "Root compatibility-test"
+role = "compatibility-test"
+project = "workbench"
+command = ["{packageManager}", "run", "test"]
+heavy = true
+stages = []

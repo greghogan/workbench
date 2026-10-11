@@ -1,0 +1,296 @@
+{
+  "report_version": 1,
+  "date": "2026-10-10",
+  "tasks": [
+    "workbench:TSK-C",
+    "workbench:TSK-D"
+  ],
+  "scope": "Shared Java and JavaScript definitions, independent examples, verified native tools, compatibility and managed environments, strict quality checks and portable releases",
+  "local_ci": {
+    "java": {
+      "targets": [
+        {
+          "id": "native:linux:x64:native:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "compatibility:linux:x64:native:java:17.0.20.1%2B1:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "compatibility:linux:x64:native:java:21.0.12.1%2B1:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "compatibility:linux:x64:native:java:27%2B35:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:guix:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:nix-docker:examples%2Flanguages%2Fjava",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:devcontainer:examples%2Flanguages%2Fjava",
+          "success": true
+        }
+      ],
+      "infrastructure_errors": [],
+      "report": "/tmp/workbench-ci-reports-v9qSJm/reports/results.json"
+    },
+    "javascript": {
+      "targets": [
+        {
+          "id": "native:linux:x64:native:examples%2Flanguages%2Fjavascript",
+          "success": true
+        },
+        {
+          "id": "compatibility:linux:x64:native:node:22.23.3:examples%2Flanguages%2Fjavascript",
+          "success": true
+        },
+        {
+          "id": "compatibility:linux:x64:native:node:26.10.0:examples%2Flanguages%2Fjavascript",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:guix:examples%2Flanguages%2Fjavascript",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:nix-docker:examples%2Flanguages%2Fjavascript",
+          "success": true
+        },
+        {
+          "id": "environment:linux:x64:devcontainer:examples%2Flanguages%2Fjavascript",
+          "success": true
+        }
+      ],
+      "infrastructure_errors": [],
+      "report": "/tmp/workbench-ci-reports-uMRRir/reports/results.json"
+    }
+  },
+  "current_configured_linux_x64_targets": 62,
+  "root_ci": {
+    "success": true,
+    "tests": 317,
+    "test_files": 61,
+    "coverage": {
+      "lines": {
+        "total": 6446,
+        "covered": 5753,
+        "skipped": 0,
+        "pct": 89.24
+      },
+      "statements": {
+        "total": 7744,
+        "covered": 6523,
+        "skipped": 0,
+        "pct": 84.23
+      },
+      "functions": {
+        "total": 1147,
+        "covered": 1039,
+        "skipped": 0,
+        "pct": 90.58
+      },
+      "branches": {
+        "total": 6089,
+        "covered": 4684,
+        "skipped": 0,
+        "pct": 76.92
+      }
+    },
+    "log": "/tmp/workbench-new-languages/root-ci-complete.log"
+  },
+  "language_coverage": {
+    "java": {
+      "lines": {
+        "total": 14,
+        "covered": 14,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 3,
+        "covered": 3,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 10,
+        "covered": 10,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "javascript": {
+      "lines": {
+        "total": 7,
+        "covered": 7,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 9,
+        "covered": 9,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 3,
+        "covered": 3,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 7,
+        "covered": 7,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "negative_probes": {
+    "native_java": [
+      {
+        "kind": "bad-hash",
+        "exit": 1,
+        "expectedDiagnostic": true
+      },
+      {
+        "kind": "missing-hash",
+        "exit": 1,
+        "expectedDiagnostic": true
+      },
+      {
+        "kind": "new-api",
+        "exit": 1,
+        "expectedDiagnostic": true
+      }
+    ],
+    "guix_java": {
+      "all_rejected": true,
+      "cases": [
+        "tampered cached JUnit SHA-256",
+        "missing cached JUnit SHA-256",
+        "Java 21 getFirst API under --release 17"
+      ],
+      "diagnostic_limitation": "Resolver 1.9.4 rejects the altered checksum but reports a null ArtifactResult; missing checksums receive an explicit diagnostic. Valid controls pass.",
+      "log": "/tmp/workbench-new-languages/negative-java-guix-verified.log"
+    },
+    "javascript": [
+      {
+        "kind": "JSDoc mismatch",
+        "exit": 1,
+        "expectedDiagnostic": true
+      },
+      {
+        "kind": "focused alias",
+        "exit": 1,
+        "expectedDiagnostic": true
+      }
+    ],
+    "starter_isolation": "Both new starters reject a nested destination symlink before copying any files; included in the complete regression gate."
+  },
+  "dependency_selection": {
+    "checked": "2026-10-10",
+    "javascript_direct_tools": {
+      "@eslint/js": "10.0.1",
+      "@types/node": "^22.20.5",
+      "@typescript/native": "npm:typescript@7.0.2",
+      "@vitest/coverage-v8": "5.0.3",
+      "eslint": "10.12.0",
+      "eslint-config-prettier": "10.1.8",
+      "prettier": "3.9.10",
+      "typescript": "npm:@typescript/typescript6@6.0.2",
+      "typescript-eslint": "8.71.1",
+      "vitest": "5.0.3"
+    },
+    "java_build_plugins": {
+      "maven-resources-plugin": "3.5.0",
+      "maven-compiler-plugin": "3.16.0",
+      "maven-surefire-plugin": "3.6.0",
+      "maven-jar-plugin": "3.5.1",
+      "spotless-maven-plugin": "3.10.4",
+      "spotbugs-maven-plugin": "4.10.4.1",
+      "jacoco-maven-plugin": "0.8.15"
+    },
+    "junit": "6.1.3",
+    "google_java_format": {
+      "selected": "1.36.1",
+      "latest_stable": "1.37.0",
+      "reason": "1.37.0 changes its Style API and fails with NoSuchMethodError in the selected latest stable Spotless 3.10.4."
+    },
+    "shared_pnpm": {
+      "selected": "12.6.0",
+      "latest_stable": "12.11.2",
+      "scope": "Retained shared Workbench bootstrap pin; this task did not refresh existing projects."
+    },
+    "node_types": {
+      "selected": "22.20.5",
+      "latest_for_22": "22.20.5",
+      "reason": "Retain the oldest supported Node API declarations."
+    },
+    "maven_checksum_index": {
+      "entries": 468,
+      "bytes": 61228,
+      "recording_environments": [
+        "native Maven 3.10.0",
+        "Nix Maven 3.9.16",
+        "Guix Maven 3.9.0"
+      ],
+      "conflicting_hashes": 0,
+      "ordinary_recording": false,
+      "advisories": "No known OSV advisories for 154 locked Maven package identities."
+    }
+  },
+  "native_acquisition": {
+    "java_development": "25.0.4.1+1",
+    "java_matrix": [
+      "17.0.20.1+1",
+      "21.0.12.1+1",
+      "25.0.4.1+1",
+      "27+35"
+    ],
+    "maven": "3.10.0",
+    "verification": "Linux x64 native JDK and Maven archives passed recorded SHA-256, upstream detached PGP signatures, and explicit executable probes. Other platforms have pinned metadata but were not executed locally."
+  },
+  "skill_validation": {
+    "java-dependency-refresh": true,
+    "javascript-dependency-refresh": true,
+    "discovery": "Generated links resolve canonical sources in both .agents and .claude."
+  },
+  "storage": "Maven and pnpm download repositories and compiled/dependency products use external cache locations. Checkout node_modules contains links and small metadata. An abandoned 491 MiB Maven experiment cache was removed from /tmp.",
+  "limitations": [
+    "Hosted CI, macOS, Windows and Linux arm64 execution remain TSK-7.",
+    "No commit, push, publication or ADR acceptance occurred.",
+    "Earlier 49-target Linux evidence is historical; this task ran all 13 added targets, plus the repository gate."
+  ],
+  "native_commit_gates": {
+    "success": true,
+    "roots": [
+      ".",
+      "examples/languages/typescript",
+      "examples/languages/rust",
+      "examples/languages/python",
+      "examples/languages/c",
+      "examples/languages/cpp",
+      "examples/languages/go",
+      "examples/languages/javascript",
+      "examples/languages/java",
+      "examples/frameworks/react"
+    ],
+    "example_gate_job": "01a128204f547ce39104a732772fa34b",
+    "root_ci_job": "01a1281f07787a01a40bb6d74459613d"
+  },
+  "final_validation": {
+    "bundle_parity": true,
+    "canonical_records": 62,
+    "structural_markdown_files": 76,
+    "readme_console_examples": true,
+    "git_diff_check": true
+  }
+}

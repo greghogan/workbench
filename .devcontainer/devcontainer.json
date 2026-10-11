@@ -1,0 +1,19 @@
+{
+  "name": "Workbench",
+  "remoteUser": "node",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1"
+  },
+  "postCreateCommand": [
+    "sh",
+    "-eu",
+    "-c",
+    "if [ -f .workbench/bin/workbench.mjs ]; then node .workbench/bin/workbench.mjs tools install; else node bin/workbench.mjs tools install; fi"
+  ],
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  }
+}

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root=$(git rev-parse --show-toplevel)
+staged_snapshot=$(mktemp -d)
+trap 'rm -rf -- "$staged_snapshot"' EXIT
+
+git -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+git -C "$repository_root" diff --cached --check
+
+while IFS= read -r -d '' removed_path; do
+    if [[ "$removed_path" =~ (^|/)workbench/(decisions|tasks|experiments|environments|citations|releases)/.*(ADR|TSK|EXP|ENV|CIT|REL)-[0-9A-Z]+\.(md|yaml)$ ]]; then
+        printf 'workbench: retain committed records; change status or supersede instead of deleting %s\n' "$removed_path" >&2
+        exit 1
+    fi
+done < <(git -C "$repository_root" diff --cached --no-renames --diff-filter=D --name-only -z)
+
+if git -C "$repository_root" grep --cached -n -I -E '^(<<<<<<<|=======|>>>>>>>)( |$)' --; then
+    echo 'workbench: staged content contains an unresolved merge marker' >&2
+    exit 1
+else
+    scan_status=$?
+    if [[ "$scan_status" != 1 ]]; then
+        echo 'workbench: could not inspect staged content for merge markers' >&2
+        exit "$scan_status"
+    fi
+fi
+if [[ -f "$staged_snapshot/workbench/distribution.json" ]]; then
+    hook_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+    bootstrap_distribution=$(cd -- "$hook_directory/.." && pwd -P)
+    WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root" \
+        node "$bootstrap_distribution/bin/workbench.mjs" installation-snapshot "$staged_snapshot"
+fi
+if [[ -d "$repository_root/.workbench" && ! -f "$staged_snapshot/.workbench/bundle/main.cjs" ]]; then
+    if ! read -r dependency_mode dependency_revision dependency_stage dependency_path < <(
+        git -C "$repository_root" ls-files --stage -- .workbench
+    ); then
+        echo 'workbench: Workbench dependency is not staged' >&2
+        exit 1
+    fi
+    if [[ "$dependency_mode" != 160000 || "$dependency_stage" != 0 || "$dependency_path" != .workbench ]]; then
+        echo 'workbench: the Workbench dependency must be staged as a pinned submodule or vendored files' >&2
+        exit 1
+    fi
+    git_local_variables=()
+    while IFS= read -r variable; do
+        git_local_variables+=("$variable")
+    done < <(git rev-parse --local-env-vars)
+    dependency_git() (
+        unset "${git_local_variables[@]}"
+        git -C "$repository_root/.workbench" "$@"
+    )
+    checkout_revision=$(dependency_git rev-parse HEAD)
+    if [[ "$checkout_revision" != "$dependency_revision" ]]; then
+        echo 'workbench: Workbench checkout does not match the staged dependency revision' >&2
+        exit 1
+    fi
+    dependency_status=$(dependency_git status --porcelain --untracked-files=normal --ignore-submodules=none)
+    if [[ -n "$dependency_status" ]]; then
+        echo 'workbench: Workbench dependency checkout has uncommitted files; restore the staged revision before checking' >&2
+        exit 1
+    fi
+    if [[ -d "$staged_snapshot/.workbench" ]]; then
+        rmdir -- "$staged_snapshot/.workbench"
+    fi
+    MSYS=winsymlinks:nativestrict ln -s -- "$repository_root/.workbench" "$staged_snapshot/.workbench"
+fi
+if [[ -f "$staged_snapshot/.workbench/bin/workbench" ]]; then
+    snapshot_launcher="$staged_snapshot/.workbench/bin/workbench"
+else
+    snapshot_launcher="$staged_snapshot/bin/workbench"
+fi
+if [[ ! -x "$snapshot_launcher" ]]; then
+    echo 'workbench: staged tree is missing its runnable Workbench distribution' >&2
+    exit 1
+fi
+local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
+export WORKBENCH_PROJECT_ROOT="$staged_snapshot"
+"$snapshot_launcher" review check "$local_config_root"
+WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root" "$snapshot_launcher" collection-links "$staged_snapshot"
+"$snapshot_launcher" secrets "$staged_snapshot"
+WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root" "$snapshot_launcher" checks run --stage commit "$staged_snapshot"

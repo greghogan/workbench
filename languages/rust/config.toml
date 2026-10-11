@@ -1,0 +1,7 @@
+schema_version = 1
+
+id = "rust"
+name = "Rust"
+summary = "rustfmt, strict Clippy, Nextest, doctests for libraries, and portable cross-built releases"
+reference = "examples/languages/rust"
+manifests = [ "Cargo.toml" ]

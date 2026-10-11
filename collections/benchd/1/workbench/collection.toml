@@ -1,0 +1,15 @@
+schema_version = 1
+id = "benchd"
+revision = "1"
+visibility = "public"
+content_sha256 = "52bebaf0fcabc3e406cf930f8dba79c2c76647fa129cf3478f50a50a167c8d21"
+dependency = []
+
+[[namespace]]
+id = "benchd"
+path = "."
+decisions = ["0"]
+
+[files]
+"workbench/decision-map.md" = "f598d262f8f3a55f6d839766b508be18343fbfb64f4db4a98c0cb61575b10877"
+"workbench/decisions/ADR-00.md" = "7a36df0c288c9ad0f81e8e37dc2dfa2a1788c4c1fad0edecb2ca4560b28a42af"

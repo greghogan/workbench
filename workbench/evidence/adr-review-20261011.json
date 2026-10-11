@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-11",
+  "task": "workbench:TSK-H",
+  "scope": "Human-requested reorganization and shortening of unaccepted ADR drafts; implementation follow-ups remain in TSK-G and TSK-7.",
+  "decisions": [
+    {
+      "before_id": "ADR-9",
+      "after_id": "ADR-9",
+      "path": "workbench/decisions/ADR-09.md",
+      "before_sha256": "5f6327eee2f194cd78dfc8e3a73ee0f290b4429ce166b6ee0b76c4288c1fb9f9",
+      "after_sha256": "69c2575956ad418187f0e6164fff5eb4de542a7de317b9e2a4673008c81dbc90",
+      "before_words": 707,
+      "after_words": 467
+    },
+    {
+      "before_id": "ADR-I",
+      "after_id": "ADR-I",
+      "path": "workbench/decisions/ADR-0I.md",
+      "before_sha256": "f9c3cfa5d99eea76db196b2671372dc96b306e238a33583d0d2adf852ec8ae24",
+      "after_sha256": "c4760013d03a1767c288c7388296869c1ed2eae5c1da60b07d46528188877189",
+      "before_words": 541,
+      "after_words": 352
+    },
+    {
+      "before_id": "ADR-O",
+      "after_id": "ADR-O",
+      "path": "workbench/decisions/ADR-0O.md",
+      "before_sha256": "ace20f4aaab5fded912d317f64578e442985a69e0eb44da3eeb0fd3d33585618",
+      "after_sha256": "6dad9b20c52be0f465bb28c633173867204f97f2fdd620fd5fc733dd7b3dd1f9",
+      "before_words": 510,
+      "after_words": 371
+    },
+    {
+      "before_id": "ADR-10",
+      "after_id": "ADR-10",
+      "path": "workbench/decisions/ADR-10.md",
+      "before_sha256": "0a5c0730bfff5ca20d4ed837e7575308f070dc6a7a554a474c1da4f0b785cdda",
+      "after_sha256": "4316a0575f5b655583d708521d685c4c6412a3299169dff44f1db65b88af7bcc",
+      "before_words": 593,
+      "after_words": 421
+    },
+    {
+      "before_id": "ADR-17",
+      "after_id": "ADR-1B",
+      "path": "workbench/decisions/ADR-1B.md",
+      "before_sha256": "5bf9a3c96a15fabbe959ab220793ae303be5b743d1521be938c8eb964d4e4fd5",
+      "after_sha256": "45d6cfbd815414abd161107fc8b8ee05ab4f3ab614d7c5468b00857c9c5436a1",
+      "before_words": 78,
+      "after_words": 78
+    },
+    {
+      "before_id": "ADR-18",
+      "after_id": "ADR-L",
+      "path": "workbench/decisions/ADR-0L.md",
+      "before_sha256": "f97385f64a8246f05689792f1f3603da5f42b1e4df1a40cc26824daadb41430b",
+      "after_sha256": "eefb7e266831586ad9cc1e787b6d2f18afc05747d9769be741f01ce9c82536fa",
+      "before_words": 719,
+      "after_words": 499
+    },
+    {
+      "before_id": "ADR-19",
+      "after_id": "ADR-17",
+      "path": "workbench/decisions/ADR-17.md",
+      "before_sha256": "6c410b3cfe6a5aa35bc58a10c95ef005ec7b937710ace950107f39f20f9f6cee",
+      "after_sha256": "fc4271b9eed5a06c5b7ec91fcc488b70264e9b5b660a7dfadb3c594836b69c64",
+      "before_words": 285,
+      "after_words": 259
+    },
+    {
+      "before_id": "ADR-1A",
+      "after_id": "ADR-18",
+      "path": "workbench/decisions/ADR-18.md",
+      "before_sha256": "2c61095843ffea1e7446b30320f58d2f26be4bbf3ebaacadfad05ef198403911",
+      "after_sha256": "54b5be040a966ec919a52eaef6b8d7dba14a1eead33ae93a7753ff0ead60f190",
+      "before_words": 153,
+      "after_words": 153
+    },
+    {
+      "before_id": "ADR-1B",
+      "after_id": "ADR-19",
+      "path": "workbench/decisions/ADR-19.md",
+      "before_sha256": "59150b5309675fed8bdbf4566e9ec8aa6c7654acdcd8e5a8fd6ff26ff59c7468",
+      "after_sha256": "39cb9465e4156bf675924772682468f1a61674460f52ad4fe82c32609ad288de",
+      "before_words": 270,
+      "after_words": 245
+    },
+    {
+      "before_id": "ADR-1C",
+      "after_id": "ADR-1A",
+      "path": "workbench/decisions/ADR-1A.md",
+      "before_sha256": "0fc1a1ed8a50a33e336b12bbf51d18d03ce5b4f43607b0345ed350675ced99e6",
+      "after_sha256": "40238b3df53a0c686a57f438863f6ab61c41ca98f698f1d23bbed0d366cc7f87",
+      "before_words": 314,
+      "after_words": 273
+    }
+  ],
+  "historical_evidence_preserved": true,
+  "immutable_benchd_export_unchanged": true,
+  "next_adr_allocation": "1D",
+  "next_adr_allocation_reason": "Preserve the reserved monotonic counter after the explicit draft reorder.",
+  "guides": [
+    "workbench/guides/tooling.md",
+    "workbench/guides/ci.md",
+    "workbench/guides/collections.md",
+    "workbench/guides/adoption.md"
+  ],
+  "source_and_pin_changes": false,
+  "accepted": false,
+  "committed": false,
+  "pushed": false,
+  "verification": {
+    "root_ci_job": "01a128d1f0dc7493827f16734867bdcb",
+    "status": "passed",
+    "command": "node bin/workbench.mjs checks run --stage ci --path . --environment native",
+    "exit_code": 0,
+    "tests": 343,
+    "test_files": 64,
+    "elapsed_seconds": 250.97,
+    "coverage_percent": {
+      "lines": 89.53,
+      "statements": 84.52,
+      "functions": 90.48,
+      "branches": 77.21
+    },
+    "log_sha256": "a3bad56bdb6003b9a65abe4b24a7d0409b8b1c3927833463d60de4973f22bf97",
+    "subsequent_changes": "Task completion, scope-table wording restoration, adoption starter list, and generated maps; final structural validation repeated."
+  }
+}

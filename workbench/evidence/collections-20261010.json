@@ -1,0 +1,167 @@
+{
+  "report_version": 1,
+  "date": "2026-10-10",
+  "task": "workbench:TSK-9",
+  "scope": "Installed pinned ADR collections and the first benchd collection",
+  "first_collection": {
+    "id": "benchd",
+    "revision": "1",
+    "sha256": "6165f63d1e5ea6ac8fac53a50302ce94e4eb3f280c4c0aa98816b716bbd99a5d",
+    "visibility": "public",
+    "scopes": [
+      "."
+    ]
+  },
+  "migration": {
+    "from": "workbench:ADR-L",
+    "to": "benchd:ADR-0",
+    "previous_review_revision": "abc2898",
+    "policy_unchanged_apart_from_identifier": true,
+    "old_draft_removed": true,
+    "ids_reused": false
+  },
+  "root_ci_gate": {
+    "command": "workbench checks run --path . --stage ci",
+    "status": "passed",
+    "tests": 304,
+    "test_files": 60,
+    "coverage": {
+      "lines": {
+        "total": 6299,
+        "covered": 5630,
+        "skipped": 0,
+        "pct": 89.37
+      },
+      "statements": {
+        "total": 7570,
+        "covered": 6388,
+        "skipped": 0,
+        "pct": 84.38
+      },
+      "functions": {
+        "total": 1125,
+        "covered": 1018,
+        "skipped": 0,
+        "pct": 90.48
+      },
+      "branches": {
+        "total": 5902,
+        "covered": 4550,
+        "skipped": 0,
+        "pct": 77.09
+      }
+    },
+    "log": "/tmp/workbench-collections-root-ci.log"
+  },
+  "collection_regressions": {
+    "tests": 26,
+    "status": "passed",
+    "log": "/tmp/workbench-collections-focused.log",
+    "cases": [
+      "installation distinct from adoption",
+      "user, system and explicit local resolution",
+      "immutable revisions and independently recorded manifest/file hashes",
+      "scope coverage and explicit pinned dependencies",
+      "namespace, reference, override and dependency conflicts",
+      "offline lookup, queries, maps and generated context",
+      "bounded inventories, symlinks and path containment",
+      "private audience guards and update-report redaction",
+      "selected exports reject omitted text references and linked records",
+      "real staged gates preserve external policy links as ignored state",
+      "local CI freezes verified external policy for container workspaces",
+      "standalone packaging resolves shipped public policy without development dependencies"
+    ]
+  },
+  "native_commit_stage_gate": {
+    "command": "workbench checks run --stage commit",
+    "status": "passed",
+    "roots": [
+      ".",
+      "examples/languages/typescript",
+      "examples/languages/rust",
+      "examples/frameworks/react",
+      "examples/languages/python",
+      "examples/languages/c",
+      "examples/languages/cpp",
+      "examples/languages/go"
+    ],
+    "platform": "linux-x64",
+    "log": "/tmp/workbench-collections-proposed-gate.log",
+    "expected_skips": "Portable C/C++ builds skip AVX2-only execution; native and optimized AVX2 tests passed."
+  },
+  "boundaries": {
+    "network_acquisition": "Existing authorized package/repository tooling; collection installation consumes a local verified export.",
+    "private_sources": "Synthetic fixtures only.",
+    "provider_installer": "Actual benchd application integration remains part of its future Workbench adoption.",
+    "full_linux_matrix_rerun": false,
+    "github_actions_run": false,
+    "commit": false,
+    "push": false,
+    "publication": false,
+    "draft_adrs_accepted": false,
+    "review_receipts": "unchanged"
+  },
+  "source_sha256": {
+    ".githooks/pre-commit": "c4eea4d237c72cf6cec27e89ee52cbe54c4192a8fd80ea656bef742cf994f768",
+    "AGENTS.md": "d14054c33e224c15d7076f61172620e3578e3b7df70aa1f384ad8d2c65d40d19",
+    "README.md": "f7a832a61e02bb1f16dc28751f77016b215393f09fff76e4d33730b75b8b1048",
+    "bundle/THIRD_PARTY_NOTICES.txt": "78b701feaeedea48222fb10d73bf730f12ed88405b6cd0f085d6826c8666f721",
+    "bundle/main.cjs.br": "b1f39e14b159082905419d7e019ab6e5829d3be627fa137f00223071b91553ae",
+    "bundle/skills.cjs.br": "82f8594ab161b192ab5639cfbc4d4a1f7daa004d307d17d17a3a9c734e4b2c17",
+    "collections/benchd/1/workbench/collection.toml": "6165f63d1e5ea6ac8fac53a50302ce94e4eb3f280c4c0aa98816b716bbd99a5d",
+    "collections/benchd/1/workbench/decision-map.md": "f598d262f8f3a55f6d839766b508be18343fbfb64f4db4a98c0cb61575b10877",
+    "collections/benchd/1/workbench/decisions/ADR-00.md": "7a36df0c288c9ad0f81e8e37dc2dfa2a1788c4c1fad0edecb2ca4560b28a42af",
+    "collections/index.toml": "0f6cd866db55a53205896553bce0194ecaf2d84761191ec71b2bbc0002295b95",
+    "coverage/coverage-summary.json": "fb4b3c2431e3cd09f0aceb5a25c4b3b38de62e090aeff54b489d1de1c7615fbb",
+    "scripts/package-workbench.mjs": "016b1e09405e5983d3b4415391b7a681589bc95c66d1e26c9d0b7c74166b0638",
+    "scripts/skill-evaluation-cases.mjs": "cf94ebd50932542273bf8cdf76a1264c86442d4674b0defb9076b1b37ec4ae24",
+    "scripts/source-checkout.mjs": "523cfc7d320609e905c69121914d124ba2881cf68af440be7b18cf2a57a75b89",
+    "src/agents.ts": "eec47d176323ac5f9c4f286c6eefb25f44a28c5b18b1fca2a42d010d6444f9b4",
+    "src/ci-inputs.ts": "c7cf169154551917f89eeb081dae20876d178ca1b35c963d0ac8d9de0fc22a04",
+    "src/collection-commands.ts": "6773735cb454b34280d1e64889994959d2a148261fbabbb183fa7014b6d75912",
+    "src/collection-links.ts": "43cf74c9773842a6dc1eb76995b4ca5a47b5400509e603f1431982f3f2ddf1f0",
+    "src/collection-maps.ts": "c1c663882140dfd6f26593a8e8132c10894f8a59885c543392b167fda509805b",
+    "src/collection-provision.ts": "1c279c6756c307125db3887a9cfc6544aee1d7d9e2d8f6f197819a56e55a8757",
+    "src/collection-schema.ts": "85087f493e0b510db8072c553629e3d53f4e05b9cf45de1bf311d34b9a46945d",
+    "src/collections.ts": "d661631aed5be23136efe212af04db2e647e8e199895a5b14de0ed7d4c9e6bc4",
+    "src/config-command.ts": "5f0ac9a77a60bc8abed9c96f50ead2a362b463f702176acc1ef9edbea1e86ed8",
+    "src/config-schema.ts": "3859ff373c22b64316b84ca419e47aec4367bb494ba39d6cb7bf05696792f5e3",
+    "src/core.ts": "05427e27704a040cac1fc714ede09c49d6fc38e7407111fa0673dbbc0b4764fd",
+    "src/decision-record.ts": "90a65f2a225dbfe02566155049899f8b8de0645bb19c1946a42dc1841456f291",
+    "src/decisions.ts": "f5a63a1648261e6469aaf187d2e26d1bb757fda74de1534382bd5f350b266b3e",
+    "src/documentation.ts": "e633def2b9d40225dcd182b48b9005c365d64e92a3fb9d8dffa44f32dac3d2e7",
+    "src/environments.ts": "853c65cfac1a11345a6d3a54fe5da3cdc909d254fe522be1c0e74ee2de7cffb3",
+    "src/formatting.ts": "046d94a169363f05303c35621c6aaf85366211102768dba8432fc085f5f0b641",
+    "src/local-ci.ts": "5a676f18bd6b20ad5f95fd9bc57b9a0e65016af5c916db0575de3d1e74da8d19",
+    "src/main.ts": "ca57c7bb6fc5084627324a163e6665340f7ef5f37791732d979f4d7746c0f028",
+    "src/maps.ts": "749146dbff3f41b43db0f27b92ffafc5ff9c2247a2dc6e74574432aad8a7177d",
+    "src/record-commands.ts": "9a481b90016542ed73e20859794f8036462bc0d547bae686e6efa51f163ab037",
+    "src/record-resolver.ts": "d4c7de1822770966f1cead91b5e7d14b051e262a0a1130df129a76874363143b",
+    "src/records.ts": "fa1e2fd72247f70773d64427c297fec352dc2c0f4fffc217415e52db78cda178",
+    "src/review.ts": "2bda4ec02aab429c716a69e8ac6b58a46bef7dd0866f684aa2b5dffe6d1d1e00",
+    "src/sync.ts": "725385a90b22e8e01cc5af1229385592e992825596c83b84603945836291bebc",
+    "src/update.ts": "7ff6015b1c3480f6c60884c8ca9c1e78e730751a0e4adfeba8248893c65abe66",
+    "src/user-config.ts": "f4c7d607564d9e1f316af8578d96121f82234f5d287354612d32b9f1316d30e8",
+    "src/validation.ts": "fcab53e7bdbf64c21b37a8764bf419ad3c2b5fbfa0328d327ec771008d1e1b30",
+    "tests/ci_optimization.test.mjs": "ef59d0593d3870164a01da4b6466b0665ac332b056c8dd7c446fe4c8ffaa6c61",
+    "tests/ci_selection.test.mjs": "bf9f114923f913a998dfe4e3ca779a601403461d0bdf3d8009b33b4928a2d096",
+    "tests/collections.test.mjs": "f63f732d7308ed95a9c3be88b798f4e91a7eac7fefdc6b419000c3c6ae7363e0",
+    "tests/context_records.test.mjs": "8064d09557d9536b6df779c7da7aff2dbfab569c52e7911de894f447084ebe13",
+    "tests/coverage.test.mjs": "1eaee33fceb78af547e3436cdbc2e53c00363e9455e8beca9f73198dd7c5feb8",
+    "tests/git_gate.test.mjs": "52b7dd537da2dbf759929fa2dd35d6f630cf57f0333ba7a6b245f59944ec7189",
+    "tests/review_timing_docs.test.mjs": "2722abf8c97b1bee98ae41e495fb7239773b590eaf3b246305abf710596865f3",
+    "tests/setup.mjs": "d5e19480ad0d8b474a21fed3ffd79e6495544391d00a34e3c43abf6c3c2a84f1",
+    "tests/update.test.mjs": "6cd262c7f0c80f6c52d0cd282387d64131c8ebaa1ccdba9afa1c9dd527fb0403",
+    "tests/user_config.test.mjs": "8eb80c93d0e633f9c97aeb9c20e7382839d9bad73ff1d6f3fef4589094581e42",
+    "workbench/automation.toml": "bae03856e98760e301b4a4a3654a6a411c5624c878bcc7e73b147fe1e6c4b3af",
+    "workbench/decision-map.md": "4a7a3f60b18bbf4b1319c2c2a67505fef452bd76ae70317b1bc19326a04ffe13",
+    "workbench/decisions/ADR-0M.md": "10dd5160dd8bafbb5c669b6ff20542332c764df6c8518a454f2c315beba8409d",
+    "workbench/decisions/ADR-0T.md": "9fc7390fef3ab17592dfadc73b4dad3d853fc81a4f267decc5a308363b1d5b2a",
+    "workbench/decisions/ADR-0U.md": "f1d56d8d4aedda443fb0c4fe991630d3f870cee6090b10c877792a5ef7d3ccc4",
+    "workbench/decisions/ADR-18.md": "4356c6c492a76f8869726f8014cb5e1f239b4d935e20f3fc533ffa06ce820f8e",
+    "workbench/source-map.md": "9d656d0e78c1a712c80f9809ae062a521f0cdc078a14015161c77a5c6c12593d",
+    "workbench/tasks/TSK-09.md": "ff95f06cfd91e16a0eee3b678989a7c68b0c08710bb0763787d3b5198308c7b1",
+    "workbench/tasks/TSK-01.md": "9df47bebe8bc3d8c524bc47fc07d3a47d6e8dfb7ad59af13772ff03f753b466f",
+    "workbench/task-map.md": "fca1d54484ec1eaa2039a47092b5098f9d045d694b696493d7e1bede77b8319f"
+  }
+}

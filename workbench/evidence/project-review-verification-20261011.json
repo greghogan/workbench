@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-11",
+  "scope": "Comprehensive project review, with consumer adoption and records as the primary focus",
+  "base_commit": "35f18dff8e2668cde2df1097e359fc62e2b4fee9",
+  "uncommitted": true,
+  "reviewed_implementation_sha256": "3d5f2c32824a28d8c8f601c045b40b77b2cc7650e525f995e4f45ac7c9ad2e7d",
+  "digest_inputs": "Sorted [relative path, SHA-256] pairs for src, scripts, bin, languages, .github, tests, bundle, package.json, pnpm-lock.yaml, and workbench config/automation/projects TOML",
+  "root_ci": {
+    "passed": true,
+    "command": "workbench checks run --stage ci --path . --environment native",
+    "platform": "linux-x64",
+    "node": "26.11.1",
+    "tests": 343,
+    "test_files": 64,
+    "elapsed_seconds": 165.51,
+    "coverage_percent": {
+      "lines": 89.53,
+      "statements": 84.52,
+      "functions": 90.48,
+      "branches": 77.19
+    },
+    "checks": [
+      "frozen dependencies",
+      "formatting",
+      "lint",
+      "types",
+      "bundle parity and licenses",
+      "structural validation",
+      "tests and coverage floors",
+      "shell format/lint",
+      "actionlint",
+      "executable README example",
+      "OSV advisories",
+      "credential scanning"
+    ],
+    "benchd_job": "01a128bc7ec37b339236f37af172f24d",
+    "log": "/tmp/workbench-review-verified.log"
+  },
+  "release_checks": {
+    "typescript_project_owned_verifier": true,
+    "relocated_workbench_distribution": true,
+    "typescript_log": "/tmp/workbench-review-root-gate-final.log",
+    "distribution_inventory": "project-review-distribution-20261011.json"
+  },
+  "matrix": {
+    "linux_x64": {
+      "native": 12,
+      "compatibility": 30,
+      "environment": 34,
+      "total": 76
+    },
+    "all_platform_target_roots": 115,
+    "grouped_execution_jobs": 31
+  },
+  "limits": [
+    "No hosted execution or publication",
+    "No fresh full 76-target rehearsal",
+    "No new cross-platform execution",
+    "No ADR acceptance or renumbering",
+    "No commit or push"
+  ]
+}
