@@ -420,5 +420,36 @@
       "Python ordinary tests: 5 passed"
     ],
     "diagnostic_workflow": "temporary CI branch only"
+  },
+  "final_cache_fix_verification": {
+    "run": 38129743227,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38129743227",
+    "revision": "9d75e131f6b3451556d2c2361929151d5e34fe9a",
+    "branch": "ci/draft-functionality-20261011",
+    "status": "Every target check and standalone release passed; Windows job cancelled at its 30-minute infrastructure limit during final cleanup, after successful cache saves.",
+    "preceding_run": {
+      "run": 38127320951,
+      "guix_passed": true,
+      "all_other_targets_except_windows_passed": true,
+      "windows_failure": "Diagnosed installed junction/alias cache restoration failure, corrected and verified cold/warm in 38128890118."
+    },
+    "windows": {
+      "job": 114441452589,
+      "checks_passed": true,
+      "releases_passed": true,
+      "tools_cache_saved": true,
+      "log": "/tmp/workbench-7-windows-cache-timeout.log",
+      "tools_key": "tools-v7-win32-x64-2b1ba7f5c72d2bd1481161cf"
+    }
+  },
+  "windows_job_lifetime": {
+    "previous_minutes": 30,
+    "minutes": 40,
+    "other_native_minutes": 30,
+    "reason": "Allow Windows cache archiving and final cleanup after all checks and release verification.",
+    "checks_unchanged": true,
+    "lint_job": "01a12a7b29cc7ec3ab97baf601f845b0",
+    "status": "lint and structural validation passed; final hosted rerun pending",
+    "lint_passed": true
   }
 }

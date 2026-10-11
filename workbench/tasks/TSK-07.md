@@ -256,3 +256,8 @@ The focused Windows cache verification passes both cold and warm attempts in
 [run 38128890118](https://github.com/greghogan/workbench/actions/runs/38128890118). The warm attempt restores verified
 tools, package-manager bootstrap, and download stores, then recreates dependency links and Python installations
 successfully. Python tests pass on both attempts. Diagnostic workflows remain isolated from the primary checkout.
+
+In [run 38129743227](https://github.com/greghogan/workbench/actions/runs/38129743227), every target check and standalone
+release passes. Windows successfully saves its corrected caches, then reaches the 30-minute job limit during final
+cleanup. Its infrastructure lifetime is now 40 minutes; other native jobs retain 30 minutes and all checks are
+unchanged. Final aggregate verification remains pending.

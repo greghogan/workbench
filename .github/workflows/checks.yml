@@ -97,7 +97,8 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.matrix).native.include[0] != null
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    # Windows also needs time to archive verified SDKs and finish checkout cleanup.
+    timeout-minutes: ${{ matrix.os == 'windows' && 40 || 30 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix).native }}
