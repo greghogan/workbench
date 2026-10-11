@@ -113,12 +113,13 @@
   },
   "windows_core_followup": {
     "run": 38119747105,
-    "status": "running; Windows dependency links and bootstrap fixture correction under verification"
+    "status": "324 passed, 47 platform skips, one remaining bootstrap mock call-count assertion corrected and locally verified; coverage cross-drive tests pass",
+    "log": "/tmp/workbench-7-windows-core-r7.log"
   },
   "c_cpp_portability": {
     "passed": true,
-    "job": "01a129c3dd2277c1bf47f1656b3419af",
-    "log": "/tmp/workbench-7-c-cpp-portability.log",
+    "job": "01a129c7e2f27ca2b1b4ccfab57337a3",
+    "log": "/tmp/workbench-7-c-cpp-portability-r3.log",
     "platform": "linux-x64"
   }
 }

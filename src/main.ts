@@ -630,8 +630,9 @@ program
   .argument("<directory>")
   .argument("<build>")
   .addOption(new Option("--compiler <family>").choices(["clang", "gcc"]))
-  .action((directory: string, build: string, options: { compiler?: "clang" | "gcc" }) => {
-    prepareVcpkg(directory, build, options.compiler);
+  .option("--sanitizers", "Match dependency instrumentation where required by the target ABI")
+  .action((directory: string, build: string, options: { compiler?: "clang" | "gcc"; sanitizers?: boolean }) => {
+    prepareVcpkg(directory, build, options.compiler, options.sanitizers);
   });
 program
   .command("miri-exec", { hidden: true })

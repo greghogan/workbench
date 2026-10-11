@@ -46,6 +46,7 @@ function configure(directory, options = [], compiler = selectedCompiler) {
     directory,
     "--compiler",
     compiler,
+    ...(options.includes("-DWORKBENCH_SANITIZERS=ON") ? ["--sanitizers"] : []),
   ]);
   process.env.VCPKG_DISABLE_METRICS = "1";
   process.env.VCPKG_FORCE_SYSTEM_BINARIES = "1";

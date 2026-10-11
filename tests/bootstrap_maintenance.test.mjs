@@ -109,7 +109,7 @@ test("npm bootstraps the package manager from committed hashes outside the proje
   delete lock.packages["node_modules/pnpm"].integrity;
   writeJson(lockPath, lock);
   expect(() => packageManagerCommand(root, repository)).toThrow(/recorded strong integrity hash/);
-  expect(npm).toHaveBeenCalledTimes(3);
+  expect(npm.mock.calls.filter(([command]) => command === "npm")).toEqual(acquisitions);
   writeJson(join(root, "package.json"), { packageManager: "pnpm@12.7.0" });
   expect(() => packageManagerCommand(root, repository)).toThrow(/bootstrap lock must match/);
 });

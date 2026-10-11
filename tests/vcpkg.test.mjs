@@ -79,6 +79,10 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
     expect(chainload).toContain('set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")');
     expect(chainload).not.toContain("toolchains/windows.cmake");
     expect(readFileSync(join(build, "workbench-vcpkg.cmake"), "utf8")).toContain("VCPKG_KEEP_ENV_VARS");
+    const sanitized = join(paths.directory, "sanitized");
+    prepareVcpkg(root, sanitized, "clang", true);
+    expect(readFileSync(join(sanitized, "workbench-compiler.cmake"), "utf8")).toContain("-fsanitize=address");
+    expect(readFileSync(join(sanitized, "workbench-vcpkg.cmake"), "utf8")).toContain("clang-asan-windows");
   }
   const gccBuild = join(paths.directory, "gcc");
   prepareVcpkg(root, gccBuild, "gcc");

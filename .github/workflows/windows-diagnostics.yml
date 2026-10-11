@@ -12,7 +12,7 @@ defaults:
     shell: bash
 jobs:
   native:
-    name: Windows C/C++ verification
+    name: Windows C++ sanitizer verification
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -32,7 +32,6 @@ jobs:
             llvm: ""
             java: ""
             paths:
-              - examples/languages/c
               - examples/languages/cpp
             msvc: true
             runtime: ""
@@ -136,7 +135,8 @@ jobs:
           CHECK_ROOTS: ${{ steps.native-setup.outputs.roots }}
           WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha ||
             github.event.before || 'HEAD' }}
-        run: node scripts/ci-run.mjs native-check
+        run: node bin/workbench.mjs checks run --role sanitizers --path
+          examples/languages/cpp --environment native
       - name: Prepare and verify passing roots' local release artifacts
         id: release-checks
         if: ${{ !cancelled() && steps.native-checks.outputs.roots != '' &&

@@ -19,6 +19,7 @@ export function prepareVcpkg(
   directory: string,
   build: string,
   family: CompilerFamily = process.env.WORKBENCH_COMPILER === "gcc" ? "gcc" : "clang",
+  sanitizers = false,
 ): void {
   directory = resolve(directory);
   build = resolve(build);
@@ -85,6 +86,8 @@ export function prepareVcpkg(
   const architecture = ({ x64: "x64", arm64: "arm64" } as Record<string, string>)[process.arch];
   const system = ({ linux: "linux", darwin: "osx", win32: "windows" } as Record<string, string>)[process.platform];
   if (!architecture || !system) throw new Error(`no vcpkg reference target for ${process.platform}/${process.arch}`);
+  // MSVC's STL checks require matching ASan annotations across static libraries.
+  const sanitizeDependencies = sanitizers && system === "windows";
   mkdirSync(build, { recursive: true });
   const compiler = (name: string) =>
     required(
@@ -122,12 +125,15 @@ export function prepareVcpkg(
             "set(CMAKE_SYSTEM_PROCESSOR AMD64)",
             "set(CMAKE_CROSSCOMPILING OFF)",
             'set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")',
+            ...(sanitizeDependencies
+              ? ['set(CMAKE_C_FLAGS_INIT "-fsanitize=address")', 'set(CMAKE_CXX_FLAGS_INIT "-fsanitize=address")']
+              : []),
           ]
         : [`include(${cmake(join(installation, `scripts/toolchains/${system}.cmake`))})`]),
       "",
     ].join("\n"),
   );
-  const triplet = `${architecture}-workbench-${family}-${system}`;
+  const triplet = `${architecture}-workbench-${family}${sanitizeDependencies ? "-asan" : ""}-${system}`;
   const systemName = ({ linux: "Linux", osx: "Darwin", windows: "" } as Record<string, string>)[system];
   writeFileSync(
     join(build, `${triplet}.cmake`),
