@@ -5,8 +5,8 @@
     "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a129aea16b78e29b3bc4d915fd60df",
-    "log": "/tmp/workbench-7-root-gate-r8.log"
+    "job": "01a129bfd1727703b2df3b0d3d1e00ab",
+    "log": "/tmp/workbench-7-root-gate-r9.log"
   },
   "focused": {
     "passed": 25,
@@ -78,8 +78,9 @@
   "windows_native_followup": {
     "run": 38118139925,
     "revision": "f9f0136a0d05f1880c6e9296f90a0c170c99edc2",
-    "status": "completed; every language except C/C++ passed; Windows vcpkg GNU-driver correction under verification",
-    "log": "/tmp/workbench-7-windows-full-r5.log"
+    "status": "all other language examples and release preparations passed; C/C++ dependency setup fixed; Windows CRT APIs and compiler-rt linkage under verification",
+    "log": "/tmp/workbench-7-windows-full-r5.log",
+    "latest_run": 38119981541
   },
   "guix_first_hosted": {
     "passed": true,
@@ -100,14 +101,24 @@
       38118703099,
       38119140600
     ],
-    "status": "all language examples and releases passed in first run; core failures reduced from 25 to two fixture assumptions; final fixture corrections running",
+    "status": "all language examples and releases passed in first run; complete core gate passed after canonical-path and immutable-installation corrections",
     "logs": [
       "/tmp/workbench-7-macos-r1.log",
-      "/tmp/workbench-7-macos-core-r2.log"
-    ]
+      "/tmp/workbench-7-macos-core-r2.log",
+      "/tmp/workbench-7-macos-core-r4.log"
+    ],
+    "core_passed": true,
+    "core_run": 38119747067,
+    "core_revision": "a71db1824bcea3d642723a9aa7aa7f90eeab1e2b"
   },
   "windows_core_followup": {
-    "run": 38118725724,
-    "status": "in progress; canonical paths and isolated Git symlink configuration corrected"
+    "run": 38119747105,
+    "status": "running; Windows dependency links and bootstrap fixture correction under verification"
+  },
+  "c_cpp_portability": {
+    "passed": true,
+    "job": "01a129c3dd2277c1bf47f1656b3419af",
+    "log": "/tmp/workbench-7-c-cpp-portability.log",
+    "platform": "linux-x64"
   }
 }

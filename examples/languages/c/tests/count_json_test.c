@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
         return 2;
     }
     FILE *output = NULL;
-#if defined(_WIN32)
+#ifdef _WIN32
     if (tmpfile_s(&output) != 0) {
         return 1;
     }
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     FILE *read_only = NULL;
-#if defined(_WIN32)
+#ifdef _WIN32
     if (fopen_s(&read_only, argv[1], "r") != 0) {
         (void)fclose(output);
         return 1;

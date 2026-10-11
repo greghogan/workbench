@@ -205,3 +205,9 @@ and update lifecycle checks pass. The final fixture corrections are under hosted
 language except C/C++, whose vcpkg chainload incorrectly assumed MSVC-style compiler flags. A native GNU Clang chainload
 correction is under hosted verification. The latest complete local gate passes all 372 tests and 13 checks; the original
 index remains unchanged.
+
+The subsequent macOS core gate passes all 350 applicable tests and every configured check; 22 Linux-specific tests are
+explicitly skipped. All macOS example gates and release preparations passed separately. The latest complete local root
+gate passes 372 tests and 13 checks, and both Linux C/C++ gates pass after the Windows portability corrections. Hosted
+Windows verification remains active. Temporary diagnostic workflows stay outside the primary checkout; the original
+index and review receipts remain unchanged.
