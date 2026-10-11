@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -278,6 +279,9 @@ test.skipIf(process.platform === "win32")(
     save();
     prepareReleases(root);
     const receipt = JSON.parse(readFileSync(join(root, "dist/releases/linked/workbench-release.json"), "utf8"));
-    expect(receipt.artifacts.find((file) => file.path === "alias")).toMatchObject({ type: "symlink", mode: 0o777 });
+    expect(receipt.artifacts.find((file) => file.path === "alias")).toMatchObject({
+      type: "symlink",
+      mode: lstatSync(join(root, "dist/releases/linked/alias")).mode & 0o777,
+    });
   },
 );
