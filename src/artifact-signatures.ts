@@ -1,5 +1,5 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { Readable, Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -75,7 +75,7 @@ export async function authenticateCatalog(
 export async function signatureVerifier(signature: ArtifactSignature, staging: string, signal: AbortSignal) {
   if (!signature.signers.length || signature.signers.some((signer) => !/^[A-F0-9]{40,64}$/.test(signer)))
     throw new Error("artifact signature requires pinned full signer fingerprints");
-  const home = mkdtempSync(join(staging, ".authentication-"));
+  const home = mkdtempSync(join(resolve(staging), ".authentication-"));
   const keys = join(home, "keys.asc");
   writeFileSync(keys, signature.keys, { mode: 0o600 });
   const signaturePath = join(home, "artifact.sig");
@@ -91,9 +91,12 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
   // A dedicated read-only keyring avoids importing keys or consulting an agent socket.
   const keyring = join(home, "keys.gpg");
   execute("gpg", [...arguments_, "--dearmor", "--output", keyring, keys], { capture: true, timeout: 30_000 });
-  arguments_.push("--no-default-keyring", "--keyring", keyring, "--no-auto-check-trustdb");
+  // GnuPG under Git Bash treats a drive-letter keyring path as a resource URL.
+  // Resolve the read-only keyring within the verifier's private working directory instead.
+  arguments_.push("--no-default-keyring", "--keyring", "./keys.gpg", "--no-auto-check-trustdb");
   const invocation = commandInvocation("gpg", [...arguments_, "--status-fd", "2", "--verify", signaturePath, "-"]);
   const child = spawn(required(invocation[0], "signature verification needs a command"), invocation.slice(1), {
+    cwd: home,
     stdio: ["pipe", "ignore", "pipe"],
   });
   let status = "";
