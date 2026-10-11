@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
   symlinkSync,
@@ -27,7 +28,7 @@ afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-profiles-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-profiles-")));
   temporary.push(root);
   mkdirSync(join(root, "workbench"));
   mkdirSync(join(root, "app"));

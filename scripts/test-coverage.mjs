@@ -34,7 +34,18 @@ export async function coverageWorkspace(root, temporary) {
   mkdirSync(workspace);
   copySourceCheckout(root, workspace);
   // Reuse installed build/test dependencies; never copy or download them for coverage.
-  symlinkSync(realpathSync(join(root, "node_modules")), join(workspace, "node_modules"), "junction");
+  symlinkSync(realpathSync.native(join(root, "node_modules")), join(workspace, "node_modules"), "junction");
+  if (process.platform === "win32")
+    console.error(
+      "Coverage dependency lookup",
+      JSON.stringify({
+        root,
+        workspace,
+        target: realpathSync.native(join(root, "node_modules")),
+        found: existsSync(join(workspace, "node_modules/vitest/vitest.mjs")),
+        targetFound: existsSync(join(root, "node_modules/vitest/vitest.mjs")),
+      }),
+    );
   for (const name of ["main", "skills"]) await build(bundleOptions(workspace, name, true));
   return workspace;
 }
@@ -136,7 +147,7 @@ export function mergeCoverage(paths, directory, thresholds, sourceRoot, reportRo
 }
 
 export async function runCoverage(root, builds = join(root, "build")) {
-  root = realpathSync(root);
+  root = realpathSync.native(root);
   const output = join(root, "coverage");
   if (existsSync(output) && lstatSync(output).isSymbolicLink()) throw new Error("coverage must be a real directory");
   mkdirSync(output, { recursive: true });
@@ -147,7 +158,7 @@ export async function runCoverage(root, builds = join(root, "build")) {
   if (existsSync(summaryPath) && lstatSync(summaryPath).isSymbolicLink())
     throw new Error("coverage summary must be a regular file");
   mkdirSync(builds, { recursive: true });
-  const temporary = mkdtempSync(join(realpathSync(builds), "coverage-"));
+  const temporary = mkdtempSync(join(realpathSync.native(builds), "coverage-"));
   try {
     const workspace = await coverageWorkspace(resolve(root), temporary);
     const source = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });

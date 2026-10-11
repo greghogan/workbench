@@ -182,7 +182,7 @@ export function prepareReleases(root: string, names?: string[], all = false): vo
             `${profile.output}: release output already exists; preserve or explicitly remove it before preparing again`,
           );
         mkdirSync(stage, { mode: 0o700 });
-        const verificationDirectory = mkdtempSync(join(tmpdir(), "workbench-release-profile-"));
+        const verificationDirectory = realpathSync(mkdtempSync(join(tmpdir(), "workbench-release-profile-")));
         verification = verificationDirectory;
         const sources = artifactFiles(profile.directory, true);
         const configuration = readFileSync(join(root, "workbench/config.toml"));

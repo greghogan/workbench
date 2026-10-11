@@ -8,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -51,7 +52,7 @@ afterEach(() => {
 });
 
 function fixture(id = "product") {
-  const base = mkdtempSync(join(tmpdir(), "workbench-collections-"));
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "workbench-collections-")));
   temporary.push(base);
   const root = join(base, "project");
   mkdirSync(join(root, "workbench"), { recursive: true });

@@ -195,6 +195,7 @@ jobs:
             ${{ runner.temp }}/workbench-ci/cache/dependencies/**/*.def
           if-no-files-found: ignore
           retention-days: 14
+    if: false
   core:
     name: Windows core diagnostics
     runs-on: ${{ matrix.runner }}

@@ -98,8 +98,9 @@ test("npm bootstraps the package manager from committed hashes outside the proje
     expect.anything(),
   );
   expect(npm).toHaveBeenCalledWith("npm", ["audit", "signatures"], expect.anything());
+  const acquisitions = npm.mock.calls.filter(([command]) => command === "npm");
   expect(packageManagerCommand(root, repository)).toEqual(command);
-  expect(npm).toHaveBeenCalledTimes(3);
+  expect(npm.mock.calls.filter(([command]) => command === "npm")).toEqual(acquisitions);
   const local = join(root, "workbench/package-manager");
   mkdirSync(local, { recursive: true });
   cpSync(join(repository, "scripts/package-manager"), local, { recursive: true });

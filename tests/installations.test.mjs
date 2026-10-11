@@ -8,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -54,7 +55,7 @@ afterEach(() => {
   }
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-installation-test-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-installation-test-")));
   temporary.push(root);
   vi.stubEnv("WORKBENCH_LOCAL_CONFIG_ROOT", "");
   return root;
@@ -120,6 +121,7 @@ test("multiple checkouts retain exact versions, rollback generations, and active
   const one = distribution(root, "one");
   const two = distribution(root, "two", "2".repeat(40));
   const store = install(root, one);
+  if (process.platform !== "win32") expect(lstatSync(installedVersion(store, one.pin)).mode & 0o222).toBe(0);
   install(root, two);
   const a = project(root, "project-a");
   const b = project(root, "project-b");

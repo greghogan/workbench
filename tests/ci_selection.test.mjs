@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { realpathSync, cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
@@ -20,7 +20,7 @@ afterEach(() => {
   for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-selection-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-selection-")));
   temporary.push(root);
   git(root, "init", "--quiet");
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", root);

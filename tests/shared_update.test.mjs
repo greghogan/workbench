@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -34,7 +35,7 @@ afterEach(() => {
   }
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-shared-update-test-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-shared-update-test-")));
   temporary.push(root);
   const distribution = join(root, "distribution");
   mkdirSync(distribution);
