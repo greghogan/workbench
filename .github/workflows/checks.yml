@@ -4,6 +4,8 @@ name: Checks
 # changes still receive validation and a final required status.
 on:
   push:
+    # Publication branches select a separate operation on a revision whose Checks already passed.
+    branches-ignore: ["ci/publication-verification-**"]
   pull_request:
 
   # Use the full matrix for initial verification; ordinary pushes/PRs select affected roots.
@@ -21,6 +23,10 @@ on:
   # Release verification covers every configured root. This workflow does not publish.
   release:
     types: [published]
+
+# Read-only API authentication avoids the shared unauthenticated attestation rate limit.
+env:
+  GH_TOKEN: ${{ github.token }}
 
 # Pull request code runs with read-only repository access.
 permissions:
@@ -59,6 +65,12 @@ jobs:
       # The adapter reads the event payload as data and writes the selection summary.
       - id: plan
         run: node scripts/ci-plan.mjs
+      - name: Retain the resolved matrix for publication verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-plan
+          path: ${{ runner.temp }}/workbench-ci-plan.json
+          retention-days: 14
 
   # Small, unconditional checks: no example dependency or compiler installations.
   # Keep this job independent of planning so invalid records remain visible.

@@ -68,6 +68,8 @@ test("credential diagnostics identify source locations without exposing values",
     },
   );
   writeFileSync(join(root, "src/config.js"), "const token = process.env.TOKEN;\n");
+  mkdirSync(join(root, "vendor/dependency"), { recursive: true });
+  writeFileSync(join(root, "vendor/dependency/fixture.pem"), ["-----BEGIN", "PRIVATE KEY-----"].join(" "));
   checkSecrets(root);
   writeFileSync(join(root, "private.pem"), ["-----BEGIN", "PRIVATE KEY-----"].join(" "));
   assert.throws(() => checkSecrets(root), /private.pem:1/);

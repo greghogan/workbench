@@ -115,12 +115,12 @@ export function packageManagerCommand(directory: string, distribution: string): 
     )
       throw new Error(`${destination}: missing package-manager executable or launcher`);
     // Never let pnpm's wrapper fetch an unpinned replacement when npm could not install its optional binary.
-    return [
-      "env",
-      "COREPACK_ENABLE_NETWORK=0",
-      `PATH=${join(destination, "bin")}${delimiter}${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
-      process.execPath,
-      executable,
-    ];
+    const nativePath = `${join(destination, "bin")}${delimiter}${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`;
+    // GNU env runs under Git Bash, whose PATH uses POSIX paths; MSYS converts it for the native Node child.
+    const path =
+      process.platform === "win32"
+        ? execute("cygpath", ["-p", "-u", nativePath], { capture: true }).trim()
+        : nativePath;
+    return ["env", "COREPACK_ENABLE_NETWORK=0", `PATH=${path}`, process.execPath, executable];
   });
 }

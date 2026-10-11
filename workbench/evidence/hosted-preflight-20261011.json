@@ -2,11 +2,11 @@
   "date": "2026-10-11",
   "root_gate": {
     "passed": true,
-    "tests": 370,
+    "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a129579ccf734291f7504a4e35612e",
-    "log": "/tmp/workbench-7-root-gate-r2.log"
+    "job": "01a129bfd1727703b2df3b0d3d1e00ab",
+    "log": "/tmp/workbench-7-root-gate-r9.log"
   },
   "focused": {
     "passed": 25,
@@ -21,7 +21,105 @@
     "log": "/tmp/workbench-7-windows-preflight.log"
   },
   "previous_hosted_run_inspected": 37834795016,
-  "hosted_verification": "pending",
+  "hosted_verification": {
+    "branch": "ci/draft-functionality-20261011",
+    "revision": "bb3c0292322504c2b9884144fc64788f78c1ec24",
+    "run": 38114097093,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38114097093",
+    "status": "completed; failures inspected; Guix, Nix Docker and all GCC compatibility jobs passed; platform corrections under verification"
+  },
   "deployment": "not authorized or performed",
-  "document_acceptance": "pending human review"
+  "document_acceptance": "pending human review",
+  "windows_signature_diagnostic": {
+    "passed": true,
+    "run": 38114877693,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38114877693"
+  },
+  "devcontainer_regression": {
+    "passed": true,
+    "job": "01a1296ec9e57a00b0331510b799d8ab",
+    "log": "/tmp/workbench-7-devcontainer-r2.log",
+    "results": "/tmp/workbench-ci-reports-vc4Czi/reports/results.json"
+  },
+  "portability_focused": {
+    "passed": 83,
+    "files": 7,
+    "job": "01a12972d9cd7d83bd1d59ad9076bcd4",
+    "log": "/tmp/workbench-7-portability-focused.log"
+  },
+  "cache_inventory_partial": {
+    "compressed_bytes": 9233287280,
+    "count": 65,
+    "inventory": "/tmp/workbench-7-cache-inventory.tsv",
+    "measurements": "/tmp/workbench-7-cache-first",
+    "warm_verification": "pending"
+  },
+  "gcc_strip_probe": {
+    "source": "/home/ec2-user/.cache/workbench/toolchains/gcc/16.2.0/linux-x64/e6738e29597f7332",
+    "destination": "/tmp/workbench-7-stripped-gcc16",
+    "before": 1977915609,
+    "after": 289239129,
+    "stripped_files": 73,
+    "passed": true,
+    "strip_job": "01a12985ddf977e2a018731fc2e71677",
+    "behavior_job": "01a1298827bd7b42a3ccd8a97c704fa6",
+    "checks": [
+      "C17 LTO",
+      "C++20 LTO",
+      "address and undefined-behavior sanitizers"
+    ],
+    "method": "strip --strip-debug on disposable copy; hosted installer selects upstream install-strip"
+  },
+  "ruby_external_gate": {
+    "passed": true,
+    "job": "01a1298a4c3979c095829d64adf80bf6",
+    "log": "/tmp/workbench-7-ruby-external-gate.log"
+  },
+  "windows_native_followup": {
+    "run": 38118139925,
+    "revision": "f9f0136a0d05f1880c6e9296f90a0c170c99edc2",
+    "status": "all other language examples and release preparations passed; C/C++ dependency setup fixed; Windows CRT APIs and compiler-rt linkage under verification",
+    "log": "/tmp/workbench-7-windows-full-r5.log",
+    "latest_run": 38119981541
+  },
+  "guix_first_hosted": {
+    "passed": true,
+    "run": 38114097093,
+    "job": 114395451544,
+    "elapsed_minutes": 56,
+    "log": "/tmp/workbench-7-guix-first.log",
+    "cold_setup_minutes": {
+      "channel_clone": 11.5,
+      "authentication": 5.3,
+      "guix_runtime_build": 21
+    },
+    "warm_verification": "pending"
+  },
+  "macos_native_followup": {
+    "runs": [
+      38117267697,
+      38118703099,
+      38119140600
+    ],
+    "status": "all language examples and releases passed in first run; complete core gate passed after canonical-path and immutable-installation corrections",
+    "logs": [
+      "/tmp/workbench-7-macos-r1.log",
+      "/tmp/workbench-7-macos-core-r2.log",
+      "/tmp/workbench-7-macos-core-r4.log"
+    ],
+    "core_passed": true,
+    "core_run": 38119747067,
+    "core_revision": "a71db1824bcea3d642723a9aa7aa7f90eeab1e2b"
+  },
+  "windows_core_followup": {
+    "run": 38119747105,
+    "status": "324 passed, 47 platform skips, one remaining bootstrap mock call-count assertion corrected and locally verified; coverage cross-drive tests pass",
+    "log": "/tmp/workbench-7-windows-core-r7.log"
+  },
+  "c_cpp_portability": {
+    "passed": true,
+    "job": "01a129c7e2f27ca2b1b4ccfab57337a3",
+    "log": "/tmp/workbench-7-c-cpp-portability-r3.log",
+    "platform": "linux-x64"
+  }
 }

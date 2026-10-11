@@ -1,5 +1,5 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { Readable, Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -75,7 +75,7 @@ export async function authenticateCatalog(
 export async function signatureVerifier(signature: ArtifactSignature, staging: string, signal: AbortSignal) {
   if (!signature.signers.length || signature.signers.some((signer) => !/^[A-F0-9]{40,64}$/.test(signer)))
     throw new Error("artifact signature requires pinned full signer fingerprints");
-  const home = mkdtempSync(join(staging, ".authentication-"));
+  const home = mkdtempSync(join(resolve(staging), ".authentication-"));
   const keys = join(home, "keys.asc");
   writeFileSync(keys, signature.keys, { mode: 0o600 });
   const signaturePath = join(home, "artifact.sig");
@@ -87,13 +87,19 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
     chunks.push(chunk as Buffer);
   }
   writeFileSync(signaturePath, Buffer.concat(chunks), { mode: 0o600 });
-  const arguments_ = ["--batch", "--no-options", "--homedir", home, "--no-auto-key-retrieve", "--no-autostart"];
+  const arguments_ = ["--batch", "--no-options", "--homedir", ".", "--no-auto-key-retrieve", "--no-autostart"];
   // A dedicated read-only keyring avoids importing keys or consulting an agent socket.
-  const keyring = join(home, "keys.gpg");
-  execute("gpg", [...arguments_, "--dearmor", "--output", keyring, keys], { capture: true, timeout: 30_000 });
-  arguments_.push("--no-default-keyring", "--keyring", keyring, "--no-auto-check-trustdb");
-  const invocation = commandInvocation("gpg", [...arguments_, "--status-fd", "2", "--verify", signaturePath, "-"]);
+  execute("gpg", [...arguments_, "--dearmor", "--output", "keys.gpg", "keys.asc"], {
+    cwd: home,
+    capture: true,
+    timeout: 30_000,
+  });
+  // GnuPG under Git Bash misinterprets drive-letter home/keyring paths.
+  // Resolve verifier paths within its private working directory instead.
+  arguments_.push("--no-default-keyring", "--keyring", "./keys.gpg", "--no-auto-check-trustdb");
+  const invocation = commandInvocation("gpg", [...arguments_, "--status-fd", "2", "--verify", "artifact.sig", "-"]);
   const child = spawn(required(invocation[0], "signature verification needs a command"), invocation.slice(1), {
+    cwd: home,
     stdio: ["pipe", "ignore", "pipe"],
   });
   let status = "";
@@ -124,12 +130,22 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
   };
   signal.addEventListener("abort", abort, { once: true });
   if (signal.aborted) abort();
+  const verificationFailure = () =>
+    new Error(
+      `${failure?.message ?? "upstream artifact signature verification failed"}${status ? `\n${status.trim().slice(-8192)}` : ""}`,
+      { cause: failure },
+    );
   return {
     relay: new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         child.stdin.write(chunk, (error) => {
-          if (error) failure ??= new Error("upstream artifact signature verification failed", { cause: error });
-          callback(error ? failure : undefined, error ? undefined : chunk);
+          if (error) {
+            failure ??= new Error("upstream artifact signature verification failed", { cause: error });
+            child.kill();
+            void completed.then(() => {
+              callback(verificationFailure());
+            });
+          } else callback(undefined, chunk);
         });
       },
       flush(callback) {
@@ -140,8 +156,8 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
     async finish() {
       await completed;
       signal.removeEventListener("abort", abort);
-      if (failure) throw failure;
-      const valid = [...status.matchAll(/^\[GNUPG:\] VALIDSIG ([A-F0-9]+) .+$/gm)];
+      if (failure) throw verificationFailure();
+      const valid = [...status.replaceAll("\r", "").matchAll(/^\[GNUPG:\] VALIDSIG ([A-F0-9]+) .+$/gm)];
       if (
         !valid.some(
           (match) =>

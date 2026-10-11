@@ -101,11 +101,26 @@ int main(int argc, char **argv) {
     if (argc != 2) {
         return 2;
     }
-    FILE *output = tmpfile();
+    FILE *output = NULL;
+#ifdef _WIN32
+    if (tmpfile_s(&output) != 0) {
+        return 1;
+    }
+#else
+    output = tmpfile();
+#endif
     if (output == NULL) {
         return 1;
     }
-    FILE *read_only = fopen(argv[1], "r");
+    FILE *read_only = NULL;
+#ifdef _WIN32
+    if (fopen_s(&read_only, argv[1], "r") != 0) {
+        (void)fclose(output);
+        return 1;
+    }
+#else
+    read_only = fopen(argv[1], "r");
+#endif
     if (read_only == NULL) {
         (void)fclose(output);
         return 1;

@@ -7,9 +7,15 @@ import { compatibilityRuntimePlan, executeCompatibilityRuntime } from "../src/ci
 import { ciMatrix } from "../src/ci.ts";
 import { executionEnvironment } from "../src/execution-resources.ts";
 import { toolProbes } from "../src/tool-probes.ts";
+import * as assets from "../src/native-assets.ts";
 
 const repository = resolve(import.meta.dirname, "..");
 beforeEach(() => {
+  // Installation is mocked; use the configured Linux x64 target's actual artifact metadata on every test host.
+  const assetFor = assets.assetFor;
+  vi.spyOn(assets, "assetFor").mockImplementation((root, tool, directory) =>
+    assetFor(root, tool, directory, "linux-x64"),
+  );
   vi.spyOn(native, "installNativeTools").mockResolvedValue(undefined);
   vi.spyOn(builds, "prepareBuild").mockImplementation(() => {});
   vi.spyOn(builds, "withBuildLock").mockImplementation((_paths, action) => action());

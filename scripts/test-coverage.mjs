@@ -13,6 +13,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -34,7 +35,27 @@ export async function coverageWorkspace(root, temporary) {
   mkdirSync(workspace);
   copySourceCheckout(root, workspace);
   // Reuse installed build/test dependencies; never copy or download them for coverage.
-  symlinkSync(join(root, "node_modules"), join(workspace, "node_modules"), "junction");
+  const dependencies = realpathSync.native(join(root, "node_modules"));
+  const destination = join(workspace, "node_modules");
+  if (process.platform !== "win32") symlinkSync(dependencies, destination, "junction");
+  else {
+    // Resolve package targets before crossing drives: pnpm's relative package links
+    // must retain their original virtual-store base through the disposable workspace.
+    mkdirSync(destination);
+    const link = (source, target) => {
+      const canonical = realpathSync.native(source);
+      symlinkSync(canonical, target, statSync(canonical).isDirectory() ? "junction" : "file");
+    };
+    for (const entry of readdirSync(dependencies)) {
+      const source = join(dependencies, entry);
+      const target = join(destination, entry);
+      if (!entry.startsWith("@")) link(source, target);
+      else {
+        mkdirSync(target);
+        for (const name of readdirSync(source)) link(join(source, name), join(target, name));
+      }
+    }
+  }
   for (const name of ["main", "skills"]) await build(bundleOptions(workspace, name, true));
   return workspace;
 }
@@ -62,7 +83,9 @@ export async function subprocessCoverage(directory, root) {
           throw new Error(`${sourcePath}: bundle source differs from the checkout`);
         included.add(sourcePath);
       }
-      return sourcePath;
+      // Relative URLs avoid treating Windows drive letters as URI schemes, and preserve
+      // the converter's source-content lookup using native filesystem paths.
+      return relative(dirname(path), sourcePath).split(sep).join("/");
     });
     bundles.set(key, { code, map, included, url: pathToFileURL(path).href, executions: [] });
   }
@@ -95,7 +118,14 @@ export async function subprocessCoverage(directory, root) {
       // esbuild's generated export getters map to the `export` keyword, not a source function or statement.
       ignoreSourceCode: (code) => code.trim() === "export",
     });
-    map.merge(Object.fromEntries(Object.entries(converted).filter(([path]) => bundle.included.has(path))));
+    map.merge(
+      Object.fromEntries(
+        Object.entries(converted).flatMap(([path, value]) => {
+          const absolute = resolve(path);
+          return bundle.included.has(absolute) ? [[absolute, { ...value, path: absolute }]] : [];
+        }),
+      ),
+    );
   }
   return map;
 }
@@ -127,7 +157,7 @@ export function mergeCoverage(paths, directory, thresholds, sourceRoot, reportRo
 }
 
 export async function runCoverage(root, builds = join(root, "build")) {
-  root = realpathSync(root);
+  root = realpathSync.native(root);
   const output = join(root, "coverage");
   if (existsSync(output) && lstatSync(output).isSymbolicLink()) throw new Error("coverage must be a real directory");
   mkdirSync(output, { recursive: true });
@@ -138,9 +168,11 @@ export async function runCoverage(root, builds = join(root, "build")) {
   if (existsSync(summaryPath) && lstatSync(summaryPath).isSymbolicLink())
     throw new Error("coverage summary must be a regular file");
   mkdirSync(builds, { recursive: true });
-  const temporary = mkdtempSync(join(realpathSync(builds), "coverage-"));
+  const temporary = mkdtempSync(join(realpathSync.native(builds), "coverage-"));
   try {
     const workspace = await coverageWorkspace(resolve(root), temporary);
+    const source = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+    const revision = process.env.WORKBENCH_SOURCE_REVISION ?? (source.status === 0 ? source.stdout.trim() : undefined);
     const raw = join(temporary, "raw");
     const unit = join(temporary, "unit");
     const tests = spawnSync(
@@ -150,7 +182,12 @@ export async function runCoverage(root, builds = join(root, "build")) {
         cwd: workspace,
         stdio: "inherit",
         // Vitest already measures its workers. Their setup enables native V8 capture only for CLI children.
-        env: { ...process.env, NODE_V8_COVERAGE: "", WORKBENCH_SUBPROCESS_COVERAGE: raw },
+        env: {
+          ...process.env,
+          NODE_V8_COVERAGE: "",
+          WORKBENCH_SUBPROCESS_COVERAGE: raw,
+          ...(revision === undefined ? {} : { WORKBENCH_SOURCE_REVISION: revision }),
+        },
       },
     );
     const resultsPath = join(workspace, "coverage/tests.json");

@@ -118,7 +118,7 @@ test("Ruby and PHP declare maintained runtime matrices and all native platform a
     const tool = nativeTools(join(repository, `examples/languages/${language}`), repository).find(
       (entry) => entry.name === language,
     );
-    expect(assetFor(repository, tool)).toMatchObject({ build: language, format: "tar" });
+    expect(assetFor(repository, tool, undefined, "linux-x64")).toMatchObject({ build: language, format: "tar" });
   }
 });
 

@@ -183,13 +183,14 @@ export async function executeDevcontainer(root: string, directory: string, comma
     }
     const builds = buildPaths(root, directory, "devcontainer");
     const rehearsal = process.env.WORKBENCH_CI_DOCKER !== undefined;
-    const caches = rehearsal
-      ? [userDirectory("cache")]
+    const ci = rehearsal || process.env.GITHUB_ACTIONS === "true";
+    const caches = ci
+      ? [...new Set([userDirectory("cache"), userDirectory("data")])]
       : builds.external
         ? [resolve(builds.roots, ".."), resolve(builds.dependencyRoots, ".."), builds.pnpmStore]
         : [];
     const runtime = [
-      ...forwardedCIEnvironment(rehearsal ? env : executionEnvironment(root)),
+      ...forwardedCIEnvironment(ci ? env : executionEnvironment(root)),
       ...(sharedPin ? ["--remote-env", "WORKBENCH_DISTRIBUTION_MATERIALIZED=1"] : []),
     ];
     if (sharedPin && distribution.includes(","))

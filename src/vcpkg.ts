@@ -79,7 +79,9 @@ export function prepareVcpkg(
     capture: true,
   }).trim();
   if (head !== revision || changed || !existsSync(executable))
-    throw new Error(`${installation}: vcpkg must match its pinned checkout; refusing modified or incomplete tools`);
+    throw new Error(
+      `${installation}: vcpkg must match its pinned checkout; refusing modified or incomplete tools (HEAD ${head}; changes ${changed.slice(0, 4096) || "none"}; executable ${existsSync(executable) ? "present" : "missing"})`,
+    );
   const architecture = ({ x64: "x64", arm64: "arm64" } as Record<string, string>)[process.arch];
   const system = ({ linux: "linux", darwin: "osx", win32: "windows" } as Record<string, string>)[process.platform];
   if (!architecture || !system) throw new Error(`no vcpkg reference target for ${process.platform}/${process.arch}`);
@@ -112,7 +114,16 @@ export function prepareVcpkg(
             `set(CMAKE_CXX_FLAGS_INIT ${cmake(`"--gcc-toolchain=${gccSdk}"`)})`,
           ]
         : []),
-      `include(${cmake(join(installation, `scripts/toolchains/${system}.cmake`))})`,
+      // The examples select Clang's GNU driver. vcpkg's Windows chainload file assumes
+      // cl/clang-cl flags and requires triplet state before the main project loads it.
+      ...(system === "windows"
+        ? [
+            "set(CMAKE_SYSTEM_NAME Windows)",
+            "set(CMAKE_SYSTEM_PROCESSOR AMD64)",
+            "set(CMAKE_CROSSCOMPILING OFF)",
+            'set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")',
+          ]
+        : [`include(${cmake(join(installation, `scripts/toolchains/${system}.cmake`))})`]),
       "",
     ].join("\n"),
   );
@@ -139,6 +150,15 @@ export function prepareVcpkg(
       `set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE ${cmake(chainload)} CACHE FILEPATH "")`,
       `set(VCPKG_INSTALLED_DIR ${cmake(join(build, "vcpkg_installed"))} CACHE PATH "")`,
       `set(ENV{VCPKG_DOWNLOADS} ${cmake(downloads)})`,
+      // vcpkg cleans Windows port environments; retain the verified CMake/Ninja PATH.
+      ...(process.platform === "win32"
+        ? [
+            'set(_workbench_keep_env "$ENV{VCPKG_KEEP_ENV_VARS};PATH")',
+            "list(REMOVE_DUPLICATES _workbench_keep_env)",
+            'set(ENV{VCPKG_KEEP_ENV_VARS} "${_workbench_keep_env}")',
+            "unset(_workbench_keep_env)",
+          ]
+        : []),
       `set(VCPKG_INSTALL_OPTIONS ${cmake(`--x-buildtrees-root=${join(build, "vcpkg_buildtrees")}`)} ${cmake(`--x-packages-root=${join(build, "vcpkg_packages")}`)})`,
       `include(${cmake(join(installation, "scripts/buildsystems/vcpkg.cmake"))})`,
       "",

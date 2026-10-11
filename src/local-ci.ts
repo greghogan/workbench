@@ -163,8 +163,6 @@ export function rehearsalDocker(path: string, docker: string): void {
 }
 
 export async function runLocalCI(root: string, options: LocalCIOptions = {}): Promise<void> {
-  if (process.platform !== "linux" || process.arch !== "x64")
-    throw new Error("Local CI requires a native Linux x64 host; emulation is not selected");
   const plan = localCIPlan(root, options);
   if (!plan.selected.length) {
     await validate(root);
@@ -172,6 +170,8 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
     console.log("Validation passed; no affected Linux x64 targets. No example tools, caches, or workspaces acquired.");
     return;
   }
+  if (process.platform !== "linux" || process.arch !== "x64")
+    throw new Error("Local CI requires a native Linux x64 host; emulation is not selected");
   const distribution = distributionRoot(root);
   const guestDistribution = readDistributionPin(root) ? ".workbench" : relative(root, distribution);
   if (isAbsolute(guestDistribution) || guestDistribution === ".." || guestDistribution.startsWith("../"))

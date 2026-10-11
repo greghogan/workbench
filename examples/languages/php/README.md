@@ -20,16 +20,17 @@ source. Composer metadata has HTTPS transport integrity, while committed locks a
 
 The application and development tools have independent manifests: the application targets PHP 8.2, while `tools/` uses
 the current tool release requirements. Compatibility jobs use the locked PHP 8.2-compatible PHPUnit in `tools/compat/`.
-ParaTest uses the complete CPU allotment in both tool graphs; PHPStan and PHP CS Fixer use that same budget.
-Tools never become application runtime dependencies. Run refresh through
+ParaTest uses the complete CPU allotment in both tool graphs; PHPStan and PHP CS Fixer use that same budget. Tools never
+become application runtime dependencies. Run refresh through
 `workbench checks run --role dependency-lock --path examples/languages/php`; use the PHP dependency refresh skill for
 narrow updates.
 
 Dependencies, Composer downloads, tool installations and build outputs use Workbench's external cache. No vendor tree is
 committed. Native Unix installation compiles signed release sources using a C compiler, make, pkg-config, OpenSSL,
-libxml2, oniguruma, zlib and curl development headers. Xdebug additionally needs autoconf. Windows uses the official x64
-NTS ZIP, its recorded SHA-256, and its matching extensions; the Visual C++ runtime is required. The Windows publisher
-does not provide detached archive signatures; this absence is recorded in native artifact metadata.
+libxml2, oniguruma, zlib and curl development headers. macOS also uses Homebrew's libiconv prefix. Xdebug additionally
+needs autoconf. Windows uses the official x64 NTS ZIP, its recorded SHA-256, and its matching extensions; the Visual C++
+runtime is required. The Windows publisher does not provide detached archive signatures; this absence is recorded in
+native artifact metadata.
 
 Native CI covers Linux x64/arm64, macOS arm64 and Windows x64. Managed CI covers Linux x64 with Nix, Guix, Nix Docker,
 and Dev Containers. The existing Nix input provides PHP 8.5.10 and the Guix channel PHP 8.5.9. The environment owns its

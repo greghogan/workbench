@@ -24,6 +24,13 @@ export function nativeEnvironment(
   selection: CompilerSelection = {},
 ): NodeJS.ProcessEnv {
   const env = { ...process.env, ...compilerEnvironment(directory, selection) };
+  // Node forwards only the first case-insensitive PATH key to Windows children.
+  // Plain object environments must remove inherited `Path` before adding the selected tools.
+  if (process.platform === "win32") {
+    const inherited = Object.entries(env).find(([key]) => key.toUpperCase() === "PATH")?.[1];
+    for (const key of Object.keys(env)) if (key.toUpperCase() === "PATH") Reflect.deleteProperty(env, key);
+    env.PATH = inherited;
+  }
   delete env.WORKBENCH_CC;
   delete env.WORKBENCH_CXX;
   const paths: string[] = [];

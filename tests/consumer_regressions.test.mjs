@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -31,7 +32,7 @@ afterEach(() => {
   for (const directory of temporary.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-consumer-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-consumer-")));
   temporary.push(root);
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   return root;

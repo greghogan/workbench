@@ -7,6 +7,8 @@ export function copySourceCheckout(root, destination) {
   const generated = new Set([
     ".git",
     "node_modules",
+    "vendor",
+    ".bundle",
     ".pnpm-store",
     "target",
     "build",

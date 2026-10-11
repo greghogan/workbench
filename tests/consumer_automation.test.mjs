@@ -13,6 +13,7 @@ import { resolveCheckCommand } from "../src/toolchains.ts";
 import { buildPaths } from "../src/builds.ts";
 import * as downloads from "../src/tool-downloads.ts";
 import * as native from "../src/native-tools.ts";
+import * as assets from "../src/native-assets.ts";
 
 const distribution = resolve(import.meta.dirname, "..");
 const temporary = [];
@@ -104,6 +105,10 @@ test("a complete local definition owns ordinary, compatibility, and release exec
     expect(result.status, result.stdout + result.stderr).toBe(0);
   }
   vi.spyOn(downloads, "installAsset").mockResolvedValue(undefined);
+  const assetFor = assets.assetFor;
+  vi.spyOn(assets, "assetFor").mockImplementation((root, tool, directory) =>
+    assetFor(root, tool, directory, "linux-x64"),
+  );
   vi.spyOn(native, "verifyInstalledTool").mockImplementation(() => {});
   await runCompatibilityChecks(root, ".", "node", "22.23.3");
   const events = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);

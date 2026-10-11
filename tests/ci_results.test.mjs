@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
   createRunReport,
@@ -30,7 +30,7 @@ test("result protocol accepts exactly the selected targets and normalizes guest 
   run.targets[0].success = true;
   delete run.targets[0].error;
   const parsed = parseRunReport(run, ["one", "two"], "/host");
-  expect(parsed.targets.map(({ report }) => report.startsWith("/host/"))).toEqual([true, true]);
+  expect(parsed.targets.map(({ report }) => report.startsWith(join("/host") + sep))).toEqual([true, true]);
   expect(parsed.targets.map(({ success }) => success)).toEqual([true, false]);
   expect(() => createRunReport(["one", "one"], "/guest")).toThrow(/unique/);
   for (const mutate of [
@@ -138,8 +138,8 @@ test("phase definitions and forwarded caches preserve runtime, compiler, release
   expect(() => targetPhases({ kind: "other" })).toThrow(/Unknown/);
   expect(() => targetPhases({ kind: "compatibility", runtime: "other" })).toThrow(/Unknown/);
   const env = ciCacheEnvironment("/cache", "/data", true);
-  expect(env.CARGO_HOME).toBe("/cache/ci/cargo");
-  expect(env.UV_PYTHON_INSTALL_DIR).toBe("/cache/uv-python/python");
+  expect(env.CARGO_HOME).toBe(join("/cache", "ci", "cargo"));
+  expect(env.UV_PYTHON_INSTALL_DIR).toBe(join("/cache", "uv-python", "python"));
   expect(ciCacheEnvironment("/cache").CARGO_HOME).toBeUndefined();
   expect(forwardedCIEnvironment({ ...env, SECRET: "private", WORKBENCH_CI_TARGET: "one" })).toEqual(
     Object.entries({ ...env, WORKBENCH_CI_TARGET: "one" }).flatMap(([name, value]) => [
@@ -171,4 +171,14 @@ test("an unavailable target report directory does not cancel independent targets
   expect(attempted).toBe(false);
   expect(run.targets.map(({ success }) => success)).toEqual([false, true]);
   expect(run.errors).toEqual([expect.objectContaining({ phase: "reports:blocked" })]);
+});
+
+test("container CI forwarding keeps local credentials private and explicitly forwards the hosted job token", () => {
+  expect(forwardedCIEnvironment({ GH_TOKEN: "local-private" })).toEqual([]);
+  expect(forwardedCIEnvironment({ GITHUB_ACTIONS: "true", GH_TOKEN: "job-read-only", SECRET: "private" })).toEqual([
+    "--remote-env",
+    "GITHUB_ACTIONS=true",
+    "--remote-env",
+    "GH_TOKEN=job-read-only",
+  ]);
 });

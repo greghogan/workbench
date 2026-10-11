@@ -9,7 +9,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
   packages: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
 
 defaults:
   run:
@@ -32,6 +36,19 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version-file: .node-version
+      # A publication branch selects an already tested commit, rather than repeating its full matrix.
+      - name: Require successful complete checks for this revision
+        run: |
+          verified_run=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/checks.yml" and .conclusion == "success")][0].id // error("Run successful complete Checks before selecting publication")')
+          gh run download "$verified_run" --name ci-plan --dir "$RUNNER_TEMP/verified-plan"
+          node --input-type=module - "$RUNNER_TEMP/verified-plan/workbench-ci-plan.json" <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { readHostedPlan } from './scripts/ci-plan-contract.mjs';
+          const { selection } = readHostedPlan(JSON.parse(readFileSync(process.argv[2], 'utf8')));
+          if (!selection.selected.length || selection.excluded.length)
+            throw new Error('Publication requires Checks covering every configured root');
+          JS
       - name: Make room for builder stores
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup

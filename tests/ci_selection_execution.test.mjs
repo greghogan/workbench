@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { afterEach, expect, test } from "vitest";
 import { planCI } from "../scripts/ci-plan.mjs";
 import { copySourceCheckout } from "../scripts/source-checkout.mjs";
@@ -14,7 +15,7 @@ afterEach(() => {
 });
 
 test("an empty local rehearsal validates without invoking Docker or acquiring example caches/workspaces", () => {
-  const parent = mkdtempSync(join(tmpdir(), "workbench-empty-selection-"));
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), "workbench-empty-selection-")));
   temporary.push(parent);
   const root = join(parent, "checkout");
   copySourceCheckout(repository, root);
@@ -49,9 +50,11 @@ test("an empty local rehearsal validates without invoking Docker or acquiring ex
   expect(output).toContain("Workbench validation passed");
   expect(output).toContain("No example tools, caches, or workspaces acquired");
 
-  const scheduler = join(parent, "clients/benchctl");
-  put(parent, "clients/benchctl", "");
-  copyFileSync(join(repository, "tests/fixtures/ci-benchctl.mjs"), scheduler);
+  const windows = process.platform === "win32";
+  const scheduler = join(parent, windows ? "clients/benchctl.exe" : "clients/benchctl");
+  const schedulerFixture = join(repository, "tests/fixtures/ci-benchctl.mjs");
+  put(parent, windows ? "clients/benchctl.exe" : "clients/benchctl", "");
+  copyFileSync(windows ? process.execPath : schedulerFixture, scheduler);
   chmodSync(scheduler, 0o755);
   const state = join(parent, "scheduler-result.json");
   git(root, "checkout", "--quiet", "-b", "advanced-base", base);
@@ -80,6 +83,7 @@ test("an empty local rehearsal validates without invoking Docker or acquiring ex
         ...environment,
         PATH: join(parent, "clients") + delimiter + process.env.PATH,
         FIXTURE_SCHEDULER_STATE: state,
+        ...(windows ? { NODE_OPTIONS: `--import=${pathToFileURL(schedulerFixture).href}` } : {}),
       },
       encoding: "utf8",
     },

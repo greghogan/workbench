@@ -27,7 +27,8 @@ for (const [index, root] of roots.entries()) {
       cli("checks", "run", "--role", "release-verify", "--path", root, "--environment", "native");
       const artifacts = join(process.env.RUNNER_TEMP, "release-artifacts");
       mkdirSync(artifacts, { recursive: true });
-      run("tar", ["-czf", join(artifacts, `${index}.tar.gz`), "-C", join(workspace, root, "dist"), "."]);
+      const tar = process.platform === "win32" ? join(process.env.SystemRoot, "System32", "tar.exe") : "tar";
+      run(tar, ["-czf", join(artifacts, `${index}.tar.gz`), "-C", join(workspace, root, "dist"), "."]);
       writeFileSync(join(artifacts, `${index}.txt`), `${root}\n`);
     } else if (mode === "environment") {
       cli("checks", "run", "--stage", "ci", "--path", root, "--environment", process.env.CHECK_ENVIRONMENT);

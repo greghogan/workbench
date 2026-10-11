@@ -1,7 +1,7 @@
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { readHostedPlan } from "./ci-plan-contract.mjs";
 
 /** Event payloads are data; revision values never enter shell source. Unknown events run everything. */
@@ -58,6 +58,8 @@ export function planCI(environment = process.env, root = process.cwd()) {
   console.log(summary);
   if (environment.GITHUB_STEP_SUMMARY) appendFileSync(environment.GITHUB_STEP_SUMMARY, summary);
   if (environment.GITHUB_OUTPUT) appendFileSync(environment.GITHUB_OUTPUT, `matrix=${JSON.stringify(matrix)}\n`);
+  if (environment.RUNNER_TEMP)
+    writeFileSync(join(environment.RUNNER_TEMP, "workbench-ci-plan.json"), JSON.stringify(matrix) + "\n");
   return matrix;
 }
 

@@ -4,7 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
+#include <cstdio>
 #include <span>
 #include <string_view>
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv) { // NOLINT(misc-const-correctness): standard ma
             return 1;
         }
         if (backend == workbench::Backend::avx2) {
-            std::cout << "SKIP: AVX2 unavailable\n";
+            (void)std::puts("SKIP: AVX2 unavailable");
             return 77;
         }
     }

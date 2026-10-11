@@ -21,9 +21,11 @@ import { nativeTools, assetFor, toolDirectory } from "../src/native-assets.ts";
 import { ciMatrix } from "../src/ci.ts";
 import { userDirectory } from "../src/storage.ts";
 import { acquisitionIdentity, acquisitionProvenance, filterIdentity } from "../src/artifact-policy.ts";
+import * as core from "../src/core.ts";
 
 const temporary = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
@@ -115,35 +117,38 @@ test("verified downloads are reusable; corrupt responses and caches never become
   await expect(installAsset(join(root, "foreign"), pinned)).rejects.toThrow(/refusing to overwrite/);
 });
 
-test("GCC source installation verifies prerequisites and publishes only the staged installation", async () => {
-  const root = fixture();
-  const destination = join(root, "installed gcc");
-  const bytes = tar([
-    { name: "gcc/", type: "5" },
-    { name: "gcc/contrib/", type: "5" },
-    {
-      name: "gcc/contrib/download_prerequisites",
-      content: '#!/bin/sh\n[ "$1" = --verify ] && [ "$2" = --sha512 ] && [ "$3" = --no-isl ]\n',
-    },
-    {
-      name: "gcc/configure",
-      content:
-        '#!/bin/sh\nprefix=${1#--prefix=}\ncat > Makefile <<EOF\nall:\n\t@true\ninstall:\n\tmkdir -p "\\$(DESTDIR)$prefix/bin"\n\tprintf installed > "\\$(DESTDIR)$prefix/bin/gcc"\nEOF\n',
-    },
-  ]);
-  serve(bytes);
-  const pinned = asset(bytes, { format: "tar", strip: 1, bin: "bin", build: "gcc" });
-  if (process.platform !== "linux") {
-    await expect(installAsset(destination, pinned)).rejects.toThrow(/currently supports Linux/);
-    expect(existsSync(destination)).toBe(false);
-    return;
-  }
-  await installAsset(destination, pinned);
-  expect(readFileSync(join(destination, "bin/gcc"), "utf8")).toBe("installed");
-  expect(readFileSync(join(destination, ".workbench-artifact"), "utf8").trim()).toBe(pinned.sha256);
-  expect(readdirSync(root).filter((name) => name.endsWith(".partial"))).toEqual([]);
-  await installAsset(destination, pinned);
-});
+test.skipIf(process.platform !== "linux")(
+  "GCC source installation verifies prerequisites and publishes only the staged installation",
+  async () => {
+    const root = fixture();
+    const destination = join(root, "installed gcc");
+    const bytes = tar([
+      { name: "gcc/", type: "5" },
+      { name: "gcc/contrib/", type: "5" },
+      {
+        name: "gcc/contrib/download_prerequisites",
+        content: '#!/bin/sh\n[ "$1" = --verify ] && [ "$2" = --sha512 ] && [ "$3" = --no-isl ]\n',
+      },
+      {
+        name: "gcc/configure",
+        content:
+          '#!/bin/sh\nprefix=${1#--prefix=}\ncat > Makefile <<EOF\nall:\n\t@true\ninstall-strip:\n\tmkdir -p "\\$(DESTDIR)$prefix/bin"\n\tprintf installed > "\\$(DESTDIR)$prefix/bin/gcc"\nEOF\n',
+      },
+    ]);
+    serve(bytes);
+    const pinned = asset(bytes, { format: "tar", strip: 1, bin: "bin", build: "gcc" });
+    if (process.platform !== "linux") {
+      await expect(installAsset(destination, pinned)).rejects.toThrow(/currently supports Linux/);
+      expect(existsSync(destination)).toBe(false);
+      return;
+    }
+    await installAsset(destination, pinned);
+    expect(readFileSync(join(destination, "bin/gcc"), "utf8")).toBe("installed");
+    expect(readFileSync(join(destination, ".workbench-artifact"), "utf8").trim()).toBe(pinned.sha256);
+    expect(readdirSync(root).filter((name) => name.endsWith(".partial"))).toEqual([]);
+    await installAsset(destination, pinned);
+  },
+);
 
 test.skipIf(process.platform !== "linux")(
   "Debian runtimes retain libraries and licenses without cross-package documentation links",
@@ -281,6 +286,13 @@ test("public installation honors declared pins and checks before altering unsupp
   const fetcher = serve(bytes);
   const before = nativeEnvironment(root, distribution).PATH;
   expect(before).toBe(process.env.PATH);
+  if (process.platform === "win32") {
+    // A worker can carry both keys, while Windows children accept only the first one.
+    vi.stubEnv("Path", before);
+    expect(Object.keys(nativeEnvironment(root, distribution)).filter((key) => key.toUpperCase() === "PATH")).toEqual([
+      "PATH",
+    ]);
+  }
   // Tests use POSIX executable fixtures, as do the project's other shell contracts.
   if (process.platform !== "win32") {
     await installNativeTools(root);
@@ -482,6 +494,10 @@ test("installer failures preserve exit status with inherited output and captured
 });
 
 test("Linux ARM64 C/C++ installation resolves every required artifact and selects isolated compiler paths", async () => {
+  const readText = core.readText;
+  vi.spyOn(core, "readText").mockImplementation((path) =>
+    path === "/etc/os-release" ? "ID=fixture\n" : readText(path),
+  );
   const root = fixture();
   const distribution = resolve(import.meta.dirname, "..");
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
@@ -506,15 +522,8 @@ test("Linux ARM64 C/C++ installation resolves every required artifact and select
     Object.defineProperty(process, "platform", { ...platform, value: "linux" });
     Object.defineProperty(process, "arch", { ...arch, value: "arm64" });
     const filter = JSON.parse(readFileSync(join(distribution, "languages/cpp/llvm-filter.json"), "utf8"));
-    const location = (name, version, pinned) =>
-      join(
-        userDirectory("cache"),
-        "toolchains",
-        name,
-        version,
-        "linux-arm64",
-        `${pinned.sha256.slice(0, 16)}${name === "llvm" ? `-${filterIdentity(filter).slice(0, 16)}-${acquisitionIdentity(assetFor(distribution, { name, version }, root)).slice(0, 16)}` : ""}`,
-      );
+    const location = (name, version) =>
+      toolDirectory({ name, version }, assetFor(distribution, { name, version }, root));
     for (const tool of nativeTools(root, distribution)) {
       const pinned =
         tool.name === "llvm" ? llvm[tool.version]["linux-arm64"] : assets[tool.name][tool.version]["linux-arm64"];
@@ -570,6 +579,10 @@ test("Linux ARM64 C/C++ installation resolves every required artifact and select
 });
 
 test("every native CI platform resolves the declared native tool pins", () => {
+  const readText = core.readText;
+  vi.spyOn(core, "readText").mockImplementation((path) =>
+    path === "/etc/os-release" ? "ID=fixture\n" : readText(path),
+  );
   const distribution = resolve(import.meta.dirname, "..");
   const assets = JSON.parse(readFileSync(join(distribution, "scripts/native-assets.json"), "utf8"));
   const llvm = JSON.parse(readFileSync(join(distribution, "scripts/llvm-assets.json"), "utf8"));

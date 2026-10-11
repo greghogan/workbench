@@ -87,8 +87,12 @@ export function nativeTools(
   return tools;
 }
 
-export function assetFor(distribution: string, tool: Tool, directory?: string): ToolAsset | undefined {
-  const platform = `${process.platform}-${process.arch}`;
+export function assetFor(
+  distribution: string,
+  tool: Tool,
+  directory?: string,
+  platform = `${process.platform}-${process.arch}`,
+): ToolAsset | undefined {
   if (tool.name === "llvm" || tool.name === "clang") {
     const assets = JSON.parse(readText(join(distribution, "scripts/llvm-assets.json"))) as Record<
       string,
@@ -169,7 +173,7 @@ export function assetFor(distribution: string, tool: Tool, directory?: string): 
 
 export function toolDirectory(tool: Tool, asset: ToolAsset): string {
   // Source builds bind to the host SDK/libc; Linux containers share a kernel but not a userspace ABI.
-  const sourceBuild = ["ruby", "php"].includes(asset.build ?? "");
+  const sourceBuild = asset.build !== undefined;
   const host = sourceBuild
     ? createHash("sha256")
         .update(process.platform === "linux" ? readText("/etc/os-release") : release())

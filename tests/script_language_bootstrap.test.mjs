@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { execute, download, extractArchive } from "../src/tool-downloads.ts";
 import { executeBundler } from "../src/ruby-manager.ts";
@@ -99,49 +99,64 @@ test("Composer bootstrap follows a root pin and refuses an incorrect executable 
 });
 
 test("runtime source builds use all allotted CPUs and stage installs with the final prefix", () => {
-  for (const build of [buildRuby, buildPhp]) {
-    const stage = fixture();
-    const destination = join(fixture(), "runtime");
-    const source = fixture();
-    const image = build(source, stage, destination, execute);
-    expect(image).toBe(join(stage, "image", destination));
-    expect(execute).toHaveBeenCalledWith(
-      join(source, "configure"),
-      expect.arrayContaining([`--prefix=${destination}`]),
-      expect.objectContaining({ cwd: join(stage, "compile") }),
-    );
-    expect(execute).toHaveBeenCalledWith("make", ["-j4"], expect.anything());
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...platform, value: "linux" });
+  try {
+    for (const build of [buildRuby, buildPhp]) {
+      const stage = fixture();
+      const destination = join(fixture(), "runtime");
+      const source = fixture();
+      const image = build(source, stage, destination, execute);
+      expect(image).toBe(join(stage, "image", destination));
+      expect(execute).toHaveBeenCalledWith(
+        join(source, "configure"),
+        expect.arrayContaining([`--prefix=${destination}`]),
+        expect.objectContaining({ cwd: join(stage, "compile") }),
+      );
+      expect(execute).toHaveBeenCalledWith("make", ["-j4"], expect.anything());
+    }
+  } finally {
+    Object.defineProperty(process, "platform", platform);
   }
 });
 
 test("Xdebug builds once for the selected PHP executable, verifies receipts, and passes coverage settings", async () => {
-  const root = fixture();
-  writeFileSync(join(root, ".xdebug-version"), "3.5.3\n");
-  vi.mocked(download).mockResolvedValue("/verified/xdebug.tgz");
-  vi.mocked(extractArchive).mockImplementation(async (_archive, stage) => {
-    const source = join(stage, "xdebug-3.5.3");
-    mkdirSync(source);
-    writeFileSync(join(source, "config.m4"), "source");
-    mkdirSync(join(source, "modules"));
-    writeFileSync(join(source, "modules/xdebug.so"), "verified-build");
-    return stage;
-  });
-  vi.mocked(execute).mockImplementation((cmd, args) =>
-    args.includes("echo PHP_BINARY;") ? "/runtime/bin/php" : cmd.endsWith("php-config") ? "--prefix=/runtime" : "",
-  );
-  await executePhpCoverage(root, repository, ["suite.php"]);
-  await executePhpCoverage(root, repository, ["suite.php"]);
-  expect(download).toHaveBeenCalledTimes(1);
-  expect(execute).toHaveBeenLastCalledWith(
-    "/runtime/bin/php",
-    expect.arrayContaining(["-d", "xdebug.mode=coverage", "suite.php"]),
-    expect.anything(),
-  );
-  const last = vi.mocked(execute).mock.calls.at(-1);
-  const extension = join(last[2].env.PHP_INI_SCAN_DIR.split(":")[0], "xdebug.so");
-  expect(readFileSync(join(dirname(extension), ".workbench-extension"), "utf8")).toMatch(/^[a-f0-9]{64}$/);
-  writeFileSync(join(dirname(extension), ".workbench-extension"), "changed");
-  await expect(executePhpCoverage(root, repository, ["suite.php"])).rejects.toThrow(/incomplete/);
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...platform, value: "linux" });
+  try {
+    const root = fixture();
+    writeFileSync(join(root, ".xdebug-version"), "3.5.3\n");
+    vi.mocked(download).mockResolvedValue("/verified/xdebug.tgz");
+    vi.mocked(extractArchive).mockImplementation(async (_archive, stage) => {
+      const source = join(stage, "xdebug-3.5.3");
+      mkdirSync(source);
+      writeFileSync(join(source, "config.m4"), "source");
+      mkdirSync(join(source, "modules"));
+      writeFileSync(join(source, "modules/xdebug.so"), "verified-build");
+      return stage;
+    });
+    vi.mocked(execute).mockImplementation((cmd, args) =>
+      args.includes("echo PHP_BINARY;") ? "/runtime/bin/php" : cmd.endsWith("php-config") ? "--prefix=/runtime" : "",
+    );
+    await executePhpCoverage(root, repository, ["suite.php"]);
+    await executePhpCoverage(root, repository, ["suite.php"]);
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenLastCalledWith(
+      "/runtime/bin/php",
+      expect.arrayContaining(["-d", "xdebug.mode=coverage", "suite.php"]),
+      expect.anything(),
+    );
+    const parent = join(process.env.WORKBENCH_CACHE_HOME, "toolchains", "xdebug", "3.5.3");
+    const extension = join(
+      parent,
+      readdirSync(parent).find((name) => /^[a-f0-9]{64}$/.test(name)),
+    );
+    expect(readFileSync(join(extension, ".workbench-extension"), "utf8")).toMatch(/^[a-f0-9]{64}$/);
+    writeFileSync(join(extension, ".workbench-extension"), "changed");
+    await expect(executePhpCoverage(root, repository, ["suite.php"])).rejects.toThrow(/incomplete/);
+  } finally {
+    Object.defineProperty(process, "platform", platform);
+  }
 });
 
 test("ordinary Bundler use rejects a lock without archive checksum authority before downloading", async () => {

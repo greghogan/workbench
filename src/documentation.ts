@@ -18,6 +18,8 @@ const generated = new Set([
   "coverage",
   "dist",
   "node_modules",
+  "vendor",
+  ".bundle",
   ".collections",
   ".local-collections",
   "target",

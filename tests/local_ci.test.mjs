@@ -19,6 +19,7 @@ import { ciTargets } from "../src/ci-targets.ts";
 import { localCIPlan, listLocalCI, rehearsalDocker } from "../src/local-ci.ts";
 import { snapshotCIProject } from "../src/ci-workspace.ts";
 import { compatibilityRuntimePlan } from "../src/ci-runtime.ts";
+import * as assets from "../src/native-assets.ts";
 import { terminalTable } from "../src/terminal-table.ts";
 import { collectReports, reportState } from "../scripts/ci-reports.mjs";
 
@@ -119,7 +120,7 @@ test("plan presentation is read only and exposes commands, provenance, exclusion
   expect(
     json.selected
       .find(({ kind }) => kind === "native")
-      .checks.some(({ role, source }) => role === "coverage" && source.includes("python/automation.toml")),
+      .checks.some(({ role, source }) => role === "coverage" && source.includes(join("python", "automation.toml"))),
   ).toBe(true);
   expect(json.excluded[0].reason).toBeTruthy();
   log.mockClear();
@@ -186,6 +187,10 @@ test("snapshots give an integrated distribution its own independent repository a
 });
 
 test("compatibility acquisition accepts only declared targets and uses recorded verification policy", () => {
+  const assetFor = assets.assetFor;
+  vi.spyOn(assets, "assetFor").mockImplementation((root, tool, directory) =>
+    assetFor(root, tool, directory, "linux-x64"),
+  );
   const node = compatibilityRuntimePlan(repository, ".", "node", "22.23.3");
   expect(node.asset.sha256).toMatch(/^[a-f0-9]{64}$/);
   expect(node.asset.checksums.signature.keys).toContain("BEGIN PGP PUBLIC KEY BLOCK");

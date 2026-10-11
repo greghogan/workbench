@@ -24,8 +24,8 @@ export function acquisitionProvenance(asset: ToolAsset) {
     executable: asset.executable,
     build: asset.build,
     phpExtensions: asset.phpExtensions,
-    // Changes to the Ruby/PHP source-build recipe invalidate only those compiled runtime caches.
-    buildRevision: asset.build === "php" ? 2 : asset.build === "ruby" ? 1 : undefined,
+    // Source-build recipe changes invalidate the affected compiled installations.
+    buildRevision: asset.build === "php" ? 2 : asset.build ? 1 : undefined,
     filter: asset.filter,
     limits: {
       ...artifactLimits,

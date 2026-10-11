@@ -1,7 +1,26 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll } from "vitest";
+
+// Worker environments are case-sensitive, including on Windows; native child processes require a canonical PATH.
+if (process.platform === "win32") {
+  const path = Object.entries(process.env).find(([name]) => name.toUpperCase() === "PATH")?.[1];
+  if (path !== undefined) process.env.PATH = path;
+  // Git canonicalizes DOS short names; fixtures and source maps need the same path spelling.
+  const temporary = realpathSync.native(tmpdir());
+  process.env.TMP = temporary;
+  process.env.TEMP = temporary;
+  // Fixture repositories deliberately ignore global Git configuration. Retain the
+  // platform checkout contract used by the hosted workflow in their isolated environment.
+  process.env.GIT_CONFIG_COUNT = "3";
+  process.env.GIT_CONFIG_KEY_0 = "core.symlinks";
+  process.env.GIT_CONFIG_VALUE_0 = "true";
+  process.env.GIT_CONFIG_KEY_1 = "core.autocrlf";
+  process.env.GIT_CONFIG_VALUE_1 = "false";
+  process.env.GIT_CONFIG_KEY_2 = "core.longpaths";
+  process.env.GIT_CONFIG_VALUE_2 = "true";
+}
 
 // Node reads this setting at startup: changing it here captures child CLIs without a second worker report.
 if (process.env.WORKBENCH_SUBPROCESS_COVERAGE) process.env.NODE_V8_COVERAGE = process.env.WORKBENCH_SUBPROCESS_COVERAGE;

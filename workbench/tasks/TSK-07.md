@@ -172,4 +172,42 @@ included. Focused checks pass all 25 tests across cache planning, publication bo
 workflow lint passes. The full local gate passes all 370 tests and 13 configured checks. Review of the previous hosted
 logs identified Windows long-path checkout and Git Bash linker selection failures; the preflight now enables long paths
 and selects the MSVC linker explicitly. Focused vcpkg verification, type checking, and workflow lint pass after those
-corrections. Hosted verification is next.
+corrections.
+
+The first hosted full run is [38114097093](https://github.com/greghogan/workbench/actions/runs/38114097093) on
+`ci/draft-functionality-20261011`; draft documents remain unaccepted. Nix Docker, maintained runtime checks except one
+rate-limited Python acquisition, Clang compatibility, and all six Linux x64/ARM64 GCC selections pass. Native platform
+failures exposed unauthenticated GitHub API limits, Git Bash GnuPG path interpretation, missing guest decompressors,
+Linux-x64 assumptions in test fixtures, lost Git revision metadata under coverage, and incomplete Ruby platform locks.
+The Windows signature repair passes its dedicated hosted diagnostic. Follow-up full platform verification is pending.
+The repaired local C Dev Container gate passes; the latest complete root gate passes 372 tests and all 13 checks.
+
+Cache measurements retain compressed GitHub inventory separately from uncompressed per-job footprints. The first partial
+run reached approximately 9.2 GB across 65 caches; complete cold/warm comparison and eviction behavior remain pending.
+Publication now requires a successful Checks run for the exact revision and its retained plan covering every configured
+root. No registry publication or deployment has occurred.
+
+A disposable GCC 16.2 installation shrank from 1,977,915,609 to 289,239,129 file bytes after removing debug information;
+C17/C++20 LTO and sanitizer probes pass. The source installer now selects upstream `install-strip`, with recipe and host
+ABI in its installation identity. Ruby's full configured Linux gate passes with external dependency storage. A separate
+standalone Ruby coverage defect counts installed gems under the source root; changing that scope awaits the human
+approval required by ADR-A.
+
+The first Guix job also passes, taking approximately 56 minutes cold; channel acquisition/authentication accounts for
+about 17 minutes and building the pinned Guix runtime for another 21. Warm measurements remain pending. Windows now
+installs every selected tool and prepares passing roots' release artifacts. Its core failures have fallen from 65 to 21;
+remaining fixes cover Git null-device fixtures, portable source maps, scheduler fixtures, selected PATH casing, archive
+filename encoding, and canonical Ruby line endings. Shared installation lifecycle tests pass on Windows.
+
+macOS passes every language example and its release preparation. Its Workbench core failures fell from 25 to two fixture
+assumptions after canonicalizing temporary paths and fixing Darwin's read-only directory rename behavior; installation
+and update lifecycle checks pass. The final fixture corrections are under hosted verification. Windows passes every
+language except C/C++, whose vcpkg chainload incorrectly assumed MSVC-style compiler flags. A native GNU Clang chainload
+correction is under hosted verification. The latest complete local gate passes all 372 tests and 13 checks; the original
+index remains unchanged.
+
+The subsequent macOS core gate passes all 350 applicable tests and every configured check; 22 Linux-specific tests are
+explicitly skipped. All macOS example gates and release preparations passed separately. The latest complete local root
+gate passes 372 tests and 13 checks, and both Linux C/C++ gates pass after the Windows portability corrections. Hosted
+Windows verification remains active. Temporary diagnostic workflows stay outside the primary checkout; the original
+index and review receipts remain unchanged.

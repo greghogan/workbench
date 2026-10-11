@@ -25,6 +25,8 @@ export function forwardedCIEnvironment(env) {
     ...Object.keys(ciCacheEnvironment("", "", true)),
     ...Object.keys(cpuEnvironment(1)),
     "WORKBENCH_CI_TARGET",
+    // Only hosted jobs forward their explicitly provisioned read-only API token.
+    ...(env.GITHUB_ACTIONS === "true" ? ["GITHUB_ACTIONS", "GH_TOKEN"] : []),
   ];
   return names.flatMap((name) => (env[name] === undefined ? [] : ["--remote-env", `${name}=${env[name]}`]));
 }

@@ -10,6 +10,8 @@ execFileSync(process.execPath, ["bin/workbench.mjs", "collection", "check-export
 packageOutput(process.cwd(), destination, (output) => {
   const generated = new Set([
     "node_modules",
+    "vendor",
+    ".bundle",
     ".pnpm-store",
     "target",
     "build",
@@ -87,7 +89,8 @@ packageOutput(process.cwd(), destination, (output) => {
     stdio: "inherit",
     env: { ...process.env, WORKBENCH_PROJECT_ROOT: output },
   });
-  const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const revision =
+    process.env.WORKBENCH_SOURCE_REVISION ?? execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   execFileSync(process.execPath, ["bin/workbench.mjs", "installation", "seal", output, "--revision", revision], {
     stdio: "inherit",
   });

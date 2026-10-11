@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir, devNull } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "vitest";
 import { grade, prepare, write } from "../scripts/skill-evaluation-cases.mjs";
 
 test("evaluation rejects unchanged defects and advisory edits, then accepts corrected behavior", () => {
   const root = mkdtempSync(join(tmpdir(), "workbench-evaluation-grader-"));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" };
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
   try {
     const before = prepare(root, resolve(import.meta.dirname, ".."), env, "review");
     grade(root, env, "refactors", before);
