@@ -39,5 +39,5 @@ Rehearsals verify updates through isolated repository tests without publishing. 
 registry authorization, and publication require applicable remote verification; local passes do not establish those
 claims.
 
-Rationale: CI makes environment compatibility observable while contributors keep a lightweight local workflow.
+Rationale: CI makes environment compatibility observable while contributors retain a lightweight local workflow.
 Independently pinned environments provide useful coverage without requiring identical package collections.
