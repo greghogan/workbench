@@ -57,7 +57,7 @@ export interface ToolAsset {
 }
 
 export function commandInvocation(command: string, args: string[]): string[] {
-  return process.platform === "win32"
+  return process.platform === "win32" && !/\.exe$/i.test(command)
     ? ["sh", "-eu", "-c", 'exec "$@"', "workbench-command", command.replaceAll("\\", "/"), ...args]
     : [command, ...args];
 }
@@ -388,7 +388,7 @@ async function installLockedAsset(directory: string, asset: ToolAsset): Promise<
         { cwd: build },
       );
       execute("make", [`-j${String(cpuBudget())}`], { cwd: build });
-      execute("make", ["install", `DESTDIR=${image}`], { cwd: build });
+      execute("make", ["install-strip", `DESTDIR=${image}`], { cwd: build });
       content = join(image, directory);
     }
     if (!existsSync(resolve(content, asset.bin))) throw new Error("tool archive is missing its executable directory");

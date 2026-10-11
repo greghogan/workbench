@@ -147,7 +147,7 @@ test("Xdebug builds once for the selected PHP executable, verifies receipts, and
       expect.anything(),
     );
     const last = vi.mocked(execute).mock.calls.at(-1);
-    const extension = join(last[2].env.PHP_INI_SCAN_DIR.split((await import("node:path")).delimiter)[0], "xdebug.so");
+    const extension = join(last[2].env.PHP_INI_SCAN_DIR.split(":")[0], "xdebug.so");
     expect(readFileSync(join(dirname(extension), ".workbench-extension"), "utf8")).toMatch(/^[a-f0-9]{64}$/);
     writeFileSync(join(dirname(extension), ".workbench-extension"), "changed");
     await expect(executePhpCoverage(root, repository, ["suite.php"])).rejects.toThrow(/incomplete/);

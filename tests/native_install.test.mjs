@@ -132,7 +132,7 @@ test.skipIf(process.platform !== "linux")(
       {
         name: "gcc/configure",
         content:
-          '#!/bin/sh\nprefix=${1#--prefix=}\ncat > Makefile <<EOF\nall:\n\t@true\ninstall:\n\tmkdir -p "\\$(DESTDIR)$prefix/bin"\n\tprintf installed > "\\$(DESTDIR)$prefix/bin/gcc"\nEOF\n',
+          '#!/bin/sh\nprefix=${1#--prefix=}\ncat > Makefile <<EOF\nall:\n\t@true\ninstall-strip:\n\tmkdir -p "\\$(DESTDIR)$prefix/bin"\n\tprintf installed > "\\$(DESTDIR)$prefix/bin/gcc"\nEOF\n',
       },
     ]);
     serve(bytes);
@@ -487,6 +487,10 @@ test("installer failures preserve exit status with inherited output and captured
 });
 
 test("Linux ARM64 C/C++ installation resolves every required artifact and selects isolated compiler paths", async () => {
+  const readText = core.readText;
+  vi.spyOn(core, "readText").mockImplementation((path) =>
+    path === "/etc/os-release" ? "ID=fixture\n" : readText(path),
+  );
   const root = fixture();
   const distribution = resolve(import.meta.dirname, "..");
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
@@ -511,15 +515,8 @@ test("Linux ARM64 C/C++ installation resolves every required artifact and select
     Object.defineProperty(process, "platform", { ...platform, value: "linux" });
     Object.defineProperty(process, "arch", { ...arch, value: "arm64" });
     const filter = JSON.parse(readFileSync(join(distribution, "languages/cpp/llvm-filter.json"), "utf8"));
-    const location = (name, version, pinned) =>
-      join(
-        userDirectory("cache"),
-        "toolchains",
-        name,
-        version,
-        "linux-arm64",
-        `${pinned.sha256.slice(0, 16)}${name === "llvm" ? `-${filterIdentity(filter).slice(0, 16)}-${acquisitionIdentity(assetFor(distribution, { name, version }, root)).slice(0, 16)}` : ""}`,
-      );
+    const location = (name, version) =>
+      toolDirectory({ name, version }, assetFor(distribution, { name, version }, root));
     for (const tool of nativeTools(root, distribution)) {
       const pinned =
         tool.name === "llvm" ? llvm[tool.version]["linux-arm64"] : assets[tool.name][tool.version]["linux-arm64"];

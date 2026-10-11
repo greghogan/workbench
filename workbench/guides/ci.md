@@ -89,17 +89,18 @@ compiled GCC installations. Selected Rust stable, MSRV, and Miri toolchains use 
 selected versions and bootstrap proxies are retained. Dev Container caches include selected guest tool versions,
 filtered LLVM, vcpkg, and managed Python installations. Every job records elapsed restore/setup/check time and retained
 uncompressed cache bytes as an artifact and summary. GCC is compiled once per version and architecture and reused for
-both C and C++; its installation is saved after tool verification so a later project-test failure does not discard the
-expensive compiler build. Guix caches authenticated source history; roots share its bootstrap and store within one job.
-Nix roots similarly share a job-local store and use upstream binary substitutes. Lockfiles, tool pins, platform, runtime
-selection, and the compiler installer determine cache keys. LLVM caches contain the selected language components and
-private runtime, with separate keys covering the source, filter, authentication policy, trust material, and installer.
-Restored filtered contents are verified before reuse, and newly verified installations are saved before project checks.
-Cache hits still run configured checks; caches do not store test results as evidence of a passing run. Package download
-stores have separate keys from installed dependencies and compiled outputs. Installer changes and runtime patch
-selections invalidate the compiled-output cache without invalidating the download cache. Compatibility jobs include only
-the native artifacts required by their execution phases; package managers still validate reused downloads through their
-lockfiles and integrity checks.
+both C and C++; GCC's `install-strip` target removes compiler debug information from the cached installation. Its
+installation is saved after tool verification so a later project-test failure does not discard the expensive compiler
+build. Guix caches authenticated source history; roots share its bootstrap and store within one job. Nix roots similarly
+share a job-local store and use upstream binary substitutes. Lockfiles, tool pins, platform, runtime selection, and the
+compiler installer determine cache keys. LLVM caches contain the selected language components and private runtime, with
+separate keys covering the source, filter, authentication policy, trust material, and installer. Restored filtered
+contents are verified before reuse, and newly verified installations are saved before project checks. Cache hits still
+run configured checks; caches do not store test results as evidence of a passing run. Package download stores have
+separate keys from installed dependencies and compiled outputs. Installer changes and runtime patch selections
+invalidate the compiled-output cache without invalidating the download cache. Compatibility jobs include only the native
+artifacts required by their execution phases; package managers still validate reused downloads through their lockfiles
+and integrity checks.
 
 The workflow does not raise GitHub's default 10 GB cache limit. Complete LLVM distributions, discarded source archives,
 and whole Nix/Guix stores are excluded from GitHub caches. Retained LLVM components compete with other caches for this

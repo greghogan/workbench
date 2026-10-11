@@ -14,6 +14,8 @@ const generated = new Set([
   ".git",
   ".workbench",
   "node_modules",
+  "vendor",
+  ".bundle",
   ".venv",
   ".pnpm-store",
   "target",

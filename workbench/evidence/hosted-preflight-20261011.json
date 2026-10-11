@@ -5,8 +5,8 @@
     "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a1296ffdf470e394d6653d3af22c38",
-    "log": "/tmp/workbench-7-root-gate-r3.log"
+    "job": "01a129843ed37890863ca69b1fd24aa6",
+    "log": "/tmp/workbench-7-root-gate-r5.log"
   },
   "focused": {
     "passed": 25,
@@ -53,5 +53,31 @@
     "inventory": "/tmp/workbench-7-cache-inventory.tsv",
     "measurements": "/tmp/workbench-7-cache-first",
     "warm_verification": "pending"
+  },
+  "gcc_strip_probe": {
+    "source": "/home/ec2-user/.cache/workbench/toolchains/gcc/16.2.0/linux-x64/e6738e29597f7332",
+    "destination": "/tmp/workbench-7-stripped-gcc16",
+    "before": 1977915609,
+    "after": 289239129,
+    "stripped_files": 73,
+    "passed": true,
+    "strip_job": "01a12985ddf977e2a018731fc2e71677",
+    "behavior_job": "01a1298827bd7b42a3ccd8a97c704fa6",
+    "checks": [
+      "C17 LTO",
+      "C++20 LTO",
+      "address and undefined-behavior sanitizers"
+    ],
+    "method": "strip --strip-debug on disposable copy; hosted installer selects upstream install-strip"
+  },
+  "ruby_external_gate": {
+    "passed": true,
+    "job": "01a1298a4c3979c095829d64adf80bf6",
+    "log": "/tmp/workbench-7-ruby-external-gate.log"
+  },
+  "windows_native_followup": {
+    "run": 38116111925,
+    "revision": "4c00e924d8c93c834edb50e13ecf852145390010",
+    "status": "in progress; acquisition and native checks still fail; diagnostics pending"
   }
 }

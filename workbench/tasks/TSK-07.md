@@ -176,7 +176,7 @@ corrections.
 
 The first hosted full run is [38114097093](https://github.com/greghogan/workbench/actions/runs/38114097093) on
 `ci/draft-functionality-20261011`; draft documents remain unaccepted. Nix Docker, maintained runtime checks except one
-rate-limited Python acquisition, Clang compatibility, and all three Linux ARM64 GCC selections pass. Native platform
+rate-limited Python acquisition, Clang compatibility, and all six Linux x64/ARM64 GCC selections pass. Native platform
 failures exposed unauthenticated GitHub API limits, Git Bash GnuPG path interpretation, missing guest decompressors,
 Linux-x64 assumptions in test fixtures, lost Git revision metadata under coverage, and incomplete Ruby platform locks.
 The Windows signature repair passes its dedicated hosted diagnostic. Follow-up full platform verification is pending.
@@ -186,3 +186,9 @@ Cache measurements retain compressed GitHub inventory separately from uncompress
 run reached approximately 9.2 GB across 65 caches; complete cold/warm comparison and eviction behavior remain pending.
 Publication now requires a successful Checks run for the exact revision and its retained plan covering every configured
 root. No registry publication or deployment has occurred.
+
+A disposable GCC 16.2 installation shrank from 1,977,915,609 to 289,239,129 file bytes after removing debug information;
+C17/C++20 LTO and sanitizer probes pass. The source installer now selects upstream `install-strip`, with recipe and host
+ABI in its installation identity. Ruby's full configured Linux gate passes with external dependency storage. A separate
+standalone Ruby coverage defect counts installed gems under the source root; changing that scope awaits the human
+approval required by ADR-A.

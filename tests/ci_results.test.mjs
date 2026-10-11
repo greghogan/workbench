@@ -138,8 +138,8 @@ test("phase definitions and forwarded caches preserve runtime, compiler, release
   expect(() => targetPhases({ kind: "other" })).toThrow(/Unknown/);
   expect(() => targetPhases({ kind: "compatibility", runtime: "other" })).toThrow(/Unknown/);
   const env = ciCacheEnvironment("/cache", "/data", true);
-  expect(env.CARGO_HOME).toBe("/cache/ci/cargo");
-  expect(env.UV_PYTHON_INSTALL_DIR).toBe("/cache/uv-python/python");
+  expect(env.CARGO_HOME).toBe(join("/cache", "ci", "cargo"));
+  expect(env.UV_PYTHON_INSTALL_DIR).toBe(join("/cache", "uv-python", "python"));
   expect(ciCacheEnvironment("/cache").CARGO_HOME).toBeUndefined();
   expect(forwardedCIEnvironment({ ...env, SECRET: "private", WORKBENCH_CI_TARGET: "one" })).toEqual(
     Object.entries({ ...env, WORKBENCH_CI_TARGET: "one" }).flatMap(([name, value]) => [

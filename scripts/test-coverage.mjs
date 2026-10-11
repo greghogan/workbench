@@ -95,7 +95,14 @@ export async function subprocessCoverage(directory, root) {
       // esbuild's generated export getters map to the `export` keyword, not a source function or statement.
       ignoreSourceCode: (code) => code.trim() === "export",
     });
-    map.merge(Object.fromEntries(Object.entries(converted).filter(([path]) => bundle.included.has(path))));
+    map.merge(
+      Object.fromEntries(
+        Object.entries(converted).flatMap(([path, value]) => {
+          const absolute = resolve(path);
+          return bundle.included.has(absolute) ? [[absolute, { ...value, path: absolute }]] : [];
+        }),
+      ),
+    );
   }
   return map;
 }

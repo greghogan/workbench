@@ -32,7 +32,9 @@ export async function executeBundler(directory: string, distribution: string, ar
     },
   ).trim();
   const identity = createHash("sha256").update(ruby).update(acquisitionIdentity(asset)).digest("hex");
-  const destination = join(userDirectory("cache"), "package-managers", "bundler", version, identity);
+  // Keep generated extension paths within Windows tool limits; receipts retain the complete digest.
+  const key = identity.slice(0, 24);
+  const destination = join(userDirectory("cache"), "package-managers", "bundler", version, key);
   const receipt = join(destination, ".workbench-bootstrap");
   await withCacheLock(destination, async () => {
     if (!existsSync(destination)) {
@@ -68,7 +70,7 @@ export async function executeBundler(directory: string, distribution: string, ar
     BUNDLE_PATH: join(
       process.env.BUNDLE_PATH ??
         join(userDirectory("cache"), "dependencies", "ruby", createHash("sha256").update(authority).digest("hex")),
-      identity,
+      key,
     ),
     BUNDLE_VERSION: version,
     BUNDLE_FROZEN: process.env.BUNDLE_FROZEN ?? "true",
@@ -76,7 +78,7 @@ export async function executeBundler(directory: string, distribution: string, ar
     BUNDLE_LOCKFILE_CHECKSUMS: "true",
     BUNDLE_DISABLE_CHECKSUM_VALIDATION: "false",
     BUNDLE_GLOBAL_GEM_CACHE: "true",
-    BUNDLE_USER_CACHE: join(userDirectory("cache"), "downloads", "bundler", identity),
+    BUNDLE_USER_CACHE: join(userDirectory("cache"), "downloads", "bundler", key),
   };
   const executable = join(destination, "gems", `bundler-${version}`, "exe", "bundle");
   const actual = execute("ruby", [executable, "--version"], { env, capture: true }).trim();

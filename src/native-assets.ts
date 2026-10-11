@@ -173,7 +173,7 @@ export function assetFor(
 
 export function toolDirectory(tool: Tool, asset: ToolAsset): string {
   // Source builds bind to the host SDK/libc; Linux containers share a kernel but not a userspace ABI.
-  const sourceBuild = ["ruby", "php"].includes(asset.build ?? "");
+  const sourceBuild = asset.build !== undefined;
   const host = sourceBuild
     ? createHash("sha256")
         .update(process.platform === "linux" ? readText("/etc/os-release") : release())

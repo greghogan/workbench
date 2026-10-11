@@ -183,10 +183,10 @@
         "format": "zip",
         "strip": 1,
         "bin": "bin",
-        "signature": {
-          "url": "https://go.dev/dl/go1.27.1.windows-amd64.zip.asc",
-          "keys": "scripts/keys/google.asc",
-          "signers": ["0E225917414670F4442C250DFD533C07C264648F"]
+        "authenticationUnavailable": {
+          "reason": "Go signs tar.gz archives with OpenPGP and the Windows MSI with Authenticode; its Windows ZIP has no detached upstream signature. Verify the independently recorded SHA-256.",
+          "source": "https://go.googlesource.com/build.git/+/c41297f715b1734fcdfa9c096f0709a26664dff2/internal/relui/workflows.go#1272",
+          "checked": "2026-10-11"
         }
       },
       "linux-arm64": {
