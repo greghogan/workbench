@@ -6,12 +6,12 @@ import { required } from "./invariants.js";
 import { existsSync, realpathSync, mkdirSync, copyFileSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { distributionRoot, readLanguageRoots, readText, readToml, safeRelative } from "./core.js";
-import { exactVersion, guardToolchains, resolveCheckCommand } from "./toolchains.js";
+import { exactVersion, guardToolchains } from "./toolchains.js";
 import { execute, installAsset } from "./tool-downloads.js";
 import { compilerEnvironment, type CompilerSelection } from "./compilers.js";
-import { buildEnvironment, buildPaths, prepareBuild, withBuildLock } from "./builds.js";
 import { acquisitionIdentity } from "./artifact-policy.js";
 import { nativeTools, assetFor, toolDirectory, type Tool } from "./native-assets.js";
 import { probePrelude, probeScript, toolProbes } from "./tool-probes.js";
@@ -350,16 +350,16 @@ export async function ensureRustup(distribution: string, environment: NodeJS.Pro
   return env;
 }
 
-/** Mutable optional CLI dependencies live outside immutable installed distributions. */
+const containerInputs = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"];
+
+/** Host CLI dependencies must survive a guest rewiring the workspace's package links. */
 export function containerToolsDirectory(distribution: string): string {
-  return existsSync(join(distribution, distributionManifest))
-    ? join(
-        userDirectory("cache"),
-        "container-tools",
-        `${process.platform}-${process.arch}`,
-        inspectDistribution(distribution).pin.sha256,
-      )
-    : distribution;
+  const identity = existsSync(join(distribution, distributionManifest))
+    ? inspectDistribution(distribution).pin.sha256
+    : createHash("sha256")
+        .update(JSON.stringify(containerInputs.map((name) => [name, readText(join(distribution, name))])))
+        .digest("hex");
+  return join(userDirectory("cache"), "container-tools", `${process.platform}-${process.arch}`, identity);
 }
 
 export async function installContainerTools(root: string): Promise<void> {
@@ -372,34 +372,17 @@ export async function installContainerTools(root: string): Promise<void> {
   if (!asset) throw new Error("no verified Workbench Node artifact for this platform");
   await installAsset(toolDirectory(tool, asset), asset);
   const directory = containerToolsDirectory(distribution);
-  if (directory !== distribution) {
-    withCacheLockSync(directory, () => {
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      for (const name of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"])
-        copyFileSync(join(distribution, name), join(directory, name));
-      const command = [...packageManagerCommand(directory, distribution), "install", "--frozen-lockfile"];
-      execute(required(command[0], "container tool installer"), command.slice(1), {
-        cwd: directory,
-        env: {
-          ...nativeEnvironment(distribution, distribution),
-          PNPM_CONFIG_STORE_DIR: join(userDirectory("cache"), "downloads/pnpm"),
-          PNPM_CONFIG_VIRTUAL_STORE_DIR: join(directory, "virtual-store"),
-          PNPM_CONFIG_CONFIRM_MODULES_PURGE: "false",
-        },
-      });
-    });
-    return;
-  }
-  const command = resolveCheckCommand(distribution, ["{packageManager}", "install", "--frozen-lockfile"]);
-  const paths = buildPaths(root, distribution, "native", {}, false);
-  withBuildLock(paths, () => {
-    prepareBuild(paths);
-    execute("node", [join(distribution, "bin/workbench.mjs"), "dependency-setup", "--", ...command], {
-      cwd: distribution,
+  withCacheLockSync(directory, () => {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    for (const name of containerInputs) copyFileSync(join(distribution, name), join(directory, name));
+    const command = [...packageManagerCommand(directory, distribution), "install", "--frozen-lockfile"];
+    execute(required(command[0], "container tool installer"), command.slice(1), {
+      cwd: directory,
       env: {
         ...nativeEnvironment(distribution, distribution),
-        ...buildEnvironment(paths),
-        WORKBENCH_PROJECT_ROOT: root,
+        PNPM_CONFIG_STORE_DIR: join(userDirectory("cache"), "downloads/pnpm"),
+        PNPM_CONFIG_VIRTUAL_STORE_DIR: join(directory, "virtual-store"),
+        PNPM_CONFIG_CONFIRM_MODULES_PURGE: "false",
       },
     });
   });

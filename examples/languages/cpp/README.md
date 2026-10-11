@@ -43,6 +43,8 @@ analysis uses a separate Clang build and matching dependencies; LLVM coverage us
 selected-compiler tests. Build products follow the global Workbench storage selection; verified source downloads and
 ABI-keyed binaries use shared caches. The dependency declarations apply to native, Dev Container, Guix, and Nix builds.
 Windows sanitizer builds also instrument dependencies, preserving matching MSVC STL annotations across static libraries.
+They use `RelWithDebInfo` and the release CRT, avoiding upstream LLVM ASan's debug CRT incompatibility while retaining
+debug symbols and the complete instrumented suite.
 
 `workbench/quality.json` owns the coverage floors and advisory per-test cap. Workbench configuration owns the
 whole-command soft cap, which includes any build and setup inside that command. Slow execution prints a warning and
