@@ -2,11 +2,11 @@
   "date": "2026-10-11",
   "root_gate": {
     "passed": true,
-    "tests": 373,
+    "tests": 374,
     "files": 68,
     "checks": 13,
-    "job": "01a129dfa97771e2be16bbefafdc306b",
-    "log": "/tmp/workbench-7-root-gate-r12.log"
+    "job": "01a12a3120147fb2a51c4f3b08ac49c2",
+    "log": "/tmp/workbench-7-source-state-gate.log"
   },
   "focused": {
     "passed": 25,
@@ -80,7 +80,16 @@
     "revision": "f9f0136a0d05f1880c6e9296f90a0c170c99edc2",
     "status": "C complete gate and release preparation pass; C++ ordinary tests and all LTO modes pass; ASan dependency annotation mismatch corrected and under focused hosted verification",
     "log": "/tmp/workbench-7-windows-cpp-r10.log",
-    "latest_run": 38120241914
+    "latest_run": 38120241914,
+    "final": {
+      "passed": true,
+      "run": 38122790825,
+      "job": 114420845116,
+      "tests_passed": 326,
+      "platform_skips": 47,
+      "log": "/tmp/workbench-7-windows-final.log",
+      "release_verification": "all configured native language roots passed"
+    }
   },
   "guix_first_hosted": {
     "passed": true,
@@ -109,12 +118,20 @@
     ],
     "core_passed": true,
     "core_run": 38119747067,
-    "core_revision": "a71db1824bcea3d642723a9aa7aa7f90eeab1e2b"
+    "core_revision": "a71db1824bcea3d642723a9aa7aa7f90eeab1e2b",
+    "final": {
+      "passed": true,
+      "run": 38122790825,
+      "job": 114420845110,
+      "tests_passed": 351,
+      "platform_skips": 22,
+      "log": "/tmp/workbench-7-macos-final.log"
+    }
   },
   "windows_core_followup": {
-    "run": 38119747105,
-    "status": "324 passed, 47 platform skips, one remaining bootstrap mock call-count assertion corrected and locally verified; coverage cross-drive tests pass",
-    "log": "/tmp/workbench-7-windows-core-r7.log"
+    "run": 38120600146,
+    "status": "325 passed, 47 platform skips; complete Windows core gate passed; only the separately corrected C++ sanitizer gate failed in this full run",
+    "log": "/tmp/workbench-7-windows-full-r2.log"
   },
   "c_cpp_portability": {
     "passed": true,
@@ -127,7 +144,7 @@
     "revision": "3d9bd4fe4fb86289e35005636f90817f322c75fe",
     "run": 38120600146,
     "url": "https://github.com/greghogan/workbench/actions/runs/38120600146",
-    "status": "Linux x64, Linux ARM64, macOS, Nix Docker, and all compatibility jobs passed; Guix active; known Windows sanitizer and host Dev Container CLI corrections locally verified, final complete rerun pending"
+    "status": "completed; Linux x64, Linux ARM64, macOS, Nix Docker, Guix, all compatibility jobs, and Windows core passed; known Windows sanitizer and host Dev Container CLI failures corrected"
   },
   "windows_sanitizer_followup": {
     "run": 38121621077,
@@ -147,6 +164,163 @@
     "status": "real sequential root and TypeScript Dev Container CI gates passed; owned test container and successful disposable checkout removed",
     "passed": true,
     "regression_job": "01a129ea86f574129ed5dbc4c3d68533",
-    "regression_log": "/tmp/workbench-7-devcontainer-sequence-r4.log"
-  }
+    "regression_log": "/tmp/workbench-7-devcontainer-sequence-r4.log",
+    "hosted": {
+      "passed": true,
+      "run": 38122790825,
+      "job": 114420845119,
+      "log": "/tmp/workbench-7-devcontainer-final.log",
+      "roots": 12
+    }
+  },
+  "adr_only_hosted_selection": {
+    "passed": true,
+    "run": 38122539374,
+    "revision": "b1a44c0d2aa48cc24ed33119c8d76d65a5ce882d",
+    "branch": "ci/adr-selection-verification-20261011",
+    "changed_files": [
+      "workbench/decisions/ADR-10.md"
+    ],
+    "selected_roots": 0,
+    "validation_and_aggregate": "passed",
+    "plan": "/tmp/workbench-7-adr-only-plan/workbench-ci-plan.json"
+  },
+  "guix_warm_source_cache": {
+    "passed": true,
+    "run": 38120600146,
+    "job": 114414388064,
+    "elapsed_seconds": 2114.489,
+    "log": "/tmp/workbench-7-guix-r2.log",
+    "measurement": "/tmp/workbench-7-cache-r2-guix/cache-measurement.json",
+    "scope": "authenticated source history restored; compiled runtime and package store are not cached"
+  },
+  "hosted_final_verification": {
+    "run": 38122790825,
+    "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+    "branch": "ci/draft-functionality-20261011",
+    "status": "complete; all 34 jobs passed, including aggregate status",
+    "url": "https://github.com/greghogan/workbench/actions/runs/38122790825",
+    "passed_platforms": [
+      "Linux x64",
+      "Linux ARM64",
+      "macOS ARM64",
+      "Windows x64",
+      "Nix Docker",
+      "Dev Containers"
+    ],
+    "compatibility": "all declared selections passed",
+    "passed": true,
+    "job_count": 34,
+    "log_guix": "/tmp/workbench-7-guix-final.log",
+    "measurements": "/tmp/workbench-7-cache-final-complete"
+  },
+  "pruned_completed_diagnostic_caches": {
+    "count": 4,
+    "compressed_bytes": 630898688,
+    "inventory": "/tmp/workbench-7-completed-diagnostic-caches.json"
+  },
+  "gcc_cold_warm_comparison": {
+    "cold_run": 38120600146,
+    "warm_run": 38122790825,
+    "cache_restore_log": "/tmp/workbench-7-gcc16-warm.log",
+    "measurements": [
+      {
+        "runtime": "gcc",
+        "version": "14.4.0",
+        "architecture": "x64",
+        "cold_seconds": 1433.022,
+        "warm_seconds": 221.37,
+        "compiler_file_bytes": 260861128
+      },
+      {
+        "runtime": "gcc",
+        "version": "14.4.0",
+        "architecture": "arm64",
+        "cold_seconds": 1048.059,
+        "warm_seconds": 177.956,
+        "compiler_file_bytes": 236103868
+      },
+      {
+        "runtime": "gcc",
+        "version": "15.3.0",
+        "architecture": "x64",
+        "cold_seconds": 1312.547,
+        "warm_seconds": 225.471,
+        "compiler_file_bytes": 278574919
+      },
+      {
+        "runtime": "gcc",
+        "version": "15.3.0",
+        "architecture": "arm64",
+        "cold_seconds": 1134.678,
+        "warm_seconds": 200.889,
+        "compiler_file_bytes": 253471237
+      },
+      {
+        "runtime": "gcc",
+        "version": "16.2.0",
+        "architecture": "x64",
+        "cold_seconds": 1219.791,
+        "warm_seconds": 240.093,
+        "compiler_file_bytes": 287966943
+      },
+      {
+        "runtime": "gcc",
+        "version": "16.2.0",
+        "architecture": "arm64",
+        "cold_seconds": 1241.271,
+        "warm_seconds": 187.899,
+        "compiler_file_bytes": 268658863
+      }
+    ],
+    "status": "all six selections passed; compiler archives restored; warm durations include setup, dependency preparation, tests, sanitizer and LTO variants"
+  },
+  "cache_eviction_observation": {
+    "inventories": [
+      "/tmp/workbench-7-cache-current.tsv",
+      "/tmp/workbench-7-cache-before-final.tsv",
+      "/tmp/workbench-7-cache-final-active.tsv"
+    ],
+    "guix_source_key_present_before_final": false,
+    "final_guix_restore_step_seconds": 1,
+    "status": "confirmed in final Guix log: source-history cache miss, cold bootstrap passed, authenticated history saved again after checks",
+    "peak_observed_compressed_bytes": 11356670859,
+    "final_log": "/tmp/workbench-7-guix-final.log"
+  },
+  "publication_verification": {
+    "status": "active",
+    "branch": "ci/publication-verification-20261011",
+    "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+    "deployment": false,
+    "run": 38126046951,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38126046951",
+    "nix": {
+      "passed": true,
+      "job": 114430511747,
+      "evidence": {
+        "version": 1,
+        "profile": "go-nix-docker",
+        "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+        "image": "ghcr.io/greghogan/workbench-ci-nix:ci-38126046951-1-af33536c26f6",
+        "digest": "ghcr.io/greghogan/workbench-ci-nix@sha256:4398b64e1ffe193fa221e842cd7df8c7bb9a97c90f2815c7bd771058469ddb2f",
+        "imageID": "sha256:4398b64e1ffe193fa221e842cd7df8c7bb9a97c90f2815c7bd771058469ddb2f",
+        "archiveSHA256": "f9a5a346a496ddf2ff868a4ba1bf177db4f7bbd5c03914ca9dbe3c93e2ff5bda",
+        "verified": true,
+        "published": true,
+        "deployed": false
+      },
+      "artifact": "/tmp/workbench-7-publication-nix/_temp/publication-evidence/nix.json"
+    }
+  },
+  "publication_source_guard": {
+    "local_passed": true,
+    "tests": 374,
+    "checks": 13,
+    "job": "01a12a3120147fb2a51c4f3b08ac49c2",
+    "log": "/tmp/workbench-7-source-state-gate.log",
+    "behavior": "reject dirty, missing, or unknown source state before Docker or registry effects",
+    "production_nix_receipt_clean": true,
+    "hosted_followup": "preparing affected-root verification"
+  },
+  "cache_comparison": "workbench/evidence/hosted-cache-comparison-20261011.json"
 }

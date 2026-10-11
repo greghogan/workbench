@@ -1,0 +1,607 @@
+{
+  "date": "2026-10-11",
+  "baseline_run": 38120600146,
+  "final_run": 38122790825,
+  "final_revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+  "all_final_targets_passed": true,
+  "measurement": "Restore, setup, checks and standalone release verification where configured. File bytes describe retained cache contents, exclude links, and are not filesystem allocated blocks. Nix/Guix stores and Docker images are not retained by these caches.",
+  "interpretation": [
+    "Baseline Windows and Dev Container runs failed; their durations do not represent the same completed work.",
+    "All six GCC compiler cache selections were cold in baseline and restored in final; final checks include newly prepared vcpkg dependencies.",
+    "Guix source history was restored in baseline and evicted before final; compiled runtime/package stores were fresh in both.",
+    "Current observed cache usage is approximately 10.1 GB compressed; active entries and eviction vary during the matrix.",
+    "Full-matrix restoration is not guaranteed when its working set exceeds available cache storage."
+  ],
+  "gcc_sdk_cache_comparison": [
+    {
+      "runtime": "gcc",
+      "version": "14.4.0",
+      "architecture": "x64",
+      "cold_seconds": 1433.022,
+      "warm_seconds": 221.37,
+      "compiler_file_bytes": 260861128
+    },
+    {
+      "runtime": "gcc",
+      "version": "14.4.0",
+      "architecture": "arm64",
+      "cold_seconds": 1048.059,
+      "warm_seconds": 177.956,
+      "compiler_file_bytes": 236103868
+    },
+    {
+      "runtime": "gcc",
+      "version": "15.3.0",
+      "architecture": "x64",
+      "cold_seconds": 1312.547,
+      "warm_seconds": 225.471,
+      "compiler_file_bytes": 278574919
+    },
+    {
+      "runtime": "gcc",
+      "version": "15.3.0",
+      "architecture": "arm64",
+      "cold_seconds": 1134.678,
+      "warm_seconds": 200.889,
+      "compiler_file_bytes": 253471237
+    },
+    {
+      "runtime": "gcc",
+      "version": "16.2.0",
+      "architecture": "x64",
+      "cold_seconds": 1219.791,
+      "warm_seconds": 240.093,
+      "compiler_file_bytes": 287966943
+    },
+    {
+      "runtime": "gcc",
+      "version": "16.2.0",
+      "architecture": "arm64",
+      "cold_seconds": 1241.271,
+      "warm_seconds": 187.899,
+      "compiler_file_bytes": 268658863
+    }
+  ],
+  "repository_cache_usage": {
+    "active_caches_count": 25,
+    "active_caches_size_in_bytes": 10140360687
+  },
+  "targets": [
+    {
+      "target": {
+        "os": "linux",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 916.368,
+      "final_seconds": 927.577,
+      "final_cache_file_bytes": {
+        "tools-paths": 1592510408,
+        "package-managers-paths": 61738569,
+        "downloads-paths": 511672386,
+        "builds-paths": 1842227355,
+        "guix-paths": 0,
+        "llvm-paths": 3238098326,
+        "rust-paths": 2435336598
+      }
+    },
+    {
+      "target": {
+        "os": "linux",
+        "architecture": "arm64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 923.352,
+      "final_seconds": 880.791,
+      "final_cache_file_bytes": {
+        "tools-paths": 1488378666,
+        "package-managers-paths": 49881385,
+        "downloads-paths": 463686254,
+        "builds-paths": 1642789591,
+        "guix-paths": 0,
+        "llvm-paths": 3211009871,
+        "rust-paths": 2184104722
+      }
+    },
+    {
+      "target": {
+        "os": "macos",
+        "architecture": "arm64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1248.671,
+      "final_seconds": 1073.103,
+      "final_cache_file_bytes": {
+        "tools-paths": 1458314175,
+        "package-managers-paths": 47610261,
+        "downloads-paths": 643563336,
+        "builds-paths": 1442988183,
+        "guix-paths": 0,
+        "llvm-paths": 2696292993,
+        "rust-paths": 2040193924
+      }
+    },
+    {
+      "target": {
+        "os": "windows",
+        "architecture": "x64"
+      },
+      "baseline_passed": false,
+      "final_passed": true,
+      "baseline_seconds": 1605.857,
+      "final_seconds": 1541.697,
+      "final_cache_file_bytes": {
+        "tools-paths": 1440955125,
+        "package-managers-paths": 56738581,
+        "downloads-paths": 471378776,
+        "builds-paths": 2189012293,
+        "guix-paths": 0,
+        "llvm-paths": 2510698374,
+        "rust-paths": 2635515455
+      }
+    },
+    {
+      "target": {
+        "runtime": "node",
+        "version": "22.23.3"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 80.042,
+      "final_seconds": 83.144,
+      "final_cache_file_bytes": {
+        "tools-paths": 196362515,
+        "package-managers-paths": 59429318,
+        "downloads-paths": 199555618,
+        "builds-paths": 407686169,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "node",
+        "version": "24.21.0"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 106.349,
+      "final_seconds": 106.61,
+      "final_cache_file_bytes": {
+        "tools-paths": 201362329,
+        "package-managers-paths": 59429359,
+        "downloads-paths": 199544241,
+        "builds-paths": 407686205,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "rust",
+        "version": "1.93.0"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 28.578,
+      "final_seconds": 21.949,
+      "final_cache_file_bytes": {
+        "tools-paths": 0,
+        "downloads-paths": 8669313,
+        "builds-paths": 127013718,
+        "guix-paths": 0,
+        "rust-paths": 599493927
+      }
+    },
+    {
+      "target": {
+        "runtime": "python",
+        "version": "3.11.17"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 6.316,
+      "final_seconds": 6.835,
+      "final_cache_file_bytes": {
+        "tools-paths": 129768332,
+        "downloads-paths": 144471916,
+        "builds-paths": 97596250,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "python",
+        "version": "3.12.15"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 7.622,
+      "final_seconds": 6.924,
+      "final_cache_file_bytes": {
+        "tools-paths": 146007276,
+        "downloads-paths": 91827562,
+        "builds-paths": 97270038,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "python",
+        "version": "3.13.16"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 6.262,
+      "final_seconds": 8.748,
+      "final_cache_file_bytes": {
+        "tools-paths": 146726542,
+        "downloads-paths": 145005436,
+        "builds-paths": 97286557,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "python",
+        "version": "3.14.8"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 8.207,
+      "final_seconds": 5.351,
+      "final_cache_file_bytes": {
+        "tools-paths": 149502496,
+        "downloads-paths": 91468523,
+        "builds-paths": 98646359,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "clang",
+        "version": "21.1.8",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 518.844,
+      "final_seconds": 427.719,
+      "final_cache_file_bytes": {
+        "tools-paths": 516102963,
+        "downloads-paths": 2360419,
+        "builds-paths": 261379695,
+        "guix-paths": 0,
+        "llvm-paths": 6358797986
+      }
+    },
+    {
+      "target": {
+        "runtime": "clang",
+        "version": "22.1.8",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 472.789,
+      "final_seconds": 517.613,
+      "final_cache_file_bytes": {
+        "tools-paths": 515923567,
+        "downloads-paths": 2360419,
+        "builds-paths": 263132040,
+        "guix-paths": 0,
+        "llvm-paths": 6345724426
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "14.4.0",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1433.022,
+      "final_seconds": 221.37,
+      "final_cache_file_bytes": {
+        "tools-paths": 516102963,
+        "downloads-paths": 2360419,
+        "builds-paths": 197970098,
+        "gcc-path": 260861128,
+        "guix-paths": 0,
+        "llvm-paths": 3238098326
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "14.4.0",
+        "architecture": "arm64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1048.059,
+      "final_seconds": 177.956,
+      "final_cache_file_bytes": {
+        "tools-paths": 446828407,
+        "downloads-paths": 2360419,
+        "builds-paths": 203045578,
+        "gcc-path": 236103868,
+        "guix-paths": 0,
+        "llvm-paths": 3211009871
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "15.3.0",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1312.547,
+      "final_seconds": 225.471,
+      "final_cache_file_bytes": {
+        "tools-paths": 516103143,
+        "downloads-paths": 2360419,
+        "builds-paths": 198244999,
+        "gcc-path": 278574919,
+        "guix-paths": 0,
+        "llvm-paths": 3238098326
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "15.3.0",
+        "architecture": "arm64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1134.678,
+      "final_seconds": 200.889,
+      "final_cache_file_bytes": {
+        "tools-paths": 446827259,
+        "downloads-paths": 2360419,
+        "builds-paths": 204832361,
+        "gcc-path": 253471237,
+        "guix-paths": 0,
+        "llvm-paths": 3211009871
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "16.2.0",
+        "architecture": "x64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1219.791,
+      "final_seconds": 240.093,
+      "final_cache_file_bytes": {
+        "tools-paths": 516041684,
+        "downloads-paths": 2360419,
+        "builds-paths": 202513056,
+        "gcc-path": 287966943,
+        "guix-paths": 0,
+        "llvm-paths": 3238098326
+      }
+    },
+    {
+      "target": {
+        "runtime": "gcc",
+        "version": "16.2.0",
+        "architecture": "arm64"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 1241.271,
+      "final_seconds": 187.899,
+      "final_cache_file_bytes": {
+        "tools-paths": 446709134,
+        "downloads-paths": 2360419,
+        "builds-paths": 208498513,
+        "gcc-path": 268658863,
+        "guix-paths": 0,
+        "llvm-paths": 3211009871
+      }
+    },
+    {
+      "target": {
+        "runtime": "go",
+        "version": "1.26.8"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 22.222,
+      "final_seconds": 22.85,
+      "final_cache_file_bytes": {
+        "tools-paths": 232512951,
+        "downloads-paths": 0,
+        "builds-paths": 61149980,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "java",
+        "version": "17.0.20.1+1"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 16.643,
+      "final_seconds": 24.075,
+      "final_cache_file_bytes": {
+        "tools-paths": 343893927,
+        "downloads-paths": 11549875,
+        "builds-paths": 91235,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "java",
+        "version": "21.0.12.1+1"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 25.267,
+      "final_seconds": 20.994,
+      "final_cache_file_bytes": {
+        "tools-paths": 372931597,
+        "downloads-paths": 11549875,
+        "builds-paths": 91277,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "java",
+        "version": "27+35"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 15.489,
+      "final_seconds": 24.168,
+      "final_cache_file_bytes": {
+        "tools-paths": 329029849,
+        "downloads-paths": 11549875,
+        "builds-paths": 92059,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "ruby",
+        "version": "3.3.12"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 203.811,
+      "final_seconds": 175.192,
+      "final_cache_file_bytes": {
+        "tools-paths": 194555060,
+        "package-managers-paths": 2309214,
+        "downloads-paths": 36192295,
+        "builds-paths": 51785495,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "ruby",
+        "version": "3.4.11"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 230.278,
+      "final_seconds": 17.893,
+      "final_cache_file_bytes": {
+        "tools-paths": 211226528,
+        "package-managers-paths": 2309213,
+        "downloads-paths": 0,
+        "builds-paths": 51795568,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "php",
+        "version": "8.2.34"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 230.681,
+      "final_seconds": 174.293,
+      "final_cache_file_bytes": {
+        "tools-paths": 51184528,
+        "downloads-paths": 2457890,
+        "builds-paths": 7853247,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "php",
+        "version": "8.3.35"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 221.48,
+      "final_seconds": 188.743,
+      "final_cache_file_bytes": {
+        "tools-paths": 53953147,
+        "downloads-paths": 2457890,
+        "builds-paths": 7853242,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "runtime": "php",
+        "version": "8.4.26"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 250.552,
+      "final_seconds": 272.309,
+      "final_cache_file_bytes": {
+        "tools-paths": 60651826,
+        "downloads-paths": 2457890,
+        "builds-paths": 7853247,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "environment": "guix"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 2114.489,
+      "final_seconds": 3124.479,
+      "final_cache_file_bytes": {
+        "tools-paths": 0,
+        "package-managers-paths": 2309213,
+        "downloads-paths": 213636239,
+        "builds-paths": 1067557536,
+        "guix-paths": 595090758
+      }
+    },
+    {
+      "target": {
+        "environment": "nix-docker"
+      },
+      "baseline_passed": true,
+      "final_passed": true,
+      "baseline_seconds": 554.549,
+      "final_seconds": 358.167,
+      "final_cache_file_bytes": {
+        "tools-paths": 0,
+        "package-managers-paths": 0,
+        "downloads-paths": 213632143,
+        "builds-paths": 1161990650,
+        "guix-paths": 0
+      }
+    },
+    {
+      "target": {
+        "environment": "devcontainer"
+      },
+      "baseline_passed": false,
+      "final_passed": true,
+      "baseline_seconds": 579.528,
+      "final_seconds": 1002.116,
+      "final_cache_file_bytes": {
+        "tools-paths": 4817560835,
+        "package-managers-paths": 64047779,
+        "downloads-paths": 549452052,
+        "builds-paths": 1742490984,
+        "guix-paths": 0,
+        "rust-paths": 2456449830
+      }
+    }
+  ]
+}

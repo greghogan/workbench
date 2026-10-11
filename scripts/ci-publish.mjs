@@ -28,7 +28,8 @@ export async function verifyRegistryPublication(root, builder, environment = pro
     receipt.emulation !== false ||
     receipt.builder !== builder ||
     receipt.profile?.name !== profile ||
-    receipt.source?.revision !== revision
+    receipt.source?.revision !== revision ||
+    receipt.source.dirty !== false
   )
     throw new Error("publication requires the selected revision's verified native release receipt");
   const file = join(artifact, "docker.tar.gz");
