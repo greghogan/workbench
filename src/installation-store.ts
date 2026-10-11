@@ -379,11 +379,18 @@ export function installDistribution(
     }
     const staging = ownedPath(base, `versions/.install-${randomUUID()}`);
     copyDistribution(source, staging, pin);
+    let published = false;
     try {
       makeImmutable(staging);
+      // Darwin refuses to rename a write-disabled directory, even within the same parent.
+      // Only store authority can write this root; retained contents stay read-only throughout.
+      if (process.platform === "darwin") chmodSync(staging, 0o755);
       renameSync(staging, destination);
+      published = true;
+      if (process.platform === "darwin") chmodSync(destination, 0o555);
     } catch (error) {
       if (existsSync(staging)) removeVersion(staging);
+      else if (published) removeVersion(destination);
       throw error;
     }
     return pin;

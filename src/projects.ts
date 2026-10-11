@@ -1,7 +1,7 @@
 import { required } from "./invariants.js";
 import { citationLibrarySetting } from "./citations.js";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
@@ -150,8 +150,8 @@ function git(root: string, args: string[]): string {
 }
 
 export function configureGitHooks(root: string, distribution: string): void {
-  const repository = resolve(git(root, ["rev-parse", "--show-toplevel"]));
-  if (repository !== resolve(root)) throw new Error("setup must run for the project repository root");
+  const repository = realpathSync.native(git(root, ["rev-parse", "--show-toplevel"]));
+  if (repository !== realpathSync.native(root)) throw new Error("setup must run for the project repository root");
   const expected = distribution === root ? ".githooks" : ".workbench/.githooks";
   const configured = spawnSync("git", ["-C", root, "config", "--get", "core.hooksPath"], { encoding: "utf8" });
   if (configured.status !== 0 && configured.status !== 1) throw new Error(configured.stderr.trim());

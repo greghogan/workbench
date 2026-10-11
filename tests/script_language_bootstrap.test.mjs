@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { execute, download, extractArchive } from "../src/tool-downloads.ts";
 import { executeBundler } from "../src/ruby-manager.ts";
@@ -146,10 +146,13 @@ test("Xdebug builds once for the selected PHP executable, verifies receipts, and
       expect.arrayContaining(["-d", "xdebug.mode=coverage", "suite.php"]),
       expect.anything(),
     );
-    const last = vi.mocked(execute).mock.calls.at(-1);
-    const extension = join(last[2].env.PHP_INI_SCAN_DIR.split(":")[0], "xdebug.so");
-    expect(readFileSync(join(dirname(extension), ".workbench-extension"), "utf8")).toMatch(/^[a-f0-9]{64}$/);
-    writeFileSync(join(dirname(extension), ".workbench-extension"), "changed");
+    const parent = join(process.env.WORKBENCH_CACHE_HOME, "toolchains", "xdebug", "3.5.3");
+    const extension = join(
+      parent,
+      readdirSync(parent).find((name) => /^[a-f0-9]{64}$/.test(name)),
+    );
+    expect(readFileSync(join(extension, ".workbench-extension"), "utf8")).toMatch(/^[a-f0-9]{64}$/);
+    writeFileSync(join(extension, ".workbench-extension"), "changed");
     await expect(executePhpCoverage(root, repository, ["suite.php"])).rejects.toThrow(/incomplete/);
   } finally {
     Object.defineProperty(process, "platform", platform);

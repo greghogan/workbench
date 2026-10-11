@@ -77,6 +77,7 @@ test("npm bootstraps the package manager from committed hashes outside the proje
   writeJson(join(root, "package.json"), { packageManager: `pnpm@${pnpmVersion}` });
   const npm = vi.mocked(execute);
   npm.mockImplementation((command, _args, options) => {
+    if (command === "cygpath") return _args.at(-1);
     if (command === "env") return pnpmVersion;
     const directory = join(options.cwd, "node_modules/pnpm/bin");
     mkdirSync(directory, { recursive: true });
@@ -97,8 +98,9 @@ test("npm bootstraps the package manager from committed hashes outside the proje
     expect.anything(),
   );
   expect(npm).toHaveBeenCalledWith("npm", ["audit", "signatures"], expect.anything());
+  const acquisitions = npm.mock.calls.filter(([command]) => command === "npm");
   expect(packageManagerCommand(root, repository)).toEqual(command);
-  expect(npm).toHaveBeenCalledTimes(3);
+  expect(npm.mock.calls.filter(([command]) => command === "npm")).toEqual(acquisitions);
   const local = join(root, "workbench/package-manager");
   mkdirSync(local, { recursive: true });
   cpSync(join(repository, "scripts/package-manager"), local, { recursive: true });

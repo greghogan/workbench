@@ -21,3 +21,6 @@ Style/StringLiterals:
   EnforcedStyle: double_quotes
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Layout/EndOfLine:
+  EnforcedStyle: lf

@@ -7,11 +7,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir, devNull } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { ciSelection } from "../src/ci-selection.ts";
@@ -34,7 +35,7 @@ afterEach(() => {
   }
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-shared-update-test-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-shared-update-test-")));
   temporary.push(root);
   const distribution = join(root, "distribution");
   mkdirSync(distribution);
@@ -59,7 +60,7 @@ function fixture() {
       encoding: "utf8",
       env: {
         ...process.env,
-        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_GLOBAL: "/dev/null",
         GIT_CONFIG_NOSYSTEM: "1",
         WORKBENCH_PROJECT_ROOT: consumer,
         WORKBENCH_LOCAL_CONFIG_ROOT: consumer,
@@ -85,7 +86,7 @@ function fixture() {
       {
         cwd: consumer,
         encoding: "utf8",
-        env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" },
+        env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
       },
     );
     expect(result.status, result.stderr).toBe(0);
@@ -177,7 +178,7 @@ test("shared project hooks validate the staged pin and affected selection skips 
   const hook = spawnSync("git", ["hook", "run", "pre-commit"], {
     cwd: consumer,
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
   });
   expect(hook.status, hook.stdout + hook.stderr).toBe(0);
   // Working-tree drift must not alter the proposed dependency.
@@ -185,7 +186,7 @@ test("shared project hooks validate the staged pin and affected selection skips 
   const exact = spawnSync("git", ["hook", "run", "pre-commit"], {
     cwd: consumer,
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
   });
   expect(exact.status, exact.stdout + exact.stderr).toBe(0);
   // Staging a missing identity must fail before any checks use another version.
@@ -193,7 +194,7 @@ test("shared project hooks validate the staged pin and affected selection skips 
   const missing = spawnSync("git", ["hook", "run", "pre-commit"], {
     cwd: consumer,
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
   });
   expect(missing.status).not.toBe(0);
   expect(missing.stderr).toMatch(/not installed/);

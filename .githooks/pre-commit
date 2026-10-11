@@ -5,7 +5,7 @@ repository_root=$(git rev-parse --show-toplevel)
 staged_snapshot=$(mktemp -d)
 trap 'rm -rf -- "$staged_snapshot"' EXIT
 
-git -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
 git -C "$repository_root" diff --cached --check
 
 while IFS= read -r -d '' removed_path; do

@@ -5,8 +5,8 @@
     "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a129843ed37890863ca69b1fd24aa6",
-    "log": "/tmp/workbench-7-root-gate-r5.log"
+    "job": "01a12992c04875b39255fd36f4808de7",
+    "log": "/tmp/workbench-7-root-gate-r6.log"
   },
   "focused": {
     "passed": 25,
@@ -26,7 +26,7 @@
     "revision": "bb3c0292322504c2b9884144fc64788f78c1ec24",
     "run": 38114097093,
     "url": "https://github.com/greghogan/workbench/actions/runs/38114097093",
-    "status": "in progress"
+    "status": "completed; failures inspected; Guix, Nix Docker and all GCC compatibility jobs passed; platform corrections under verification"
   },
   "deployment": "not authorized or performed",
   "document_acceptance": "pending human review",
@@ -76,8 +76,26 @@
     "log": "/tmp/workbench-7-ruby-external-gate.log"
   },
   "windows_native_followup": {
-    "run": 38116111925,
-    "revision": "4c00e924d8c93c834edb50e13ecf852145390010",
-    "status": "in progress; acquisition and native checks still fail; diagnostics pending"
+    "run": 38117028032,
+    "revision": "acaad9c5b6415f4d478560a8708cd928529f95f3",
+    "status": "completed; tool installation and release preparation passed; 21 core test failures plus C/C++ PATH and Ruby line endings under correction",
+    "log": "/tmp/workbench-7-windows-full-r4.log"
+  },
+  "guix_first_hosted": {
+    "passed": true,
+    "run": 38114097093,
+    "job": 114395451544,
+    "elapsed_minutes": 56,
+    "log": "/tmp/workbench-7-guix-first.log",
+    "cold_setup_minutes": {
+      "channel_clone": 11.5,
+      "authentication": 5.3,
+      "guix_runtime_build": 21
+    },
+    "warm_verification": "pending"
+  },
+  "macos_native_followup": {
+    "run": 38117267697,
+    "status": "in progress; installation passed"
   }
 }

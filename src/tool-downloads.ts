@@ -184,8 +184,10 @@ export async function extractArchive(
     process.platform === "win32"
       ? join(required(process.env.SystemRoot, "expected process.env.SystemRoot"), "System32/tar.exe")
       : "tar";
+  // bsdtar otherwise interprets UTF-8 ustar names using the Windows ANSI code page.
+  const charset = process.platform === "win32" ? ["--options=hdrcharset=UTF-8"] : [];
   const members = archiveListing(
-    execute(tar, ["-tf", archive], {
+    execute(tar, ["-tf", archive, ...charset], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -200,7 +202,7 @@ export async function extractArchive(
   if (new Set(names.map(key)).size !== names.length) throw new Error("tool archive contains duplicate paths");
   const links = new Set<string>();
   const listing = archiveListing(
-    execute(tar, ["-tvf", archive], {
+    execute(tar, ["-tvf", archive, ...charset], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -242,6 +244,7 @@ export async function extractArchive(
       [
         "-xf",
         archive,
+        ...charset,
         "--no-same-owner",
         "-C",
         destination,
