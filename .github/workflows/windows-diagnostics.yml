@@ -329,3 +329,4 @@ jobs:
       - name: Measure retained cache footprint
         if: always() && steps.cache-plan.conclusion == 'success'
         run: node scripts/ci-cache-metrics.mjs finish
+    if: false
