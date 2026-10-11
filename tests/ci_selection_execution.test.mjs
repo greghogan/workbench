@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 test("an empty local rehearsal validates without invoking Docker or acquiring example caches/workspaces", () => {
-  const parent = mkdtempSync(join(tmpdir(), "workbench-empty-selection-"));
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), "workbench-empty-selection-")));
   temporary.push(parent);
   const root = join(parent, "checkout");
   copySourceCheckout(repository, root);

@@ -35,17 +35,6 @@ export async function coverageWorkspace(root, temporary) {
   copySourceCheckout(root, workspace);
   // Reuse installed build/test dependencies; never copy or download them for coverage.
   symlinkSync(realpathSync.native(join(root, "node_modules")), join(workspace, "node_modules"), "junction");
-  if (process.platform === "win32")
-    console.error(
-      "Coverage dependency lookup",
-      JSON.stringify({
-        root,
-        workspace,
-        target: realpathSync.native(join(root, "node_modules")),
-        found: existsSync(join(workspace, "node_modules/vitest/vitest.mjs")),
-        targetFound: existsSync(join(root, "node_modules/vitest/vitest.mjs")),
-      }),
-    );
   for (const name of ["main", "skills"]) await build(bundleOptions(workspace, name, true));
   return workspace;
 }

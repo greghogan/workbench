@@ -12,7 +12,7 @@ defaults:
     shell: bash
 jobs:
   native:
-    name: ${{ matrix.os }} ${{ matrix.architecture }} / selected roots
+    name: Windows C/C++ verification
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -32,17 +32,8 @@ jobs:
             llvm: ""
             java: ""
             paths:
-              - .
-              - examples/languages/typescript
-              - examples/languages/rust
-              - examples/languages/python
               - examples/languages/c
               - examples/languages/cpp
-              - examples/languages/go
-              - examples/languages/javascript
-              - examples/languages/java
-              - examples/languages/ruby
-              - examples/languages/php
             msvc: true
     steps:
       - name: Preserve canonical text and skill symlinks
@@ -195,7 +186,7 @@ jobs:
             ${{ runner.temp }}/workbench-ci/cache/dependencies/**/*.def
           if-no-files-found: ignore
           retention-days: 14
-    if: false
+    if: true
   core:
     name: Windows core diagnostics
     runs-on: ${{ matrix.runner }}
@@ -337,3 +328,4 @@ jobs:
       - name: Measure retained cache footprint
         if: always() && steps.cache-plan.conclusion == 'success'
         run: node scripts/ci-cache-metrics.mjs finish
+    if: false

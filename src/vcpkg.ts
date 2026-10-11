@@ -114,7 +114,16 @@ export function prepareVcpkg(
             `set(CMAKE_CXX_FLAGS_INIT ${cmake(`"--gcc-toolchain=${gccSdk}"`)})`,
           ]
         : []),
-      `include(${cmake(join(installation, `scripts/toolchains/${system}.cmake`))})`,
+      // The examples select Clang's GNU driver. vcpkg's Windows chainload file assumes
+      // cl/clang-cl flags and requires triplet state before the main project loads it.
+      ...(system === "windows"
+        ? [
+            "set(CMAKE_SYSTEM_NAME Windows)",
+            "set(CMAKE_SYSTEM_PROCESSOR AMD64)",
+            "set(CMAKE_CROSSCOMPILING OFF)",
+            'set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")',
+          ]
+        : [`include(${cmake(join(installation, `scripts/toolchains/${system}.cmake`))})`]),
       "",
     ].join("\n"),
   );
