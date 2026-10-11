@@ -76,6 +76,11 @@ export function nativeEnvironment(
           if (tool.name === "go") env.GOROOT = directory;
           if (tool.name === "java") env.JAVA_HOME = resolve(directory, asset.bin, "..");
           if (tool.name === "llvm") {
+            if (process.platform === "win32") {
+              const runtime = join(directory, "lib", "clang", tool.version.split(".")[0] ?? "", "lib", "windows");
+              // ASan DLLs must match the selected compiler, ahead of the host SDK's copies.
+              if (existsSync(runtime)) paths.push(runtime);
+            }
             for (const name of [
               "CPATH",
               "C_INCLUDE_PATH",
