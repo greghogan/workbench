@@ -150,6 +150,15 @@ export function prepareVcpkg(
       `set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE ${cmake(chainload)} CACHE FILEPATH "")`,
       `set(VCPKG_INSTALLED_DIR ${cmake(join(build, "vcpkg_installed"))} CACHE PATH "")`,
       `set(ENV{VCPKG_DOWNLOADS} ${cmake(downloads)})`,
+      // vcpkg cleans Windows port environments; retain the verified CMake/Ninja PATH.
+      ...(process.platform === "win32"
+        ? [
+            'set(_workbench_keep_env "$ENV{VCPKG_KEEP_ENV_VARS};PATH")',
+            "list(REMOVE_DUPLICATES _workbench_keep_env)",
+            'set(ENV{VCPKG_KEEP_ENV_VARS} "${_workbench_keep_env}")',
+            "unset(_workbench_keep_env)",
+          ]
+        : []),
       `set(VCPKG_INSTALL_OPTIONS ${cmake(`--x-buildtrees-root=${join(build, "vcpkg_buildtrees")}`)} ${cmake(`--x-packages-root=${join(build, "vcpkg_packages")}`)})`,
       `include(${cmake(join(installation, "scripts/buildsystems/vcpkg.cmake"))})`,
       "",

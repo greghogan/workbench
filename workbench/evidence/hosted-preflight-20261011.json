@@ -5,8 +5,8 @@
     "tests": 372,
     "files": 68,
     "checks": 13,
-    "job": "01a12992c04875b39255fd36f4808de7",
-    "log": "/tmp/workbench-7-root-gate-r6.log"
+    "job": "01a129aea16b78e29b3bc4d915fd60df",
+    "log": "/tmp/workbench-7-root-gate-r8.log"
   },
   "focused": {
     "passed": 25,
@@ -76,10 +76,10 @@
     "log": "/tmp/workbench-7-ruby-external-gate.log"
   },
   "windows_native_followup": {
-    "run": 38117028032,
-    "revision": "acaad9c5b6415f4d478560a8708cd928529f95f3",
-    "status": "completed; tool installation and release preparation passed; 21 core test failures plus C/C++ PATH and Ruby line endings under correction",
-    "log": "/tmp/workbench-7-windows-full-r4.log"
+    "run": 38118139925,
+    "revision": "f9f0136a0d05f1880c6e9296f90a0c170c99edc2",
+    "status": "completed; every language except C/C++ passed; Windows vcpkg GNU-driver correction under verification",
+    "log": "/tmp/workbench-7-windows-full-r5.log"
   },
   "guix_first_hosted": {
     "passed": true,
@@ -95,7 +95,19 @@
     "warm_verification": "pending"
   },
   "macos_native_followup": {
-    "run": 38117267697,
-    "status": "in progress; installation passed"
+    "runs": [
+      38117267697,
+      38118703099,
+      38119140600
+    ],
+    "status": "all language examples and releases passed in first run; core failures reduced from 25 to two fixture assumptions; final fixture corrections running",
+    "logs": [
+      "/tmp/workbench-7-macos-r1.log",
+      "/tmp/workbench-7-macos-core-r2.log"
+    ]
+  },
+  "windows_core_followup": {
+    "run": 38118725724,
+    "status": "in progress; canonical paths and isolated Git symlink configuration corrected"
   }
 }

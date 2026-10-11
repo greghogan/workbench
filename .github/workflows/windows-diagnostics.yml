@@ -35,6 +35,7 @@ jobs:
               - examples/languages/c
               - examples/languages/cpp
             msvc: true
+            runtime: ""
     steps:
       - name: Preserve canonical text and skill symlinks
         run: |
@@ -186,7 +187,6 @@ jobs:
             ${{ runner.temp }}/workbench-ci/cache/dependencies/**/*.def
           if-no-files-found: ignore
           retention-days: 14
-    if: true
   core:
     name: Windows core diagnostics
     runs-on: ${{ matrix.runner }}
@@ -210,6 +210,7 @@ jobs:
             paths:
               - .
             msvc: true
+            runtime: ""
     steps:
       - name: Preserve canonical text and skill symlinks
         run: |
@@ -328,4 +329,3 @@ jobs:
       - name: Measure retained cache footprint
         if: always() && steps.cache-plan.conclusion == 'success'
         run: node scripts/ci-cache-metrics.mjs finish
-    if: false
