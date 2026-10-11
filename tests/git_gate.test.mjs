@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir, devNull } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "vitest";
 
@@ -15,7 +15,7 @@ test("standalone staged gates use the owning checkout's review receipt", () => {
       encoding: "utf8",
       env: {
         ...process.env,
-        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_GLOBAL: "/dev/null",
         GIT_CONFIG_NOSYSTEM: "1",
         GIT_CONFIG_COUNT: "2",
         GIT_CONFIG_KEY_0: "core.autocrlf",
@@ -72,7 +72,7 @@ test("public setup gates staged files and rejects a dirty or mismatched Workbenc
   mkdirSync(root);
   const environment = {
     ...process.env,
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_COUNT: "2",
     GIT_CONFIG_KEY_0: "core.autocrlf",
     GIT_CONFIG_VALUE_0: "false",

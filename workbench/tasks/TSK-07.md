@@ -192,3 +192,9 @@ C17/C++20 LTO and sanitizer probes pass. The source installer now selects upstre
 ABI in its installation identity. Ruby's full configured Linux gate passes with external dependency storage. A separate
 standalone Ruby coverage defect counts installed gems under the source root; changing that scope awaits the human
 approval required by ADR-A.
+
+The first Guix job also passes, taking approximately 56 minutes cold; channel acquisition/authentication accounts for
+about 17 minutes and building the pinned Guix runtime for another 21. Warm measurements remain pending. Windows now
+installs every selected tool and prepares passing roots' release artifacts. Its core failures have fallen from 65 to 21;
+remaining fixes cover Git null-device fixtures, portable source maps, scheduler fixtures, selected PATH casing, archive
+filename encoding, and canonical Ruby line endings. Shared installation lifecycle tests pass on Windows.

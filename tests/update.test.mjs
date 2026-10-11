@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir, devNull } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import { test } from "vitest";
@@ -18,7 +18,7 @@ function fixture(action, collision = false, privateStandards = false) {
   mkdirSync(root);
   const env = {
     ...process.env,
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_COUNT: "2",
     GIT_CONFIG_KEY_0: "core.autocrlf",
     GIT_CONFIG_VALUE_0: "false",

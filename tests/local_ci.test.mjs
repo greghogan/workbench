@@ -120,7 +120,7 @@ test("plan presentation is read only and exposes commands, provenance, exclusion
   expect(
     json.selected
       .find(({ kind }) => kind === "native")
-      .checks.some(({ role, source }) => role === "coverage" && source.includes("python/automation.toml")),
+      .checks.some(({ role, source }) => role === "coverage" && source.includes(join("python", "automation.toml"))),
   ).toBe(true);
   expect(json.excluded[0].reason).toBeTruthy();
   log.mockClear();

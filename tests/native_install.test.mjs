@@ -286,6 +286,13 @@ test("public installation honors declared pins and checks before altering unsupp
   const fetcher = serve(bytes);
   const before = nativeEnvironment(root, distribution).PATH;
   expect(before).toBe(process.env.PATH);
+  if (process.platform === "win32") {
+    // A worker can carry both keys, while Windows children accept only the first one.
+    vi.stubEnv("Path", before);
+    expect(Object.keys(nativeEnvironment(root, distribution)).filter((key) => key.toUpperCase() === "PATH")).toEqual([
+      "PATH",
+    ]);
+  }
   // Tests use POSIX executable fixtures, as do the project's other shell contracts.
   if (process.platform !== "win32") {
     await installNativeTools(root);

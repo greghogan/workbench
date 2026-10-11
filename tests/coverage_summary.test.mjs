@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import coverage from "istanbul-lib-coverage";
 import { test, vi } from "vitest";
@@ -72,7 +72,7 @@ test("coverage presents the selected committed baseline in console output and th
       encoding: "utf8",
       env: {
         ...process.env,
-        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_GLOBAL: "/dev/null",
         GIT_CONFIG_NOSYSTEM: "1",
         GIT_AUTHOR_NAME: "Coverage fixture",
         GIT_AUTHOR_EMAIL: "fixture@example.invalid",

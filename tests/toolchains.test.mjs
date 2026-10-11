@@ -92,7 +92,7 @@ test("native metadata is exact and root-local, and command arguments remain lite
       // Verify version selection and argument forwarding as one external command contract.
       assert.deepEqual(resolveCheckCommand(root, ["{packageManager}", "install", "--frozen-lockfile"], root), [
         "node",
-        "bin/workbench.mjs",
+        join("bin", "workbench.mjs"),
         "package-manager-exec",
         "--",
         "install",

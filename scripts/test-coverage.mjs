@@ -34,7 +34,7 @@ export async function coverageWorkspace(root, temporary) {
   mkdirSync(workspace);
   copySourceCheckout(root, workspace);
   // Reuse installed build/test dependencies; never copy or download them for coverage.
-  symlinkSync(join(root, "node_modules"), join(workspace, "node_modules"), "junction");
+  symlinkSync(realpathSync(join(root, "node_modules")), join(workspace, "node_modules"), "junction");
   for (const name of ["main", "skills"]) await build(bundleOptions(workspace, name, true));
   return workspace;
 }
@@ -62,7 +62,9 @@ export async function subprocessCoverage(directory, root) {
           throw new Error(`${sourcePath}: bundle source differs from the checkout`);
         included.add(sourcePath);
       }
-      return sourcePath;
+      // Relative URLs avoid treating Windows drive letters as URI schemes, and preserve
+      // the converter's source-content lookup using native filesystem paths.
+      return relative(dirname(path), sourcePath).split(sep).join("/");
     });
     bundles.set(key, { code, map, included, url: pathToFileURL(path).href, executions: [] });
   }

@@ -12,7 +12,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir, devNull } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { stringify, parse } from "smol-toml";
 import { afterEach, test, vi } from "vitest";
@@ -65,6 +65,7 @@ function fixture(id = "product") {
   vi.stubEnv("WORKBENCH_DATA_HOME", join(base, "data"));
   vi.stubEnv("WORKBENCH_CONFIG_HOME", join(base, "config"));
   vi.stubEnv("XDG_DATA_DIRS", join(base, "system"));
+  vi.stubEnv("PROGRAMDATA", join(base, "system"));
   vi.spyOn(console, "log").mockImplementation(() => {});
   const run = (...args) => {
     const result = spawnSync(process.execPath, [join(distribution, "bundle/main.cjs"), ...args], {
@@ -485,7 +486,12 @@ test("user, system and explicit local sources verify identical duplicates and re
   installCollection(company.directory, company.pin.sha256, join(base, "system/workbench/collections"));
   const explicit = join(base, "explicit");
   installCollection(company.directory, company.pin.sha256, explicit);
-  setConfiguration(root, "collections.directories", JSON.stringify([explicit]), "local");
+  setConfiguration(
+    root,
+    "collections.directories",
+    JSON.stringify([explicit, join(base, "system/workbench/collections")]),
+    "local",
+  );
   assert.match(resolveCollections(root).find((entry) => entry.pin.id === "company").directory, /explicit/);
   writeFileSync(join(base, "system/workbench/collections/company/1/workbench/decisions/ADR-00.md"), "substituted");
   assert.throws(() => resolveCollections(root), /failed verification/);
@@ -955,7 +961,7 @@ test("staged gates resolve local policies without committing them", () => {
     const result = spawnSync("git", args, {
       cwd: root,
       encoding: "utf8",
-      env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" },
+      env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
     });
     assert.equal(result.status, 0, result.stdout + result.stderr);
     return result.stdout;
