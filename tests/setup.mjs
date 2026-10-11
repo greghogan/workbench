@@ -71,9 +71,3 @@ process.env.WORKBENCH_CACHE_HOME = join(storage, "cache");
 // Local policy discovery must not inherit standards installed on the test host.
 process.env.XDG_DATA_DIRS = join(storage, "system");
 afterAll(() => rmSync(storage, { recursive: true, force: true }));
-
-if (process.platform === "win32")
-  console.log(
-    "Worker PATH",
-    Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() === "PATH")),
-  );

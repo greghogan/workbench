@@ -4,6 +4,7 @@ on:
     branches-ignore:
       - ci/publication-verification-**
       - ci/windows-diagnostics-**
+      - ci/macos-diagnostics-**
   pull_request: null
   workflow_dispatch:
     inputs:

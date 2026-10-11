@@ -224,3 +224,5 @@ preserves the previous references for review while current documents use the reo
 - `.github/workflows/publication.yml` separately selects Nix/Guix registry verification with package write authority.
 
 - `.github/workflows/windows-diagnostics.yml` temporarily verifies the native Windows job before the full matrix rerun.
+
+- `.github/workflows/macos-diagnostics.yml` temporarily verifies the native macOS job.

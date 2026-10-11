@@ -1,0 +1,186 @@
+name: macOS native verification
+on:
+  push:
+    branches:
+      - ci/macos-diagnostics-20261011
+permissions:
+  contents: read
+env:
+  GH_TOKEN: ${{ github.token }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  native:
+    name: ${{ matrix.os }} ${{ matrix.architecture }} / selected roots
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - path: .
+            os: macos
+            architecture: arm64
+            runner: macos-15
+            node: 26.11.1
+            python: ""
+            ruby: ""
+            php: ""
+            rust: ""
+            go: ""
+            llvm: ""
+            java: ""
+            paths:
+              - .
+              - examples/languages/typescript
+              - examples/languages/rust
+              - examples/languages/python
+              - examples/languages/c
+              - examples/languages/cpp
+              - examples/languages/go
+              - examples/languages/javascript
+              - examples/languages/java
+              - examples/languages/ruby
+              - examples/languages/php
+            msvc: true
+    steps:
+      - name: Preserve canonical text and skill symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.architecture }}
+      - name: Verify native runtime architecture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: node -e 'if (process.arch !== process.env.EXPECTED_ARCHITECTURE) throw new
+          Error("Expected " + process.env.EXPECTED_ARCHITECTURE + ", got " +
+          process.arch)'
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        if: matrix.msvc && runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Make room for LLVM and native build dependencies
+        if: runner.os == 'Linux'
+        run: >
+          # These hosted-runner SDKs are unused by the declared language roots.
+
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          /usr/local/.ghcup
+
+          df -h /
+      - name: Select isolated CI cache paths
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        run: node scripts/ci-cache-metrics.mjs start
+      - name: Reuse small native tool installations
+        if: steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+      - name: Reuse selected Rust toolchains
+        if: steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+      - name: Reuse package download stores
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+      - name: Reuse installed dependencies and compiled outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+      - name: Restore filtered LLVM installations
+        id: llvm-cache
+        if: steps.cache-plan.outputs.llvm-key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+      - name: Prepare native runtime build prerequisites
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: node scripts/ci-native-prerequisites.mjs
+      - name: Install and verify native tool installations
+        id: native-setup
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-run.mjs native-install
+      - name: Save verified filtered LLVM before project checks
+        if: steps.cache-plan.outputs.llvm-key != '' && steps.native-setup.conclusion ==
+          'success' && steps.llvm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+      - name: Run every installed root's configured native checks
+        id: native-checks
+        if: ${{ !cancelled() && steps.native-setup.outputs.roots != '' &&
+          fromJSON(steps.native-setup.outputs.roots)[0] != null }}
+        env:
+          CHECK_ROOTS: ${{ steps.native-setup.outputs.roots }}
+          WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha ||
+            github.event.before || 'HEAD' }}
+        run: node scripts/ci-run.mjs native-check
+      - name: Prepare and verify passing roots' local release artifacts
+        id: release-checks
+        if: ${{ !cancelled() && steps.native-checks.outputs.roots != '' &&
+          fromJSON(steps.native-checks.outputs.roots)[0] != null }}
+        env:
+          CHECK_ROOTS: ${{ steps.native-checks.outputs.roots }}
+        run: node scripts/ci-run.mjs release
+      - name: Retain verified release artifacts
+        if: ${{ !cancelled() && steps.release-checks.outputs.roots != '' &&
+          fromJSON(steps.release-checks.outputs.roots)[0] != null }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-release-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/release-artifacts/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain timing and coverage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-reports-${{ strategy.job-index }}
+          path: |
+            coverage/
+            examples/languages/*/coverage/
+            examples/frameworks/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Measure retained cache footprint
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Retain cache measurements
+        if: always() && steps.cache-plan.conclusion == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cache-measurement-native-${{ strategy.job-index || 'single' }}
+          path: ${{ runner.temp }}/workbench-ci/cache-measurement.json
+          if-no-files-found: error
+          retention-days: 14
