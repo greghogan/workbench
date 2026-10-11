@@ -2,11 +2,11 @@
   "date": "2026-10-11",
   "root_gate": {
     "passed": true,
-    "tests": 372,
+    "tests": 373,
     "files": 68,
     "checks": 13,
-    "job": "01a129bfd1727703b2df3b0d3d1e00ab",
-    "log": "/tmp/workbench-7-root-gate-r9.log"
+    "job": "01a129dfa97771e2be16bbefafdc306b",
+    "log": "/tmp/workbench-7-root-gate-r12.log"
   },
   "focused": {
     "passed": 25,
@@ -78,9 +78,9 @@
   "windows_native_followup": {
     "run": 38118139925,
     "revision": "f9f0136a0d05f1880c6e9296f90a0c170c99edc2",
-    "status": "all other language examples and release preparations passed; C/C++ dependency setup fixed; Windows CRT APIs and compiler-rt linkage under verification",
-    "log": "/tmp/workbench-7-windows-full-r5.log",
-    "latest_run": 38119981541
+    "status": "C complete gate and release preparation pass; C++ ordinary tests and all LTO modes pass; ASan dependency annotation mismatch corrected and under focused hosted verification",
+    "log": "/tmp/workbench-7-windows-cpp-r10.log",
+    "latest_run": 38120241914
   },
   "guix_first_hosted": {
     "passed": true,
@@ -121,5 +121,32 @@
     "job": "01a129c7e2f27ca2b1b4ccfab57337a3",
     "log": "/tmp/workbench-7-c-cpp-portability-r3.log",
     "platform": "linux-x64"
+  },
+  "hosted_verification_followup": {
+    "branch": "ci/draft-functionality-20261011",
+    "revision": "3d9bd4fe4fb86289e35005636f90817f322c75fe",
+    "run": 38120600146,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38120600146",
+    "status": "Linux x64, Linux ARM64, macOS, Nix Docker, and all compatibility jobs passed; Guix active; known Windows sanitizer and host Dev Container CLI corrections locally verified, final complete rerun pending"
+  },
+  "windows_sanitizer_followup": {
+    "run": 38121621077,
+    "revision": "2d94490cd51e3defdaf543610fefe79b147b3cee",
+    "status": "passed; normal and portable C++ address-sanitizer checks use matching dependency annotations, selected LLVM runtime DLLs, and release CRT with debug symbols",
+    "log": "/tmp/workbench-7-windows-sanitizer-r3.log"
+  },
+  "pruned_superseded_gcc_caches": {
+    "count": 6,
+    "compressed_bytes": 3766208776,
+    "inventory": "/tmp/workbench-7-pruned-gcc-caches.json"
+  },
+  "container_cli_isolation": {
+    "focused_passed": 28,
+    "job": "01a129dd7cef70e39e9a0bcdcb0bc647",
+    "log": "/tmp/workbench-7-container-isolation-build.log",
+    "status": "real sequential root and TypeScript Dev Container CI gates passed; owned test container and successful disposable checkout removed",
+    "passed": true,
+    "regression_job": "01a129ea86f574129ed5dbc4c3d68533",
+    "regression_log": "/tmp/workbench-7-devcontainer-sequence-r4.log"
   }
 }

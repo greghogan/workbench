@@ -211,3 +211,11 @@ explicitly skipped. All macOS example gates and release preparations passed sepa
 gate passes 372 tests and 13 checks, and both Linux C/C++ gates pass after the Windows portability corrections. Hosted
 Windows verification remains active. Temporary diagnostic workflows stay outside the primary checkout; the original
 index and review receipts remain unchanged.
+
+The next hosted run passes Linux x64, Linux ARM64, macOS, Nix Docker, and every compatibility job; Guix remains active.
+Windows C++ sanitizer checks pass in focused hosted verification after aligning dependency instrumentation, selecting
+the matching LLVM runtime, and using the release CRT with debug symbols. Dev Container checks exposed guest dependency
+links invalidating the host CLI; its locked installation now lives independently in the user cache. Focused isolation
+checks and the complete local gate pass (373 tests, 13 checks); sequential real-container verification passes for
+Workbench and TypeScript. A final full hosted rerun, cold/warm measurements, ADR-only selection, and registry
+publication verification remain.

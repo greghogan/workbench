@@ -1,8 +1,33 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { containerStartup, validateContainerOwnership } from "../src/devcontainers.ts";
+import { containerToolsDirectory } from "../src/native-tools.ts";
+
+test("host container CLI selection follows locked inputs independently of workspace package links", () => {
+  const temporary = mkdtempSync(join(tmpdir(), "workbench-container-tools-"));
+  try {
+    vi.stubEnv("WORKBENCH_CACHE_HOME", join(temporary, "cache"));
+    const checkout = join(temporary, "checkout");
+    mkdirSync(checkout);
+    for (const name of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".pnpmfile.cjs"])
+      writeFileSync(join(checkout, name), "locked fixture");
+    const selected = containerToolsDirectory(checkout);
+    expect(selected.startsWith(join(temporary, "cache/container-tools", `${process.platform}-${process.arch}`))).toBe(
+      true,
+    );
+    expect(existsSync(selected)).toBe(false);
+    mkdirSync(join(checkout, "node_modules"));
+    writeFileSync(join(checkout, "node_modules/.modules.yaml"), "guest package links");
+    expect(containerToolsDirectory(checkout)).toBe(selected);
+    writeFileSync(join(checkout, "pnpm-lock.yaml"), "new locked graph");
+    expect(containerToolsDirectory(checkout)).not.toBe(selected);
+  } finally {
+    vi.unstubAllEnvs();
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
 
 test("prebuilt workspaces require immutable images and managed builders reject inherited independent Features", () => {
   expect(() => validateContainerOwnership({ configuration: { image: "example:latest" } }, "native")).toThrow(/pinned/);

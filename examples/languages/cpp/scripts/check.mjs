@@ -46,6 +46,7 @@ function configure(directory, options = [], compiler = selectedCompiler) {
     directory,
     "--compiler",
     compiler,
+    ...(options.includes("-DWORKBENCH_SANITIZERS=ON") ? ["--sanitizers"] : []),
   ]);
   process.env.VCPKG_DISABLE_METRICS = "1";
   process.env.VCPKG_FORCE_SYSTEM_BINARIES = "1";
@@ -69,6 +70,9 @@ function configure(directory, options = [], compiler = selectedCompiler) {
       : []),
     `-DWORKBENCH_COMPILER_FAMILY=${compiler}`,
     `-DWORKBENCH_COMPILER_MINIMUM=${compiler === selectedCompiler ? (process.env.WORKBENCH_COMPILER_MINIMUM ?? "") : ""}`,
+    ...(process.platform === "win32" && options.includes("-DWORKBENCH_SANITIZERS=ON")
+      ? ["-DCMAKE_BUILD_TYPE=RelWithDebInfo"]
+      : []),
     ...options,
   ]);
 }

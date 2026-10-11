@@ -384,8 +384,12 @@ test("selection preserves user defaults and separates native LLVM from managed h
     );
     mkdirSync(location, { recursive: true });
     writeFileSync(join(location, ".workbench-artifact"), llvm.sha256);
+    const runtime = join(location, "lib/clang/23/lib/windows");
+    mkdirSync(runtime, { recursive: true });
     vi.stubEnv("CPATH", ["/gnu/store/managed/include", "/chosen/include"].join(delimiter));
-    expect(nativeEnvironment(root, distribution).CPATH).toBe("/chosen/include");
+    const selected = nativeEnvironment(root, distribution);
+    expect(selected.CPATH).toBe("/chosen/include");
+    expect(selected.PATH.split(delimiter).includes(runtime)).toBe(process.platform === "win32");
   }
   vi.stubEnv("WORKBENCH_DATA_HOME", "relative");
   expect(() => userDirectory("data")).toThrow(/absolute/);

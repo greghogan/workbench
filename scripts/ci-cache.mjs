@@ -251,7 +251,12 @@ output(
   ].join("\n"),
 );
 output("builds-key", `builds-v1-${platform}-${builds}`);
-output("builds-paths", ["builds", "dependencies", "go-build"].map((name) => join(cache, name)).join("\n"));
+output(
+  "builds-paths",
+  ["builds", "dependencies", "go-build", ...(target.environment === "devcontainer" ? ["container-tools"] : [])]
+    .map((name) => join(cache, name))
+    .join("\n"),
+);
 if (target.runtime === "gcc") {
   const gcc = plan.filter((entry) => entry.tool === "gcc");
   output("gcc-key", `gcc-v4-${platform}-${target.version}-${hash([policies(gcc), acquisitionCode])}`);
