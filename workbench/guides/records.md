@@ -166,8 +166,8 @@ every platform and must be absolute; feedback then lives in its `feedback` subdi
 automatically.
 
 Project records stay under `workbench/`, and acquired PDFs stay in the configured project library. User tool
-installations and caches follow the platform locations documented below; records remain project-owned. Only Linux
-execution has been verified locally; macOS and Windows coverage is configured in CI and awaits hosted results.
+installations and caches follow the platform locations documented below; records remain project-owned. Hosted native
+verification covers Linux x64/ARM64, macOS ARM64, and Windows x64.
 
 Citation records are one-item CSL YAML bibliographies. Their main purpose is to retain enough metadata and source URLs
 for a user to acquire papers that the project does not redistribute. Import metadata from an arXiv ID or DOI, fetch an

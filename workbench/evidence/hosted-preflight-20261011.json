@@ -2,11 +2,11 @@
   "date": "2026-10-11",
   "root_gate": {
     "passed": true,
-    "tests": 374,
+    "tests": 375,
     "files": 68,
     "checks": 13,
-    "job": "01a12a3120147fb2a51c4f3b08ac49c2",
-    "log": "/tmp/workbench-7-source-state-gate.log"
+    "job": "01a12a5196be7c90a48efcca8ad19685",
+    "log": "/tmp/workbench-7-windows-cache-final-gate-output.log"
   },
   "focused": {
     "passed": 25,
@@ -288,7 +288,7 @@
     "final_log": "/tmp/workbench-7-guix-final.log"
   },
   "publication_verification": {
-    "status": "active",
+    "status": "complete; both Nix and Guix published, pulled by digest, and verified for identity and offline behavior",
     "branch": "ci/publication-verification-20261011",
     "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
     "deployment": false,
@@ -310,7 +310,26 @@
         "deployed": false
       },
       "artifact": "/tmp/workbench-7-publication-nix/_temp/publication-evidence/nix.json"
-    }
+    },
+    "guix": {
+      "passed": true,
+      "job": 114430511924,
+      "evidence": {
+        "version": 1,
+        "profile": "go-guix-docker",
+        "revision": "af33536c26f63cfeaa47ddfe28aea1e577b01bcf",
+        "image": "ghcr.io/greghogan/workbench-ci-guix:ci-38126046951-1-af33536c26f6",
+        "digest": "ghcr.io/greghogan/workbench-ci-guix@sha256:e577b8f29833430b83d359a807a76c277a5cc9852cacf0a4c6bc02608cbce3d3",
+        "imageID": "sha256:f40d55910efec83a08d9d8b91663ff4e1fbd9d32dc373202baada53c64e21437",
+        "archiveSHA256": "9dec8bd876713fa0c7ccadf5f929819b1ca5608cd57983fd752a77bb34e4f003",
+        "verified": true,
+        "published": true,
+        "deployed": false
+      },
+      "artifact": "/tmp/workbench-7-publication-guix/_temp/publication-evidence/guix.json",
+      "source_clean": true
+    },
+    "passed": true
   },
   "publication_source_guard": {
     "local_passed": true,
@@ -320,7 +339,86 @@
     "log": "/tmp/workbench-7-source-state-gate.log",
     "behavior": "reject dirty, missing, or unknown source state before Docker or registry effects",
     "production_nix_receipt_clean": true,
-    "hosted_followup": "preparing affected-root verification"
+    "hosted_followup": {
+      "run": 38127320951,
+      "revision": "cd22791e5a2a6c9c0a41bf1916c7c1db56b3aea8",
+      "branch": "ci/draft-functionality-20261011",
+      "selection": "full matrix; two shared or unclassified inputs",
+      "status": "active",
+      "url": "https://github.com/greghogan/workbench/actions/runs/38127320951"
+    },
+    "production_guix_receipt_clean": true
   },
-  "cache_comparison": "workbench/evidence/hosted-cache-comparison-20261011.json"
+  "cache_comparison": "workbench/evidence/hosted-cache-comparison-20261011.json",
+  "windows_cache_restoration": {
+    "status": "cold and warm hosted setup/Python verification passed; full final matrix pending",
+    "failed_run": 38127320951,
+    "failed_job": 114434316045,
+    "failed_log": "/tmp/workbench-7-windows-guard-failure.log",
+    "cause": "GitHub Actions archive restoration does not preserve Windows junctions in pnpm installed dependencies and uv managed Python aliases.",
+    "change": "Retain verified SDKs and package downloads; rebuild Windows dependency and virtual-environment trees. Cache uv Python download archives rather than Windows installations; preserve compiled Go outputs.",
+    "local_gate": {
+      "passed": true,
+      "tests": 375,
+      "files": 68,
+      "checks": 13,
+      "job": "01a12a5196be7c90a48efcca8ad19685",
+      "log": "/tmp/workbench-7-windows-cache-final-gate-output.log"
+    },
+    "pruned_bad_build_cache_bytes": 328870834,
+    "run": 38128890118,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38128890118",
+    "revision": "fab3ad44090295a2681daaee38686616c8ab984c",
+    "cold": {
+      "passed": true,
+      "attempt": 1,
+      "job": 114438907930,
+      "log": "/tmp/workbench-7-windows-cache-cold.log"
+    },
+    "warm": {
+      "passed": true,
+      "attempt": 2,
+      "job": 114439200751,
+      "log": "/tmp/workbench-7-windows-cache-warm.log",
+      "restored": [
+        "tools-v7-win32-x64-3f5b1677f75540d2d153d781",
+        "package-managers-v1-win32-x64-210aaffc3e8284d9bd912d89",
+        "downloads-v2-win32-x64-e583c560fd3108955e590b07"
+      ],
+      "metrics": "/tmp/workbench-7-windows-cache-warm-metrics",
+      "metrics_artifact": 11698231156,
+      "measurement": {
+        "started": "2026-10-11T09:37:14.752Z",
+        "finished": "2026-10-11T09:37:52.816Z",
+        "elapsed_seconds": 38.064,
+        "groups": [
+          {
+            "name": "tools-paths",
+            "bytes": 168124030
+          },
+          {
+            "name": "package-managers-paths",
+            "bytes": 54429081
+          },
+          {
+            "name": "downloads-paths",
+            "bytes": 300962707
+          },
+          {
+            "name": "builds-paths",
+            "bytes": 0
+          },
+          {
+            "name": "guix-paths",
+            "bytes": 0
+          }
+        ]
+      }
+    },
+    "scope": [
+      "root/TypeScript/JavaScript/Python dependency setup",
+      "Python ordinary tests: 5 passed"
+    ],
+    "diagnostic_workflow": "temporary CI branch only"
+  }
 }

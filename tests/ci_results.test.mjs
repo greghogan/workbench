@@ -11,7 +11,7 @@ import {
   writeRunReport,
 } from "../scripts/ci-results.mjs";
 import { targetPhases, targetEnvironment } from "../scripts/ci-contract.mjs";
-import { ciCacheEnvironment, forwardedCIEnvironment } from "../scripts/ci-layout.mjs";
+import { ciBuildCachePaths, ciCacheEnvironment, forwardedCIEnvironment } from "../scripts/ci-layout.mjs";
 
 const temporary = [];
 afterEach(() => {
@@ -157,6 +157,17 @@ test("phase definitions and forwarded caches preserve runtime, compiler, release
       roles: ["test", "lto"],
     }).CHECK_ROLES,
   ).toBe('["test","lto"]');
+});
+
+test("Windows caches Python archives and rebuilds dependency trees containing junctions", () => {
+  const windows = ciCacheEnvironment("/cache", "/data", true, "win32");
+  expect(windows.UV_PYTHON_CACHE_DIR).toBe(join("/cache", "downloads", "uv-python"));
+  expect(ciBuildCachePaths("/cache", "native", "win32")).toEqual([join("/cache", "go-build")]);
+  const linux = ciCacheEnvironment("/cache", "/data", true, "linux");
+  expect(linux.UV_PYTHON_CACHE_DIR).toBeUndefined();
+  expect(ciBuildCachePaths("/cache", "devcontainer", "linux")).toEqual(
+    ["builds", "dependencies", "go-build", "container-tools"].map((name) => join("/cache", name)),
+  );
 });
 
 test("an unavailable target report directory does not cancel independent targets", () => {

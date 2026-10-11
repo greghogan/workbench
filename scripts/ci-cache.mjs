@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { ciCacheEnvironment } from "./ci-layout.mjs";
+import { ciBuildCachePaths, ciCacheEnvironment } from "./ci-layout.mjs";
 
 const distribution = resolve(import.meta.dirname, "..");
 const target = JSON.parse(process.env.CACHE_TARGET ?? "{}");
@@ -24,6 +24,7 @@ const inputs = (files) =>
   );
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 24);
 const platform = `${process.platform}-${process.arch}`;
+const windows = process.platform === "win32";
 // Inspection resolves the same artifacts, trust material and resource policy as installation.
 const inspect = (args, cwd = process.cwd()) =>
   JSON.parse(
@@ -101,7 +102,7 @@ const vcpkgPaths = [
   ...new Set(vcpkg.map(([, revision]) => join(cache, "toolchains", "vcpkg", revision.trim(), platform))),
 ];
 const pythonPaths =
-  target.runtime === "python" || (!target.runtime && !managed && inputs([".python-version"]).length)
+  !windows && (target.runtime === "python" || (!target.runtime && !managed && inputs([".python-version"]).length))
     ? [join(cache, "uv-python", "python")]
     : [];
 const devcontainerRuntimes =
@@ -211,7 +212,7 @@ const output = (key, value) => {
   appendFileSync(process.env.GITHUB_OUTPUT, `${key}<<WORKBENCH_CACHE\n${value}\nWORKBENCH_CACHE\n`);
 };
 if (ordinary.length || vcpkgPaths.length || pythonPaths.length || devcontainerRuntimePaths.length)
-  output("tools-key", `tools-v6-${platform}-${tools}`);
+  output("tools-key", `tools-v${windows ? 7 : 6}-${platform}-${tools}`);
 output(
   "tools-paths",
   [
@@ -236,12 +237,13 @@ if (managers.length || inputs(["Gemfile.lock"]).length) {
     ].join("\n"),
   );
 }
-output("downloads-key", `downloads-v1-${platform}-${downloads}`);
+output("downloads-key", `downloads-v${windows ? 2 : 1}-${platform}-${downloads}`);
 output(
   "downloads-paths",
   [
     ...["uv", "go-mod", "npm", "pip"].map((name) => join(cache, name)),
     join(cache, "downloads", "pnpm"),
+    ...(windows ? [join(cache, "downloads", "uv-python")] : []),
     join(cache, "downloads", "maven"),
     join(cache, "downloads", "composer"),
     join(cache, "downloads", "bundler"),
@@ -250,13 +252,8 @@ output(
     join(variables.CARGO_HOME, "git"),
   ].join("\n"),
 );
-output("builds-key", `builds-v1-${platform}-${builds}`);
-output(
-  "builds-paths",
-  ["builds", "dependencies", "go-build", ...(target.environment === "devcontainer" ? ["container-tools"] : [])]
-    .map((name) => join(cache, name))
-    .join("\n"),
-);
+output("builds-key", `builds-v${windows ? 2 : 1}-${platform}-${builds}`);
+output("builds-paths", ciBuildCachePaths(cache, target.environment).join("\n"));
 if (target.runtime === "gcc") {
   const gcc = plan.filter((entry) => entry.tool === "gcc");
   output("gcc-key", `gcc-v4-${platform}-${target.version}-${hash([policies(gcc), acquisitionCode])}`);

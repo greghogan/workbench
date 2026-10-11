@@ -102,6 +102,11 @@ invalidate the compiled-output cache without invalidating the download cache. Co
 artifacts required by their execution phases; package managers still validate reused downloads through their lockfiles
 and integrity checks.
 
+Windows jobs cache Python download archives and recreate managed Python installations, virtual environments, and pnpm
+dependency links. These installed trees contain Windows junctions that do not survive the Actions archive round trip.
+Verified SDKs, package download stores, and compiled Go outputs remain cached; Linux and macOS retain their installed
+dependency and build caches.
+
 The workflow does not raise GitHub's default 10 GB cache limit. Complete LLVM distributions, discarded source archives,
 and whole Nix/Guix stores are excluded from GitHub caches. Retained LLVM components compete with other caches for this
 allowance. New pins and cache misses require fresh setup. Standard GitHub-hosted runners are free for public

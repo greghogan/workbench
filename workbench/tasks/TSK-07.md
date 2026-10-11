@@ -20,9 +20,10 @@ depends_on:
 
 The complete hosted matrix passes on every configured native platform, compatibility selection, and managed environment.
 ADR-only hosted changes pass validation without example jobs. Cold/warm cache measurements confirm useful restoration
-and expose cache eviction under the full matrix. The separate Nix/Guix registry publication workflow is implemented and
-under verification on the exact passing revision. Temporary draft-document CI testing is authorized; document acceptance
-and deployment remain pending human review.
+and expose cache eviction under the full matrix. The separate Nix/Guix registry publication workflow passes on the exact
+passing revision. A subsequent Windows warm-cache restore failure is corrected locally and undergoing cold/warm hosted
+verification. Temporary draft-document CI testing is authorized; document acceptance and deployment remain pending human
+review.
 
 ## Progress
 
@@ -30,10 +31,12 @@ and deployment remain pending human review.
 - [x] Finish the approved implementation follow-ups and local verification before the next push.
 - [x] Verify the complete hosted OS/architecture and managed-environment matrix.
 - [x] Improve selected Rust and Dev Container tool caches; measure cold/warm runtime, restored bytes, and disk use.
-- [ ] Implement an explicitly selected publication workflow and test authorized GitHub Container Registry publication
+  - [x] Verify the corrected Windows cache layout on cold and restored-cache runs.
+  - [ ] Complete the full hosted matrix with the final cache correction.
+- [x] Implement an explicitly selected publication workflow and test authorized GitHub Container Registry publication
       and artifact identity.
   - [x] Verify Nix push, digest pull, image identity, and offline behavior.
-  - [ ] Verify Guix push, digest pull, image identity, and offline behavior.
+  - [x] Verify Guix push, digest pull, image identity, and offline behavior.
 
 ## Outcome
 
@@ -44,9 +47,9 @@ runtime/storage, useful caches, and explicit publication evidence under its sepa
 
 [Checks run 38122790825](https://github.com/greghogan/workbench/actions/runs/38122790825) passes all 34 jobs on revision
 `af33536c26f63cfeaa47ddfe28aea1e577b01bcf`. Native Linux x64/ARM64, macOS ARM64, Windows x64, every compatibility
-selection, Guix, Nix Docker, and every Dev Container root pass. The separately selected registry workflow is active on
-that exact revision. Nix/Guix pins and the primary checkout's staged index are unchanged. Earlier findings and
-verification history follow.
+selection, Guix, Nix Docker, and every Dev Container root pass. The separately selected registry workflow passes on that
+exact revision. A follow-up Windows warm-cache failure requires final cache restoration verification. Nix/Guix pins and
+the primary checkout's staged index are unchanged. Earlier findings and verification history follow.
 
 The C/C++ declarations now cover Clang's three-major window (21, 22, 23) and every upstream-maintained GCC branch (14,
 15, 16), with exact patch selections. ADR-14 distinguishes this Clang compatibility promise from upstream maintenance.
@@ -238,3 +241,18 @@ Publication receipt review identified a missing clean-source guard. The publishe
 state before Docker or registry effects; the actual Nix receipt is clean. The complete local gate passes 374 tests and
 all 13 checks after this correction. Additional affected-root hosted verification is being prepared while the Guix image
 build continues on the fully tested revision.
+
+Both Nix and Guix publication checks pass in
+[run 38126046951](https://github.com/greghogan/workbench/actions/runs/38126046951), including verified preparation,
+unique test tags, digest pulls, image identity, and offline behavior. Both source receipts are clean. The clean-source
+publisher guard passes local rejection tests.
+
+The subsequent full run exposed a Windows archive restoration defect: cached pnpm dependency junctions and uv Python
+aliases were unusable. Windows now retains verified SDKs, package download stores, Python download archives, and
+compiled Go outputs while recreating installed dependency and virtual-environment trees. The complete local gate passes
+375 tests and 13 checks; hosted cold/warm confirmation and a final full matrix remain pending.
+
+The focused Windows cache verification passes both cold and warm attempts in
+[run 38128890118](https://github.com/greghogan/workbench/actions/runs/38128890118). The warm attempt restores verified
+tools, package-manager bootstrap, and download stores, then recreates dependency links and Python installations
+successfully. Python tests pass on both attempts. Diagnostic workflows remain isolated from the primary checkout.
