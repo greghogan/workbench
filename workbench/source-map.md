@@ -176,6 +176,8 @@ preserves the previous references for review while current documents use the reo
 - `src/devcontainers.ts` adapts the locked Dev Container CLI with private startup scratch directories and cleanup;
   `.devcontainer` defines the workspace and its OS prerequisites.
 - `scripts/ci-cache.mjs` reuses selected verified tools, dependency downloads, compiled GCC, and Guix source history.
+- `scripts/ci-guix-bootstrap.mjs` and `scripts/ci-guix-bootstrap.scm` retain and import signed pinned Guix runtime
+  closures on disposable hosted runners.
 - `workbench/quality.json` declares coverage floors for Workbench TypeScript, including CLI subprocess execution.
 - `scripts/test-coverage.mjs`: combine Vitest and copied CLI coverage using the same AST converter and enforce unchanged
   floors.
@@ -222,3 +224,8 @@ preserves the previous references for review while current documents use the reo
 - `scripts/ci-cache-metrics.mjs` records cache footprint and elapsed verification-window evidence.
 - `scripts/ci-publish.mjs` verifies prepared image receipts, publishes selected CI tags, and checks registry pulls.
 - `.github/workflows/publication.yml` separately selects Nix/Guix registry verification with package write authority.
+- `src/offline-profiles.ts` prepares, verifies, and explicitly publishes offline development images and tracks input
+  identities in user-cache receipts.
+- `scripts/ci-image.mjs` and `scripts/ci-image.d.mts` share the authenticated native CI image recipe and platform checks.
+- `scripts/ci-gcc.mjs` executes hosted compiler phases inside the pinned GCC image without copying its toolchain.
+- `scripts/gcc-images.json` records exact Docker Official Image manifests and their authentication boundary.

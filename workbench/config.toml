@@ -72,6 +72,36 @@ builder = "guix"
 workspace = "devcontainer"
 container_config = ".devcontainer/guix/devcontainer.json"
 
+[[development.profiles]]
+name = "native-offline"
+builder = "native"
+workspace = "devcontainer"
+container_config = ".devcontainer/offline/native/devcontainer.json"
+[development.profiles.offline]
+path = "examples/languages/go"
+inputs = [".devcontainer/offline/native", "examples/languages/go/.go-version", "examples/languages/go/go.mod", "examples/languages/go/go.sum", "examples/languages/go/flake.nix", "examples/languages/go/flake.lock", "examples/languages/go/channels.scm", "examples/languages/go/manifest.scm", "examples/languages/go/scripts/offline.mjs", "package.json", ".node-version", ".tool-versions", "workbench/config.toml", "scripts", "bundle", "bin", "languages"]
+verify = ["node", "{workbench}/examples/languages/go/scripts/offline.mjs", "verify", "native"]
+
+[[development.profiles]]
+name = "nix-offline"
+builder = "nix"
+workspace = "devcontainer"
+container_config = ".devcontainer/offline/nix/devcontainer.json"
+[development.profiles.offline]
+path = "examples/languages/go"
+inputs = [".devcontainer/offline/nix", "examples/languages/go/.go-version", "examples/languages/go/go.mod", "examples/languages/go/go.sum", "examples/languages/go/flake.nix", "examples/languages/go/flake.lock", "examples/languages/go/channels.scm", "examples/languages/go/manifest.scm", "examples/languages/go/scripts/offline.mjs"]
+verify = ["node", "{workbench}/examples/languages/go/scripts/offline.mjs", "verify", "nix"]
+
+[[development.profiles]]
+name = "guix-offline"
+builder = "guix"
+workspace = "devcontainer"
+container_config = ".devcontainer/offline/guix/devcontainer.json"
+[development.profiles.offline]
+path = "examples/languages/go"
+inputs = [".devcontainer/offline/guix", "scripts/ci-guix-bootstrap.scm", "examples/languages/go/.go-version", "examples/languages/go/go.mod", "examples/languages/go/go.sum", "examples/languages/go/flake.nix", "examples/languages/go/flake.lock", "examples/languages/go/channels.scm", "examples/languages/go/manifest.scm", "examples/languages/go/scripts/offline.mjs"]
+verify = ["node", "{workbench}/examples/languages/go/scripts/offline.mjs", "verify", "guix"]
+
 [[release.profiles]]
 name = "go-native"
 path = "examples/languages/go"
@@ -152,3 +182,15 @@ format = "apptainer"
 platform = "linux-x64"
 prepare = [ "node", "scripts/package-managed.mjs", "guix", "apptainer", "{nix_image}" ]
 verify = [ "node", "{source}/scripts/verify-managed.mjs", "{artifact}", "guix", "apptainer", "{nix_image}", "{workbench}/.devcontainer/Dockerfile", "{source}/channels.scm" ]
+
+# Hosted retention controls; verification is identical for cached and reacquired tools.
+[ci.cache.artifacts]
+llvm = "download"
+clang = "download"
+rust = "cache"
+java = "download"
+node = "download"
+go = "download"
+cmake = "download"
+ninja = "download"
+uv = "download"

@@ -3,6 +3,11 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compilerCompatibilityRoles } from "./ci-contract.mjs";
 
+if (process.env.COMPILER === "gcc" && !process.env.WORKBENCH_GCC_IMAGE_VERSION) {
+  const { executeGCC } = await import("./ci-gcc.mjs");
+  executeGCC(process.argv[1], process.argv.slice(2));
+  process.exit(0);
+}
 const roots = JSON.parse(process.env.CHECK_ROOTS ?? "[]");
 if (!Array.isArray(roots) || !roots.length || roots.some((root) => typeof root !== "string" || !root))
   throw new Error("CHECK_ROOTS must list configured roots");
@@ -20,7 +25,8 @@ for (const [index, root] of roots.entries()) {
   console.log(`::group::${mode}: ${root}`);
   try {
     if (["native", "native-install", "native-check"].includes(mode)) {
-      if (mode !== "native-check") cli("tools", "install", "--path", root);
+      // Miri is an explicitly selected manual check, not part of the ordinary CI stage.
+      if (mode !== "native-check") cli("tools", "install", "--path", root, "--exclude-tool", "miri");
       if (mode !== "native-install") cli("checks", "run", "--stage", "ci", "--path", root, "--environment", "native");
     } else if (mode === "release") {
       cli("checks", "run", "--role", "release", "--path", root, "--environment", "native");
@@ -45,7 +51,15 @@ for (const [index, root] of roots.entries()) {
       );
     } else if (mode === "compiler" || mode === "compiler-install") {
       const selection = ["--compiler", process.env.COMPILER, "--compiler-version", process.env.COMPILER_VERSION];
-      if (mode === "compiler-install") cli("tools", "install", "--path", root, ...selection);
+      if (mode === "compiler-install")
+        cli(
+          "tools",
+          "install",
+          "--path",
+          root,
+          ...selection,
+          ...(process.env.WORKBENCH_GCC_IMAGE_VERSION ? ["--exclude-tool", "gcc"] : []),
+        );
       else {
         const roles = JSON.parse(process.env.CHECK_ROLES ?? "[]");
         if (!Array.isArray(roles) || !roles.length || roles.some((role) => !compilerCompatibilityRoles.includes(role)))

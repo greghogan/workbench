@@ -8,4 +8,5 @@ RUN apt-get update \
     && for key in /usr/share/guix/*.pub; do guix archive --authorize < "$key"; done \
     && groupadd --system guixbuild \
     && for number in 1 2 3 4; do useradd --system --gid guixbuild --groups guixbuild --home-dir /var/empty --shell /usr/sbin/nologin "guixbuilder${number}"; done
-CMD ["guix-daemon", "--build-users-group=guixbuild", "--disable-chroot"]
+# Avoid scanning Docker's potentially enormous descriptor limit on each child.
+CMD ["/bin/sh", "-c", "ulimit -n 65536; exec guix-daemon --build-users-group=guixbuild --disable-chroot"]

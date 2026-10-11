@@ -64,9 +64,9 @@ source changes. Selected tools were LLVM 23.1.2 (source commit `85ac560262434c9c
 preparation used PyPy 7.3.20 implementing Python 3.11.13; verification used Ubuntu's Python 3.12 inside the container.
 These interpreter selections did not change the retained LLVM bytes.
 
-Retained recipes start with the [selection recipe](../evidence/EXP-00/prepare.py) under `workbench/evidence/EXP-00`.
-These are experiment reproductions, not production installers. Copy them into disposable local storage before execution
-and adapt their recorded paths to that machine. The selection recipe is the reproducible transformation against the
+Retained recipes start with the [selection recipe](EXP-00/prepare.py) under `workbench/experiments/EXP-00`. These are
+experiment reproductions, not production installers. Copy them into disposable local storage before execution and adapt
+their recorded paths to that machine. The selection recipe is the reproducible transformation against the
 checksum-identified upstream archive; no compiler source patch was applied. Hashes of the tested recipes:
 
 | File            | SHA-256                                                            |

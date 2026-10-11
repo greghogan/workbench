@@ -24,9 +24,12 @@ on:
   release:
     types: [published]
 
-# Read-only API authentication avoids the shared unauthenticated attestation rate limit.
+# Shared authentication and cache compression settings.
 env:
+  # Read-only API authentication avoids the shared unauthenticated attestation rate limit.
   GH_TOKEN: ${{ github.token }}
+  # Applies to cache saves, including post-job saves. Retain Zstandard's default window.
+  ZSTD_CLEVEL: "9"
 
 # Pull request code runs with read-only repository access.
 permissions:
@@ -139,35 +142,41 @@ jobs:
         run: node scripts/ci-cache.mjs
       - name: Start cache and execution measurement
         run: node scripts/ci-cache-metrics.mjs start
-      - name: Reuse small native tool installations
+      # Prebuilt SDKs and small tools are downloaded and verified during setup.
+      - name: Reuse retained native tool installations
         if: steps.cache-plan.outputs.tools-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.tools-paths }}
           key: ${{ steps.cache-plan.outputs.tools-key }}
-      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+          restore-keys: ${{ steps.cache-plan.outputs.tools-restore-keys }}
+      # Retain only the selected stable/MSRV installations, never the entire rustup home.
       - name: Reuse selected Rust toolchains
         if: steps.cache-plan.outputs.rust-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.rust-paths }}
           key: ${{ steps.cache-plan.outputs.rust-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.rust-restore-keys }}
       - name: Reuse verified package-manager bootstrap
         if: steps.cache-plan.outputs.package-managers-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.package-managers-paths }}
           key: ${{ steps.cache-plan.outputs.package-managers-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.package-managers-restore-keys }}
       - name: Reuse package download stores
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.downloads-paths }}
           key: ${{ steps.cache-plan.outputs.downloads-key }}
-      - name: Reuse installed dependencies and compiled outputs
+          restore-keys: ${{ steps.cache-plan.outputs.downloads-restore-keys }}
+      - name: Reuse compiled outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.builds-paths }}
           key: ${{ steps.cache-plan.outputs.builds-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.builds-restore-keys }}
 
       # Restore compact compiler installations separately from dependency/build caches.
       - name: Restore filtered LLVM installations
@@ -177,6 +186,7 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.llvm-restore-keys }}
 
       # Authenticate/install tools before using or saving their filtered installations.
       # Ruby/PHP source builds and Ruby native gems use the runner's development SDK.
@@ -284,35 +294,41 @@ jobs:
         run: node scripts/ci-cache.mjs
       - name: Start cache and execution measurement
         run: node scripts/ci-cache-metrics.mjs start
-      - name: Reuse small native tool installations
+      # Prebuilt SDKs and small tools are downloaded and verified during setup.
+      - name: Reuse retained native tool installations
         if: steps.cache-plan.outputs.tools-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.tools-paths }}
           key: ${{ steps.cache-plan.outputs.tools-key }}
-      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+          restore-keys: ${{ steps.cache-plan.outputs.tools-restore-keys }}
+      # Retain only the selected stable/MSRV installations, never the entire rustup home.
       - name: Reuse selected Rust toolchains
         if: steps.cache-plan.outputs.rust-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.rust-paths }}
           key: ${{ steps.cache-plan.outputs.rust-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.rust-restore-keys }}
       - name: Reuse verified package-manager bootstrap
         if: steps.cache-plan.outputs.package-managers-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.package-managers-paths }}
           key: ${{ steps.cache-plan.outputs.package-managers-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.package-managers-restore-keys }}
       - name: Reuse package download stores
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.downloads-paths }}
           key: ${{ steps.cache-plan.outputs.downloads-key }}
-      - name: Reuse installed dependencies and compiled outputs
+          restore-keys: ${{ steps.cache-plan.outputs.downloads-restore-keys }}
+      - name: Reuse compiled outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.builds-paths }}
           key: ${{ steps.cache-plan.outputs.builds-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.builds-restore-keys }}
 
       # LLVM is cached independently so container checks reuse the native SDK archive.
       - name: Reuse filtered LLVM installations
@@ -321,6 +337,7 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.llvm-restore-keys }}
 
       # Enter the workspace only after restoring the selected shared caches.
       - name: Install the locked Dev Container CLI
@@ -384,35 +401,41 @@ jobs:
         run: node scripts/ci-cache.mjs
       - name: Start cache and execution measurement
         run: node scripts/ci-cache-metrics.mjs start
-      - name: Reuse small native tool installations
+      # Prebuilt SDKs and small tools are downloaded and verified during setup.
+      - name: Reuse retained native tool installations
         if: steps.cache-plan.outputs.tools-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.tools-paths }}
           key: ${{ steps.cache-plan.outputs.tools-key }}
-      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+          restore-keys: ${{ steps.cache-plan.outputs.tools-restore-keys }}
+      # Retain only the selected stable/MSRV installations, never the entire rustup home.
       - name: Reuse selected Rust toolchains
         if: steps.cache-plan.outputs.rust-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.rust-paths }}
           key: ${{ steps.cache-plan.outputs.rust-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.rust-restore-keys }}
       - name: Reuse verified package-manager bootstrap
         if: steps.cache-plan.outputs.package-managers-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.package-managers-paths }}
           key: ${{ steps.cache-plan.outputs.package-managers-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.package-managers-restore-keys }}
       - name: Reuse package download stores
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.downloads-paths }}
           key: ${{ steps.cache-plan.outputs.downloads-key }}
-      - name: Reuse installed dependencies and compiled outputs
+          restore-keys: ${{ steps.cache-plan.outputs.downloads-restore-keys }}
+      - name: Reuse compiled outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.builds-paths }}
           key: ${{ steps.cache-plan.outputs.builds-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.builds-restore-keys }}
 
       # Ruby/PHP source builds and Ruby native gems use the runner's development SDK.
       - name: Prepare native runtime build prerequisites
@@ -442,15 +465,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
 
-      # GCC and LLVM use independent installation caches; GCC builds are expensive.
-      - name: Restore the compiled GCC installation
-        id: gcc-cache
-        if: matrix.runtime == 'gcc'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.cache-plan.outputs.gcc-path }}
-          key: ${{ steps.cache-plan.outputs.gcc-key }}
-
       # Restore compact compiler installations separately from dependency/build caches.
       - name: Restore filtered LLVM installations
         id: llvm-cache
@@ -459,6 +473,7 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.llvm-paths }}
           key: ${{ steps.cache-plan.outputs.llvm-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.llvm-restore-keys }}
 
       # Older Clang versions do not repeat the development LLVM installation in their archive.
       - name: Restore the selected older Clang installation
@@ -468,6 +483,7 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.clang-paths }}
           key: ${{ steps.cache-plan.outputs.clang-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.clang-restore-keys }}
 
       # Verify the selected compiler before project tests or installation-cache writes.
       - name: Install and verify LLVM and the selected compatibility compiler
@@ -480,13 +496,7 @@ jobs:
           CHECK_ROLES: ${{ toJSON(matrix.roles) }}
         run: node scripts/ci-run.mjs compiler-install
 
-      # Cache verified compiler setup before tests so failures do not discard that work.
-      - name: Save the verified GCC installation before project checks
-        if: matrix.runtime == 'gcc' && steps.compiler-setup.conclusion == 'success' && steps.gcc-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.cache-plan.outputs.gcc-path }}
-          key: ${{ steps.cache-plan.outputs.gcc-key }}
+      # Retain verified compiler setup before project tests. GCC executes in its pinned image.
       - name: Save verified filtered LLVM before compatibility checks
         if: steps.cache-plan.outputs.llvm-key != '' && steps.compiler-setup.conclusion == 'success' && steps.llvm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -558,35 +568,41 @@ jobs:
         run: node scripts/ci-cache.mjs
       - name: Start cache and execution measurement
         run: node scripts/ci-cache-metrics.mjs start
-      - name: Reuse small native tool installations
+      # Prebuilt SDKs and small tools are downloaded and verified during setup.
+      - name: Reuse retained native tool installations
         if: steps.cache-plan.outputs.tools-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.tools-paths }}
           key: ${{ steps.cache-plan.outputs.tools-key }}
-      # Retain only the selected stable/MSRV/Miri installations, never the entire rustup home.
+          restore-keys: ${{ steps.cache-plan.outputs.tools-restore-keys }}
+      # Retain only the selected stable/MSRV installations, never the entire rustup home.
       - name: Reuse selected Rust toolchains
         if: steps.cache-plan.outputs.rust-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.rust-paths }}
           key: ${{ steps.cache-plan.outputs.rust-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.rust-restore-keys }}
       - name: Reuse verified package-manager bootstrap
         if: steps.cache-plan.outputs.package-managers-key != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.package-managers-paths }}
           key: ${{ steps.cache-plan.outputs.package-managers-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.package-managers-restore-keys }}
       - name: Reuse package download stores
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.downloads-paths }}
           key: ${{ steps.cache-plan.outputs.downloads-key }}
-      - name: Reuse installed dependencies and compiled outputs
+          restore-keys: ${{ steps.cache-plan.outputs.downloads-restore-keys }}
+      - name: Reuse compiled outputs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.cache-plan.outputs.builds-paths }}
           key: ${{ steps.cache-plan.outputs.builds-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.builds-restore-keys }}
 
       # Bootstrap Guix, then restore authenticated source history for pinned channels.
       - name: Install Guix bootstrap
@@ -609,6 +625,30 @@ jobs:
         with:
           path: ${{ steps.cache-plan.outputs.guix-paths }}
           key: ${{ steps.cache-plan.outputs.guix-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.guix-restore-keys }}
+
+      # Import only the pinned Guix runtime closure, signed by its producing runner.
+      # GitHub cache access controls are the trust boundary for this cached build.
+      - name: Restore compiled Guix bootstrap closure
+        id: guix-bootstrap-cache
+        if: matrix.environment == 'guix'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-bootstrap-path }}
+          key: ${{ steps.cache-plan.outputs.guix-bootstrap-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.guix-bootstrap-restore-keys }}
+      - name: Verify and prepare pinned Guix bootstrap
+        id: guix-bootstrap
+        if: matrix.environment == 'guix'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-guix-bootstrap.mjs
+      - name: Save compiled Guix bootstrap closure
+        if: matrix.environment == 'guix' && steps.guix-bootstrap.conclusion == 'success' && steps.guix-bootstrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.guix-bootstrap-path }}
+          key: ${{ steps.cache-plan.outputs.guix-bootstrap-key }}
 
       # Run complete configured suites inside each root's declared environment.
       - name: Run every root in its own pinned environment

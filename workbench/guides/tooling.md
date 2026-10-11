@@ -64,6 +64,10 @@ several executables (LLVM), or only libraries (the private LLVM runtime); its pa
 name. New executable tool packages need declared probes. Probes use the verified installation directly, allowing
 contained upstream executable symlinks, and report execution or version failures separately from acquisition failures.
 
+`--exclude-tool NAME` omits a tool from installation or inspection and can be repeated. It cannot be combined with
+`--tool`; toolchain checks still enforce their required tools. Ordinary CI excludes the optional Miri installation; full
+development setup includes it, and `--tool miri` installs it explicitly.
+
 The bootstrap supplies launchers for nested package scripts too, preserving the selected package manager and Node
 runtime without requiring a global package-manager installation.
 

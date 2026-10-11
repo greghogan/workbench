@@ -7,6 +7,7 @@ export interface DevelopmentProfile {
   builder: Builder;
   workspace: "host" | "devcontainer";
   container_config?: string;
+  offline?: { path: string; inputs: string[]; verify: string[] };
 }
 export interface ReleaseProfile {
   name: string;
@@ -47,7 +48,7 @@ function fields(profile: Record<string, unknown>, allowed: string[], context: st
 
 export function validateDevelopmentProfiles(value: unknown, context: string): void {
   for (const profile of profiles(value, context)) {
-    fields(profile, ["name", "builder", "workspace", "container_config"], context);
+    fields(profile, ["name", "builder", "workspace", "container_config", "offline"], context);
     if (profile.workspace !== "host" && profile.workspace !== "devcontainer")
       throw new InvalidInput(`${context}: ${String(profile.name)}: workspace must be host or devcontainer`);
     if (profile.workspace === "devcontainer") {
@@ -58,6 +59,24 @@ export function validateDevelopmentProfiles(value: unknown, context: string): vo
         throw new InvalidInput(`${context}: container_config must be JSON`);
     } else if (profile.container_config !== undefined)
       throw new InvalidInput(`${context}: container_config requires workspace = 'devcontainer'`);
+    if (profile.offline !== undefined) {
+      if (profile.workspace !== "devcontainer")
+        throw new InvalidInput(`${context}: offline requires a Dev Container workspace`);
+      if (!profile.offline || typeof profile.offline !== "object" || Array.isArray(profile.offline))
+        throw new InvalidInput(`${context}: offline must be a table`);
+      const offline = profile.offline as Record<string, unknown>;
+      fields(offline, ["path", "inputs", "verify"], context);
+      if (typeof offline.path !== "string") throw new InvalidInput(`${context}: offline.path is required`);
+      relativePath(offline.path, context, true);
+      for (const key of ["inputs", "verify"])
+        if (
+          !Array.isArray(offline[key]) ||
+          !(offline[key] as unknown[]).length ||
+          (offline[key] as unknown[]).some((part) => typeof part !== "string" || !part.trim() || part.includes("\0"))
+        )
+          throw new InvalidInput(`${context}: offline.${key} needs a nonempty string array`);
+      for (const path of offline.inputs as string[]) relativePath(path, context);
+    }
   }
 }
 

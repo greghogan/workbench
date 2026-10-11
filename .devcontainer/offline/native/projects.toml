@@ -1,0 +1,7 @@
+[[project]]
+id = "reference"
+path = "."
+
+[[language_root]]
+language = "go"
+path = "examples/languages/go"

@@ -28,6 +28,10 @@ Isolate untrusted changes, use read-only repository permissions and immutable ac
 Keep failures visible without canceling independent jobs. Verification neither publishes releases nor changes pins. Keep
 exact matrices, installation steps, notification settings, and cache mechanics in configuration and documentation.
 
+Projects may select hosted artifact retention or verified reacquisition independently of tool pins. Retention changes
+neither acquisition verification nor required checks. Execute compiler compatibility images in their own pinned OS
+rather than transplanting compiler binaries; local and hosted execution share the image recipe.
+
 Provide a Linux x64 rehearsal through the CLI and Makefile, defaulting to every configured Linux x64 target with
 explicit subset selection. Share resolved checks, compatibility targets, and standalone release verification with hosted
 CI. Isolate native and compatibility execution in containers; use configured launchers for managed targets. Expose

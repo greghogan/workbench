@@ -197,6 +197,23 @@ function wrapped(
     for (const file of ["channels.scm", "manifest.scm"]) {
       if (!existsSync(join(directory, file))) throw new Error(`${directory}: Guix check environment needs '${file}'`);
     }
+    if (process.env.WORKBENCH_OFFLINE === "1") {
+      if (process.env.WORKBENCH_DEVCONTAINER !== "1")
+        throw new Error("Offline Guix execution requires the prepared container");
+      const profile = required(
+        process.env.WORKBENCH_GUIX_TIME_MACHINE_PROFILE,
+        "Offline Guix image must declare its retained time-machine profile",
+      );
+      return [
+        profile + "/bin/guix",
+        "shell",
+        ...builderCPUArguments("guix", cpus),
+        "-m",
+        "manifest.scm",
+        "--",
+        ...command,
+      ];
+    }
     return [
       ...(sharedDistribution ? ["env", "WORKBENCH_DISTRIBUTION_MATERIALIZED=1"] : []),
       "guix",
@@ -321,14 +338,13 @@ function wrapped(
     ...builderCPUArguments("nix", cpus),
     "--extra-experimental-features",
     "nix-command flakes",
+    ...(process.env.WORKBENCH_OFFLINE === "1" ? ["--offline"] : []),
     "develop",
     `path:${directory}`,
     "--no-update-lock-file",
-    "--ignore-environment",
-    "--keep",
-    "HOME",
-    "--keep",
-    "WORKBENCH_PROJECT_ROOT",
+    ...(process.env.WORKBENCH_OFFLINE === "1"
+      ? []
+      : ["--ignore-environment", "--keep", "HOME", "--keep", "WORKBENCH_PROJECT_ROOT"]),
     "--command",
     ...command,
   ];

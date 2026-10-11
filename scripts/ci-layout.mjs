@@ -26,12 +26,14 @@ export function ciCacheEnvironment(
   };
 }
 
-/** Windows junctions in installed dependency/venv trees do not survive the Actions archive round trip. */
+/** Recreate installed dependencies from download stores; retain only reusable compiled outputs.
+ * Windows build trees contain junctions that do not survive the Actions archive round trip.
+ */
 export function ciBuildCachePaths(cache, environment, platform = process.platform) {
   const directories =
     platform === "win32"
       ? ["go-build"]
-      : ["builds", "dependencies", "go-build", ...(environment === "devcontainer" ? ["container-tools"] : [])];
+      : ["builds", "go-build", ...(environment === "devcontainer" ? ["container-tools"] : [])];
   return directories.map((name) => join(cache, name));
 }
 

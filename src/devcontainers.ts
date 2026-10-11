@@ -12,6 +12,7 @@ import { forwardedCIEnvironment } from "../scripts/ci-layout.mjs";
 import { selectedDevelopmentProfile } from "./environments.js";
 import { ownedPath } from "./paths.js";
 import { executionEnvironment } from "./execution-resources.js";
+import { preparedOfflineProfile, validateOfflineDefinition } from "./offline-profiles.js";
 
 interface ContainerConfiguration {
   configuration?: { image?: string; features?: Record<string, unknown>; mounts?: unknown[] };
@@ -159,7 +160,28 @@ export async function executeDevcontainer(root: string, directory: string, comma
     ),
   ) as ContainerConfiguration;
   validateContainerOwnership(configured, builder);
-  const temporary = sharedPin ? mkdtempSync(join(tmpdir(), "workbench-container-config-")) : undefined;
+  const offline = profile?.offline ? preparedOfflineProfile(root, profile) : undefined;
+  if (
+    profile?.offline &&
+    subdirectory !== (profile.offline.path === "." ? "" : profile.offline.path.split("/").join(sep))
+  )
+    throw new Error(
+      `Offline profile '${profile.name}' targets '${profile.offline.path}'; select that root with --path`,
+    );
+  if (offline && root.includes(",")) throw new Error("Docker workspace paths cannot contain commas");
+  if (offline) {
+    validateOfflineDefinition(configured.configuration ?? {});
+    // Fail before the upstream CLI can try pulling a missing local image ID.
+    try {
+      execute("docker", ["image", "inspect", offline.image], { env, capture: true });
+    } catch (cause) {
+      throw new Error(
+        "Prepared offline image is unavailable locally; prepare the profile again or pull its recorded registry digest",
+        { cause },
+      );
+    }
+  }
+  const temporary = sharedPin || offline ? mkdtempSync(join(tmpdir(), "workbench-container-config-")) : undefined;
   try {
     const override: string[] = [];
     if (temporary) {
@@ -173,9 +195,18 @@ export async function executeDevcontainer(root: string, directory: string, comma
         path,
         JSON.stringify({
           ...configured.configuration,
+          ...(offline
+            ? {
+                build: undefined,
+                image: offline.image,
+                updateRemoteUserUID: false,
+                workspaceMount: `source=${root},target=${(configured.configuration as { workspaceFolder?: string }).workspaceFolder ?? "/workbench"},type=bind`,
+                runArgs: [...((configured.configuration as { runArgs?: string[] }).runArgs ?? []), "--network=none"],
+              }
+            : {}),
           mounts: [
             ...(configured.configuration.mounts ?? []),
-            `type=bind,source=${distribution},target=${distribution},readonly`,
+            ...(sharedPin ? [`type=bind,source=${distribution},target=${distribution},readonly`] : []),
           ],
         }),
       );
@@ -184,13 +215,16 @@ export async function executeDevcontainer(root: string, directory: string, comma
     const builds = buildPaths(root, directory, "devcontainer");
     const rehearsal = process.env.WORKBENCH_CI_DOCKER !== undefined;
     const ci = rehearsal || process.env.GITHUB_ACTIONS === "true";
-    const caches = ci
-      ? [...new Set([userDirectory("cache"), userDirectory("data")])]
-      : builds.external
-        ? [resolve(builds.roots, ".."), resolve(builds.dependencyRoots, ".."), builds.pnpmStore]
-        : [];
+    const caches = offline
+      ? []
+      : ci
+        ? [...new Set([userDirectory("cache"), userDirectory("data")])]
+        : builds.external
+          ? [resolve(builds.roots, ".."), resolve(builds.dependencyRoots, ".."), builds.pnpmStore]
+          : [];
     const runtime = [
-      ...forwardedCIEnvironment(ci ? env : executionEnvironment(root)),
+      ...forwardedCIEnvironment(ci && !offline ? env : executionEnvironment(root)),
+      ...(offline ? ["--remote-env", "WORKBENCH_OFFLINE=1"] : []),
       ...(sharedPin ? ["--remote-env", "WORKBENCH_DISTRIBUTION_MATERIALIZED=1"] : []),
     ];
     if (sharedPin && distribution.includes(","))
@@ -226,6 +260,25 @@ export async function executeDevcontainer(root: string, directory: string, comma
     const mounts = JSON.parse(
       execute("docker", ["inspect", "--format", "{{json .Mounts}}", result.containerId], { env, capture: true }),
     ) as { Source?: string; Destination?: string; RW?: boolean }[];
+    if (offline) {
+      const actual = JSON.parse(
+        execute("docker", ["inspect", "--format", "{{json .}}", result.containerId], { env, capture: true }),
+      ) as { Image: string; HostConfig: { NetworkMode: string } };
+      if (actual.Image !== offline.image || actual.HostConfig.NetworkMode !== "none")
+        throw new Error(
+          "Existing Dev Container does not use the prepared offline image and disabled network; preserve active work and reopen it explicitly",
+        );
+      if (
+        mounts.some(
+          (mount) =>
+            !(mount.Source === root && mount.Destination === result.remoteWorkspaceFolder) &&
+            !(sharedPin && mount.Source === distribution && mount.Destination === distribution && !mount.RW),
+        )
+      )
+        throw new Error(
+          "Offline Dev Container has unexpected host mounts; preserve active work and reopen it explicitly",
+        );
+    }
     if (
       caches.some((cache) => !mounts.some((mount) => mount.Source === cache && mount.Destination === cache && mount.RW))
     )
@@ -259,9 +312,8 @@ export async function executeDevcontainer(root: string, directory: string, comma
         "--remote-env",
         "WORKBENCH_DEVCONTAINER=1",
         "--remote-env",
-        `WORKBENCH_STORAGE_EXTERNAL=${String(builds.external)}`,
-        "--remote-env",
-        `WORKBENCH_STORAGE_ROOT=${builds.storageRoot}`,
+        `WORKBENCH_STORAGE_EXTERNAL=${String(offline ? false : builds.external)}`,
+        ...(offline ? [] : ["--remote-env", `WORKBENCH_STORAGE_ROOT=${builds.storageRoot}`]),
         "--remote-env",
         `WORKBENCH_CONTAINER_CHECKOUT=${builds.identity.checkout}`,
         "--remote-env",

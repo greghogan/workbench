@@ -1,0 +1,18 @@
+{
+  "name": "Workbench offline nix",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../../..",
+    "options": ["--network=host"]
+  },
+  "remoteUser": "workbench",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1"
+  },
+  "overrideCommand": false,
+  "remoteEnv": {
+    "NIX_REMOTE": "daemon"
+  }
+}

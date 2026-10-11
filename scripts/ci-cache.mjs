@@ -8,6 +8,11 @@ import { ciBuildCachePaths, ciCacheEnvironment } from "./ci-layout.mjs";
 const distribution = resolve(import.meta.dirname, "..");
 const target = JSON.parse(process.env.CACHE_TARGET ?? "{}");
 if (process.env.CHECK_CACHE_ENVIRONMENT) target.environment = process.env.CHECK_CACHE_ENVIRONMENT;
+if (target.runtime === "gcc" && !process.env.WORKBENCH_GCC_IMAGE_VERSION) {
+  const { executeGCC } = await import("./ci-gcc.mjs");
+  executeGCC(process.argv[1]);
+  process.exit(0);
+}
 const roots = target.paths ?? ["."];
 const base = join(process.env.RUNNER_TEMP, "workbench-ci");
 const data = join(base, "data");
@@ -23,8 +28,37 @@ const inputs = (files) =>
     }),
   );
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 24);
+// An installed artifact depends on its pin, not which roots declare the same pin.
+const pinInputs = (files) =>
+  [...new Set(inputs(files).map(([path, value]) => JSON.stringify([basename(path), value.trim()])))].sort();
 const platform = `${process.platform}-${process.arch}`;
 const windows = process.platform === "win32";
+// Reacquire these prebuilt tools through the verified installer on each hosted job.
+// Keep local reuse and reuse between roots within the job; reserve Actions storage
+// for expensive builds rather than prebuilt SDK installations.
+const redownload = new Set([
+  "llvm",
+  "clang",
+  "java",
+  "node",
+  "go",
+  "cmake",
+  "ninja",
+  "uv",
+  "shfmt",
+  "shellcheck",
+  "actionlint",
+  "cargo-nextest",
+  "cargo-llvm-cov",
+]);
+// Project policy controls hosted retention only; installers still reuse verified local files.
+const configuredCache = execFileSync(
+  process.execPath,
+  [join(distribution, "bin/workbench.mjs"), "config", "get", "ci.cache", "--scope", "project"],
+  { encoding: "utf8" },
+).trim();
+const retention = configuredCache === "<unset>" ? {} : (JSON.parse(configuredCache).artifacts ?? {});
+const retained = (tool) => (retention[tool] ? retention[tool] === "cache" : !redownload.has(tool));
 // Inspection resolves the same artifacts, trust material and resource policy as installation.
 const inspect = (args, cwd = process.cwd()) =>
   JSON.parse(
@@ -43,7 +77,7 @@ const plan =
   runtimeOnly || managed
     ? []
     : roots
-        .flatMap((root) => inspect(["tools", "--json", "--path", root, ...selection]))
+        .flatMap((root) => inspect(["tools", "--json", "--path", root, "--exclude-tool", "miri", ...selection]))
         .filter((entry) =>
           target.runtime === "python"
             ? entry.tool === "uv"
@@ -72,6 +106,7 @@ const ordinary = plan.filter(
   (entry) =>
     typeof entry.directory === "string" &&
     !entry.filtered &&
+    retained(entry.tool) &&
     !["llvm-runtime", "llvm-xml-runtime", "gcc"].includes(entry.tool) &&
     (target.runtime !== "python" || entry.tool === "uv"),
 );
@@ -97,10 +132,10 @@ const acquisitionCode = sourceInputs([
   "src/artifact-policy.ts",
 ]);
 const vcpkg =
-  (target.runtime && !["clang", "gcc"].includes(target.runtime)) || managed ? [] : inputs([".vcpkg-version"]);
-const vcpkgPaths = [
-  ...new Set(vcpkg.map(([, revision]) => join(cache, "toolchains", "vcpkg", revision.trim(), platform))),
-];
+  (target.runtime && !["clang", "gcc"].includes(target.runtime)) || managed
+    ? []
+    : [...new Set(inputs([".vcpkg-version"]).map(([, revision]) => revision.trim()))].sort();
+const vcpkgPaths = [...new Set(vcpkg.map((revision) => join(cache, "toolchains", "vcpkg", revision, platform)))];
 const pythonPaths =
   !windows && (target.runtime === "python" || (!target.runtime && !managed && inputs([".python-version"]).length))
     ? [join(cache, "uv-python", "python")]
@@ -111,30 +146,31 @@ const devcontainerRuntimes =
         .flatMap((root) => inspect(["tools", "--json", "--path", root]))
         .filter((entry) => !["rust", "miri", "python"].includes(entry.tool))
     : [];
+const cachedDevcontainerRuntimes = devcontainerRuntimes.filter((entry) => retained(entry.tool));
 // Guest OS identities are resolved after startup; retain only selected tool versions across those identities.
 const devcontainerRuntimePaths = [
   ...new Set(
-    devcontainerRuntimes
+    cachedDevcontainerRuntimes
       .filter((entry) => !entry.filtered && !["llvm-runtime", "llvm-xml-runtime"].includes(entry.tool))
       .map((entry) => join(cache, "toolchains", entry.tool, entry.version)),
   ),
-];
+].sort();
 const tools = hash([
-  policies(devcontainerRuntimes),
+  policies(cachedDevcontainerRuntimes),
   target.environment === "devcontainer"
     ? [".devcontainer/Dockerfile", ".devcontainer/devcontainer.json"]
         .filter((file) => existsSync(file))
         .map((file) => [file, readFileSync(file, "utf8")])
     : [],
   devcontainerRuntimePaths,
-  inputs([".ruby-version", ".php-version"]),
-  devcontainerRuntimes.some((entry) => entry.filtered) ? sourceInputs(["src/filtered-artifacts.ts"]) : [],
+  pinInputs([".ruby-version", ".php-version"]),
+  cachedDevcontainerRuntimes.some((entry) => entry.filtered) ? sourceInputs(["src/filtered-artifacts.ts"]) : [],
   policies(ordinary),
   acquisitionCode,
   vcpkg,
   vcpkg.length ? sourceInputs(["src/vcpkg.ts"]) : [],
   pythonPaths.length
-    ? [inputs([".python-version"]), target.runtime === "python" ? target.version : undefined]
+    ? [pinInputs([".python-version"]), target.runtime === "python" ? target.version : undefined]
     : undefined,
 ]);
 const managers = roots
@@ -183,13 +219,15 @@ const manifests = inputs([
 // Installer edits and runtime patch selections must not invalidate those stores.
 const downloads = hash(manifests);
 const builds = hash([
+  target.runtime === "gcc"
+    ? sourceInputs(["scripts/gcc-images.json", "scripts/ci-image.mjs", "scripts/ci-linux/Dockerfile"])
+    : [],
   manifests,
   inputs([
     "CMakeLists.txt",
     ".llvm-version",
     ".gcc-version",
     "rust-toolchain.toml",
-    "rust-toolchain-miri.toml",
     ".python-version",
     ".go-version",
     ".node-version",
@@ -201,6 +239,8 @@ const builds = hash([
   ]),
   target.environment ? inputs(["flake.nix", "flake.lock", "channels.scm", "manifest.scm"]) : undefined,
   readFileSync("workbench/projects.toml", "utf8"),
+  // Redownloaded guest tools still determine compiled-output compatibility.
+  policies(devcontainerRuntimes),
   policies(plan),
   acquisitionCode,
   sourceInputs(["src/builds.ts"]),
@@ -211,12 +251,21 @@ const builds = hash([
   inputs([".devcontainer/devcontainer.json", ".devcontainer/Dockerfile"]),
 ]);
 const measuredPlan = {};
+// Cache entries are immutable: changing the encoder level must create a new identity.
+const compressionLevel = process.env.ZSTD_CLEVEL ?? "3";
+if (!/^(?:[1-9]|1[0-9])$/.test(compressionLevel)) throw new Error("ZSTD_CLEVEL must be an integer from 1 to 19");
 const output = (key, value) => {
+  if (key.endsWith("-key")) {
+    // Reuse identical contents saved with an older compression policy before saving the new key.
+    output(key.replace(/-key$/, "-restore-keys"), value);
+    value += `-zstd${compressionLevel}`;
+  }
   measuredPlan[key] = value;
   appendFileSync(process.env.GITHUB_OUTPUT, `${key}<<WORKBENCH_CACHE\n${value}\nWORKBENCH_CACHE\n`);
 };
 if (ordinary.length || vcpkgPaths.length || pythonPaths.length || devcontainerRuntimePaths.length)
-  output("tools-key", `tools-v${windows ? 7 : 6}-${platform}-${tools}`);
+  // Do not restore the broader installation archives from earlier layouts.
+  output("tools-key", `tools-v8-${platform}-${tools}`);
 output(
   "tools-paths",
   [
@@ -256,15 +305,19 @@ output(
     join(variables.CARGO_HOME, "git"),
   ].join("\n"),
 );
-output("builds-key", `builds-v${windows ? 2 : 1}-${platform}-${builds}`);
+// v2 omits installed dependencies; do not restore archives from the broader v1 layout.
+output("builds-key", `builds-v2-${platform}-${builds}`);
 output("builds-paths", ciBuildCachePaths(cache, target.environment).join("\n"));
-if (target.runtime === "gcc") {
-  const gcc = plan.filter((entry) => entry.tool === "gcc");
-  output("gcc-key", `gcc-v4-${platform}-${target.version}-${hash([policies(gcc), acquisitionCode])}`);
-  output("gcc-path", [...new Set(gcc.map((entry) => entry.directory))].join("\n"));
-}
-output("guix-key", `guix-source-v1-${platform}-${hash(inputs(["channels.scm"]))}`);
+// The same channel history is reusable across any roots declaring those channels.
+output("guix-key", `guix-source-v2-${platform}-${hash(pinInputs(["channels.scm"]))}`);
 output("guix-paths", ["checkouts", "authentication"].map((name) => join(homedir(), ".cache", "guix", name)).join("\n"));
+if (target.environment === "guix") {
+  output(
+    "guix-bootstrap-key",
+    `guix-bootstrap-v1-${platform}-${hash([pinInputs(["channels.scm"]), sourceInputs(["scripts/ci-guix-bootstrap.mjs", "scripts/ci-guix-bootstrap.scm"])])}`,
+  );
+  output("guix-bootstrap-path", join(cache, "guix-bootstrap"));
+}
 
 // Keep the development SDK reusable when an older compatibility compiler is selected.
 // Dev Containers use the same immutable LLVM artifacts and language-owned filters.
@@ -275,7 +328,7 @@ for (const [group, entries] of [
   ["llvm", llvm.filter((entry) => !["clang", "llvm-xml-runtime"].includes(entry.tool))],
   ["clang", llvm.filter((entry) => ["clang", "llvm-xml-runtime"].includes(entry.tool))],
 ]) {
-  if (!entries.length) continue;
+  if (!entries.length || !retained(group)) continue;
   output(
     `${group}-key`,
     `${group}-v3-${platform}-${hash([policies(entries), acquisitionCode, sourceInputs(["src/filtered-artifacts.ts"])])}`,
@@ -291,12 +344,12 @@ const rustPins = managed
       ? []
       : roots
           .flatMap((root) => inspect(["tools", "--json", "--path", root]))
-          .filter((entry) => ["rust", "miri"].includes(entry.tool))
+          .filter((entry) => entry.tool === "rust")
           .map((entry) => ({ channel: entry.version }));
-if (rustPins.length) {
+if (rustPins.length && retained("rust")) {
   output(
     "rust-key",
-    `rust-v1-${platform}-${hash([rustPins, inputs(["rust-toolchain.toml", "rust-toolchain-miri.toml"]), readFileSync(join(distribution, "scripts/bootstrap-tools.json"), "utf8"), acquisitionCode])}`,
+    `rust-v2-${platform}-${hash([[...new Set(rustPins.map((pin) => JSON.stringify(pin)))].sort(), pinInputs(["rust-toolchain.toml"]), readFileSync(join(distribution, "scripts/bootstrap-tools.json"), "utf8"), acquisitionCode])}`,
   );
   output(
     "rust-paths",

@@ -159,3 +159,85 @@ workbench completion fish | source
 
 For PowerShell 7, add `workbench completion powershell | Out-String | Invoke-Expression` to your profile. Completion
 scripts are printed for review; Workbench does not edit shell startup files.
+
+## Prepared offline profiles
+
+Offline development is opt-in. Workbench provides `native-offline`, `nix-offline`, and `guix-offline`, each
+demonstrating the Go reference. Install Docker and the locked Dev Container CLI; Nix and Guix need not be installed on
+the host:
+
+```sh
+workbench tools install --devcontainer
+workbench development prepare native-offline
+workbench development verify native-offline
+workbench development use native-offline
+workbench shell --path examples/languages/go -- go test ./...
+```
+
+Preparation builds the standard Dev Container definition online, then mounts a separate source snapshot into the
+resulting immutable image with `--network=none`. Verification has no host dependency-cache mounts or installed project
+outputs; it compiles and tests current source. Native installation uses Workbench's verified installer. Nix retains
+locked flake sources and the realized development closure. Guix retains its authenticated time-machine profile and
+manifest closure. All three retain project dependency downloads. Advisory checks requiring live services remain online
+operations; an offline build does not claim fresh vulnerability information.
+
+The Guix recipes bound file descriptors during image builds and daemon startup. Older bootstrap daemons otherwise
+scan Docker's potentially enormous inherited limit when starting children, adding minutes to each build step.
+
+Each offline development profile adds a project-owned table:
+
+```toml
+[development.profiles.offline]
+path = "app"
+inputs = [".devcontainer/offline", "app/go.mod", "app/go.sum", "app/.go-version"]
+verify = ["node", "scripts/offline.mjs", "verify", "native"]
+```
+
+`path` names a registered root; `inputs` lists preparation recipes, pins, locks, and environment definitions. Workbench
+always includes the profile, its container JSON, and any shared Workbench distribution pin. Declare every other
+preparation input explicitly, including copied helpers. Input directories follow the Git snapshot and exclude ignored
+caches; explicitly listed files must be included in that snapshot. The example configuration includes Nix/Guix definitions
+and the native acquisition authority. Ordinary source edits reuse the image and are verified afresh; changing a declared input
+requires preparation again. Preparation does not change the active development profile. Failure preserves the previous
+receipt.
+
+The verification command runs from `path` inside the fresh source snapshot. `{workbench}` expands to that snapshot's
+Workbench distribution when the command needs its CLI or a shipped helper.
+
+Offline profiles use one image and a literal `workspaceFolder`. Prepare dependencies in the Dockerfile rather than
+lifecycle commands. Additional mounts, Compose, and network overrides are rejected. Managed profiles reject compiler
+Features. The Guix recipe declares `WORKBENCH_GUIX_TIME_MACHINE_PROFILE` for its retained authenticated profile; offline
+execution uses that profile without contacting channel repositories. Images must match the native Linux architecture; no
+emulation is selected. Linux x64 is verified locally; Linux ARM64 requires native verification. On Windows use WSL 2.
+
+Workbench records accepted image IDs, input hashes, verification time, and any published digest under the platform
+user-cache `offline-profiles` directory. Docker retains image bytes separately. Deleting a receipt requires preparing
+again; deleting Docker images requires recreating or pulling them. Workbench never prunes unrelated Docker images or
+containers. Preparation and verification remove their own temporary workspaces and verification containers. Workbench
+disables automatic UID rewriting for accepted images; choose a workspace user whose permissions allow writes to the
+checkout. Opening an offline profile retains the usual working-checkout mount and container session, with networking
+disabled and no host dependency-cache mounts.
+
+### Publish a prepared image to GHCR
+
+Authenticate with Docker's normal credential lookup, then explicitly select the destination:
+
+```sh
+workbench development publish native-offline --image ghcr.io/OWNER/PROJECT-dev:TAG
+```
+
+Use lowercase owner and repository names. The command first repeats local offline verification, pushes the selected
+image, pulls its registry digest, checks that it is the prepared image, and repeats the offline build against the pulled
+reference. It prints and records the immutable `ghcr.io/...@sha256:...` reference. Authentication is external; Workbench
+neither stores nor prints registry tokens. Existing local destination tags are preserved by rejecting their reuse. A
+failed post-push verification cannot retract a registry upload; the command reports failure and does not record the
+image as verified publication. Tags can be updated by the registry; consumers should pin the returned digest.
+
+A consumer can use that digest as the `image` in its standard Dev Container JSON and configure its own offline profile.
+`development prepare` pulls the pinned image and verifies it against that consumer's current source and declared
+command, without requiring the builder on its host. Live GHCR credentials and permissions require hosted verification;
+local tests exercise publication ordering and failures without uploading images.
+
+The explicit registry-verification workflow covers native, Nix, and Guix offline development images alongside release
+images. It requires successful complete Checks for the same revision, uses a distinct tag for each workflow attempt, and
+retains publication receipts. It is separate from ordinary push and pull-request checks.

@@ -84,37 +84,85 @@ validation and all selected jobs to succeed; intentionally empty groups are skip
 platform, compiler compatibility jobs by compiler/version/architecture, and managed jobs by environment. Each root still
 uses its own declared pins and complete checks, including release verification.
 
-CI caches small installed tools, filtered LLVM installations, dependency downloads, incremental builds, and verified
-compiled GCC installations. Selected Rust stable, MSRV, and Miri toolchains use an isolated CI rustup home; only their
-selected versions and bootstrap proxies are retained. Dev Container caches include selected guest tool versions,
-filtered LLVM, vcpkg, and managed Python installations. Every job records elapsed restore/setup/check time and retained
-uncompressed cache bytes as an artifact and summary. GCC is compiled once per version and architecture and reused for
-both C and C++; GCC's `install-strip` target removes compiler debug information from the cached installation. Its
-installation is saved after tool verification so a later project-test failure does not discard the expensive compiler
-build. Guix caches authenticated source history; roots share its bootstrap and store within one job. Nix roots similarly
-share a job-local store and use upstream binary substitutes. Lockfiles, tool pins, platform, runtime selection, and the
-compiler installer determine cache keys. LLVM caches contain the selected language components and private runtime, with
-separate keys covering the source, filter, authentication policy, trust material, and installer. Older Clang
-compatibility installations have their own archives; they reuse the development LLVM cache rather than storing another
-copy. Native and Dev Container jobs share LLVM cache entries when their selected artifacts and filters match. Each
-language retains its independent filter; LLVM development libraries and Fortran resources are omitted, while compiler
-tools, C/C++ runtimes, sanitizer and coverage resources, and LTO support remain. Restored filtered contents are verified
-before reuse, and newly verified installations are saved before project checks. Cache hits still run configured checks;
-caches do not store test results as evidence of a passing run. Package download stores have separate keys from installed
-dependencies and compiled outputs. Installer changes and runtime patch selections invalidate the compiled-output cache
-without invalidating the download cache. Compatibility jobs include only the native artifacts required by their
-execution phases; package managers still validate reused downloads through their lockfiles and integrity checks.
+Hosted CI redownloads pinned prebuilt LLVM/Clang, JDK, Node.js, Go, CMake, Ninja, uv, shfmt, ShellCheck, actionlint,
+cargo-nextest, and cargo-llvm-cov through the same verified installers used locally. These installation directories and
+their upstream archives are excluded from Actions caches; roots in the same job reuse the verified installations. Local
+tool caches remain reusable. LLVM/Clang downloads still stream through language-owned inclusion filters and complete
+authentication and content validation before use. CI retains other selected installations, including compiled Ruby/PHP
+runtimes, managed Python, and vcpkg, alongside dependency downloads and incremental builds. Selected Rust stable and
+MSRV toolchains use an isolated CI rustup home; only their selected versions and bootstrap proxies are retained.
+Ordinary native and Dev Container CI setup omits Miri, whose checks require explicit role selection. Full development
+setup still installs it; use `workbench tools install --path examples/languages/rust --tool miri` for explicit
+installation. Dev Container caches apply the same prebuilt-tool exclusions to selected guest installations and retain
+vcpkg and managed Python installations. Every job records elapsed restore/setup/check time and retained uncompressed
+cache bytes as an artifact and summary. GCC compatibility runs inside digest-pinned Docker Official Images on both
+native Linux architectures, using the same image recipe in local rehearsal and hosted CI. These community-maintained
+official-library images are not GCC upstream binaries. Docker verifies manifest and layer digests; the publisher
+currently provides no applicable image signatures. `scripts/gcc-images.json` owns exact image pins and this
+authentication statement. Compiler setup omits the native GCC installer, selects `/usr/local/bin/gcc` and `g++`, and
+verifies their exact versions. LLVM remains required for formatting and analysis; its verified installation is
+independent. Host GCC installation still builds from authenticated source. Docker manages image layers separately from
+Actions caches. Guix caches authenticated source history under an identity shared by roots with identical channel
+declarations; roots share its bootstrap and store within one job. A separate cache retains compiled pinned Guix profiles
+and their runtime closures as native signed Guix archives. Restore checks the archive digest, imports through Guix's
+signature verification, and recreates its registered profile links. Channel declarations and the archive implementation
+identify this cache; package environments and the whole store are excluded. GitHub's cache access controls establish
+trust in these compiled outputs and their cached public signer. Authorization occurs only on the disposable hosted
+runner; private signing keys are never cached. Nix roots similarly share a job-local store and use upstream binary
+substitutes. Lockfiles, tool pins, platform, runtime selection, and the compiler installer determine cache keys. When
+explicitly enabled, LLVM caches contain the selected language components and private runtime, with separate keys
+covering the source, filter, authentication policy, trust material, and installer. Older Clang compatibility
+installations have their own archives; they reuse the development LLVM cache rather than storing another copy. Native
+and Dev Container jobs share LLVM cache entries when their selected artifacts and filters match. Each language retains
+its independent filter; LLVM development libraries and Fortran resources are omitted, while compiler tools, C/C++
+runtimes, sanitizer and coverage resources, and LTO support remain. Restored filtered contents are verified before
+reuse, and newly verified installations are saved before project checks. Cache hits still run configured checks; caches
+do not store test results as evidence of a passing run. Installed dependency trees, including virtual environments and
+package-manager vendor trees, are recreated from verified download stores rather than archived a second time. Local
+installations remain reusable until explicitly cleaned. Compiled caches retain reusable dependency, standard library,
+and application objects; build tools check their inputs again whenever an affected root runs. Source changes still run
+the selected root's complete checks. Identical tool selections share cache identities regardless of which roots declare
+their pins. Installer changes and runtime patch selections invalidate the compiled-output cache without invalidating the
+download cache. Compatibility jobs include only the native artifacts required by their execution phases; package
+managers still validate reused downloads through their lockfiles and integrity checks.
+
+### Configurable artifact retention
+
+`[ci.cache.artifacts]` in `workbench/config.toml` overrides hosted retention by group with `"cache"` or `"download"`.
+For example, to opt into retaining filtered LLVM/Clang instead of their default verified redownloads:
+
+```toml
+[ci.cache.artifacts]
+llvm = "cache"
+clang = "cache"
+rust = "download"
+node = "download"
+```
+
+Supported groups are `llvm`, `clang`, `rust`, `java`, `node`, `go`, `cmake`, `ninja`, `uv`, `shfmt`, `shellcheck`,
+`actionlint`, `cargo-nextest`, `cargo-llvm-cov`, `ruby`, `php`, and `maven`. Omitted groups retain the defaults
+described above. `llvm` and `clang` include their associated private runtime components. `download` omits Actions
+restore/save; it preserves reuse between roots in a job and ordinary user-cache installations. Package download stores,
+managed Python, vcpkg, and the Guix bootstrap retain their existing policies. GCC images use Docker's layer storage, not
+an Actions compiler-installation archive. Both retention modes use identical pinned acquisition and verification.
+
+Cache saves use Zstandard level 9 with its default window, selected by the workflow's `ZSTD_CLEVEL` environment
+variable. Cache keys include that level because existing entries cannot be recompressed in place. Restore fallbacks
+retain the same content identity and allow an existing entry to be reused and saved under the new compression key,
+avoiding an unnecessary toolchain rebuild. Old entries remain subject to normal eviction. The higher level reduces
+storage at the cost of additional compression time when saving a new entry. Cache hits still require only decompression
+and verification.
 
 Windows jobs cache Python download archives and recreate managed Python installations, virtual environments, and pnpm
 dependency links. These installed trees contain Windows junctions that do not survive the Actions archive round trip.
-Verified SDKs, package download stores, and compiled Go outputs remain cached; Linux and macOS retain their installed
-dependency and build caches.
+Verified SDKs, package download stores, and compiled Go outputs remain cached. Linux and macOS additionally retain
+compiled build trees; installed dependencies are recreated on every hosted platform.
 
 The workflow does not raise GitHub's default 10 GB cache limit. Complete LLVM distributions, discarded source archives,
 and whole Nix/Guix stores are excluded from GitHub caches. Retained LLVM components compete with other caches for this
-allowance. New pins and cache misses require fresh setup. Standard GitHub-hosted runners are free for public
-repositories; private repositories and larger runners have their applicable billing rules. Cache storage is a separate
-allowance. See
+allowance when LLVM retention is enabled. The default redownload policy excludes these installations from Actions
+storage. New pins and cache misses require fresh setup. Standard GitHub-hosted runners are free for public repositories;
+private repositories and larger runners have their applicable billing rules. Cache storage is a separate allowance. See
 [GitHub's billing documentation](https://docs.github.com/en/billing/concepts/product-billing/github-actions). Release
 artifacts and coverage reports use a 14-day retention period in the supplied workflow. Cache choices still affect
 feedback time, transfers, eviction, and runner disk use.

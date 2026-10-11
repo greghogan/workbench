@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { parse } from "yaml";
+import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
 import { groupedCIMatrix } from "../src/ci-targets.ts";
 import { ciMatrix } from "../src/ci.ts";
 import { copySourceCheckout } from "../scripts/source-checkout.mjs";
@@ -109,7 +110,7 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   writeFileSync(assetsPath, JSON.stringify(assets));
   const environment = join(root, "environment");
   const output = join(root, "output");
-  const run = (version) => {
+  const run = (version, runtime = "node", paths = ["."]) => {
     writeFileSync(environment, "");
     writeFileSync(output, "");
     const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mjs")], {
@@ -119,7 +120,7 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
         RUNNER_TEMP: root,
         GITHUB_ENV: environment,
         GITHUB_OUTPUT: output,
-        CACHE_TARGET: JSON.stringify({ runtime: "node", version, paths: ["."] }),
+        CACHE_TARGET: JSON.stringify({ runtime, version, paths }),
       },
       encoding: "utf8",
     });
@@ -137,9 +138,10 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   const oldest = run(versions[0]);
   const newest = run(versions[1]);
   expect(oldest["builds-key"]).not.toBe(newest["builds-key"]);
-  expect(oldest["tools-key"]).not.toBe(newest["tools-key"]);
+  expect(oldest["tools-key"]).toBeUndefined();
+  expect(newest["tools-key"]).toBeUndefined();
   expect(oldest["tools-paths"]).not.toMatch(/toolchains[\\/](llvm|clang|gcc)/);
-  expect(oldest["tools-paths"]).toContain(join(root, "workbench-ci", "cache", "toolchains", "node"));
+  expect(oldest["tools-paths"]).toBe("");
   expect(oldest["tools-paths"]).not.toContain(join(root, "workbench-ci", "cache", "toolchains", "vcpkg"));
   expect(oldest["tools-paths"]).not.toContain(join(root, "workbench-ci", "data"));
   expect(readFileSync(environment, "utf8")).toContain(
@@ -148,7 +150,8 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   if (process.platform === "win32") {
     expect(oldest["builds-paths"]).toBe(join(root, "workbench-ci", "cache", "go-build"));
     expect(oldest["downloads-paths"]).toContain(join(root, "workbench-ci", "cache", "downloads", "uv-python"));
-  } else expect(oldest["builds-paths"]).toContain(join(root, "workbench-ci", "cache", "dependencies"));
+  } else expect(oldest["builds-paths"]).toContain(join(root, "workbench-ci", "cache", "builds"));
+  expect(oldest["builds-paths"]).not.toContain(join(root, "workbench-ci", "cache", "dependencies"));
   expect(oldest["builds-paths"]).not.toMatch(/\/nix\/store|\/gnu\/store/);
   expect(oldest["builds-paths"]).not.toContain("package-managers");
   expect(oldest["downloads-key"]).toBe(newest["downloads-key"]);
@@ -157,9 +160,33 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   expect(oldest["package-managers-paths"]).toContain(join(root, "workbench-ci", "cache", "package-managers"));
   expect(oldest["package-managers-key"]).toBe(newest["package-managers-key"]);
   expect(readFileSync(environment, "utf8")).toContain("WORKBENCH_STORAGE_EXTERNAL=true");
+  for (const runtime of ["go", "java"]) {
+    const path = `examples/languages/${runtime}`;
+    const target = ciMatrix(checkout).compatibility.include.find(
+      (entry) => entry.path === path && entry.runtime === runtime,
+    );
+    expect(target).toBeDefined();
+    const fields = run(target.version, runtime, [path]);
+    expect(fields["tools-paths"].replaceAll("\\", "/")).not.toContain(`/toolchains/${runtime}/`);
+    // Maven remains selected independently of the JDK installation.
+    if (runtime === "java") expect(fields["tools-paths"].replaceAll("\\", "/")).toContain("/toolchains/maven/");
+    else expect(fields["tools-key"]).toBeUndefined();
+  }
+  const configPath = join(checkout, "workbench/config.toml");
+  const config = parseTOML(readFileSync(configPath, "utf8"));
+  config.ci.cache = { artifacts: { node: "cache", llvm: "download", clang: "download", rust: "download" } };
+  writeFileSync(configPath, stringifyTOML(config));
+  const retainedNode = run(versions[0]);
+  expect(retainedNode["tools-key"]).toBeDefined();
+  expect(retainedNode["tools-paths"].replaceAll("\\", "/")).toContain("/toolchains/node/");
+  const noLLVM = run("21.1.8", "clang", ["examples/languages/c"]);
+  expect(noLLVM["llvm-key"]).toBeUndefined();
+  expect(noLLVM["clang-key"]).toBeUndefined();
+  const rustTarget = ciMatrix(checkout).compatibility.include.find((entry) => entry.runtime === "rust");
+  expect(run(rustTarget.version, "rust", [rustTarget.path])["rust-key"]).toBeUndefined();
 });
 
-test("native cache keys follow selected acquisition policy independently of bootstrap and unused assets", () => {
+test("native cache keys retain acquisition identity without caching redownloaded tools", () => {
   const root = fixture();
   for (const path of [
     "bin",
@@ -180,7 +207,7 @@ test("native cache keys follow selected acquisition policy independently of boot
   );
   const environment = join(root, "environment");
   const output = join(root, "output");
-  const run = () => {
+  const run = (target = { paths: ["."] }) => {
     writeFileSync(environment, "");
     writeFileSync(output, "");
     const result = spawnSync(process.execPath, [join(root, "scripts/ci-cache.mjs")], {
@@ -190,7 +217,7 @@ test("native cache keys follow selected acquisition policy independently of boot
         RUNNER_TEMP: root,
         GITHUB_ENV: environment,
         GITHUB_OUTPUT: output,
-        CACHE_TARGET: JSON.stringify({ paths: ["."] }),
+        CACHE_TARGET: JSON.stringify(target),
         WORKBENCH_DISTRIBUTION_ROOT: root,
         WORKBENCH_PROJECT_ROOT: root,
       },
@@ -204,6 +231,9 @@ test("native cache keys follow selected acquisition policy independently of boot
     );
   };
   const baseline = run();
+  const guestTarget = { paths: ["."], environment: "devcontainer" };
+  expect(baseline["tools-key"]).toBeUndefined();
+  expect(baseline["tools-paths"]).toBe("");
   const inventoryPath = join(root, "scripts/native-assets.json");
   const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
   inventory.gcc["99.0.0"] = {};
@@ -220,9 +250,13 @@ test("native cache keys follow selected acquisition policy independently of boot
   const changedInstaller = run();
   expect(changedInstaller["downloads-key"]).toBe(baseline["downloads-key"]);
   expect(changedInstaller["builds-key"]).not.toBe(baseline["builds-key"]);
+  const guestBaseline = run(guestTarget);
   const key = join(root, "scripts/keys/node.asc");
   writeFileSync(key, `${readFileSync(key, "utf8")}\n`);
-  expect(run()["tools-key"]).not.toBe(baseline["tools-key"]);
+  expect(run()["builds-key"]).not.toBe(changedInstaller["builds-key"]);
+  const guestChanged = run(guestTarget);
+  expect(guestChanged["tools-key"]).toBeUndefined();
+  expect(guestChanged["builds-key"]).not.toBe(guestBaseline["builds-key"]);
 });
 
 test("Python compatibility delegates the selected version to configured compatibility checks", () => {
@@ -260,6 +294,7 @@ test("compiler compatibility executes ordinary, sanitizer, and optimized release
       CHECK_ROOTS: '["native"]',
       COMPILER: "gcc",
       COMPILER_VERSION: "14.4.0",
+      WORKBENCH_GCC_IMAGE_VERSION: "14.4.0",
       CHECK_ROLES: '["test","sanitizers","lto"]',
     },
     encoding: "utf8",
@@ -285,17 +320,23 @@ test("compiler compatibility executes ordinary, sanitizer, and optimized release
 });
 
 test.skipIf(process.platform !== "linux")(
-  "LLVM caches contain only selected retained installations and are saved after verification",
+  "opt-in LLVM caches contain only selected retained installations and are saved after verification",
   () => {
     const root = fixture();
+    const checkout = join(root, "checkout");
+    copySourceCheckout(repository, checkout);
+    const configPath = join(checkout, "workbench/config.toml");
+    const config = parseTOML(readFileSync(configPath, "utf8"));
+    config.ci.cache = { artifacts: { llvm: "cache", clang: "cache" } };
+    writeFileSync(configPath, stringifyTOML(config));
     const environment = join(root, "environment");
     const output = join(root, "output");
     const keys = [];
     for (const version of ["21.1.8", "22.1.8", "23.1.3"]) {
       writeFileSync(environment, "");
       writeFileSync(output, "");
-      const result = spawnSync(process.execPath, [join(repository, "scripts/ci-cache.mjs")], {
-        cwd: repository,
+      const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mjs")], {
+        cwd: checkout,
         env: {
           ...process.env,
           RUNNER_TEMP: root,
@@ -443,20 +484,53 @@ test("CI retains selected Rust versions and the tool versions installed inside D
   };
   const rust = run({ paths: ["examples/languages/rust"] });
   expect(rust["rust-paths"]).toContain(join(root, "workbench-ci/cache/ci/rustup/toolchains/1.99.0-*"));
-  expect(rust["rust-paths"]).toContain("nightly-2026-10-04-*");
+  expect(rust["rust-paths"]).not.toContain("nightly");
   expect(rust["rust-paths"]).not.toContain("downloads");
   const msrv = run({ paths: ["examples/languages/rust"], runtime: "rust", version: "1.93.0" });
   expect(msrv["rust-key"]).not.toBe(rust["rust-key"]);
   expect(msrv["rust-paths"]).toContain("1.93.0-*");
   expect(msrv["rust-paths"]).not.toContain("1.99.0");
+  const c = run({ paths: ["examples/languages/c"] });
+  expect(c["tools-key"]).toMatch(/^tools-v8-/);
+  const both = run({ paths: ["examples/languages/c", "examples/languages/cpp"] });
+  const reversed = run({ paths: ["examples/languages/cpp", "examples/languages/c"] });
+  expect(both["tools-key"]).toBe(c["tools-key"]);
+  expect(reversed["tools-key"]).toBe(c["tools-key"]);
+  expect(both["tools-paths"]).toBe(c["tools-paths"]);
+  expect(both["guix-key"]).toBe(c["guix-key"]);
+  expect(reversed["guix-key"]).toBe(c["guix-key"]);
+  const guix = run({ paths: ["examples/languages/c"], environment: "guix" });
+  const guixBoth = run({ paths: ["examples/languages/cpp", "examples/languages/c"], environment: "guix" });
+  expect(guixBoth["guix-bootstrap-key"]).toBe(guix["guix-bootstrap-key"]);
+  expect(guix["guix-bootstrap-path"]).toContain("guix-bootstrap");
+  expect(c["guix-bootstrap-key"]).toBeUndefined();
   const guest = run({
     paths: ["examples/languages/cpp", "examples/languages/java", "examples/languages/python"],
     environment: "devcontainer",
   });
-  expect(guest["llvm-paths"]).toContain(join(root, "workbench-ci/cache/toolchains/llvm"));
+  expect(guest["llvm-key"]).toBeUndefined();
+  expect(guest["llvm-paths"]).toBeUndefined();
+  expect(guest["clang-key"]).toBeUndefined();
   expect(guest["tools-paths"]).not.toContain(join(root, "workbench-ci/cache/toolchains/llvm"));
-  for (const tool of ["cmake", "ninja", "java", "maven", "uv"])
-    expect(guest["tools-paths"]).toContain(join(root, "workbench-ci/cache/toolchains", tool));
+  expect(guest["tools-paths"]).toContain(join(root, "workbench-ci/cache/toolchains/maven"));
+  const redownload = [
+    "llvm",
+    "clang",
+    "java",
+    "node",
+    "go",
+    "cmake",
+    "ninja",
+    "uv",
+    "shfmt",
+    "shellcheck",
+    "actionlint",
+    "cargo-nextest",
+    "cargo-llvm-cov",
+  ];
+  for (const fields of [c, both, reversed, guest, rust, msrv])
+    for (const tool of redownload)
+      expect(fields["tools-paths"].replaceAll("\\", "/")).not.toContain(`/toolchains/${tool}/`);
   const pythonInstall = join(root, "workbench-ci/cache/uv-python/python");
   if (process.platform === "win32") expect(guest["tools-paths"]).not.toContain(pythonInstall);
   else expect(guest["tools-paths"]).toContain(pythonInstall);

@@ -13,6 +13,8 @@ Record selected practices and rationale, assuming capable agents. Omit tutorials
 mechanically enforceable detail in checks. Group rules that share a rationale and change together. Split independently
 applicable decisions, keeping shared requirements in a common decision and only differences in specializations.
 
+Decision records may link supporting diagrams or design material kept beside the record.
+
 Order ADRs from foundations to specializations. Within a scope, an ADR may refer only to earlier ADRs; a later decision
 states how it applies an earlier one. Remove circular dependencies by putting shared rules in the foundational decision.
 References to inherited decisions use their owning scope; independent scope IDs do not establish cross-scope order.

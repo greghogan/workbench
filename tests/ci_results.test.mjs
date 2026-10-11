@@ -166,7 +166,7 @@ test("Windows caches Python archives and rebuilds dependency trees containing ju
   const linux = ciCacheEnvironment("/cache", "/data", true, "linux");
   expect(linux.UV_PYTHON_CACHE_DIR).toBeUndefined();
   expect(ciBuildCachePaths("/cache", "devcontainer", "linux")).toEqual(
-    ["builds", "dependencies", "go-build", "container-tools"].map((name) => join("/cache", name)),
+    ["builds", "go-build", "container-tools"].map((name) => join("/cache", name)),
   );
 });
 

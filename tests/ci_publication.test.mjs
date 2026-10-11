@@ -1,9 +1,27 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
+import { parse } from "yaml";
 import { verifyRegistryPublication } from "../scripts/ci-publish.mjs";
+
+test("explicit registry verification covers release images and all offline development builders", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/publication.yml", import.meta.url), "utf8"));
+  expect(Object.keys(workflow.on).sort()).toEqual(["push", "workflow_dispatch"]);
+  expect(workflow.jobs.publish.strategy.matrix.include).toEqual([
+    { kind: "release", builder: "nix" },
+    { kind: "release", builder: "guix" },
+    { kind: "development", builder: "native" },
+    { kind: "development", builder: "nix" },
+    { kind: "development", builder: "guix" },
+  ]);
+  const steps = workflow.jobs.publish.steps;
+  for (const operation of ["prepare", "publish"])
+    expect(steps.find((step) => step.run?.includes(`development ${operation}`))?.if).toBe(
+      "matrix.kind == 'development'",
+    );
+});
 
 const temporary = [];
 afterEach(() => {

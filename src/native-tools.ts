@@ -17,6 +17,8 @@ import { nativeTools, assetFor, toolDirectory, type Tool } from "./native-assets
 import { probePrelude, probeScript, toolProbes } from "./tool-probes.js";
 import type { ToolAsset } from "./tool-downloads.js";
 
+export type NativeToolSelection = CompilerSelection & { excludeTool?: string[] };
+
 /** Read-only selection: absent installations retain host discovery and the existing exact-version guard. */
 export function nativeEnvironment(
   directory: string,
@@ -36,11 +38,20 @@ export function nativeEnvironment(
   const paths: string[] = [];
   let rustBin: string | undefined;
   const tools = nativeTools(directory, distribution, selection);
+  const imageGCC = tools.find(
+    (tool) => tool.name === "gcc" && tool.version === process.env.WORKBENCH_GCC_IMAGE_VERSION,
+  );
+  if (process.env.WORKBENCH_GCC_IMAGE_VERSION && tools.some((tool) => tool.name === "gcc") && !imageGCC)
+    throw new Error("GCC image version does not match compiler selection");
+  if (imageGCC) {
+    env.WORKBENCH_CC = "/usr/local/bin/gcc";
+    env.WORKBENCH_CXX = "/usr/local/bin/g++";
+  }
   for (const tool of tools) {
     if (tool.name === "rust" || tool.name === "miri") {
       rustBin = join(env.CARGO_HOME ?? join(homedir(), ".cargo"), "bin");
       if (tool.name === "rust") env.RUSTUP_TOOLCHAIN = tool.version;
-    } else if (tool.name !== "python") {
+    } else if (tool.name !== "python" && !(imageGCC && tool.name === "gcc")) {
       const asset = assetFor(distribution, tool, directory);
       if (asset) {
         const directory = toolDirectory(tool, asset);
@@ -130,9 +141,10 @@ function roots(root: string, selected?: string): string[] {
 function resolveNativeInstallation(
   root: string,
   selected?: string,
-  selection: CompilerSelection = {},
+  selection: NativeToolSelection = {},
   onlyTool?: string,
 ) {
+  if (onlyTool !== undefined && selection.excludeTool?.length) throw new Error("select --tool or --exclude-tool");
   const distribution = distributionRoot(root);
   return roots(root, selected).map((path) => {
     const directory = resolve(root, path);
@@ -146,6 +158,7 @@ function resolveNativeInstallation(
           ? ["llvm-runtime", "llvm-xml-runtime"]
           : [];
     const tools = declared
+      .filter((tool) => !selection.excludeTool?.includes(tool.name))
       .filter((tool) => onlyTool === undefined || tool.name === onlyTool || dependencies.includes(tool.name))
       .map((tool) => {
         const asset = ["rust", "miri", "python"].includes(tool.name)
@@ -157,7 +170,7 @@ function resolveNativeInstallation(
   });
 }
 
-export function nativeInstallationPlan(root: string, selected?: string, selection: CompilerSelection = {}) {
+export function nativeInstallationPlan(root: string, selected?: string, selection: NativeToolSelection = {}) {
   return resolveNativeInstallation(root, selected, selection).flatMap(({ path, tools }) =>
     tools.map(({ tool, asset, destination }) => ({
       root: path,
@@ -178,7 +191,7 @@ export function listNativeTools(
   root: string,
   selected?: string,
   json = false,
-  selection: CompilerSelection = {},
+  selection: NativeToolSelection = {},
 ): void {
   if (json) {
     console.log(JSON.stringify(nativeInstallationPlan(root, selected, selection), null, 2));
@@ -214,7 +227,7 @@ export function listNativeTools(
 export async function installNativeTools(
   root: string,
   selected?: string,
-  selection: CompilerSelection = {},
+  selection: NativeToolSelection = {},
   onlyTool?: string,
 ): Promise<void> {
   if ((selection.compiler !== undefined || selection.compilerVersion !== undefined) && selected === undefined)

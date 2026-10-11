@@ -1,0 +1,9 @@
+{
+  "authentication": "Docker Official Images publisher via Docker Hub HTTPS; digest-pinned OCI manifests. No applicable upstream image signatures are published.",
+  "source": "https://github.com/docker-library/official-images/blob/master/library/gcc",
+  "images": {
+    "14.4.0": "gcc:14.4.0@sha256:6f37e44a9b41181de5dd97366ec732652f5d895a72b5549c64694efed50a97e8",
+    "15.3.0": "gcc:15.3.0@sha256:1fdcd041afad61e21d4ca0f8046e36f8da61baaa815f5ba290e39a15c487926a",
+    "16.2.0": "gcc:16.2.0@sha256:17043c23ec2ad97fc3beca18da77275d26be5db5cd70ea0a5d73200e21a8e999"
+  }
+}

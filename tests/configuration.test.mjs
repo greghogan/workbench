@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, test } from "vitest";
-import { readConfig, readProjects, readLanguageRoots, scan } from "../src/core.ts";
+import { kinds, readConfig, readProjects, readLanguageRoots, relativeRecordPath, scan } from "../src/core.ts";
 import { citationLibrarySetting } from "../src/citations.ts";
 
 const roots = [];
@@ -52,4 +52,25 @@ test("portable library paths and symlinked record parents cannot escape ownershi
   symlinkSync(join(outside, "workbench"), join(root, "workbench"), "junction");
   assert.throws(() => readConfig(root), /symlinks are not supported/);
   assert.throws(() => scan(root, "ADR"), /symlinks are not supported/);
+});
+
+test("record discovery skips owned supporting directories and still validates unowned files", () => {
+  const root = fixture();
+  for (const kind of kinds) {
+    for (const number of ["0", "100"]) {
+      const record = join(root, "workbench", relativeRecordPath(kind, number));
+      const supporting = record.slice(0, -extname(record).length);
+      mkdirSync(dirname(record), { recursive: true });
+      writeFileSync(record, "record contents are validated separately\n");
+      mkdirSync(join(supporting, "fixtures"), { recursive: true });
+      writeFileSync(join(supporting, "notes.md"), "supporting material\n");
+      writeFileSync(join(supporting, "fixtures", `${kind}-02.md`), "a fixture, not another record\n");
+    }
+    assert.deepEqual(
+      scan(root, kind).map((record) => record.number),
+      ["0", "100"],
+    );
+    rmSync(join(root, "workbench", relativeRecordPath(kind, "0")));
+    assert.throws(() => scan(root, kind), /unexpected file in record directory|expected canonical path/);
+  }
 });

@@ -11,6 +11,12 @@ Native profiles use native pins. Nix and Guix profiles use their pinned environm
 the same compilers through container features. A pinned prebuilt image or a local container build may provide the
 workspace; the host need not have the selected managed builder installed.
 
+Projects may opt into prepared offline profiles. Image builds retain the selected toolchain and locked dependency
+inputs. Accept them only after rebuilding and executing current project code in a fresh workspace with networking
+disabled and without host dependency caches. Record immutable image and preparation-input identities; changed inputs
+require explicit preparation again. Opening an offline profile preserves that network boundary. Publication remains a
+separate explicit operation and verifies the registry digest and offline behavior after pulling it.
+
 Local development retains changes in the working checkout. CI selects container coverage independently and shares one
 container session across its selected roots. Native macOS and Windows checks remain separate compatibility evidence.
 Opening an existing container does not authorize changing pins or rebuilding it destructively. Resource scheduling

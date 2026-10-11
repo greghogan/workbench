@@ -13,6 +13,10 @@ affected checks and review the result. Record independent work as tasks or feedb
 prevent this change from meeting its intent. A requested refactor review may find missed improvements; distinguish them
 from independent design opportunities and explain their value. Report verification and unresolved limitations.
 
+Correct defects and unsuitable structures encountered during authorized work, investigate their causes, and address
+recurrence in the responsible definitions, automation, or checks. Carry reusable improvements into shared Workbench
+material. Policy changes retain ADR-0's human review requirements.
+
 A commit keeps a coherent change with its tests, documentation, decisions, and derived files.
 
 Commit conventions are configurable; the default is Conventional Commits with 50-character subjects and 72-character

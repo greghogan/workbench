@@ -5,7 +5,7 @@ name: Verify registry publication
 on:
   workflow_dispatch:
   push:
-    branches: ['ci/publication-verification-**']
+    branches: ["ci/publication-verification-**"]
 
 permissions:
   contents: read
@@ -21,13 +21,18 @@ defaults:
 
 jobs:
   publish:
-    name: Verify ${{ matrix.builder }} image in GHCR
-    runs-on: ${{ matrix.builder == 'guix' && 'ubuntu-24.04' || 'ubuntu-26.04' }}
+    name: Verify ${{ matrix.kind }} ${{ matrix.builder }} image in GHCR
+    runs-on: ${{ matrix.kind == 'release' && matrix.builder == 'guix' && 'ubuntu-24.04' || 'ubuntu-26.04' }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        builder: [nix, guix]
+        include:
+          - { kind: release, builder: nix }
+          - { kind: release, builder: guix }
+          - { kind: development, builder: native }
+          - { kind: development, builder: nix }
+          - { kind: development, builder: guix }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -54,7 +59,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
           df -h /
       - name: Bootstrap Guix from its signed Ubuntu repository
-        if: matrix.builder == 'guix'
+        if: matrix.kind == 'release' && matrix.builder == 'guix'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y guix=1.4.0-6build1
@@ -64,18 +69,40 @@ jobs:
           done
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Prepare and verify the selected example image
+        if: matrix.kind == 'release'
         env:
           BUILDER: ${{ matrix.builder }}
         run: node bin/workbench.mjs release prepare "go-${BUILDER}-docker"
+
+      # Offline development profiles need only Docker and the locked host CLI.
+      # Their verification uses fresh source, networking disabled, and no host caches.
+      - name: Prepare and verify the selected offline development image
+        if: matrix.kind == 'development'
+        env:
+          BUILDER: ${{ matrix.builder }}
+        run: |
+          node bin/workbench.mjs tools install --devcontainer
+          node bin/workbench.mjs development prepare "${BUILDER}-offline"
+
       - name: Authenticate for this explicitly selected publication
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY_USER: ${{ github.actor }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - name: Publish, pull by digest, and verify image identity and behavior
+        if: matrix.kind == 'release'
         env:
           BUILDER: ${{ matrix.builder }}
         run: node scripts/ci-publish.mjs "$BUILDER"
+      - name: Publish and verify the offline development image by registry digest
+        if: matrix.kind == 'development'
+        env:
+          BUILDER: ${{ matrix.builder }}
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          tag="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          node bin/workbench.mjs development publish "${BUILDER}-offline" \
+            --image "ghcr.io/${repository}-dev-${BUILDER}:${tag}"
       - name: Remove transient credentials
         if: always()
         run: docker logout ghcr.io
@@ -83,9 +110,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: publication-${{ matrix.builder }}
+          name: publication-${{ matrix.kind }}-${{ matrix.builder }}
           path: |
             ${{ runner.temp }}/publication-evidence/
             dist/releases/*/workbench-release.json
+            ~/.cache/workbench/offline-profiles/*/*.json
           if-no-files-found: ignore
           retention-days: 14

@@ -1,0 +1,15 @@
+{
+  "name": "Workbench offline guix",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../../..",
+    "options": ["--network=host", "--ulimit=nofile=65536:65536"]
+  },
+  "remoteUser": "ubuntu",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1"
+  },
+  "overrideCommand": false
+}

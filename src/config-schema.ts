@@ -91,6 +91,36 @@ export const projectFields: Record<string, Record<string, Validator>> = {
     allow_empty: boolean,
   },
   ci: {
+    cache: table({
+      artifacts: (value, location) => {
+        mapping(value, location);
+        for (const [name, policy] of Object.entries(value as Record<string, unknown>)) {
+          if (
+            ![
+              "llvm",
+              "clang",
+              "rust",
+              "java",
+              "node",
+              "go",
+              "cmake",
+              "ninja",
+              "uv",
+              "shfmt",
+              "shellcheck",
+              "actionlint",
+              "cargo-nextest",
+              "cargo-llvm-cov",
+              "ruby",
+              "php",
+              "maven",
+            ].includes(name)
+          )
+            fail(location, "a supported CI artifact retention group");
+          choice("cache", "download")(policy, `${location}.${name}`);
+        }
+      },
+    }),
     operating_systems: selection(["linux", "macos", "windows"], true),
     architectures: table({
       linux: selection(["x64", "arm64"], true),

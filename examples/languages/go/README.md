@@ -37,3 +37,11 @@ can invoke these builders directly, or declare project-owned Workbench release p
 provided multi-format profiles are verified on Linux x64; ordinary language checks retain the Go example’s broader
 configured platform matrix. Packaging needs Docker for isolated verification and either the pinned Nix Docker adapter or
 host Guix, depending on the selected recipe.
+
+## Offline development images
+
+The repository's optional `native-offline`, `nix-offline`, and `guix-offline` development profiles demonstrate preparing
+this project's tools and locked dependency inputs in an image, then compiling and testing fresh source with networking
+disabled. See [development profiles](../../../workbench/guides/profiles.md#prepared-offline-profiles) for preparation,
+selection, verification, and explicit GHCR publication. Copy the selected standard Dev Container recipe and declare its
+inputs and verification command when adopting it in another project; the example requires no parent Makefile.

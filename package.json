@@ -11,8 +11,8 @@
   "scripts": {
     "build": "pnpm run typecheck && node scripts/build-bundle.mjs",
     "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit",
-    "format:check": "node node_modules/prettier/bin/prettier.cjs --check src tests \"scripts/**/*.mjs\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/package-manager/*.json \".devcontainer/**/*.json\" \"examples/**/scripts/*.mjs\" bin/*.mjs bin/*.cjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
-    "format": "node node_modules/prettier/bin/prettier.cjs --write src tests \"scripts/**/*.mjs\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/package-manager/*.json \".devcontainer/**/*.json\" \"examples/**/scripts/*.mjs\" bin/*.mjs bin/*.cjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check src tests \"scripts/**/*.mjs\" scripts/*-assets.json scripts/gcc-images.json scripts/bootstrap-tools.json scripts/package-manager/*.json \".devcontainer/**/*.json\" \"examples/**/scripts/*.mjs\" bin/*.mjs bin/*.cjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write src tests \"scripts/**/*.mjs\" scripts/*-assets.json scripts/gcc-images.json scripts/bootstrap-tools.json scripts/package-manager/*.json \".devcontainer/**/*.json\" \"examples/**/scripts/*.mjs\" bin/*.mjs bin/*.cjs package.json tsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
     "lint": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests scripts bin \"examples/**/scripts/*.mjs\" --max-warnings 0 .pnpmfile.cjs eslint.config.mjs vitest.config.mjs",
     "bundle:check": "node scripts/check-bundle.mjs",
     "test": "node node_modules/vitest/vitest.mjs run",

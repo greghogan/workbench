@@ -34,7 +34,13 @@ import { readProjects } from "./core.js";
 import { synchronize } from "./sync.js";
 import { prepareUpdate } from "./update-prepare.js";
 import { updateWorkbench } from "./update.js";
-import { installNativeTools, listNativeTools, nativeEnvironment, installContainerTools } from "./native-tools.js";
+import {
+  installNativeTools,
+  listNativeTools,
+  nativeEnvironment,
+  installContainerTools,
+  type NativeToolSelection,
+} from "./native-tools.js";
 import { runCommand } from "./checks.js";
 import { prepareVcpkg } from "./vcpkg.js";
 import { executeDevcontainer } from "./devcontainers.js";
@@ -46,9 +52,9 @@ import { guardToolchains, quote } from "./toolchains.js";
 import { configScopes, showConfiguration, setConfiguration, type ConfigScope } from "./config-command.js";
 import { completionCandidates, completionScript, installCompletion } from "./completion.js";
 import { listDevelopment, useDevelopment } from "./development.js";
+import { prepareOfflineProfile, verifyOfflineProfile, publishOfflineProfile } from "./offline-profiles.js";
 import { listReleaseProfiles, prepareReleases } from "./release-profiles.js";
 import { dependencySetup, pnpmStorageConfiguration } from "./dependencies.js";
-import { type CompilerSelection } from "./compilers.js";
 import { executePhpCoverage } from "./php-coverage.js";
 import { executeComposer, composerBootstrap } from "./php-manager.js";
 import { executeBundler } from "./ruby-manager.js";
@@ -437,6 +443,49 @@ const development = program
   .action((options: { json?: boolean }) => {
     listDevelopment(root, options.json);
   });
+for (const operation of ["prepare", "verify", "publish"] as const) {
+  const command = development
+    .command(operation)
+    .description(
+      operation === "publish"
+        ? "Push a verified development image to GHCR and verify its registry digest"
+        : operation === "prepare"
+          ? "Build an image online, then verify offline without host dependency caches"
+          : "Verify a prepared image without networking or host dependency caches",
+    )
+    .argument("<profile>");
+  if (operation === "publish") command.requiredOption("--image <reference>", "Explicit ghcr.io/owner/image:tag");
+  command.action((profile: string, options: { image?: string }) => {
+    runCommand(
+      root,
+      `development ${operation}`,
+      [
+        "node",
+        "{workbench}/bin/workbench.mjs",
+        "offline-exec",
+        operation,
+        profile,
+        ...(options.image ? [options.image] : []),
+      ],
+      true,
+      "native",
+      root,
+      undefined,
+      false,
+    );
+  });
+}
+program
+  .command("offline-exec", { hidden: true })
+  .argument("<operation>")
+  .argument("<profile>")
+  .argument("[image]")
+  .action(async (operation: string, profile: string, image?: string) => {
+    if (operation === "prepare") await prepareOfflineProfile(root, profile);
+    else if (operation === "verify") await verifyOfflineProfile(root, profile);
+    else if (operation === "publish" && image) await publishOfflineProfile(root, profile, image);
+    else throw new Error("Unknown offline image operation");
+  });
 development
   .command("use")
   .description("Select an ignored local development profile; prompt when omitted")
@@ -466,9 +515,10 @@ const tools = program
   .description("Show native tool pins and installation locations")
   .option("--path <path>", "Select one registered language root; default: all roots")
   .option("--json", "Show installation paths and acquisition policy identities as JSON")
+  .option("--exclude-tool <name>", "Omit a declared tool from this plan; repeat to omit several", collect, [])
   .addOption(new Option("--compiler <family>", "Inspect a supported C/C++ compiler").choices(["clang", "gcc"]))
   .option("--compiler-version <version>", "Inspect an exact compiler compatibility target")
-  .action((options: CompilerSelection & { path?: string; json?: boolean }) => {
+  .action((options: NativeToolSelection & { path?: string; json?: boolean }) => {
     if ((options.compiler || options.compilerVersion) && options.path === undefined)
       throw new Error("compiler overrides require --path");
     listNativeTools(root, options.path, options.json, options);
@@ -478,6 +528,7 @@ tools
   .description("Explicitly install and verify pinned native tools")
   .option("--path <path>", "Select one registered language root; default: all roots")
   .option("--tool <name>", "Install only one declared native tool in the selected roots")
+  .option("--exclude-tool <name>", "Skip installing a tool; existing toolchain checks still apply", collect, [])
   .addOption(new Option("--compiler <family>", "Select a supported C/C++ compiler").choices(["clang", "gcc"]))
   .option("--compiler-version <version>", "Install an exact compiler compatibility target")
   .option("--devcontainer", "Install only the host Node runtime and locked Dev Container CLI")
@@ -489,7 +540,7 @@ tools
   )
   .action(
     (
-      options: CompilerSelection & {
+      options: NativeToolSelection & {
         path?: string;
         tool?: string;
         devcontainer?: boolean;
@@ -500,6 +551,9 @@ tools
         throw new Error("compiler installation overrides require --path");
       if (options.devcontainer && options.path !== undefined) throw new Error("select --devcontainer or --path");
       if (options.devcontainer && options.tool !== undefined) throw new Error("select --devcontainer or --tool");
+      if (options.devcontainer && options.excludeTool?.length)
+        throw new Error("select --devcontainer or --exclude-tool");
+      if (options.tool !== undefined && options.excludeTool?.length) throw new Error("select --tool or --exclude-tool");
       if (options.tool === "") throw new Error("--tool requires a nonempty declared tool name");
       if (options.devcontainer && options.environment === "devcontainer")
         throw new Error(
@@ -516,6 +570,7 @@ tools
           ...(options.compiler ? ["--compiler", options.compiler] : []),
           ...(options.compilerVersion ? ["--compiler-version", options.compilerVersion] : []),
           ...(options.tool ? ["--tool", options.tool] : []),
+          ...(options.excludeTool ?? []).flatMap((tool) => ["--exclude-tool", tool]),
         ],
         true,
         options.environment ?? "native",
@@ -532,7 +587,8 @@ program
   .option("--compiler <family>")
   .option("--compiler-version <version>")
   .option("--tool <name>")
-  .action((path: string | undefined, options: CompilerSelection & { devcontainer?: boolean; tool?: string }) =>
+  .option("--exclude-tool <name>", "", collect, [])
+  .action((path: string | undefined, options: NativeToolSelection & { devcontainer?: boolean; tool?: string }) =>
     options.devcontainer ? installContainerTools(root) : installNativeTools(root, path, options, options.tool),
   );
 program

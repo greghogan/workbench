@@ -3,6 +3,7 @@ import { readConfig } from "./core.js";
 import { executionPreference, selectedDevelopmentProfile } from "./environments.js";
 import { setConfiguration } from "./config-command.js";
 import { terminalTable } from "./terminal-table.js";
+import { preparedOfflineProfile } from "./offline-profiles.js";
 
 export function inspectDevelopment(root: string) {
   const selected = selectedDevelopmentProfile(root);
@@ -54,6 +55,7 @@ export async function useDevelopment(root: string, requested?: string): Promise<
   }
   const profile = selectedDevelopmentProfile(root, name);
   if (!profile) throw new Error("a development profile name is required");
+  if (profile.offline) preparedOfflineProfile(root, profile);
   setConfiguration(root, "development.profile", profile.name, "local");
   console.log(
     `Selected development profile '${profile.name}' (${profile.builder}, ${profile.workspace}). Open a new workbench shell to use it.`,

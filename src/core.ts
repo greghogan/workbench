@@ -68,6 +68,7 @@ export type Config = Record<string, unknown> & {
   markdown?: { wrap_width?: number };
   checks?: { environment?: string; nix_docker_image?: string; allow_empty?: boolean };
   ci?: {
+    cache?: { artifacts?: Record<string, "cache" | "download"> };
     operating_systems?: string[];
     architectures?: Partial<Record<"linux" | "macos" | "windows", string[]>>;
     environments?: string[];
@@ -299,6 +300,13 @@ export function scan(projectDirectory: string, kind: Kind): RecordFile[] {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const path = join(current, entry.name);
       if (entry.isDirectory()) {
+        // A sibling record owns this directory's supporting files. They are
+        // attachments, so record discovery must not interpret their contents.
+        if (
+          new RegExp(`^${kind}-[0-9A-Za-z_]+$`).test(entry.name) &&
+          lstatSync(`${path}.${detail(kind).extension}`, { throwIfNoEntry: false })?.isFile()
+        )
+          continue;
         walk(path);
         continue;
       }

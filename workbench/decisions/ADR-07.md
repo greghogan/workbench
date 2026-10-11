@@ -7,6 +7,9 @@ summary: Task hierarchy, completion, history, commit references.
 A task records an outcome, state, current plan, material findings, and completion evidence. Plans gain detail as work
 approaches implementation.
 
+Supporting files under ADR-3 may include small reproduction fixtures or design assets; routine execution logs remain
+disposable.
+
 Begin substantive tasks with a short review summary for humans: the intended or delivered change, verification status,
 and remaining decisions or limitations. Keep it current as work proceeds. Detailed plans, findings, and evidence follow
 for agents and deeper review; the summary links to that evidence rather than repeating it. The summary is prose, not

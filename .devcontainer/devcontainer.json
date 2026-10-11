@@ -10,7 +10,7 @@
     "sh",
     "-eu",
     "-c",
-    "if [ -f .workbench/bin/workbench.mjs ]; then node .workbench/bin/workbench.mjs tools install; else node bin/workbench.mjs tools install; fi"
+    "set --; if [ \"$(printenv GITHUB_ACTIONS || true)\" = true ] || [ -n \"$(printenv WORKBENCH_CI_TARGET || true)\" ]; then set -- --exclude-tool miri; fi; if [ -f .workbench/bin/workbench.mjs ]; then node .workbench/bin/workbench.mjs tools install \"$@\"; else node bin/workbench.mjs tools install \"$@\"; fi"
   ],
   "build": {
     "dockerfile": "Dockerfile",

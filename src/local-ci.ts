@@ -1,17 +1,16 @@
+import { ciImageContext, gccImage, verifyCIImage } from "../scripts/ci-image.mjs";
 import { readDistributionPin } from "./distribution-manifest.js";
 import { ciSelection, printCISelection, type CISelectionOptions } from "./ci-selection.js";
 import { validate } from "./validation.js";
 import { provisionCollectionSnapshot } from "./collection-provision.js";
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { ciTargets, printCITargets, type CITarget } from "./ci-targets.js";
 import { distributionRoot, readText } from "./core.js";
-import { type ToolAsset } from "./tool-downloads.js";
 import { CILifecycle, CIInterrupted, executeCI } from "./ci-lifecycle.js";
 import { parseCIWorkerRequest, type CIWorkerRequest } from "../scripts/ci-worker-request.mjs";
 import { userDirectory } from "./storage.js";
-import { ownedPath } from "./paths.js";
 import { quote } from "./toolchains.js";
 import { required } from "./invariants.js";
 import { CIWorkspace } from "./ci-workspace.js";
@@ -80,6 +79,13 @@ export function localCIPlan(root: string, options: LocalCIOptions = {}) {
     platform: "linux-x64",
     network: "host",
     image: baseImage,
+    compiler_images: Object.fromEntries(
+      selected.flatMap((target) =>
+        target.kind === "compatibility" && target.runtime === "gcc"
+          ? [[target.version, gccImage(distributionRoot(root), target.version)]]
+          : [],
+      ),
+    ),
     stage: "ci",
     selected,
     excluded,
@@ -108,7 +114,7 @@ export function listLocalCI(root: string, options: LocalCIOptions, json = false)
     `${String(plan.excluded.length)} targets excluded; --plan --json includes reasons and resolved commands.`,
   );
   console.log(
-    "Native and compatibility targets use the Ubuntu container. Managed targets use their configured host launchers.",
+    "Native and runtime compatibility targets use Ubuntu; GCC uses its pinned compiler image. Managed targets use their configured launchers.",
   );
   console.log(
     "GitHub permissions, OIDC, registry publication, and other native platforms require hosted verification.",
@@ -116,30 +122,19 @@ export function listLocalCI(root: string, options: LocalCIOptions, json = false)
 }
 
 async function rehearsalImage(distribution: string, context: string, image: string): Promise<string> {
-  cpSync(join(distribution, "scripts/ci-linux"), context, { recursive: true });
-  const node = readText(join(distribution, ".node-version")).trim();
-  const assets = JSON.parse(readFileSync(join(distribution, "scripts/native-assets.json"), "utf8")) as Record<
-    string,
-    Record<string, Record<string, ToolAsset>>
-  >;
-  const asset = assets.node?.[node]?.["linux-x64"];
-  if (!asset?.checksums) throw new Error("Local CI requires a signed Linux x64 Node bootstrap artifact");
-  cpSync(ownedPath(distribution, asset.checksums.signature.keys), join(context, "node.asc"));
-  asset.checksums.signature.keys = "node.asc";
-  writeFileSync(join(context, "bootstrap.json"), JSON.stringify(asset));
-  const recipe = digest(
-    JSON.stringify([
-      image,
-      ...["Dockerfile", "bootstrap.py", "bootstrap.json", "node.asc"].map((name) => readText(join(context, name))),
-    ]),
-  );
-  const tag = `workbench-ci:${recipe}`;
-  await executeCI("docker", ["build", "--network=host", "--build-arg", `BASE_IMAGE=${image}`, "--tag", tag, context]);
-  const platform = JSON.parse(
-    await executeCI("docker", ["image", "inspect", "--format", "{{json .}}", tag], { capture: true }),
-  ) as { Os: string; Architecture: string };
-  if (platform.Os !== "linux" || platform.Architecture !== "amd64")
-    throw new Error("Local CI image is not native Linux x64");
+  const tag = ciImageContext(distribution, context, image);
+  await executeCI("docker", [
+    "build",
+    "--platform",
+    "linux/amd64",
+    "--network=host",
+    "--build-arg",
+    `BASE_IMAGE=${image}`,
+    "--tag",
+    tag,
+    context,
+  ]);
+  verifyCIImage(tag);
   return tag;
 }
 
@@ -233,7 +228,11 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
       );
     await lifecycle.checkpoint();
     let image: string | undefined;
-    if (plan.selected.some((target) => target.kind !== "environment")) {
+    if (
+      plan.selected.some(
+        (target) => target.kind !== "environment" && !(target.kind === "compatibility" && target.runtime === "gcc"),
+      )
+    ) {
       try {
         image = await rehearsalImage(join(resources.workspace, guestDistribution), resources.context, plan.image);
       } catch (error) {
@@ -249,7 +248,8 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
       mkdirSync(path, { recursive: true });
     const workers: CIWorker[] = [];
     for (const target of plan.selected) {
-      if (target.kind !== "environment" && !image) continue;
+      if (target.kind !== "environment" && !(target.kind === "compatibility" && target.runtime === "gcc") && !image)
+        continue;
       const report = required(
         run.targets.find((entry) => entry.id === target.id),
         "selected target result",
@@ -260,12 +260,17 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
         log: join(report, "job.log"),
         start: async () => {
           const workspace = await resources.fork(target.id);
-          const jobShared = {
+          const jobShared: Record<string, string> = {
             ...shared,
             ...cpuEnvironment(plan.resources.cpusPerJob),
             WORKBENCH_CONTAINER_CHECKOUT: `${shared.WORKBENCH_CONTAINER_CHECKOUT ?? ""}#${target.id}`,
           };
           const jobDistribution = join(workspace, guestDistribution);
+          const gcc = target.kind === "compatibility" && target.runtime === "gcc";
+          const jobImage = gcc
+            ? await rehearsalImage(jobDistribution, join(report, "image"), gccImage(jobDistribution, target.version))
+            : image;
+          if (gcc) jobShared.WORKBENCH_GCC_IMAGE_VERSION = target.version;
           const request = join(report, "request.json");
           const env = {
             ...process.env,
@@ -279,7 +284,7 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
             distribution: jobDistribution,
             target,
             reports: report,
-            ...(image ? { image } : {}),
+            ...(jobImage ? { image: jobImage } : {}),
             cache: plan.cache,
             shared: jobShared,
             adapter: resources.adapter,
