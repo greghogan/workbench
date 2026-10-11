@@ -59,7 +59,15 @@ export async function artifactResponse(urlText: string, signal?: AbortSignal): P
     let response: Response | undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        response = await fetch(url, { redirect: "manual", ...(signal ? { signal } : {}) });
+        // Re-evaluate credentials on every hop; never forward GitHub API tokens to an asset CDN.
+        const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+        const headers =
+          url.origin === "https://api.github.com" && token ? { Authorization: `Bearer ${token}` } : undefined;
+        response = await fetch(url, {
+          redirect: "manual",
+          ...(headers ? { headers } : {}),
+          ...(signal ? { signal } : {}),
+        });
         break;
       } catch (cause) {
         if (signal?.aborted || attempt === 2)

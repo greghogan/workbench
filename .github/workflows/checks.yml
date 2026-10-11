@@ -4,6 +4,8 @@ name: Checks
 # changes still receive validation and a final required status.
 on:
   push:
+    # Publication branches select a separate operation on a revision whose Checks already passed.
+    branches-ignore: ["ci/publication-verification-**", "ci/windows-diagnostics-**"]
   pull_request:
 
   # Use the full matrix for initial verification; ordinary pushes/PRs select affected roots.
@@ -21,6 +23,10 @@ on:
   # Release verification covers every configured root. This workflow does not publish.
   release:
     types: [published]
+
+# Read-only API authentication avoids the shared unauthenticated attestation rate limit.
+env:
+  GH_TOKEN: ${{ github.token }}
 
 # Pull request code runs with read-only repository access.
 permissions:

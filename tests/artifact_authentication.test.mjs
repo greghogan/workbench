@@ -180,3 +180,21 @@ test("artifact connections retry transport failures within the shared deadline",
   );
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test("GitHub API authentication follows the API origin and is stripped from redirected asset requests", async () => {
+  vi.stubEnv("GH_TOKEN", "fixture-read-only-token");
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(null, { status: 302, headers: { location: "https://assets.example/attestation" } }),
+    )
+    .mockResolvedValueOnce(new Response("signed bundle"));
+  vi.stubGlobal("fetch", fetcher);
+  const stream = await artifactResponse("https://api.github.com/repos/example/project/attestations/sha256:abc");
+  for await (const chunk of stream) expect(chunk.toString()).toBe("signed bundle");
+  expect(fetcher.mock.calls[0][1].headers).toEqual({ Authorization: "Bearer fixture-read-only-token" });
+  expect(fetcher.mock.calls[1][1].headers).toBeUndefined();
+  fetcher.mockReset().mockResolvedValue(new Response("public asset"));
+  await artifactResponse("https://api.github.com.evil.example/asset");
+  expect(fetcher.mock.calls[0][1].headers).toBeUndefined();
+});

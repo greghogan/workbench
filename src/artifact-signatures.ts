@@ -140,8 +140,9 @@ export async function signatureVerifier(signature: ArtifactSignature, staging: s
     async finish() {
       await completed;
       signal.removeEventListener("abort", abort);
-      if (failure) throw failure;
-      const valid = [...status.matchAll(/^\[GNUPG:\] VALIDSIG ([A-F0-9]+) .+$/gm)];
+      if (failure)
+        throw new Error(`${failure.message}${status ? `\n${status.trim().slice(-8192)}` : ""}`, { cause: failure });
+      const valid = [...status.replaceAll("\r", "").matchAll(/^\[GNUPG:\] VALIDSIG ([A-F0-9]+) .+$/gm)];
       if (
         !valid.some(
           (match) =>

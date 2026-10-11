@@ -222,3 +222,5 @@ preserves the previous references for review while current documents use the reo
 - `scripts/ci-cache-metrics.mjs` records cache footprint and elapsed verification-window evidence.
 - `scripts/ci-publish.mjs` verifies prepared image receipts, publishes selected CI tags, and checks registry pulls.
 - `.github/workflows/publication.yml` separately selects Nix/Guix registry verification with package write authority.
+
+- `.github/workflows/windows-diagnostics.yml` is temporary hosted signature-verifier diagnosis.

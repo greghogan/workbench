@@ -21,7 +21,13 @@
     "log": "/tmp/workbench-7-windows-preflight.log"
   },
   "previous_hosted_run_inspected": 37834795016,
-  "hosted_verification": "pending",
+  "hosted_verification": {
+    "branch": "ci/draft-functionality-20261011",
+    "revision": "bb3c0292322504c2b9884144fc64788f78c1ec24",
+    "run": 38114097093,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38114097093",
+    "status": "in progress"
+  },
   "deployment": "not authorized or performed",
   "document_acceptance": "pending human review"
 }
