@@ -198,3 +198,10 @@ about 17 minutes and building the pinned Guix runtime for another 21. Warm measu
 installs every selected tool and prepares passing roots' release artifacts. Its core failures have fallen from 65 to 21;
 remaining fixes cover Git null-device fixtures, portable source maps, scheduler fixtures, selected PATH casing, archive
 filename encoding, and canonical Ruby line endings. Shared installation lifecycle tests pass on Windows.
+
+macOS passes every language example and its release preparation. Its Workbench core failures fell from 25 to two fixture
+assumptions after canonicalizing temporary paths and fixing Darwin's read-only directory rename behavior; installation
+and update lifecycle checks pass. The final fixture corrections are under hosted verification. Windows passes every
+language except C/C++, whose vcpkg chainload incorrectly assumed MSVC-style compiler flags. A native GNU Clang chainload
+correction is under hosted verification. The latest complete local gate passes all 372 tests and 13 checks; the original
+index remains unchanged.

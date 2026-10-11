@@ -44,6 +44,7 @@ jobs:
               - examples/languages/ruby
               - examples/languages/php
             msvc: true
+            runtime: ""
     steps:
       - name: Preserve canonical text and skill symlinks
         run: |
@@ -218,6 +219,7 @@ jobs:
             paths:
               - .
             msvc: true
+            runtime: ""
     steps:
       - name: Preserve canonical text and skill symlinks
         run: |

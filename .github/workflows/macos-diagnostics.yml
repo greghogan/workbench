@@ -34,6 +34,7 @@ jobs:
             paths:
               - .
             msvc: true
+            runtime: ""
     steps:
       - name: Preserve canonical text and skill symlinks
         run: |

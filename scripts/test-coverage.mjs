@@ -13,6 +13,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -34,7 +35,27 @@ export async function coverageWorkspace(root, temporary) {
   mkdirSync(workspace);
   copySourceCheckout(root, workspace);
   // Reuse installed build/test dependencies; never copy or download them for coverage.
-  symlinkSync(realpathSync.native(join(root, "node_modules")), join(workspace, "node_modules"), "junction");
+  const dependencies = realpathSync.native(join(root, "node_modules"));
+  const destination = join(workspace, "node_modules");
+  if (process.platform !== "win32") symlinkSync(dependencies, destination, "junction");
+  else {
+    // Resolve package targets before crossing drives: pnpm's relative package links
+    // must retain their original virtual-store base through the disposable workspace.
+    mkdirSync(destination);
+    const link = (source, target) => {
+      const canonical = realpathSync.native(source);
+      symlinkSync(canonical, target, statSync(canonical).isDirectory() ? "junction" : "file");
+    };
+    for (const entry of readdirSync(dependencies)) {
+      const source = join(dependencies, entry);
+      const target = join(destination, entry);
+      if (!entry.startsWith("@")) link(source, target);
+      else {
+        mkdirSync(target);
+        for (const name of readdirSync(source)) link(join(source, name), join(target, name));
+      }
+    }
+  }
   for (const name of ["main", "skills"]) await build(bundleOptions(workspace, name, true));
   return workspace;
 }
