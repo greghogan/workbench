@@ -5,6 +5,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { nativeAssetPruningPlan, pruneNativeAssets, publishNativeAssets } from "../src/native-asset-maintenance.ts";
 import { packageManagerCommand, packageManagerInstallationPlan } from "../src/package-manager.ts";
 import { userDirectory } from "../src/storage.ts";
+import { ciMatrix } from "../src/ci.ts";
+import { assetFor } from "../src/native-assets.ts";
+import { toolProfiles } from "../src/tool-profiles.ts";
 
 vi.mock("../src/tool-downloads.js", () => ({ execute: vi.fn() }));
 import { execute } from "../src/tool-downloads.ts";
@@ -26,6 +29,24 @@ function fixture() {
   return root;
 }
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+
+test("configured native tool profiles have verified metadata for every selected CI platform", () => {
+  const profiles = toolProfiles(repository);
+  for (const target of ciMatrix(repository).native.include) {
+    if (!target.toolchain) continue;
+    const profile = profiles.find((profile) => profile.name === target.toolchain);
+    const os = target.os === "macos" ? "darwin" : target.os === "windows" ? "win32" : target.os;
+    const platform = `${os}-${target.architecture}`;
+    for (const [name, version] of Object.entries(profile.tools ?? {})) {
+      // Python and Rust use their verified upstream managers rather than this artifact catalog.
+      if (["python", "rust", "miri"].includes(name)) continue;
+      expect(
+        assetFor(repository, { name, version }, undefined, platform),
+        `${name} ${version} ${platform}`,
+      ).toBeDefined();
+    }
+  }
+});
 
 test("native metadata pruning retains native, bootstrap and compiler support pins on every host", () => {
   // Existing reference roots include both compiler families and independently pinned C/C++ toolchains.
