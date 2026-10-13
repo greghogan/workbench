@@ -98,8 +98,22 @@ long-path extraction test on Windows. Comparing local and hosted catalogs additi
 hash difference; preparation now records Git's executable flag instead of distinguishing modes 700 and 755.
 
 The updated local Workbench gate passes all 390 tests, coverage floors, formatting, lint, types, bundle parity,
-validation, workflow checks, documentation, advisory queries, and credential scanning. Guix hosted verification is still
-running; the pending fixes will be pushed after its results are inspected.
+validation, workflow checks, documentation, advisory queries, and credential scanning. The first hosted Guix image
+completed package preparation; its cold bootstrap took about 40 minutes and layer export another eight. It was canceled
+during unpacking to inspect its logs before the follow-up push, so hosted offline verification and publication remain
+pending. No Guix package or test failure was identified in those logs.
+
+The fixes are pushed as `92d009e` on the same temporary branch. The
+[follow-up run](https://github.com/greghogan/workbench/actions/runs/38411265319) passed Linux x64 and ARM64 (16
+selections each), macOS (14), Nix (12), and Guix (12). All four Linux images were published to GHCR, pulled by digest,
+and verified with fresh offline builds/tests; their catalog history is retained. Guix's root gate passed all 390 tests.
+
+Windows passed all examples except C, whose Git download failed on a connection reset. Its C++ gate passed, including
+vcpkg port extraction, LTO, sanitizers, and release verification. The three Workbench Node selections failed only the
+new long-path regression fixture: Git rejected its oversized working-directory argument before loading repository
+configuration. The corrected fixture keeps that startup path short while retaining the long extraction prefix and
+isolating global Git configuration. Focused local checks pass. The next push retains the same preparation identities and
+will verify acquisition of the published images while rechecking Windows.
 
 ## Remaining verification
 

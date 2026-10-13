@@ -84,13 +84,14 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
     const globalConfig = join(temporary, "empty-gitconfig");
     writeFileSync(globalConfig, "");
     mkdirSync(port, { recursive: true });
+    // Git resolves its working directory before loading local config; test long output paths after startup.
     execute(
       "git",
       [
         "--git-dir",
         join(installation, ".git"),
         "--work-tree",
-        port,
+        installation,
         "checkout-index",
         "-af",
         `--prefix=${port.replaceAll("\\", "/")}/`,
