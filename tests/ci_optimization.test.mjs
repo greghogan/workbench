@@ -400,6 +400,31 @@ test.skipIf(process.platform !== "linux")(
   },
 );
 
+test("hosted persistence selection reads the configured image table or selects host caches", () => {
+  const root = fixture();
+  const checkout = join(root, "checkout");
+  copySourceCheckout(repository, checkout);
+  const workflow = parse(readFileSync(join(repository, ".github/workflows/checks.yml"), "utf8"));
+  const step = workflow.jobs.native.steps.find((step) => step.id === "persistence");
+  const script = /^node --input-type=module <<'JS'\n([\s\S]+)\nJS\n?$/.exec(step.run)?.[1];
+  expect(script).toBeDefined();
+  const configPath = join(checkout, "workbench/config.toml");
+  const config = parseTOML(readFileSync(configPath, "utf8"));
+  const output = join(root, "output");
+  for (const configured of [true, false]) {
+    if (!configured) delete config.ci.images;
+    writeFileSync(configPath, stringifyTOML(config));
+    writeFileSync(output, "");
+    const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+      cwd: checkout,
+      env: { ...process.env, GITHUB_OUTPUT: output },
+      encoding: "utf8",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(output, "utf8")).toBe(`container=${process.platform === "linux" && configured}\n`);
+  }
+});
+
 test("compatibility wrapper selects one verified runtime per root and forwards the exact version", () => {
   const root = fixture();
   mkdirSync(join(root, "bin"));

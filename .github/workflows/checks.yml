@@ -130,8 +130,9 @@ jobs:
           node --input-type=module <<'JS'
           import { execFileSync } from 'node:child_process';
           import { appendFileSync } from 'node:fs';
-          const image = execFileSync(process.execPath, ['bin/workbench.mjs', 'config', 'get', 'ci.images.native', '--scope', 'project'], { encoding: 'utf8' }).trim();
-          appendFileSync(process.env.GITHUB_OUTPUT, `container=${process.platform === 'linux' && image !== '<unset>'}\n`);
+          const encoded = execFileSync(process.execPath, ['bin/workbench.mjs', 'config', 'get', 'ci.images', '--scope', 'project'], { encoding: 'utf8' }).trim();
+          const image = encoded === '<unset>' ? undefined : JSON.parse(encoded).native;
+          appendFileSync(process.env.GITHUB_OUTPUT, `container=${process.platform === 'linux' && Boolean(image)}\n`);
           JS
 
       - name: Authenticate the project image registry
