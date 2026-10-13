@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stringify } from "smol-toml";
@@ -134,6 +134,19 @@ test("offline profiles validate their declared root, input paths, and command bo
   expect(() =>
     validateDevelopmentProfiles([{ ...profile, workspace: "host", container_config: undefined }], "profiles"),
   ).toThrow(/offline requires/);
+});
+
+linuxTest("image identities normalize executable permissions as a Git checkout does", () => {
+  const pin = join(root, "app/pin");
+  chmodSync(pin, 0o600);
+  const plain = offlineInputs(root, profile);
+  chmodSync(pin, 0o644);
+  expect(offlineInputs(root, profile)).toBe(plain);
+  chmodSync(pin, 0o700);
+  const executable = offlineInputs(root, profile);
+  expect(executable).not.toBe(plain);
+  chmodSync(pin, 0o755);
+  expect(offlineInputs(root, profile)).toBe(executable);
 });
 
 test("source changes reuse prepared inputs while pins, recipes, and profile changes invalidate them", () => {

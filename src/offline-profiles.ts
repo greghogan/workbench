@@ -85,7 +85,8 @@ export function offlineInputManifest(root: string, profile: DevelopmentProfile) 
         : readdirSync(path).sort();
       for (const child of children) visit(`${name}/${child}`, gitAware);
     } else if (stat.isFile() && stat.size <= 64 * 1024 * 1024)
-      files.push([name, hash(readFileSync(path)), stat.mode & 0o111]);
+      // Git preserves the executable flag, not owner/group permission differences.
+      files.push([name, hash(readFileSync(path)), stat.mode & 0o100 ? 0o111 : 0]);
     else throw new Error(`unsupported offline input: ${name}`);
   };
   for (const name of [...new Set([profile.container_config, ...profile.offline.inputs])].sort()) visit(name);

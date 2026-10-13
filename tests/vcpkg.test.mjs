@@ -44,6 +44,8 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
   const revision = git(["rev-parse", "HEAD"]).trim();
   const installation = join(cache, "toolchains/vcpkg", revision, `${process.platform}-${process.arch}`);
   execute("git", ["clone", source, installation], { capture: true });
+  if (process.platform === "win32")
+    execute("git", ["config", "--local", "core.longpaths", "false"], { cwd: installation });
   writeFileSync(join(installation, process.platform === "win32" ? "vcpkg.exe" : "vcpkg"), "fixture");
   const build = join(paths.directory, "debug");
   writeFileSync(join(root, ".vcpkg-version"), "latest");
@@ -75,6 +77,30 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
   prepareVcpkg(root, build);
   expect(readFileSync(join(build, "workbench-compiler.cmake"), "utf8")).toContain("clang++");
   if (process.platform === "win32") {
+    expect(
+      execute("git", ["config", "--local", "--get", "core.longpaths"], { cwd: installation, capture: true }).trim(),
+    ).toBe("true");
+    const port = join(build, "vcpkg_buildtrees", "versioning_", "versions", "a".repeat(80), "b".repeat(80));
+    const globalConfig = join(temporary, "empty-gitconfig");
+    writeFileSync(globalConfig, "");
+    mkdirSync(port, { recursive: true });
+    execute(
+      "git",
+      [
+        "--git-dir",
+        join(installation, ".git"),
+        "--work-tree",
+        port,
+        "checkout-index",
+        "-af",
+        `--prefix=${port.replaceAll("\\", "/")}/`,
+      ],
+      {
+        capture: true,
+        env: { ...process.env, GIT_CONFIG_COUNT: "0", GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: "1" },
+      },
+    );
+    expect(readFileSync(join(port, "recipe"), "utf8")).toBe("pinned");
     const chainload = readFileSync(join(build, "workbench-compiler.cmake"), "utf8");
     expect(chainload).toContain('set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")');
     expect(chainload).not.toContain("toolchains/windows.cmake");

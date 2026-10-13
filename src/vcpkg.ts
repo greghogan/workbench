@@ -83,6 +83,10 @@ export function prepareVcpkg(
     throw new Error(
       `${installation}: vcpkg must match its pinned checkout; refusing modified or incomplete tools (HEAD ${head}; changes ${changed.slice(0, 4096) || "none"}; executable ${existsSync(executable) ? "present" : "missing"})`,
     );
+  // Port extraction invokes Git from sanitized Windows environments. Retain this
+  // setting in our checkout so versioned ports do not depend on global config.
+  if (process.platform === "win32")
+    execute("git", ["config", "--local", "core.longpaths", "true"], { cwd: installation });
   const architecture = ({ x64: "x64", arm64: "arm64" } as Record<string, string>)[process.arch];
   const system = ({ linux: "linux", darwin: "osx", win32: "windows" } as Record<string, string>)[process.platform];
   if (!architecture || !system) throw new Error(`no vcpkg reference target for ${process.platform}/${process.arch}`);

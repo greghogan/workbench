@@ -83,6 +83,24 @@ including Workbench's 387 tests. Offline verification identified missing `make` 
 manifest; these are now declared. All three images have passed final offline verification. Local verification is
 complete; hosted verification is next.
 
+## Hosted verification
+
+The temporary branch `ci/draft-environments-20261013` includes draft records solely for testing. In the
+[hosted rehearsal](https://github.com/greghogan/workbench/actions/runs/38401748678), Linux x64 passed all 16 native
+selections and Nix passed all 12 roots. Both published images to GHCR, pulled them by digest, and passed fresh offline
+verification. Their preparation and publication observations are retained in the project image catalog.
+
+macOS passed 13 of 14 selections; Windows passed 11 of 14. Node 22 artifact metadata originally covered Linux x64 only,
+so the other platforms could not prepare that profile. The missing platform entries now use Node's authenticated
+checksum catalog, with a regression check across every configured profile and CI platform. Windows C/C++ also exposed
+Git's long-path limit during vcpkg port extraction; the managed checkout now sets that option locally, with an isolated
+long-path extraction test on Windows. Comparing local and hosted catalogs additionally exposed an executable-permission
+hash difference; preparation now records Git's executable flag instead of distinguishing modes 700 and 755.
+
+The updated local Workbench gate passes all 390 tests, coverage floors, formatting, lint, types, bundle parity,
+validation, workflow checks, documentation, advisory queries, and credential scanning. Guix hosted verification is still
+running; the pending fixes will be pushed after its results are inspected.
+
 ## Remaining verification
 
 Use the locally available Linux x64 host first. GitHub then verifies the other native platforms and real GHCR
