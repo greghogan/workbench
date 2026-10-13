@@ -80,7 +80,8 @@ The approved Guix repair selects the existing channel's `cmake-minimal@4.3.3` in
 package still supplies CMake 4.1, which lacks an operation required by the selected vcpkg tooling. Both manifests
 document this temporary choice and the condition for switching back to `cmake`. All twelve Guix gates now pass,
 including Workbench's 387 tests. Offline verification identified missing `make` and `xz` test prerequisites in the root
-manifest; these are now declared. All three images have passed final offline verification. Local verification is complete; hosted verification is next.
+manifest; these are now declared. All three images have passed final offline verification. Local verification is
+complete; hosted verification is next.
 
 ## Remaining verification
 
