@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-10",
+  "task": "workbench:TSK-8",
+  "scope": "Five follow-up CI selection refactors",
+  "report_version": 1,
+  "compatibility_adapters": false,
+  "refactors": {
+    "match_groups": "Count each input group once; retain filename lists only for detailed reports; share groups across roots.",
+    "explanations": "Use structured identities independent of display text; retain every applicable immediate dependency cause; admit roots once through cycles.",
+    "public_cli": "Execute the real forwarded CLI through an isolated scheduler hold/follow protocol, with diverged history and dirty Python input.",
+    "failure_classification": "Explicit invalid-input errors distinguish expected history, declaration, change-path and checkout failures from unexpected parser and policy errors.",
+    "hosted_contract": "Validate workflow fields, root membership, disjoint identities and filename/count consistency before matrix expansion."
+  },
+  "root_ci_gate": {
+    "command": "workbench checks run --path . --stage ci",
+    "status": "passed",
+    "tests": 276,
+    "test_files": 59,
+    "coverage": {
+      "lines": {
+        "total": 5761,
+        "covered": 5126,
+        "skipped": 0,
+        "pct": 88.97
+      },
+      "statements": {
+        "total": 6934,
+        "covered": 5770,
+        "skipped": 0,
+        "pct": 83.21
+      },
+      "functions": {
+        "total": 991,
+        "covered": 900,
+        "skipped": 0,
+        "pct": 90.81
+      },
+      "branches": {
+        "total": 5451,
+        "covered": 4158,
+        "skipped": 0,
+        "pct": 76.27
+      }
+    },
+    "log": "/tmp/workbench-ci-followup-root-ci.log"
+  },
+  "coverage_change_against_previous_review": {
+    "lines": 0.11,
+    "statements": 0.15,
+    "functions": 0.29,
+    "branches": 0.21
+  },
+  "focused_gate": {
+    "tests": 45,
+    "test_files": 8,
+    "status": "passed",
+    "log": "/tmp/workbench-ci-followup-focused.log"
+  },
+  "selection_regressions": {
+    "tests": 21,
+    "public_scheduler_forwarding": "passed",
+    "all_immediate_causes_and_cycles": "passed",
+    "compact_and_detailed_selection_equivalence": "passed",
+    "unexpected_parser_and_policy_failures": "passed",
+    "malformed_hosted_plans": "rejected with diagnostics"
+  },
+  "proposed_tree_gate": {
+    "command": "workbench checks run --stage commit",
+    "status": "passed",
+    "roots": [
+      ".",
+      "examples/languages/typescript",
+      "examples/languages/rust",
+      "examples/frameworks/react",
+      "examples/languages/python",
+      "examples/languages/c",
+      "examples/languages/cpp",
+      "examples/languages/go"
+    ],
+    "platform": "linux-x64",
+    "log": "/tmp/workbench-ci-followup-proposed-gate.log",
+    "expected_skips": "AVX2-only tests skip in portable C/C++ builds; native and LTO AVX2 tests passed."
+  },
+  "hosted_adapters": {
+    "full": {
+      "mode": "full",
+      "groups": {
+        "native": 4,
+        "compatibility": 15,
+        "environments": 2,
+        "devcontainer": 8
+      },
+      "changed_count": null,
+      "failure": null,
+      "aggregate": "All selected checks and validation passed."
+    },
+    "fallback": {
+      "mode": "fallback",
+      "groups": {
+        "native": 4,
+        "compatibility": 15,
+        "environments": 2,
+        "devcontainer": 8
+      },
+      "changed_count": null,
+      "failure": {
+        "kind": "history",
+        "operation": "git rev-parse",
+        "message": "Command failed: git -C /tmp/workbench-ci-review-20261010 rev-parse --verify --end-of-options workbench-missing-ref-for-verification^{commit}"
+      },
+      "aggregate": "All selected checks and validation passed."
+    },
+    "linux_x64_targets": 49
+  },
+  "catalog": {
+    "linux_x64_targets": 49,
+    "hosted_native_groups": 4,
+    "hosted_compatibility_groups": 15,
+    "hosted_environment_groups": 2,
+    "devcontainer_roots": 8,
+    "unchanged": true,
+    "full_matrix_execution_rerun": false,
+    "hosted_execution": false
+  },
+  "commit_preparation": {
+    "branch": "ci/review-functionality-20261010",
+    "previous_review_commit": "4b522ae",
+    "squash_parent": "35f18df",
+    "draft_documents_accepted": false,
+    "review_receipts": "unchanged",
+    "package_version": "0.1.0",
+    "push": false,
+    "publication": false
+  },
+  "source_sha256": {
+    "src/ci-selection.ts": "41782dc4c504f26109bfd7aa53dd9a13f95365048ec4332df022f1f7a8812b09",
+    "src/ci-inputs.ts": "41d85be7fd4a8c0e1425ec8f0f1f0c8de93de701df0c8eee09ea2ff5dad6156e",
+    "src/input-errors.ts": "ee0ddd3693db27495bea48a06de3a22e6e6dd3bab90b060df5172f8123e0962a",
+    "src/core.ts": "912309421e7301aea76baa0f651408ddd238ba70fd273a14eb29e9415a3277d5",
+    "src/config-schema.ts": "aa6442efdcfcdaca45bc6536d826e6e73b63fa9dc73ce257c8bf6b462d475ecb",
+    "src/profile-schema.ts": "176ff6ae7372b60199fb86fdde4229b14e0c41e98c036324c8a396511cf18bff",
+    "src/paths.ts": "e3d14ce4cbdd06ee4dfbb3fa9f07576c2ff1081829162b89b7920a2654b03249",
+    "src/language-config.ts": "cfa67544aac9b8ba8456c29bf081548094bd3aaad1b1619522ca122286b302d2",
+    "src/check-plan.ts": "11435716b9e638e84758b66c8639faf0f0a45bd3de6ab805788ffd592d134d0b",
+    "src/environments.ts": "eb8ec75f1192e2b5633986420fa44896e46425413b8eea550390a70d9c51fb3c",
+    "scripts/ci-plan-contract.mjs": "1d29c66f2caf6cc2ef4245dd3ae0d1537ba53b3f0fd332dfa9fa0c68e1ec8a7e",
+    "tests/ci_selection_policy.test.mjs": "d2136834c706968cae5da243fd6e8a61666cf4bc996d19146b37c403420706de",
+    "tests/ci_selection.test.mjs": "ef478ff4c1dbf17ccae177a047fe23fbea2c4bf607d18afc16f215ce285f1a9f",
+    "tests/ci_planning.test.mjs": "f7e402613a0740440e2e5190baca5646819f38a40f7ad6a7b4ea9e8e91b41906",
+    "tests/ci_selection_execution.test.mjs": "6e9ad7880432aa88f5237b9d981944c2816c5641cb7635d936f30dcfb92e1bb8",
+    "tests/fixtures/ci-benchctl.mjs": "cbbf035ba24dd735ddd7038fd63a7025e92deda347c6c3f77781e4777f4f1bfa",
+    "README.md": "3cac86d32bb869665761a94cbe8dc4cfb7e9ffccc27565695f839ad18ca625ab",
+    "workbench/source-map.md": "e372fa8b7d8e77402c154b8ea60411f65600bb691792ba1d0d5e000d6b06fd7d",
+    "workbench/tasks/TSK-08.md": "65f1a5a250765bd7e7a83440ceffddf4abd93e0f860cf6efc2016b807df78895",
+    "bundle/main.cjs.br": "34f05cadb61197ac38e1c6c45f3f0771e6a21d2e6f1f4ed75de1b764faa6b36d",
+    "bundle/skills.cjs.br": "dfc3b2dc452a7d4a369410d43b29b63d2ca1a07a4f0506202d5956726607d1d6",
+    "bundle/THIRD_PARTY_NOTICES.txt": "78b701feaeedea48222fb10d73bf730f12ed88405b6cd0f085d6826c8666f721",
+    "coverage/coverage-summary.json": "a8baf561a0270671eed5e0535272eb5b953fe301f12a7bbc5e62797c7fef17b9"
+  }
+}

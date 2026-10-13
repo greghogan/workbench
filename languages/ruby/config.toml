@@ -1,0 +1,8 @@
+schema_version = 1
+id = "ruby"
+name = "Ruby"
+summary = "checksummed Bundler locks, Ruby baseline syntax, RuboCop, Steep/RBS, Minitest, and branch coverage"
+reference = "examples/languages/ruby"
+manifests = [ "Gemfile", "workbench-ruby-reference.gemspec" ]
+
+starter = ["scripts/release-verify.mjs", "scripts/check.mjs", ".ruby-version", ".gitignore", "Gemfile", "Gemfile.lock", "workbench-ruby-reference.gemspec", "lib/workbench_ruby_reference.rb", "sig/workbench_ruby_reference.rbs", "bin/count", "Steepfile", ".rubocop.yml", "Rakefile", "test/test_helper.rb", "test/arithmetic_test.rb", "test/cli_test.rb", "workbench/quality.json", "README.md", "LICENSE"]

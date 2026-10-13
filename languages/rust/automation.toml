@@ -1,0 +1,102 @@
+schema_version = 1
+
+[[command]]
+role = "format"
+command = [ "cargo", "fmt", "--all", "--check" ]
+
+[[command]]
+role = "lint"
+command = [ "cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings" ]
+heavy = true
+
+[[command]]
+role = "test"
+warn_seconds = 120
+command = [ "cargo", "nextest", "run", "--all-targets", "--locked", "--no-fail-fast" ]
+heavy = true
+
+[command.coverage]
+command = [ "node", "{workbench}/scripts/check-rust.mjs" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[command]]
+role = "build"
+command = [ "cargo", "build", "--locked" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "doctests"
+role = "docs"
+command = [ "cargo", "test", "--doc", "--locked" ]
+heavy = true
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/release-rust.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "cargo", "fmt", "--all" ]
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+name = "miri portable"
+role = "miri"
+command = [ "node", "scripts/miri.mjs", "portable", "{workbench}" ]
+heavy = true
+stages = []
+environment = "native"
+
+[[command]]
+name = "miri avx2"
+role = "miri"
+command = [ "node", "scripts/miri.mjs", "avx2", "{workbench}" ]
+heavy = true
+stages = []
+environment = "native"
+
+
+[[command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "rust" ]
+stages = [ "ci" ]
+heavy = true
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-1"
+role = "compatibility-test"
+command = ["cargo", "test", "--workspace", "--all-targets", "--locked"]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-2"
+role = "compatibility-test"
+command = ["cargo", "test", "--workspace", "--doc", "--locked"]
+heavy = true
+stages = []

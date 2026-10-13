@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-10",
+  "task": "workbench:TSK-6",
+  "platform": "linux-x64",
+  "rootGate": {
+    "stage": "ci",
+    "passed": true,
+    "testFiles": 50,
+    "tests": 239,
+    "coveragePercent": {
+      "lines": 88.17,
+      "statements": 82.02,
+      "functions": 90.32,
+      "branches": 75.36
+    }
+  },
+  "managedContainerGates": [
+    {
+      "profile": "nix-container",
+      "root": "examples/languages/go",
+      "stage": "commit",
+      "user": "workbench",
+      "passed": true
+    },
+    {
+      "profile": "guix-container",
+      "root": "examples/languages/go",
+      "stage": "commit",
+      "user": "ubuntu",
+      "passed": true
+    }
+  ],
+  "releaseProfiles": [
+    {
+      "name": "go-guix-apptainer",
+      "builder": "guix",
+      "format": "apptainer",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "5253000ef727327176551786658084fcec28506e4bd6d406c8839959c6a14dfc",
+      "files": 1,
+      "bytes": 27549696
+    },
+    {
+      "name": "go-guix-docker",
+      "builder": "guix",
+      "format": "docker",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "b9e18892e8be5cb66956841b0129a21c0d7d2027fc5567dfc759bcf906a99524",
+      "files": 1,
+      "bytes": 27264599
+    },
+    {
+      "name": "go-guix-portable",
+      "builder": "guix",
+      "format": "portable",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "0a1f519ea523407aa3cf1dd3032559730433ed6dfbb84dca76b55f47d092ed89",
+      "files": 1,
+      "bytes": 29065696
+    },
+    {
+      "name": "go-guix-relocatable",
+      "builder": "guix",
+      "format": "relocatable",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "a324b2cd2a0847154e52b28cbb137bc5b89e713bda3347d6ea9497612ca5c864",
+      "files": 1,
+      "bytes": 28528489
+    },
+    {
+      "name": "go-guix-squashfs",
+      "builder": "guix",
+      "format": "squashfs",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "fe5e77f371d5102d640a49393baf9c45f130b442ba86b7ec5e9249fae5603eae",
+      "files": 1,
+      "bytes": 27549696
+    },
+    {
+      "name": "go-native",
+      "builder": "native",
+      "format": "directory",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "7c96dfbdd4b997666dea552cbe57652c65c20059436f9e22b3976da6e9dbe872",
+      "files": 1,
+      "bytes": 1519776
+    },
+    {
+      "name": "go-nix-closure",
+      "builder": "nix",
+      "format": "closure",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "fa6bc69af4ed64d1c11328c2fdd8b1df164eafdb050d5271264bf4250c0d847c",
+      "files": 2,
+      "bytes": 1520522
+    },
+    {
+      "name": "go-nix-docker",
+      "builder": "nix",
+      "format": "docker",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "c8f9008a9aebb09612edbc3e3c785a4146af703950cec9d4038d8f6fc317f6c2",
+      "files": 1,
+      "bytes": 698632
+    },
+    {
+      "name": "go-nix-portable",
+      "builder": "nix",
+      "format": "portable",
+      "verified": true,
+      "emulation": false,
+      "receiptSha256": "f3f08c7112611c7eb84ff478f4dec9372f3c5a8b6c5f77053c8e2cf0858337e4",
+      "files": 1,
+      "bytes": 690793
+    }
+  ],
+  "releaseVerificationNote": "An earlier default-all invocation passed all nine profiles. The final batch passed eight managed profiles; native preparation correctly rejected a concurrent Go check lock and passed on retry. All retained receipts match current Go source files and artifact identities.",
+  "logs": [
+    {
+      "path": "/tmp/workbench-profile-root-gate-final.log",
+      "sha256": "23f6be2a443f24a625454b5780837cb38830957f3729275d32bff7b8c73c8b7b"
+    },
+    {
+      "path": "/tmp/workbench-profile-nix-daemon-gate.log",
+      "sha256": "957912de49edce45d9a65b705ce827bdb3fb9c177f04b4d45085a4d54760f1ee"
+    },
+    {
+      "path": "/tmp/workbench-profile-guix-user-gate.log",
+      "sha256": "d6dcc4618404c144cb91f09f5175f75b0eed2d646f3ca3692b752024d7bb504a"
+    },
+    {
+      "path": "/tmp/workbench-profile-all-releases-final-bootstrap.log",
+      "sha256": "9bcc9633b76128655b17a65f1d716c0a17c1f0c7a1ea8989839c63e6a2bb4032"
+    },
+    {
+      "path": "/tmp/workbench-profile-native-final.log",
+      "sha256": "2b2a84ed883f118716ddc8993df2cb343cd2f53a1d7bbbf29c596842bf3c056b"
+    },
+    {
+      "path": "/tmp/workbench-profile-root-gate-review.log",
+      "sha256": "fa0c6645a99c3b9837f939c51598385223f6bb5daa6e0ae236d7f680d8b4b415"
+    }
+  ],
+  "limitations": [
+    "No hosted or non-Linux-x64 verification in this task; no publication.",
+    "Fresh Guix channel acquisition returned HTTP 429; the test reused and authenticated a cached checkout.",
+    "Guix cold pinned runtime build took approximately 20 minutes; warm store/cache used for final ordinary-user check.",
+    "Local CI target scheduling remains sequential.",
+    "Scoped Docker host networking used for acquisition on this host; artifact runtime verification remained offline."
+  ],
+  "environmentPinsChanged": false,
+  "finalGateNote": "Complete root CI-stage gate passed again after task completion, documentation, and generated-map updates."
+}

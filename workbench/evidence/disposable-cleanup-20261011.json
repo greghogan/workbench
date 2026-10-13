@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-11",
+  "removed": [
+    {
+      "bytes": 5651566592,
+      "path": "/tmp/workbench-toolchain-footprint-gykwjqo6"
+    },
+    {
+      "bytes": 2923360256,
+      "path": "/tmp/workbench-ci-reports-pFK1zw"
+    },
+    {
+      "bytes": 2881183744,
+      "path": "/tmp/workbench-ci-reports-5kdkoZ"
+    },
+    {
+      "bytes": 2643181568,
+      "path": "/tmp/workbench-ci-reports-4vlAl7"
+    },
+    {
+      "bytes": 2633580544,
+      "path": "/tmp/workbench-ci-reports-MbD7DD"
+    },
+    {
+      "bytes": 2632572928,
+      "path": "/tmp/workbench-ci-reports-cwAw4j"
+    },
+    {
+      "bytes": 2631249920,
+      "path": "/tmp/workbench-ci-reports-4p0HLQ"
+    },
+    {
+      "bytes": 1565687808,
+      "path": "/tmp/workbench-llvm-cache-7WpcIYf8"
+    },
+    {
+      "bytes": 1150349312,
+      "path": "/tmp/workbench-ci-reports-YUoS5Y"
+    },
+    {
+      "bytes": 1144520704,
+      "path": "/tmp/workbench-ci-reports-iYs4oL"
+    },
+    {
+      "bytes": 1141092352,
+      "path": "/tmp/workbench-ci-reports-JcVXjj"
+    },
+    {
+      "bytes": 964100096,
+      "path": "/tmp/workbench-node-compat"
+    },
+    {
+      "bytes": 330797056,
+      "path": "/tmp/workbench-ci-reports-pPGyx6"
+    },
+    {
+      "bytes": 327901184,
+      "path": "/tmp/workbench-ci-reports-uMRRir"
+    },
+    {
+      "bytes": 300056576,
+      "path": "/tmp/workbench-gcc-sources"
+    },
+    {
+      "bytes": 293490688,
+      "path": "/tmp/workbench-7-stripped-gcc16"
+    },
+    {
+      "bytes": 219373568,
+      "path": "/tmp/workbench-ci-reports-6xlXWM"
+    },
+    {
+      "bytes": 130949120,
+      "path": "/tmp/workbench-ci-reports-w8IIx0"
+    },
+    {
+      "bytes": 8224768,
+      "path": "/tmp/workbench-ci-reports-706NNG"
+    },
+    {
+      "bytes": 5263360,
+      "path": "/tmp/workbench-ci-reports-pWSXuc"
+    },
+    {
+      "bytes": 5099520,
+      "path": "/tmp/workbench-ci-reports-gvONW6"
+    },
+    {
+      "bytes": 987136,
+      "path": "/tmp/workbench-ci-reports-bwv7PM"
+    },
+    {
+      "bytes": 962560,
+      "path": "/tmp/workbench-ci-reports-5ioB5f"
+    },
+    {
+      "bytes": 761856,
+      "path": "/tmp/workbench-ci-reports-srylZ6"
+    },
+    {
+      "bytes": 757760,
+      "path": "/tmp/workbench-ci-reports-R696k7"
+    },
+    {
+      "bytes": 753664,
+      "path": "/tmp/workbench-ci-reports-UKXKOe"
+    },
+    {
+      "bytes": 688128,
+      "path": "/tmp/workbench-ci-reports-06RKPj"
+    },
+    {
+      "bytes": 589824,
+      "path": "/tmp/workbench-ci-reports-v9qSJm"
+    },
+    {
+      "bytes": 573440,
+      "path": "/tmp/workbench-ci-reports-GyTyUq"
+    },
+    {
+      "bytes": 544768,
+      "path": "/tmp/workbench-ci-reports-ljJn78"
+    },
+    {
+      "bytes": 516096,
+      "path": "/tmp/workbench-ci-reports-o1o9oB"
+    },
+    {
+      "bytes": 475136,
+      "path": "/tmp/workbench-ci-reports-vc4Czi"
+    },
+    {
+      "bytes": 458752,
+      "path": "/tmp/workbench-ci-reports-ZZJC2P"
+    },
+    {
+      "bytes": 450560,
+      "path": "/tmp/workbench-ci-reports-CUPSpD"
+    },
+    {
+      "bytes": 425984,
+      "path": "/tmp/workbench-ci-reports-PMFU9h"
+    },
+    {
+      "bytes": 421888,
+      "path": "/tmp/workbench-ci-reports-VHbLW7"
+    },
+    {
+      "bytes": 311296,
+      "path": "/tmp/workbench-ci-reports-9nabqE"
+    }
+  ],
+  "bytes": 29593280512,
+  "retained_evidence": "/tmp/workbench-tmp-cleanup-20261011/evidence",
+  "scope": "Completed Workbench reports and identified disposable toolchain trials only; unrelated projects, active work, and persistent SDK caches preserved.",
+  "benchd_job": "01a12b62f26f70728f3c490419daa06e",
+  "removed_directories": 37,
+  "filesystem_free_gib_after": 161,
+  "interpretation": "Removed bytes are the inventoried allocated usage of these directories. The overall filesystem free-space change can include unrelated concurrent activity."
+}

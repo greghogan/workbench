@@ -1,0 +1,7 @@
+{
+  "name": "workbench-package-manager",
+  "private": true,
+  "dependencies": {
+    "pnpm": "12.11.2"
+  }
+}

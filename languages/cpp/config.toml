@@ -1,0 +1,7 @@
+schema_version = 1
+
+id = "cpp"
+name = "C++"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/cpp"
+manifests = [ "CMakeLists.txt" ]

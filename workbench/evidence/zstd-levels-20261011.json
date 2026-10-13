@@ -1,0 +1,394 @@
+{
+  "date": "2026-10-11",
+  "classification": "Exploratory compression profiling; one observation per case on a shared host, not a controlled hosted runtime benchmark.",
+  "environment": "workbench:ENV-0",
+  "scope": "Filtered LLVM 23.1.3 Linux x64 installations for the independent C and C++ examples, including their integrity metadata but excluding the private ICU runtime.",
+  "production_settings_changed": false,
+  "benchd_jobs": ["01a12b68823a7b73aa5431cb330e1642", "01a12b6ed8a57ef0ab5f363ae099c08c"],
+  "commands": {
+    "tar": "tar --format=posix --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime -cf - -C LLVM_INSTALLATION_PARENT C_INSTALLATION_ID CPP_INSTALLATION_ID",
+    "compression": "zstd -T4 -LEVEL -c; add --long=30 only for the separate long-window comparison",
+    "decompression": "zstd -d -c ARCHIVE; add --long=30 only for the separate long-window comparison",
+    "timing": "/usr/bin/time: elapsed, user and system seconds; maximum process RSS in KiB. Each codec invocation has a 300-second timeout."
+  },
+  "hosted_cache_behavior": {
+    "action": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    "observed_linux_save": "tar --posix ... --use-compress-program zstdmt",
+    "selection": "getCompressionMethod selects ZstdWithoutLong. The dormant Zstd branch contains --long=30; it is not used by the observed hosted run.",
+    "source": "https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/dist/save/index.js",
+    "run": 38147824694
+  },
+  "limitations": [
+    "Tar timestamps, ownership and traversal order were normalized to keep input bytes identical across cases. Actual Actions archives use their own metadata and traversal order, and can have different sizes.",
+    "Four Zstandard workers were used; the action uses automatic thread selection. Timings from this 64-core shared Linux host do not predict GitHub runner times.",
+    "The two window comparisons ran concurrently for part of their execution. They are exploratory observations, not an isolated timing comparison between window policies.",
+    "Long-window archives require approximately 1 GiB of decoder memory in this trial. They are not a configuration recommendation for the current cache action.",
+    "A timed-out encoder produces no complete archive or valid size result. Every completed case verifies both decompressed length and SHA-256 against its input."
+  ],
+  "default_window": {
+    "date": "2026-10-11",
+    "platform": "linux-x64",
+    "sdk": "LLVM 23.1.3 C and C++ filtered installations",
+    "installations": [
+      "14d2f701eb68fb79-5612373387ed3dc9-e4fd9a7c65412742",
+      "14d2f701eb68fb79-a5e36afbc741bad1-9f8b0b6f3fda1a37"
+    ],
+    "threads": 4,
+    "window_log": "zstd default for each compression level",
+    "zstd_version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+    "tar_format": "POSIX; sorted paths, zero timestamps/owners, fixed PAX header names; identical input digest required for every level",
+    "per_level_timeout_seconds": 300,
+    "results": [
+      {
+        "level": 3,
+        "compression": {
+          "seconds": 5.18,
+          "user_seconds": 13.16,
+          "system_seconds": 1.18,
+          "peak_rss_kib": 87632,
+          "pipeline_seconds": 5.208553453
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 672774995,
+          "sha256": "71bd7615ab0235469900ccba3ec77b5510e21acd8fd00ea31b4779ea7400378c"
+        },
+        "decompression": {
+          "seconds": 3.08,
+          "user_seconds": 2.9,
+          "system_seconds": 1.04,
+          "peak_rss_kib": 7100
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 6,
+        "compression": {
+          "seconds": 11.32,
+          "user_seconds": 42.23,
+          "system_seconds": 1.04,
+          "peak_rss_kib": 99880,
+          "pipeline_seconds": 11.357152978999999
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 619812754,
+          "sha256": "9d9823bf1124bf2218192f6fd97f46263ce92a3975e2f6871fd3d68ea14d0603"
+        },
+        "decompression": {
+          "seconds": 3.09,
+          "user_seconds": 2.97,
+          "system_seconds": 0.79,
+          "peak_rss_kib": 7224
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 9,
+        "compression": {
+          "seconds": 20.97,
+          "user_seconds": 79.48,
+          "system_seconds": 1.13,
+          "peak_rss_kib": 205516,
+          "pipeline_seconds": 21.005761238999995
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 589412514,
+          "sha256": "4a26f3d4e2a4b0e4c8fd9dfbbd8885dbfe0313104df7bc08f3da614fa29980f8"
+        },
+        "decompression": {
+          "seconds": 4.38,
+          "user_seconds": 4.33,
+          "system_seconds": 0.84,
+          "peak_rss_kib": 8884
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 12,
+        "compression": {
+          "seconds": 36.33,
+          "user_seconds": 136.89,
+          "system_seconds": 1.19,
+          "peak_rss_kib": 330964,
+          "pipeline_seconds": 36.36971773999999
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 581903394,
+          "sha256": "711a6e1b667ade1f1772fd558520432f6b5879410624fca36ccc960e1d4f5922"
+        },
+        "decompression": {
+          "seconds": 4.83,
+          "user_seconds": 4.51,
+          "system_seconds": 1.01,
+          "peak_rss_kib": 9204
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 15,
+        "compression": {
+          "seconds": 139.65,
+          "user_seconds": 524.83,
+          "system_seconds": 1.04,
+          "peak_rss_kib": 429116,
+          "pipeline_seconds": 139.688825298
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 579283229,
+          "sha256": "79a9c7a1afa2b49fe353d2ea39568fc09a94b991aaf13735be782d8999f20db5"
+        },
+        "decompression": {
+          "seconds": 4.6,
+          "user_seconds": 4.55,
+          "system_seconds": 0.88,
+          "peak_rss_kib": 8888
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 19,
+        "status": "timed_out",
+        "error": "Error: write EPIPE",
+        "encoder_exit_code": 124,
+        "compression": {
+          "seconds": 300.06,
+          "user_seconds": 1188.16,
+          "system_seconds": 0.92,
+          "peak_rss_kib": 624576
+        }
+      }
+    ],
+    "input": {
+      "bytes": 2495477760,
+      "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+    }
+  },
+  "long_window": {
+    "date": "2026-10-11",
+    "platform": "linux-x64",
+    "sdk": "LLVM 23.1.3 C and C++ filtered installations",
+    "installations": [
+      "14d2f701eb68fb79-5612373387ed3dc9-e4fd9a7c65412742",
+      "14d2f701eb68fb79-a5e36afbc741bad1-9f8b0b6f3fda1a37"
+    ],
+    "threads": 4,
+    "window_log": 30,
+    "zstd_version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+    "tar_format": "POSIX; sorted paths, zero timestamps/owners, fixed PAX header names; identical input digest required for every level",
+    "per_level_timeout_seconds": 300,
+    "results": [
+      {
+        "level": 3,
+        "compression": {
+          "seconds": 7.17,
+          "user_seconds": 15.96,
+          "system_seconds": 1.85,
+          "peak_rss_kib": 1139728,
+          "pipeline_seconds": 7.197630676
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 471428577,
+          "sha256": "0f216db4d0337c2006b28ba9e74d17c782274a5244e6295f5ee694bcdcfdcea7"
+        },
+        "decompression": {
+          "seconds": 3.55,
+          "user_seconds": 3.24,
+          "system_seconds": 1.07,
+          "peak_rss_kib": 1053836
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 6,
+        "compression": {
+          "seconds": 11.66,
+          "user_seconds": 39.55,
+          "system_seconds": 1.71,
+          "peak_rss_kib": 1212584,
+          "pipeline_seconds": 11.696922371000001
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 422251803,
+          "sha256": "80452388f4504f5891f4b13576bac24ac5ce58d164ac82fb323ab2b9ac05dc33"
+        },
+        "decompression": {
+          "seconds": 3.4,
+          "user_seconds": 2.75,
+          "system_seconds": 1.27,
+          "peak_rss_kib": 1053856
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 9,
+        "compression": {
+          "seconds": 17.14,
+          "user_seconds": 62.52,
+          "system_seconds": 1.64,
+          "peak_rss_kib": 1279464,
+          "pipeline_seconds": 17.184761594
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 406792024,
+          "sha256": "53653a6713f58fc24d011c8d300dbfcdf73cdf615d1016a4b00cc35190f13ace"
+        },
+        "decompression": {
+          "seconds": 3.76,
+          "user_seconds": 3.14,
+          "system_seconds": 1.2,
+          "peak_rss_kib": 1053856
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 12,
+        "compression": {
+          "seconds": 30.84,
+          "user_seconds": 117.35,
+          "system_seconds": 1.69,
+          "peak_rss_kib": 1530716,
+          "pipeline_seconds": 30.880853033
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 394678937,
+          "sha256": "eab35b108d8bfba16aba94b27444af5bf1b2e973dd8eda093e37b7d7f2e463e3"
+        },
+        "decompression": {
+          "seconds": 4.02,
+          "user_seconds": 3.46,
+          "system_seconds": 1.14,
+          "peak_rss_kib": 1053856
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 15,
+        "compression": {
+          "seconds": 109.06,
+          "user_seconds": 426.79,
+          "system_seconds": 1.45,
+          "peak_rss_kib": 1759904,
+          "pipeline_seconds": 109.102906847
+        },
+        "input": {
+          "bytes": 2495477760,
+          "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+        },
+        "archive": {
+          "bytes": 377858437,
+          "sha256": "f19c9e987a09244d738ec70bf499edeee682678e6ca2c512f4494cce17180806"
+        },
+        "decompression": {
+          "seconds": 4,
+          "user_seconds": 3.42,
+          "system_seconds": 1.33,
+          "peak_rss_kib": 1053856
+        },
+        "round_trip_verified": true,
+        "status": "passed"
+      },
+      {
+        "level": 19,
+        "status": "timed_out",
+        "error": "Error: write EPIPE",
+        "encoder_exit_code": 124,
+        "compression": {
+          "seconds": 300.16,
+          "user_seconds": 1163.58,
+          "system_seconds": 1.59,
+          "peak_rss_kib": 2230240
+        }
+      }
+    ],
+    "input": {
+      "bytes": 2495477760,
+      "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+    }
+  },
+  "environment_variable_verification": {
+    "benchd_job": "01a12b7475fc7d70b0b5ee036ae21bab",
+    "environment": {
+      "ZSTD_CLEVEL": "9"
+    },
+    "encoder_arguments": ["zstd", "-T4", "-c"],
+    "archive_identical_to_explicit_level_9": true,
+    "result": {
+      "level": 9,
+      "compression": {
+        "seconds": 19.6,
+        "user_seconds": 73.99,
+        "system_seconds": 0.88,
+        "peak_rss_kib": 205908,
+        "pipeline_seconds": 19.631929159
+      },
+      "input": {
+        "bytes": 2495477760,
+        "sha256": "ae326463e53c8a369161d337af50bc30e141d1b889be29476ed39410c1fb4137"
+      },
+      "archive": {
+        "bytes": 589412514,
+        "sha256": "4a26f3d4e2a4b0e4c8fd9dfbbd8885dbfe0313104df7bc08f3da614fa29980f8"
+      },
+      "decompression": {
+        "seconds": 4.22,
+        "user_seconds": 4.1,
+        "system_seconds": 0.97,
+        "peak_rss_kib": 9012
+      },
+      "round_trip_verified": true,
+      "status": "passed"
+    }
+  },
+  "recommendation": {
+    "level": 9,
+    "window": "default",
+    "basis": "Moderate compression cost with most of the measured level-only size benefit. Higher levels offer smaller additional savings and much greater encoding cost.",
+    "saved_bytes_vs_level_3": 83362481,
+    "saved_percent_vs_level_3": 12.39084116079552,
+    "extra_compression_seconds": 15.79
+  }
+}

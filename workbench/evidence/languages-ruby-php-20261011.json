@@ -1,0 +1,209 @@
+{
+  "report_version": 1,
+  "date": "2026-10-11",
+  "task": "workbench:TSK-E",
+  "scope": "Ruby and PHP shared definitions, independent examples, verified acquisition, runtime compatibility, managed environments, quality gates and relocated releases",
+  "runtime_policy": {
+    "ruby": {
+      "development": "4.0.7",
+      "minimum": "3.3.12",
+      "tested": [
+        "3.3.12",
+        "3.4.11",
+        "4.0.7"
+      ],
+      "bundler": "4.0.22"
+    },
+    "php": {
+      "development": "8.5.11",
+      "minimum": "8.2.34",
+      "tested": [
+        "8.2.34",
+        "8.3.35",
+        "8.4.26",
+        "8.5.11"
+      ],
+      "composer": "2.10.3",
+      "xdebug": "3.5.3"
+    }
+  },
+  "local_ci": {
+    "targets": [
+      {
+        "id": "native:linux:x64:native:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "native:linux:x64:native:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "compatibility:linux:x64:native:ruby:3.3.12:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "compatibility:linux:x64:native:ruby:3.4.11:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "compatibility:linux:x64:native:php:8.2.34:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "compatibility:linux:x64:native:php:8.3.35:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "compatibility:linux:x64:native:php:8.4.26:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:guix:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:nix-docker:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:guix:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:nix-docker:examples%2Flanguages%2Fphp",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:devcontainer:examples%2Flanguages%2Fruby",
+        "success": true
+      },
+      {
+        "id": "environment:linux:x64:devcontainer:examples%2Flanguages%2Fphp",
+        "success": true
+      }
+    ],
+    "errors": [],
+    "report": "/tmp/workbench-ci-reports-UKXKOe/reports/results.json",
+    "log": "/tmp/workbench-ruby-php/combined-matrix-final.log",
+    "current_configured_linux_x64_targets": 76
+  },
+  "root_ci": {
+    "success": true,
+    "tests": 334,
+    "test_files": 63,
+    "coverage": {
+      "lines": {
+        "total": 6704,
+        "covered": 5975,
+        "skipped": 0,
+        "pct": 89.12
+      },
+      "statements": {
+        "total": 8062,
+        "covered": 6764,
+        "skipped": 0,
+        "pct": 83.89
+      },
+      "functions": {
+        "total": 1169,
+        "covered": 1053,
+        "skipped": 0,
+        "pct": 90.07
+      },
+      "branches": {
+        "total": 6291,
+        "covered": 4823,
+        "skipped": 0,
+        "pct": 76.66
+      }
+    },
+    "log": "/tmp/workbench-ruby-php/root-ci-final.log"
+  },
+  "language_coverage": {
+    "ruby": {
+      "lines": {
+        "total": 6,
+        "covered": 6,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 2,
+        "covered": 2,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "php": {
+      "lines": {
+        "total": 4,
+        "covered": 4,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 2,
+        "covered": 2,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 6,
+        "covered": 6,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "native_acquisition": {
+    "unix": "Ruby source SHA-256 and PHP source SHA-256 plus pinned OpenPGP signatures passed actual Linux x64 builds. Private images activate after successful builds. Source-build cache paths include the host OS identity.",
+    "ruby_windows": "All three pinned x64 archives passed recorded SHA-256 and signatures by the pinned official AppVeyor key. The real 4.0.7 archive passed bounded 7-Zip preflight and extraction: 18,253 files, 276,090,150 extracted bytes. Windows executables were not run.",
+    "bootstrap": "Actual Bundler, Composer and Xdebug acquisitions passed SHA-256. Composer also passed its detached signature. Absent upstream authentication is recorded in metadata and trust documentation."
+  },
+  "negative_probes": {
+    "ruby_frozen": [
+      "altered SHA-256 rejected",
+      "missing checksum entry rejected",
+      "missing CHECKSUMS section rejected"
+    ],
+    "composer": [
+      "verified archive and replayed cache-hit event accepted without catalog mutation",
+      "altered archive rejected",
+      "missing catalog digest rejected",
+      "invalid digest rejected",
+      "explicit refresh records hashes atomically"
+    ],
+    "bootstrap": [
+      "incorrect Bundler and Composer versions rejected",
+      "failed Bundler installation cleans staging and permits retry",
+      "Xdebug receipt mutation rejected"
+    ],
+    "archive": [
+      "path escapes, links, duplicates, encryption and excessive resource claims rejected",
+      "PECL .tgz decoding enforces byte limits"
+    ]
+  },
+  "cache_verification": {
+    "plans": [
+      "native",
+      "ruby compatibility",
+      "php compatibility",
+      "devcontainer",
+      "guix",
+      "nix-docker"
+    ],
+    "success": true,
+    "ruby": "Installed gems and Bundler extension caches include the runtime installation identity. Actual Debian Dev Container gates passed after eliminating cross-SDK extension reuse.",
+    "php": "Xdebug caches use PHP executable/configuration and acquisition identity. Startup filtering excludes tooling from branch collection."
+  },
+  "skills": {
+    "ruby-dependency-refresh": "quick_validate passed; canonical .agents and .claude discovery links resolve",
+    "php-dependency-refresh": "quick_validate passed; canonical .agents and .claude discovery links resolve"
+  },
+  "limitations": [
+    "Hosted CI, macOS arm64, Windows x64 and Linux arm64 execution remain workbench:TSK-7.",
+    "Unix native runtimes compile once using the host SDK, then reuse external caches.",
+    "Existing Nix and Guix input revisions were retained.",
+    "No commit, push, publication or ADR acceptance occurred; draft ADR-1B and ADR-1C require human review."
+  ]
+}

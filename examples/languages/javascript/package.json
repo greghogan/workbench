@@ -1,0 +1,41 @@
+{
+  "name": "workbench-javascript-reference",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=22.23.3"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --project jsconfig.json --noEmit",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check src test scripts package.json jsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
+    "lint": "node node_modules/eslint/bin/eslint.js src test scripts --max-warnings 0 .pnpmfile.cjs eslint.config.mjs vitest.config.mjs",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test",
+    "coverage": "node node_modules/vitest/vitest.mjs run --coverage",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write src test scripts package.json jsconfig.json eslint.config.mjs vitest.config.mjs .prettierrc.json .pnpmfile.cjs",
+    "release": "node scripts/build.mjs release"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^22.20.5",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitest/coverage-v8": "5.0.3",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.10",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  },
+  "files": [
+    "build/src"
+  ],
+  "exports": {
+    ".": {
+      "default": "./build/src/arithmetic.js"
+    }
+  }
+}

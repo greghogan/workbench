@@ -1,0 +1,14 @@
+parameters:
+    level: max
+    phpVersion: 80234
+    paths:
+        - src
+        - bin/count
+        - tests
+        - .composer/verify/src
+        - .php-cs-fixer.dist.php
+    bootstrapFiles:
+        - .phpstan-bootstrap.php
+    tmpDir: %env.WORKBENCH_PHPSTAN_CACHE%
+    parallel:
+        maximumNumberOfProcesses: int(%env.WORKBENCH_JOB_CPUS%)

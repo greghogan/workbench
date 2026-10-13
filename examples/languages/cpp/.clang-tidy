@@ -1,0 +1,5 @@
+Checks: '-*,bugprone-*,cert-*,clang-analyzer-*,misc-*,performance-*,portability-*,readability-*,modernize-*,cppcoreguidelines-*,-modernize-use-trailing-return-type'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/include/.*'
+
+# Leading return types are the selected convention; trailing return syntax is not required.

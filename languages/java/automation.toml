@@ -1,0 +1,89 @@
+schema_version = 1
+
+[[command]]
+role = "setup"
+command = [ "node", "scripts/check.mjs", "setup", "{workbench}" ]
+heavy = true
+
+[[command]]
+role = "format"
+command = [ "node", "scripts/check.mjs", "format", "{workbench}" ]
+heavy = true
+
+[[command]]
+role = "lint"
+command = [ "node", "scripts/check.mjs", "lint", "{workbench}" ]
+heavy = true
+
+[[command]]
+role = "type"
+command = [ "node", "scripts/check.mjs", "type", "{workbench}" ]
+heavy = true
+
+[[command]]
+role = "test"
+command = [ "node", "scripts/check.mjs", "test", "{workbench}" ]
+heavy = true
+warn_seconds = 120
+
+[command.coverage]
+command = [ "node", "scripts/check.mjs", "coverage", "{workbench}" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[command]]
+role = "build"
+command = [ "node", "scripts/check.mjs", "build", "{workbench}" ]
+heavy = true
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "node", "scripts/check.mjs", "release", "{workbench}" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "node", "scripts/check.mjs", "format-write", "{workbench}" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "java" ]
+stages = [ "ci" ]
+heavy = true
+
+[[command]]
+role = "dependency-lock"
+command = [ "node", "scripts/check.mjs", "dependency-lock", "{workbench}" ]
+stages = []
+heavy = true
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-1"
+role = "compatibility-test"
+command = ["node", "scripts/check.mjs", "test", "{workbench}"]
+heavy = true
+stages = []

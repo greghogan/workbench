@@ -1,0 +1,1722 @@
+{
+  "date": "2026-10-11",
+  "kind": "Exploratory profiling; no support or cache-retention policy changed",
+  "hosted": {
+    "run_id": 38147824694,
+    "url": "https://github.com/greghogan/workbench/actions/runs/38147824694",
+    "revision": "622f6204dc2f3dfea99e6e96e26a2b9af1c1074f",
+    "compression_level": 3,
+    "conclusion": "success",
+    "jobs_passed": 34,
+    "deduplicated_cache_entries": 91,
+    "compressed_bytes": 14605566207,
+    "groups_compressed_bytes": {
+      "rust": 2239226406,
+      "package-managers": 111791913,
+      "downloads": 745436408,
+      "builds": 2428630178,
+      "tools": 4064548960,
+      "guix-source": 484007595,
+      "llvm": 2757390065,
+      "gcc": 509875604,
+      "clang": 1264659078
+    },
+    "entries": [
+      {
+        "key": "builds-v1-darwin-arm64-ce738db74be73117b994cf34",
+        "compressed_bytes": 321203120,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-arm64-1d6c26e06b2f3a3e880efba8",
+        "compressed_bytes": 27313199,
+        "jobs": ["Compatibility gcc 14.4.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-arm64-36a03081a9c316ad3d0bd5fd",
+        "compressed_bytes": 27389846,
+        "jobs": ["Compatibility gcc 16.2.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-arm64-6d9af501fc2b566dd8fce723",
+        "compressed_bytes": 303887158,
+        "jobs": ["linux arm64 / selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-arm64-7ddd7073a72b75555e1b1659",
+        "compressed_bytes": 27117802,
+        "jobs": ["Compatibility gcc 15.3.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-12db92b7c586f57b678c6978",
+        "compressed_bytes": 34222,
+        "jobs": ["Compatibility java 21.0.12.1+1 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-1f08961d8e1fb81e955af603",
+        "compressed_bytes": 1273352,
+        "jobs": ["Compatibility php 8.3.35 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-2f60f8570fbfe1f261d39835",
+        "compressed_bytes": 282634354,
+        "jobs": ["nix-docker / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-38c23d491c00c1ce84a80f99",
+        "compressed_bytes": 39180758,
+        "jobs": ["Compatibility clang 21.1.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-38ead500819b78c3314e93e4",
+        "compressed_bytes": 26668127,
+        "jobs": ["Compatibility gcc 15.3.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-3c7a3404e4951498db1e234f",
+        "compressed_bytes": 49477695,
+        "jobs": ["Compatibility node 24.21.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-3eeb9f8d68222fb2322d00e4",
+        "compressed_bytes": 14498089,
+        "jobs": ["Compatibility go 1.26.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-43bdf64b24309686ae6b70c1",
+        "compressed_bytes": 18732304,
+        "jobs": ["Compatibility ruby 3.4.11 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-474e7ae5dd3761b1e56b4d0b",
+        "compressed_bytes": 31498847,
+        "jobs": ["Compatibility python 3.14.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-50d5dec5d671667b16e44b56",
+        "compressed_bytes": 49459669,
+        "jobs": ["Compatibility node 22.23.3 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-57d85382aa1359a3cbba7858",
+        "compressed_bytes": 280594615,
+        "jobs": ["Dev Container"]
+      },
+      {
+        "key": "builds-v1-linux-x64-5d2c72ffca6f54482202f583",
+        "compressed_bytes": 34706,
+        "jobs": ["Compatibility java 27+35 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-5dedd11ba37428ecef3f1dde",
+        "compressed_bytes": 31051505,
+        "jobs": ["Compatibility python 3.12.15 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-5fa8565164770b18f68d8bdc",
+        "compressed_bytes": 26645405,
+        "jobs": ["Compatibility gcc 14.4.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-797430056a26e94dc3cf4bcb",
+        "compressed_bytes": 1274092,
+        "jobs": ["Compatibility php 8.2.34 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-7c731b317e55759f59e89fe7",
+        "compressed_bytes": 26906751,
+        "jobs": ["Compatibility gcc 16.2.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-8483b6d7fd71b74d4f334c06",
+        "compressed_bytes": 31160484,
+        "jobs": ["Compatibility python 3.11.17 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-a7b28e481ad01f1eb1fbf141",
+        "compressed_bytes": 39632982,
+        "jobs": ["Compatibility clang 22.1.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-ae28a1957825b23917569871",
+        "compressed_bytes": 34152,
+        "jobs": ["Compatibility java 17.0.20.1+1 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-babdbe4b16779e348acd34fc",
+        "compressed_bytes": 18719468,
+        "jobs": ["Compatibility ruby 3.3.12 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-bf47b6993368ae4ea729e088",
+        "compressed_bytes": 27728808,
+        "jobs": ["Compatibility rust 1.93.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-e785ece5215b70d902571337",
+        "compressed_bytes": 1272189,
+        "jobs": ["Compatibility php 8.4.26 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-f53c1e4ab25417f0fde29929",
+        "compressed_bytes": 324445336,
+        "jobs": ["linux x64 / selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-f67b3d03ca57fd9f9ac1511d",
+        "compressed_bytes": 31034491,
+        "jobs": ["Compatibility python 3.13.16 / x64 / all selected roots"]
+      },
+      {
+        "key": "builds-v1-linux-x64-fb4ba058508a79bbb6927d39",
+        "compressed_bytes": 284675078,
+        "jobs": ["guix / all selected roots"]
+      },
+      {
+        "key": "builds-v2-win32-x64-67fde00e1ef52f7cc1229e9d",
+        "compressed_bytes": 83051574,
+        "jobs": ["windows x64 / selected roots"]
+      },
+      {
+        "key": "clang-v3-linux-x64-5605d0fc4557fb1b0ddcbce7",
+        "compressed_bytes": 618802771,
+        "jobs": ["Compatibility clang 21.1.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "clang-v3-linux-x64-91e565bdea2584dee54402d9",
+        "compressed_bytes": 645856307,
+        "jobs": ["Compatibility clang 22.1.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "downloads-v1-darwin-arm64-b00f55ebfa4e82d0fcea1a52",
+        "compressed_bytes": 96314953,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "downloads-v1-linux-arm64-b00f55ebfa4e82d0fcea1a52",
+        "compressed_bytes": 97812447,
+        "jobs": ["linux arm64 / selected roots"]
+      },
+      {
+        "key": "downloads-v1-linux-arm64-c72e49b605462b3b3ef1843a",
+        "compressed_bytes": 2359048,
+        "jobs": [
+          "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+          "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+          "Compatibility gcc 15.3.0 / arm64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-115a6071555a814400e3665b",
+        "compressed_bytes": 1824891,
+        "jobs": ["Compatibility rust 1.93.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "downloads-v1-linux-x64-19b83ed477927e1c80e5a668",
+        "compressed_bytes": 17676793,
+        "jobs": [
+          "Compatibility ruby 3.3.12 / x64 / all selected roots",
+          "Compatibility ruby 3.4.11 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-4735e06bcb261fc64a582807",
+        "compressed_bytes": 61844273,
+        "jobs": ["guix / all selected roots", "nix-docker / all selected roots"]
+      },
+      {
+        "key": "downloads-v1-linux-x64-6edd5f6c7032fb1b4b8b1b76",
+        "compressed_bytes": 28423248,
+        "jobs": [
+          "Compatibility python 3.13.16 / x64 / all selected roots",
+          "Compatibility python 3.14.8 / x64 / all selected roots",
+          "Compatibility python 3.11.17 / x64 / all selected roots",
+          "Compatibility python 3.12.15 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-b5043502ff8f841cb4e9c805",
+        "compressed_bytes": 77399834,
+        "jobs": [
+          "Compatibility node 22.23.3 / x64 / all selected roots",
+          "Compatibility node 24.21.0 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-b74274a383fa93f823976bc5",
+        "compressed_bytes": 8954742,
+        "jobs": [
+          "Compatibility java 27+35 / x64 / all selected roots",
+          "Compatibility java 17.0.20.1+1 / x64 / all selected roots",
+          "Compatibility java 21.0.12.1+1 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-c72e49b605462b3b3ef1843a",
+        "compressed_bytes": 274,
+        "jobs": [
+          "Compatibility gcc 15.3.0 / x64 / all selected roots",
+          "Compatibility gcc 14.4.0 / x64 / all selected roots",
+          "Compatibility clang 22.1.8 / x64 / all selected roots",
+          "Compatibility gcc 16.2.0 / x64 / all selected roots",
+          "Compatibility clang 21.1.8 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-d566551b4715f363be544493",
+        "compressed_bytes": 3983,
+        "jobs": [
+          "Compatibility php 8.3.35 / x64 / all selected roots",
+          "Compatibility php 8.4.26 / x64 / all selected roots",
+          "Compatibility php 8.2.34 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "downloads-v1-linux-x64-e0aaad17a64fbfb3db984d96",
+        "compressed_bytes": 100267304,
+        "jobs": ["Dev Container", "linux x64 / selected roots"]
+      },
+      {
+        "key": "downloads-v1-linux-x64-ed4ea9edf0b5ecdf7ace71cf",
+        "compressed_bytes": 221,
+        "jobs": ["Compatibility go 1.26.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "downloads-v2-win32-x64-cb2786808c49892852d448ff",
+        "compressed_bytes": 252554397,
+        "jobs": ["windows x64 / selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-arm64-14.4.0-76bafadc15c6c16c9ec3d038",
+        "compressed_bytes": 77056199,
+        "jobs": ["Compatibility gcc 14.4.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-arm64-15.3.0-346224c263d613cc31508168",
+        "compressed_bytes": 83890850,
+        "jobs": ["Compatibility gcc 15.3.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-arm64-16.2.0-e7f37cc48cfb2a6f262ad00f",
+        "compressed_bytes": 87441641,
+        "jobs": ["Compatibility gcc 16.2.0 / arm64 / all selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-x64-14.4.0-76bafadc15c6c16c9ec3d038",
+        "compressed_bytes": 81276441,
+        "jobs": ["Compatibility gcc 14.4.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-x64-15.3.0-346224c263d613cc31508168",
+        "compressed_bytes": 88829137,
+        "jobs": ["Compatibility gcc 15.3.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "gcc-v4-linux-x64-16.2.0-e7f37cc48cfb2a6f262ad00f",
+        "compressed_bytes": 91381336,
+        "jobs": ["Compatibility gcc 16.2.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "guix-source-v1-linux-x64-9b6c578c1c3bbe2cefcceb28",
+        "compressed_bytes": 484007595,
+        "jobs": ["guix / all selected roots"]
+      },
+      {
+        "key": "llvm-v3-darwin-arm64-55d4acc83d2043f8fc0356c9",
+        "compressed_bytes": 470890933,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "llvm-v3-linux-arm64-07c0a1c36a891b16fdb2a83f",
+        "compressed_bytes": 714927621,
+        "jobs": [
+          "linux arm64 / selected roots",
+          "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+          "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+          "Compatibility gcc 15.3.0 / arm64 / all selected roots"
+        ]
+      },
+      {
+        "key": "llvm-v3-linux-x64-e705995968e575e051e242e8",
+        "compressed_bytes": 686070817,
+        "jobs": [
+          "Dev Container",
+          "linux x64 / selected roots",
+          "Compatibility gcc 15.3.0 / x64 / all selected roots",
+          "Compatibility gcc 14.4.0 / x64 / all selected roots",
+          "Compatibility clang 22.1.8 / x64 / all selected roots",
+          "Compatibility gcc 16.2.0 / x64 / all selected roots",
+          "Compatibility clang 21.1.8 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "llvm-v3-win32-x64-844ae48ac5e29592d9be76be",
+        "compressed_bytes": 885500694,
+        "jobs": ["windows x64 / selected roots"]
+      },
+      {
+        "key": "package-managers-v1-darwin-arm64-fb6b86bfb721d8993a0a0ac5",
+        "compressed_bytes": 20433131,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "package-managers-v1-linux-arm64-fb6b86bfb721d8993a0a0ac5",
+        "compressed_bytes": 21664639,
+        "jobs": ["linux arm64 / selected roots"]
+      },
+      {
+        "key": "package-managers-v1-linux-x64-210aaffc3e8284d9bd912d89",
+        "compressed_bytes": 22471299,
+        "jobs": [
+          "Compatibility node 22.23.3 / x64 / all selected roots",
+          "Compatibility node 24.21.0 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "package-managers-v1-linux-x64-4875b4d2d9ac37da5fc32f5d",
+        "compressed_bytes": 959811,
+        "jobs": [
+          "guix / all selected roots",
+          "nix-docker / all selected roots",
+          "Compatibility ruby 3.3.12 / x64 / all selected roots",
+          "Compatibility ruby 3.4.11 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "package-managers-v1-linux-x64-fb6b86bfb721d8993a0a0ac5",
+        "compressed_bytes": 23427656,
+        "jobs": ["Dev Container", "linux x64 / selected roots"]
+      },
+      {
+        "key": "package-managers-v1-win32-x64-28965d5b9301278dbf0d8339",
+        "compressed_bytes": 22835377,
+        "jobs": ["windows x64 / selected roots"]
+      },
+      {
+        "key": "rust-v1-darwin-arm64-9ed04ea7f2abe03e7572c686",
+        "compressed_bytes": 416159934,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "rust-v1-linux-arm64-9ed04ea7f2abe03e7572c686",
+        "compressed_bytes": 487447214,
+        "jobs": ["linux arm64 / selected roots"]
+      },
+      {
+        "key": "rust-v1-linux-x64-9d4fa9fc2e8594e0947ed63a",
+        "compressed_bytes": 190991436,
+        "jobs": ["Compatibility rust 1.93.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "rust-v1-linux-x64-9ed04ea7f2abe03e7572c686",
+        "compressed_bytes": 575406364,
+        "jobs": ["Dev Container", "linux x64 / selected roots"]
+      },
+      {
+        "key": "rust-v1-win32-x64-08cf8b558323b74f3d2c2213",
+        "compressed_bytes": 569221458,
+        "jobs": ["windows x64 / selected roots"]
+      },
+      {
+        "key": "tools-v6-darwin-arm64-39e19040a925325ee348f904",
+        "compressed_bytes": 512146107,
+        "jobs": ["macos arm64 / selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-arm64-390942d714c15e2f0aab42cb",
+        "compressed_bytes": 176203671,
+        "jobs": [
+          "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+          "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+          "Compatibility gcc 15.3.0 / arm64 / all selected roots"
+        ]
+      },
+      {
+        "key": "tools-v6-linux-arm64-8fb348c56da65663c01218ea",
+        "compressed_bytes": 535783998,
+        "jobs": ["linux arm64 / selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-1bbf46d1fabb82a45523bfd3",
+        "compressed_bytes": 560926861,
+        "jobs": ["linux x64 / selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-29089ef09f742d0de7568a5c",
+        "compressed_bytes": 51659826,
+        "jobs": ["Compatibility python 3.12.15 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-3568880b9e0c250f92760585",
+        "compressed_bytes": 195282717,
+        "jobs": ["Compatibility java 17.0.20.1+1 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-400da09a425aa29000069dcd",
+        "compressed_bytes": 15533057,
+        "jobs": ["Compatibility php 8.3.35 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-4be4e5645729f6f87bd8f995",
+        "compressed_bytes": 60047602,
+        "jobs": ["Compatibility ruby 3.3.12 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-5e1d620058dc2efa3f3e955c",
+        "compressed_bytes": 48270272,
+        "jobs": ["Compatibility python 3.11.17 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-5f7483b4bae975ecf02544a5",
+        "compressed_bytes": 53576692,
+        "jobs": ["Compatibility python 3.14.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-87a227f32bc9060333301d76",
+        "compressed_bytes": 46753974,
+        "jobs": ["Compatibility node 24.21.0 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-8f08e01173ddb85386eb93d4",
+        "compressed_bytes": 143902335,
+        "jobs": ["Compatibility java 27+35 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-8f5139e5db00d01427a6a96e",
+        "compressed_bytes": 207497370,
+        "jobs": ["Compatibility java 21.0.12.1+1 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-9631b406474e22377b8fde6a",
+        "compressed_bytes": 18373107,
+        "jobs": ["Compatibility php 8.4.26 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-970b07c57d8ae11fccc71fb4",
+        "compressed_bytes": 64716688,
+        "jobs": ["Compatibility ruby 3.4.11 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-9a63db1f8d50055b604cb55d",
+        "compressed_bytes": 188726889,
+        "jobs": [
+          "Compatibility gcc 15.3.0 / x64 / all selected roots",
+          "Compatibility gcc 14.4.0 / x64 / all selected roots",
+          "Compatibility clang 22.1.8 / x64 / all selected roots",
+          "Compatibility gcc 16.2.0 / x64 / all selected roots",
+          "Compatibility clang 21.1.8 / x64 / all selected roots"
+        ]
+      },
+      {
+        "key": "tools-v6-linux-x64-a7846ca355d25881146aad5d",
+        "compressed_bytes": 45957508,
+        "jobs": ["Compatibility node 22.23.3 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-be8351a01321d9cb1da05b3e",
+        "compressed_bytes": 52322756,
+        "jobs": ["Compatibility python 3.13.16 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-e393540d16f9198902b3c280",
+        "compressed_bytes": 555431076,
+        "jobs": ["Dev Container"]
+      },
+      {
+        "key": "tools-v6-linux-x64-f05de97352d19f50aa381803",
+        "compressed_bytes": 63748601,
+        "jobs": ["Compatibility go 1.26.8 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v6-linux-x64-f59e20944d842473b22e7d68",
+        "compressed_bytes": 15172510,
+        "jobs": ["Compatibility php 8.2.34 / x64 / all selected roots"]
+      },
+      {
+        "key": "tools-v7-win32-x64-2b1ba7f5c72d2bd1481161cf",
+        "compressed_bytes": 452515343,
+        "jobs": ["windows x64 / selected roots"]
+      }
+    ],
+    "reuse": {
+      "run_id": 38147824694,
+      "measured_at": "2026-10-11T15:26:45.530186+00:00",
+      "previous_run": 38131699407,
+      "build_jobs_count": 31,
+      "build_restore_hits": 6,
+      "build_misses_with_unchanged_key": 12,
+      "build_misses_with_changed_key": 13,
+      "currently_retained_bytes": 10715487411,
+      "currently_retained_entries": 37,
+      "working_set_entries_missing_from_live_inventory": 54,
+      "limitations": [
+        "Missing entries and unchanged-key misses are consistent with eviction but are not an eviction audit log. Cache scope and timing can also affect availability.",
+        "A single run with code and policy changes is not a steady-state hit-rate benchmark."
+      ]
+    },
+    "build_jobs": [
+      {
+        "job": "Dev Container",
+        "key": "builds-v1-linux-x64-57d85382aa1359a3cbba7858",
+        "compressed_bytes": 280594615,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 7.0
+      },
+      {
+        "job": "linux arm64 / selected roots",
+        "key": "builds-v1-linux-arm64-6d9af501fc2b566dd8fce723",
+        "compressed_bytes": 303887158,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 6.0
+      },
+      {
+        "job": "guix / all selected roots",
+        "key": "builds-v1-linux-x64-fb4ba058508a79bbb6927d39",
+        "compressed_bytes": 284675078,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 5.0,
+        "post_save_seconds": 0.0
+      },
+      {
+        "job": "linux x64 / selected roots",
+        "key": "builds-v1-linux-x64-f53c1e4ab25417f0fde29929",
+        "compressed_bytes": 324445336,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 7.0
+      },
+      {
+        "job": "nix-docker / all selected roots",
+        "key": "builds-v1-linux-x64-2f60f8570fbfe1f261d39835",
+        "compressed_bytes": 282634354,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 9.0
+      },
+      {
+        "job": "macos arm64 / selected roots",
+        "key": "builds-v1-darwin-arm64-ce738db74be73117b994cf34",
+        "compressed_bytes": 321203120,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 30.0
+      },
+      {
+        "job": "windows x64 / selected roots",
+        "key": "builds-v2-win32-x64-67fde00e1ef52f7cc1229e9d",
+        "compressed_bytes": 83051574,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 6.0
+      },
+      {
+        "job": "Compatibility rust 1.93.0 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-bf47b6993368ae4ea729e088",
+        "compressed_bytes": 27728808,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility gcc 15.3.0 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-38ead500819b78c3314e93e4",
+        "compressed_bytes": 26668127,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 3.0
+      },
+      {
+        "job": "Compatibility node 22.23.3 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-50d5dec5d671667b16e44b56",
+        "compressed_bytes": 49459669,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 3.0
+      },
+      {
+        "job": "Compatibility python 3.13.16 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-f67b3d03ca57fd9f9ac1511d",
+        "compressed_bytes": 31034491,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility python 3.14.8 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-474e7ae5dd3761b1e56b4d0b",
+        "compressed_bytes": 31498847,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility gcc 14.4.0 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-5fa8565164770b18f68d8bdc",
+        "compressed_bytes": 26645405,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility python 3.11.17 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-8483b6d7fd71b74d4f334c06",
+        "compressed_bytes": 31160484,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 3.0
+      },
+      {
+        "job": "Compatibility clang 22.1.8 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-a7b28e481ad01f1eb1fbf141",
+        "compressed_bytes": 39632982,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility gcc 16.2.0 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-7c731b317e55759f59e89fe7",
+        "compressed_bytes": 26906751,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility clang 21.1.8 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-38c23d491c00c1ce84a80f99",
+        "compressed_bytes": 39180758,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 3.0
+      },
+      {
+        "job": "Compatibility gcc 14.4.0 / arm64 / all selected roots",
+        "key": "builds-v1-linux-arm64-1d6c26e06b2f3a3e880efba8",
+        "compressed_bytes": 27313199,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility ruby 3.3.12 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-babdbe4b16779e348acd34fc",
+        "compressed_bytes": 18719468,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 2.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility python 3.12.15 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-5dedd11ba37428ecef3f1dde",
+        "compressed_bytes": 31051505,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility php 8.3.35 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-1f08961d8e1fb81e955af603",
+        "compressed_bytes": 1273352,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility ruby 3.4.11 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-43bdf64b24309686ae6b70c1",
+        "compressed_bytes": 18732304,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 0.0
+      },
+      {
+        "job": "Compatibility node 24.21.0 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-3c7a3404e4951498db1e234f",
+        "compressed_bytes": 49477695,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 3.0
+      },
+      {
+        "job": "Compatibility gcc 16.2.0 / arm64 / all selected roots",
+        "key": "builds-v1-linux-arm64-36a03081a9c316ad3d0bd5fd",
+        "compressed_bytes": 27389846,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 2.0
+      },
+      {
+        "job": "Compatibility java 27+35 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-5d2c72ffca6f54482202f583",
+        "compressed_bytes": 34706,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility php 8.4.26 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-e785ece5215b70d902571337",
+        "compressed_bytes": 1272189,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": true,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility java 17.0.20.1+1 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-ae28a1957825b23917569871",
+        "compressed_bytes": 34152,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 0.0
+      },
+      {
+        "job": "Compatibility java 21.0.12.1+1 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-12db92b7c586f57b678c6978",
+        "compressed_bytes": 34222,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility php 8.2.34 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-797430056a26e94dc3cf4bcb",
+        "compressed_bytes": 1274092,
+        "restored": true,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 1.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility gcc 15.3.0 / arm64 / all selected roots",
+        "key": "builds-v1-linux-arm64-7ddd7073a72b75555e1b1659",
+        "compressed_bytes": 27117802,
+        "restored": false,
+        "key_existed_in_previous_run": false,
+        "retained_at_end": true,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      },
+      {
+        "job": "Compatibility go 1.26.8 / x64 / all selected roots",
+        "key": "builds-v1-linux-x64-3eeb9f8d68222fb2322d00e4",
+        "compressed_bytes": 14498089,
+        "restored": false,
+        "key_existed_in_previous_run": true,
+        "retained_at_end": false,
+        "restore_seconds": 0.0,
+        "post_save_seconds": 1.0
+      }
+    ],
+    "guix_bootstrap": {
+      "environment_step_seconds": 2550,
+      "first_root_seconds": 1972.328131,
+      "channel_update_start": "2026-10-11T14:38:43.5252994Z",
+      "authentication_start": "2026-10-11T14:48:30.5081224Z",
+      "authentication_finished_by": "2026-10-11T14:52:52.2059547Z",
+      "new_commits_authenticated": 134711,
+      "source_cache_restored": false,
+      "source_cache_key_unchanged_from_previous_run": true,
+      "note": "Subsequent derivation builds/substitutions are also included in the first root. Source/authentication cache was saved at job end."
+    }
+  },
+  "local": {
+    "platform": "Linux x64",
+    "image": "workbench-ci:php-ruby",
+    "base": "Ubuntu 26.04",
+    "source": "Private source copy with generated/local state excluded; the primary checkout and index were preserved.",
+    "resources": {
+      "cpus_per_root": 4,
+      "parallel_roots": 6,
+      "scheduler": "benchctl hold"
+    },
+    "passes": {
+      "cold": "Fresh build/dependency/Go output directories with verified tool and package download caches available.",
+      "warm": "Same source and retained build/dependency outputs.",
+      "fresh-checkout": "Same retained outputs; source mtimes refreshed to approximate another checkout at the same mounted path.",
+      "compiled-only": "Compiled outputs and Go cache retained; installed dependencies moved aside and recreated through normal locked setup."
+    },
+    "roles": "Ordinary test with setup for all 11 examples, plus sanitizers and LTO for C/C++; these profiling commands are not a full CI rehearsal.",
+    "per_root_seconds": {
+      "examples/languages/typescript": {
+        "cold": 6.779254801000001,
+        "warm": 2.9042689970000066,
+        "fresh-checkout": 3.215537098999994,
+        "compiled-only": 3.5480522010000133
+      },
+      "examples/languages/python": {
+        "cold": 8.185167113,
+        "warm": 2.4466875810000057,
+        "fresh-checkout": 3.776907004000008,
+        "compiled-only": 3.5567117260000085
+      },
+      "examples/languages/rust": {
+        "cold": 9.627210418999999,
+        "warm": 1.4590580219999973,
+        "fresh-checkout": 1.853213431000011,
+        "compiled-only": 1.167310598000011
+      },
+      "examples/languages/javascript": {
+        "cold": 5.197022870999999,
+        "warm": 3.0831229160000073,
+        "fresh-checkout": 3.1391918930000102,
+        "compiled-only": 3.6692332040000184
+      },
+      "examples/languages/go": {
+        "cold": 16.265490103,
+        "warm": 3.1219861430000018,
+        "fresh-checkout": 2.3056877930000046,
+        "compiled-only": 2.5189121150000138
+      },
+      "examples/languages/ruby": {
+        "cold": 6.650140820999999,
+        "warm": 2.9612893040000055,
+        "fresh-checkout": 2.7189912069999993,
+        "compiled-only": 6.437490525000001
+      },
+      "examples/languages/java": {
+        "cold": 11.685804244,
+        "warm": 8.971565488000007,
+        "fresh-checkout": 8.565818016000005,
+        "compiled-only": 9.65432355999999
+      },
+      "examples/languages/php": {
+        "cold": 9.383722123999998,
+        "warm": 6.708853839999996,
+        "fresh-checkout": 5.732886784000002,
+        "compiled-only": 7.674751329999999
+      },
+      "examples/languages/c": {
+        "cold": 73.851445797,
+        "warm": 10.020708767000004,
+        "fresh-checkout": 12.130631264999991,
+        "compiled-only": 10.95950108800002
+      },
+      "examples/frameworks/react": {
+        "cold": 8.236727663999998,
+        "warm": 5.1430763600000065,
+        "fresh-checkout": 3.718135124000008,
+        "compiled-only": 5.810153931999986
+      },
+      "examples/languages/cpp": {
+        "cold": 80.60499299400001,
+        "warm": 9.900220002000001,
+        "fresh-checkout": 13.163515975000003,
+        "compiled-only": 11.025040482000012
+      }
+    },
+    "successful_example_role_invocations": 60,
+    "root_tests": {
+      "passed": 375,
+      "exit": 0,
+      "harness_failures_excluded": [
+        {
+          "pass": "root-cold",
+          "exit": 1,
+          "reason": "Private source copy initially lacked Git metadata required by a standalone packaging test; 374 tests passed, one failed. Added a private empty Git commit, then all 375 passed."
+        },
+        {
+          "pass": "root-warm",
+          "exit": 1,
+          "reason": "Private source copy initially lacked Git metadata required by a standalone packaging test; 374 tests passed, one failed. Added a private empty Git commit, then all 375 passed."
+        }
+      ]
+    },
+    "sample_retained_bytes": {
+      "builds": {
+        "bytes": 357599830,
+        "allocated_bytes": 391118848,
+        "unique_files": 9533,
+        "symlinks": 0
+      },
+      "dependencies": {
+        "bytes": 848015596,
+        "allocated_bytes": 936120320,
+        "unique_files": 32760,
+        "symlinks": 3
+      },
+      "go-build": {
+        "bytes": 65948443,
+        "allocated_bytes": 69967872,
+        "unique_files": 1148,
+        "symlinks": 0
+      }
+    },
+    "per_root_retained_bytes": [
+      {
+        "namespace": "builds",
+        "root": "examples/languages/c",
+        "bytes": 129474208,
+        "unique_files": 6402
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/go",
+        "bytes": 171,
+        "unique_files": 1
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/rust",
+        "bytes": 117651512,
+        "unique_files": 439
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/cpp",
+        "bytes": 97499306,
+        "unique_files": 2034
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/typescript",
+        "bytes": 355,
+        "unique_files": 2
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/python",
+        "bytes": 12876515,
+        "unique_files": 627
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/javascript",
+        "bytes": 356,
+        "unique_files": 2
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/java",
+        "bytes": 90807,
+        "unique_files": 18
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/ruby",
+        "bytes": 173,
+        "unique_files": 1
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/languages/php",
+        "bytes": 719,
+        "unique_files": 3
+      },
+      {
+        "namespace": "builds",
+        "root": "examples/frameworks/react",
+        "bytes": 280,
+        "unique_files": 2
+      },
+      {
+        "namespace": "builds",
+        "root": ".",
+        "bytes": 5428,
+        "unique_files": 2
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/python",
+        "bytes": 88244299,
+        "unique_files": 2234
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/go",
+        "bytes": 171,
+        "unique_files": 1
+      },
+      {
+        "namespace": "dependencies",
+        "root": ".",
+        "bytes": 154058367,
+        "unique_files": 4820
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/rust",
+        "bytes": 173,
+        "unique_files": 1
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/cpp",
+        "bytes": 172,
+        "unique_files": 1
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/c",
+        "bytes": 170,
+        "unique_files": 1
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/typescript",
+        "bytes": 126536698,
+        "unique_files": 4194
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/javascript",
+        "bytes": 127070304,
+        "unique_files": 4197
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/java",
+        "bytes": 173,
+        "unique_files": 1
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/ruby",
+        "bytes": 47676998,
+        "unique_files": 4115
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/languages/php",
+        "bytes": 101003643,
+        "unique_files": 3551
+      },
+      {
+        "namespace": "dependencies",
+        "root": "examples/frameworks/react",
+        "bytes": 203424428,
+        "unique_files": 9644
+      }
+    ],
+    "rust_ci_without_miri": {
+      "exit": 0,
+      "seconds": 13.312077663999998,
+      "scope": "Complete configured native Rust CI-stage checks with the pinned Miri toolchain hidden by a read-only empty bind mount; stable Rust, verified tools and package downloads retained; no native tool installation phase.",
+      "cpus": 4
+    }
+  },
+  "compression": {
+    "method": "Stream sorted tar output through Zstandard with four workers at levels 3 and 9, then decode and compare the complete tar stream SHA-256. Archives deleted after verification. Default window; no long-distance option.",
+    "results": [
+      {
+        "sample": "rust-stable",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 986460160,
+        "archive_bytes": 298012487,
+        "compress_seconds": 63.99987977097044,
+        "decompress_seconds": 2.0619517479790375,
+        "round_trip_sha256": "359af14338cdb5f4fc912866282402c081eb546879f56ebf592361870c1ff833",
+        "verified": true
+      },
+      {
+        "sample": "rust-stable",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 986460160,
+        "archive_bytes": 266147586,
+        "compress_seconds": 9.060520735976752,
+        "decompress_seconds": 2.0761692529777065,
+        "round_trip_sha256": "359af14338cdb5f4fc912866282402c081eb546879f56ebf592361870c1ff833",
+        "verified": true
+      },
+      {
+        "sample": "rust-miri",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 728985600,
+        "archive_bytes": 215389166,
+        "compress_seconds": 62.17350020899903,
+        "decompress_seconds": 1.3403288190020248,
+        "round_trip_sha256": "7de65e49df8366410d529cdc9d5199c0e341b9381299e9565d3f7a10d0329877",
+        "verified": true
+      },
+      {
+        "sample": "rust-miri",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 728985600,
+        "archive_bytes": 193049278,
+        "compress_seconds": 5.329767645976972,
+        "decompress_seconds": 1.5920579319936223,
+        "round_trip_sha256": "7de65e49df8366410d529cdc9d5199c0e341b9381299e9565d3f7a10d0329877",
+        "verified": true
+      },
+      {
+        "sample": "rust-msrv",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 599736320,
+        "archive_bytes": 190531635,
+        "compress_seconds": 5.732960255991202,
+        "decompress_seconds": 1.218794409011025,
+        "round_trip_sha256": "31e8f322b03dd85b58a0cc13ec040db7c2a7b8ec6590891e3b0452fc17da802f",
+        "verified": true
+      },
+      {
+        "sample": "rust-msrv",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 599736320,
+        "archive_bytes": 170663041,
+        "compress_seconds": 4.739395804994274,
+        "decompress_seconds": 1.4099564320058562,
+        "round_trip_sha256": "31e8f322b03dd85b58a0cc13ec040db7c2a7b8ec6590891e3b0452fc17da802f",
+        "verified": true
+      },
+      {
+        "sample": "node-go-java-tools",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 888975360,
+        "archive_bytes": 267278323,
+        "compress_seconds": 235.9727501689922,
+        "decompress_seconds": 1.0663655920070596,
+        "round_trip_sha256": "a9be46215211dc174b7e7b0d2164fd004a1e04158d1e067a5d9a02bce0d550e6",
+        "verified": true
+      },
+      {
+        "sample": "node-go-java-tools",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 888975360,
+        "archive_bytes": 243676773,
+        "compress_seconds": 3.110954416973982,
+        "decompress_seconds": 1.0698731450247578,
+        "round_trip_sha256": "a9be46215211dc174b7e7b0d2164fd004a1e04158d1e067a5d9a02bce0d550e6",
+        "verified": true
+      },
+      {
+        "sample": "compiled-outputs-and-go",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 447959040,
+        "archive_bytes": 86354651,
+        "compress_seconds": 85.73801973101217,
+        "decompress_seconds": 0.9100376960122958,
+        "round_trip_sha256": "87963b91688a76a2b6973dab83448579a8ed86c2d1232a98da86e60755ca7c0e",
+        "verified": true
+      },
+      {
+        "sample": "compiled-outputs-and-go",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 447959040,
+        "archive_bytes": 69136305,
+        "compress_seconds": 4.03131005296018,
+        "decompress_seconds": 0.9373049410060048,
+        "round_trip_sha256": "87963b91688a76a2b6973dab83448579a8ed86c2d1232a98da86e60755ca7c0e",
+        "verified": true
+      },
+      {
+        "sample": "all-installed-dependencies",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 919162880,
+        "archive_bytes": 231616846,
+        "compress_seconds": 481.0169826389756,
+        "decompress_seconds": 2.1693205229821615,
+        "round_trip_sha256": "a4c4908789a30eea90201071403425959f6c8f221202e32ccb191d71a9507718",
+        "verified": true
+      },
+      {
+        "sample": "all-installed-dependencies",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 919162880,
+        "archive_bytes": 204542971,
+        "compress_seconds": 8.64146916201571,
+        "decompress_seconds": 2.0855866569909267,
+        "round_trip_sha256": "a4c4908789a30eea90201071403425959f6c8f221202e32ccb191d71a9507718",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-python",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 92528640,
+        "archive_bytes": 27544613,
+        "compress_seconds": 0.5101716479985043,
+        "decompress_seconds": 0.22757203702349216,
+        "round_trip_sha256": "3cb11c5978ede2e80fa069ea9643420359733f16c3b2fdb3de631bdf008b1a2e",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-python",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 92528640,
+        "archive_bytes": 24633015,
+        "compress_seconds": 1.0705726940068416,
+        "decompress_seconds": 0.249261763994582,
+        "round_trip_sha256": "3cb11c5978ede2e80fa069ea9643420359733f16c3b2fdb3de631bdf008b1a2e",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-ruby",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 56104960,
+        "archive_bytes": 15414023,
+        "compress_seconds": 0.5590692079858854,
+        "decompress_seconds": 0.12527715601027012,
+        "round_trip_sha256": "e582bdddac6152a78d5b4c59e0848a119ca2a67b8ef78fc934d243a6daa6fea0",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-ruby",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 56104960,
+        "archive_bytes": 14412904,
+        "compress_seconds": 0.8693938499782234,
+        "decompress_seconds": 0.14067390299169347,
+        "round_trip_sha256": "e582bdddac6152a78d5b4c59e0848a119ca2a67b8ef78fc934d243a6daa6fea0",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-php",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 108185600,
+        "archive_bytes": 29632486,
+        "compress_seconds": 0.7075910069979727,
+        "decompress_seconds": 0.2389161569881253,
+        "round_trip_sha256": "2a23c287c35c3e09aacd781caf3f3bb1f557d33cd54657044a8b17afb93b7430",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-php",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 108185600,
+        "archive_bytes": 25939259,
+        "compress_seconds": 1.238647182006389,
+        "decompress_seconds": 0.2855048369965516,
+        "round_trip_sha256": "2a23c287c35c3e09aacd781caf3f3bb1f557d33cd54657044a8b17afb93b7430",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-node-family",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 662323200,
+        "archive_bytes": 159220287,
+        "compress_seconds": 3.619411075953394,
+        "decompress_seconds": 1.2867970719817095,
+        "round_trip_sha256": "551a6dfb285a974ccb2f182dd1853c1e53d0f1f92467db2a818278f2a0ab7406",
+        "verified": true
+      },
+      {
+        "sample": "dependencies-node-family",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 662323200,
+        "archive_bytes": 139440026,
+        "compress_seconds": 4.700234473973978,
+        "decompress_seconds": 1.395573075977154,
+        "round_trip_sha256": "551a6dfb285a974ccb2f182dd1853c1e53d0f1f92467db2a818278f2a0ab7406",
+        "verified": true
+      },
+      {
+        "sample": "compiler-support-tools",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 572395520,
+        "archive_bytes": 187578196,
+        "compress_seconds": 348.82823990198085,
+        "decompress_seconds": 1.1781941009685397,
+        "round_trip_sha256": "012549111fca986b359138f8ecb208785e9fa6b9fe09537a35dc596a146b7261",
+        "verified": true
+      },
+      {
+        "sample": "compiler-support-tools",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 572395520,
+        "archive_bytes": 172141268,
+        "compress_seconds": 5.77032287302427,
+        "decompress_seconds": 1.2621567400055937,
+        "round_trip_sha256": "012549111fca986b359138f8ecb208785e9fa6b9fe09537a35dc596a146b7261",
+        "verified": true
+      },
+      {
+        "sample": "vcpkg",
+        "level": 3,
+        "workers": 4,
+        "input_tar_bytes": 131266560,
+        "archive_bytes": 72845433,
+        "compress_seconds": 1.501723115972709,
+        "decompress_seconds": 0.26778639998519793,
+        "round_trip_sha256": "6b86e579189f94168620f5d81a150319c99262695ee71614da951e3897032d45",
+        "verified": true
+      },
+      {
+        "sample": "vcpkg",
+        "level": 9,
+        "workers": 4,
+        "input_tar_bytes": 131266560,
+        "archive_bytes": 70442121,
+        "compress_seconds": 1.8089478389592841,
+        "decompress_seconds": 0.2784341310034506,
+        "round_trip_sha256": "6b86e579189f94168620f5d81a150319c99262695ee71614da951e3897032d45",
+        "verified": true
+      }
+    ],
+    "timing_limitations": "Level 3 was measured first, with cold filesystem reads and concurrent profiling. Later reads were warm. Archive sizes and round-trip checks are useful; compression time differences are not a controlled speed comparison. First-read elapsed time on this host is especially sensitive to filesystem overhead; do not infer that level 9 is faster from the ordered trials."
+  },
+  "cache_key_overlap": {
+    "same_tool_paths_for_c_alone_and_c_cpp": true,
+    "c_tools_key": "tools-v6-linux-x64-b0daeccd61cc4a35d4347bf2-zstd9",
+    "c_cpp_tools_key": "tools-v6-linux-x64-9a63db1f8d50055b604cb55d-zstd9",
+    "c_paths": [
+      "<cache>/toolchains/cmake/4.4.4/linux-x64/e5bb807f7728cb60",
+      "<cache>/toolchains/ninja/1.13.2/linux-x64/5749cbc4e6682735",
+      "<cache>/toolchains/node/26.11.1/linux-x64/15fc043a51a5783f",
+      "<cache>/toolchains/vcpkg/cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3/linux-x64"
+    ],
+    "cause": "Tool key includes root-qualified vcpkg pin inputs, even when the selected tool versions and directories are identical. Other aggregated caches also depend on selected roots.",
+    "other_selections": {
+      "native-full": {
+        "tools-key": "tools-v6-linux-x64-747249d66b33552968274508-zstd9",
+        "builds-key": "builds-v1-linux-x64-2cd5cc908d630082d20dfc0c-zstd9",
+        "downloads-key": "downloads-v1-linux-x64-e0aaad17a64fbfb3db984d96-zstd9"
+      },
+      "native-python": {
+        "tools-key": "tools-v6-linux-x64-1a2a7c1aec069ffb4380261a-zstd9",
+        "builds-key": "builds-v1-linux-x64-2c004abc25aab29b776f2a42-zstd9",
+        "downloads-key": "downloads-v1-linux-x64-6edd5f6c7032fb1b4b8b1b76-zstd9"
+      },
+      "native-c-cpp": {
+        "tools-key": "tools-v6-linux-x64-9a63db1f8d50055b604cb55d-zstd9",
+        "builds-key": "builds-v1-linux-x64-c8a35e81c2eeeef027a11d03-zstd9",
+        "downloads-key": "downloads-v1-linux-x64-c72e49b605462b3b3ef1843a-zstd9"
+      },
+      "native-c": {
+        "tools-key": "tools-v6-linux-x64-b0daeccd61cc4a35d4347bf2-zstd9",
+        "builds-key": "builds-v1-linux-x64-b2d5edb3d7a8ee25522effb6-zstd9",
+        "downloads-key": "downloads-v1-linux-x64-fc638bc2158b28dcb716fb02-zstd9"
+      },
+      "devcontainer-full": {
+        "tools-key": "tools-v6-linux-x64-91f9ba24e656fd8760eb6189-zstd9",
+        "builds-key": "builds-v1-linux-x64-479e995d5f9241afa2613c79-zstd9",
+        "downloads-key": "downloads-v1-linux-x64-e0aaad17a64fbfb3db984d96-zstd9"
+      }
+    }
+  },
+  "persistent_local_inventory": {
+    "namespaces": {
+      "builds": {
+        "unique_bytes_in_namespace_order": 15475668897,
+        "allocated_bytes_in_namespace_order": 17000771584,
+        "unique_files_in_namespace_order": 482858
+      },
+      "dependencies": {
+        "unique_bytes_in_namespace_order": 19148157420,
+        "allocated_bytes_in_namespace_order": 20922056704,
+        "unique_files_in_namespace_order": 679097
+      },
+      "go-build": {
+        "unique_bytes_in_namespace_order": 449175562,
+        "allocated_bytes_in_namespace_order": 469446656,
+        "unique_files_in_namespace_order": 5758
+      },
+      "container-tools": {
+        "unique_bytes_in_namespace_order": 93533013,
+        "allocated_bytes_in_namespace_order": 94498816,
+        "unique_files_in_namespace_order": 399
+      }
+    },
+    "unique_bytes": 35166534892,
+    "allocated_bytes": 38486773760,
+    "variants": 988,
+    "namespace_checkout_root_environment_groups": 347,
+    "extra_variants_beyond_one_per_group": 641,
+    "most_variants": [
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/cpp",
+        "environment": "native",
+        "count": 23,
+        "sum_variant_bytes_not_globally_deduplicated": 3036
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": ".",
+        "environment": "native",
+        "count": 22,
+        "sum_variant_bytes_not_globally_deduplicated": 3042363929
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/c",
+        "environment": "native",
+        "count": 22,
+        "sum_variant_bytes_not_globally_deduplicated": 2860
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": ".",
+        "environment": "native",
+        "count": 16,
+        "sum_variant_bytes_not_globally_deduplicated": 46223
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/cpp",
+        "environment": "native",
+        "count": 15,
+        "sum_variant_bytes_not_globally_deduplicated": 1619574089
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/java",
+        "environment": "native",
+        "count": 15,
+        "sum_variant_bytes_not_globally_deduplicated": 4117662
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/java",
+        "environment": "native",
+        "count": 15,
+        "sum_variant_bytes_not_globally_deduplicated": 1995
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/c",
+        "environment": "native",
+        "count": 14,
+        "sum_variant_bytes_not_globally_deduplicated": 1938542645
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": "examples/languages/cpp",
+        "environment": "native",
+        "count": 14,
+        "sum_variant_bytes_not_globally_deduplicated": 1250041878
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": "examples/languages/cpp",
+        "environment": "native",
+        "count": 14,
+        "sum_variant_bytes_not_globally_deduplicated": 2324
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/typescript",
+        "environment": "native",
+        "count": 13,
+        "sum_variant_bytes_not_globally_deduplicated": 1370756553
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": "examples/languages/c",
+        "environment": "native",
+        "count": 12,
+        "sum_variant_bytes_not_globally_deduplicated": 1336859299
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": "examples/languages/c",
+        "environment": "native",
+        "count": 12,
+        "sum_variant_bytes_not_globally_deduplicated": 1968
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": ".",
+        "environment": "native",
+        "count": 11,
+        "sum_variant_bytes_not_globally_deduplicated": 1520988390
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench#local-ci:19e1c1080d5601a9727e6800",
+        "root": ".",
+        "environment": "native",
+        "count": 11,
+        "sum_variant_bytes_not_globally_deduplicated": 5452
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/python",
+        "environment": "native",
+        "count": 10,
+        "sum_variant_bytes_not_globally_deduplicated": 881212393
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/typescript",
+        "environment": "native",
+        "count": 8,
+        "sum_variant_bytes_not_globally_deduplicated": 36989
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/rust",
+        "environment": "native",
+        "count": 8,
+        "sum_variant_bytes_not_globally_deduplicated": 1064
+      },
+      {
+        "namespace": "dependencies",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/javascript",
+        "environment": "native",
+        "count": 7,
+        "sum_variant_bytes_not_globally_deduplicated": 614029161
+      },
+      {
+        "namespace": "builds",
+        "checkout": "/efs/devel/workbench",
+        "root": "examples/languages/javascript",
+        "environment": "native",
+        "count": 7,
+        "sum_variant_bytes_not_globally_deduplicated": 14992
+      }
+    ],
+    "note": "Group counts identify repeated fingerprints, not safe deletion candidates. No persistent cache was deleted."
+  },
+  "investigation_limits": [
+    "Single exploratory observations on one shared Linux x64 host; no confidence intervals or cross-platform timing claims.",
+    "Warm package/tool stores were reused. Cold means project build/dependency outputs were absent, not an empty machine or an empty package download store.",
+    "The measured example output sample omits some CI coverage, lint, and release variants; use hosted logs for complete compressed working-set totals.",
+    "A single full-run working set is a lower bound for concurrent branches and different affected-root selections.",
+    "GitHub cache entries are immutable; pin-only build keys retain the first saved snapshot and do not refresh application outputs after code-only changes. Build systems still validate changed sources.",
+    "No new full GitHub run or deployment was performed. No persistent caches or managed Rust toolchain files were deleted."
+  ],
+  "follow_ups_in_priority_order": [
+    "Retain download stores and C/C++/Rust/Go compiled outputs; evaluate excluding installed dependency trees from hosted archives while preserving local persistent installs.",
+    "Select native CI tools by executed phases so manual-only Miri is not installed in ordinary CI; retain its complete supported manual workflow.",
+    "Normalize identical tool identities, then consider per-tool archives to reuse exact verified installations across affected-root selections and native/Dev Container jobs. Keep trust, ABI, platform, architecture, filter and resource identities.",
+    "Investigate Guix channel history/authentication retention separately from application build caches; do not add entire Nix/Guix stores to the constrained Actions cache.",
+    "Add ownership-checked, locked, previewable local cache pruning with retained generations; do not infer inactive variants solely from age or root/environment grouping.",
+    "Consider narrow CMake GUI/documentation filtering only after measuring savings and verifying independent C/C++ workflows. Preserve compiler SDK contents and use rustup-supported components instead of deleting Rust-managed files."
+  ],
+  "cleanup": {
+    "at": "2026-10-11T15:46:09.707920+00:00",
+    "disposable_root": "/tmp/workbench-build-cache-investigation-20261011",
+    "removed": [
+      {
+        "name": "source",
+        "logical_file_bytes_before_removal": 4583408,
+        "files": 824
+      },
+      {
+        "name": "builds",
+        "logical_file_bytes_before_removal": 555302301,
+        "files": 10701
+      },
+      {
+        "name": "dependencies",
+        "logical_file_bytes_before_removal": 848015596,
+        "files": 32760
+      },
+      {
+        "name": "go-build",
+        "logical_file_bytes_before_removal": 65948443,
+        "files": 1148
+      },
+      {
+        "name": "reports",
+        "logical_file_bytes_before_removal": 1134348580,
+        "files": 36277
+      },
+      {
+        "name": "empty-miri",
+        "logical_file_bytes_before_removal": 0,
+        "files": 0
+      },
+      {
+        "name": "plans",
+        "logical_file_bytes_before_removal": 52495,
+        "files": 15
+      },
+      {
+        "name": "artifacts",
+        "logical_file_bytes_before_removal": 6098321,
+        "files": 245
+      }
+    ],
+    "remaining_archives": 0,
+    "persistent_cache_deleted": false,
+    "note": "Logical file sizes sum entries and can count hardlinks more than once; this is not a measured filesystem free-space delta."
+  }
+}

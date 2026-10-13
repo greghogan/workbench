@@ -1,0 +1,5 @@
+build/
+target/
+dist/
+coverage/*
+!coverage/coverage-summary.json

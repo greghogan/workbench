@@ -1,0 +1,23 @@
+schema_version = 1
+id = "java"
+name = "Java"
+summary = "maintained JDKs, Maven artifact verification, strict compiler diagnostics, SpotBugs, JUnit, and JaCoCo"
+reference = "examples/languages/java"
+manifests = [ "pom.xml" ]
+
+starter = [
+  "scripts/check.mjs",
+  "scripts/release-verify.mjs",
+  "README.md",
+  ".gitignore",
+  ".java-version",
+  ".tool-versions",
+  "pom.xml",
+  ".mvn/checksums/checksums.sha256",
+  ".mvn/settings.xml",
+  ".mvn/maven.config",
+  ".mvn/jvm.config",
+  "src/main/java/org/example/workbench/Count.java",
+  "src/test/java/org/example/workbench/CountTest.java",
+  "workbench/quality.json",
+]

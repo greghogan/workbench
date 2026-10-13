@@ -1,0 +1,226 @@
+{
+  "date": "2026-10-09",
+  "authority": "Human authorization to reorder the unaccepted draft ADRs before initial acceptance.",
+  "mapping": [
+    {
+      "previous": "workbench:ADR-0",
+      "current": "workbench:ADR-0",
+      "title": "Decision records and authority"
+    },
+    {
+      "previous": "workbench:ADR-2",
+      "current": "workbench:ADR-1",
+      "title": "Project scopes and inheritance"
+    },
+    {
+      "previous": "workbench:ADR-5",
+      "current": "workbench:ADR-2",
+      "title": "Workbench adoption and distribution"
+    },
+    {
+      "previous": "workbench:ADR-3",
+      "current": "workbench:ADR-3",
+      "title": "Record identity and references"
+    },
+    {
+      "previous": "workbench:ADR-4",
+      "current": "workbench:ADR-4",
+      "title": "Record schemas and canonical formatting"
+    },
+    {
+      "previous": "workbench:ADR-1",
+      "current": "workbench:ADR-5",
+      "title": "Maps and agent context"
+    },
+    {
+      "previous": "workbench:ADR-6",
+      "current": "workbench:ADR-6",
+      "title": "Skills and harness integration"
+    },
+    {
+      "previous": "workbench:ADR-7",
+      "current": "workbench:ADR-7",
+      "title": "Plans and task continuity"
+    },
+    {
+      "previous": "workbench:ADR-8",
+      "current": "workbench:ADR-8",
+      "title": "Feedback before promotion"
+    },
+    {
+      "previous": "workbench:ADR-B",
+      "current": "workbench:ADR-9",
+      "title": "Toolchains and engineering constraints"
+    },
+    {
+      "previous": "workbench:ADR-C",
+      "current": "workbench:ADR-A",
+      "title": "Test evidence and isolation"
+    },
+    {
+      "previous": "workbench:ADR-E",
+      "current": "workbench:ADR-B",
+      "title": "Review and coherent commits"
+    },
+    {
+      "previous": "workbench:ADR-M",
+      "current": "workbench:ADR-C",
+      "title": "Semantic code boundaries"
+    },
+    {
+      "previous": "workbench:ADR-N",
+      "current": "workbench:ADR-D",
+      "title": "Opt-in backward compatibility"
+    },
+    {
+      "previous": "workbench:ADR-O",
+      "current": "workbench:ADR-E",
+      "title": "Errors, diagnostics, and observability"
+    },
+    {
+      "previous": "workbench:ADR-P",
+      "current": "workbench:ADR-F",
+      "title": "Documentation and knowledge integrity"
+    },
+    {
+      "previous": "workbench:ADR-10",
+      "current": "workbench:ADR-G",
+      "title": "Durable state and recovery"
+    },
+    {
+      "previous": "workbench:ADR-11",
+      "current": "workbench:ADR-H",
+      "title": "Concurrency and resource ownership"
+    },
+    {
+      "previous": "workbench:ADR-12",
+      "current": "workbench:ADR-I",
+      "title": "Configuration, filesystem locations, and commands"
+    },
+    {
+      "previous": "workbench:ADR-13",
+      "current": "workbench:ADR-J",
+      "title": "Trust and privilege boundaries"
+    },
+    {
+      "previous": "workbench:ADR-Q",
+      "current": "workbench:ADR-K",
+      "title": "Dependencies, credentials, and supply-chain evidence"
+    },
+    {
+      "previous": "workbench:ADR-U",
+      "current": "workbench:ADR-L",
+      "title": "Execution resources"
+    },
+    {
+      "previous": "workbench:ADR-9",
+      "current": "workbench:ADR-M",
+      "title": "Experiments and measurement evidence"
+    },
+    {
+      "previous": "workbench:ADR-L",
+      "current": "workbench:ADR-N",
+      "title": "Architecture-specific optimization"
+    },
+    {
+      "previous": "workbench:ADR-15",
+      "current": "workbench:ADR-O",
+      "title": "Native artifact acquisition and installation"
+    },
+    {
+      "previous": "workbench:ADR-16",
+      "current": "workbench:ADR-P",
+      "title": "Link-time optimization"
+    },
+    {
+      "previous": "workbench:ADR-R",
+      "current": "workbench:ADR-Q",
+      "title": "Development environments"
+    },
+    {
+      "previous": "workbench:ADR-S",
+      "current": "workbench:ADR-R",
+      "title": "Nix development environments"
+    },
+    {
+      "previous": "workbench:ADR-T",
+      "current": "workbench:ADR-S",
+      "title": "Guix development environments"
+    },
+    {
+      "previous": "workbench:ADR-14",
+      "current": "workbench:ADR-T",
+      "title": "Dev Container development environments"
+    },
+    {
+      "previous": "workbench:ADR-D",
+      "current": "workbench:ADR-U",
+      "title": "Quality gates"
+    },
+    {
+      "previous": "workbench:ADR-A",
+      "current": "workbench:ADR-V",
+      "title": "Citation records and source acquisition"
+    },
+    {
+      "previous": "workbench:ADR-V",
+      "current": "workbench:ADR-W",
+      "title": "Live service operations"
+    },
+    {
+      "previous": "workbench:ADR-W",
+      "current": "workbench:ADR-X",
+      "title": "Terminal user interfaces"
+    },
+    {
+      "previous": "workbench:ADR-17",
+      "current": "workbench:ADR-Y",
+      "title": "Builds and deployment artifacts"
+    },
+    {
+      "previous": "workbench:ADR-Y",
+      "current": "workbench:ADR-Z",
+      "title": "Release records and verified artifacts"
+    },
+    {
+      "previous": "workbench:ADR-Z",
+      "current": "workbench:ADR-10",
+      "title": "GitHub continuous integration"
+    },
+    {
+      "previous": "workbench:ADR-F",
+      "current": "workbench:ADR-11",
+      "title": "Rust implementation"
+    },
+    {
+      "previous": "workbench:ADR-G",
+      "current": "workbench:ADR-12",
+      "title": "Python implementation"
+    },
+    {
+      "previous": "workbench:ADR-H",
+      "current": "workbench:ADR-13",
+      "title": "TypeScript projects"
+    },
+    {
+      "previous": "workbench:ADR-I",
+      "current": "workbench:ADR-14",
+      "title": "C implementation"
+    },
+    {
+      "previous": "workbench:ADR-J",
+      "current": "workbench:ADR-15",
+      "title": "C++ implementation"
+    },
+    {
+      "previous": "workbench:ADR-K",
+      "current": "workbench:ADR-16",
+      "title": "Go implementation"
+    },
+    {
+      "previous": "workbench:ADR-X",
+      "current": "workbench:ADR-17",
+      "title": "AWS boundaries"
+    }
+  ]
+}

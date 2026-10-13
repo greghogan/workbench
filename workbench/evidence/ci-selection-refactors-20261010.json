@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-10",
+  "task": "workbench:TSK-8",
+  "scope": "Grouped affected-root explanations and the five supporting refactors",
+  "report_version": 1,
+  "compatibility_adapters": false,
+  "root_ci_gate": {
+    "command": "workbench checks run --path . --stage ci",
+    "status": "passed",
+    "tests": 273,
+    "test_files": 59,
+    "coverage": {
+      "lines": {
+        "total": 5720,
+        "covered": 5083,
+        "skipped": 0,
+        "pct": 88.86
+      },
+      "statements": {
+        "total": 6892,
+        "covered": 5725,
+        "skipped": 0,
+        "pct": 83.06
+      },
+      "functions": {
+        "total": 982,
+        "covered": 889,
+        "skipped": 0,
+        "pct": 90.52
+      },
+      "branches": {
+        "total": 5418,
+        "covered": 4121,
+        "skipped": 0,
+        "pct": 76.06
+      }
+    },
+    "log": "/tmp/workbench-ci-refactors-root-ci-final.log"
+  },
+  "proposed_tree_gate": {
+    "command": "workbench checks run --stage commit",
+    "status": "passed",
+    "roots": [
+      ".",
+      "examples/languages/typescript",
+      "examples/languages/rust",
+      "examples/frameworks/react",
+      "examples/languages/python",
+      "examples/languages/c",
+      "examples/languages/cpp",
+      "examples/languages/go"
+    ],
+    "platform": "linux-x64",
+    "log": "/tmp/workbench-ci-refactors-proposed-gate.log",
+    "expected_skips": "AVX2-only tests skip in intentionally portable C/C++ builds; native and LTO AVX2 tests passed."
+  },
+  "selection_regressions": {
+    "tests": 18,
+    "large_git_comparison": {
+      "changed_files": 3000,
+      "detailed_report_exceeds_bytes": 262144,
+      "selected_roots": [
+        "python"
+      ],
+      "excluded_roots": [
+        "web"
+      ],
+      "same_selection_with_and_without_filenames": true
+    },
+    "large_policy_comparison": {
+      "root_files": 10000,
+      "dependency_files": 2,
+      "compact_report_below_bytes": 1024
+    },
+    "unavailable_change_count": null
+  },
+  "catalog": {
+    "linux_x64_targets": 49,
+    "hosted_native_groups": 4,
+    "hosted_compatibility_groups": 15,
+    "hosted_environment_groups": 2,
+    "devcontainer_roots": 8,
+    "unchanged": true,
+    "execution_note": "Catalog projection verified; the earlier TSK-B 49-target execution baseline was not rerun."
+  },
+  "hosted_adapters": {
+    "manual_full_plan": "passed",
+    "aggregate_status": "passed",
+    "no_import_side_effects": "passed",
+    "malformed_plan_rejection": "passed",
+    "evidence": "/tmp/workbench-ci-refactors-hosted-check.json",
+    "hosted_execution": false
+  },
+  "commit_preparation": {
+    "branch": "ci/review-functionality-20261010",
+    "squash_parent": "35f18df",
+    "draft_documents_accepted": false,
+    "review_receipts": "unchanged",
+    "push": false,
+    "publication": false
+  },
+  "commit_gate_cleanup": {
+    "file": "scripts/keys/ubuntu.asc",
+    "change": "Removed one trailing space from an ASCII armor comment header.",
+    "decoded_bytes_identical": true,
+    "decoded_sha256": "aff7b0bd431039349cfd2b8e97e722f360f61dd02f1c2087f911d80c5bd57614"
+  },
+  "source_sha256": {
+    "src/ci-selection.ts": "4e605e1364cfc1a8c6e8b5d888da5a09af9830bb13058a5b5543a8234c18f2a2",
+    "src/ci-inputs.ts": "c315765d5ab08d3ddb633907bf08b5e86ed8672c9646037505e4e3e3d4498d33",
+    "src/ci-options.ts": "848343f974ebf9fbff0a25bb3a85809929d4557779a10c09b7908eed86557fe4",
+    "src/core.ts": "f2e7cdc9f2ab139ef4dab8adcd7749a280c916d55bad36f30bb727b774868dc0",
+    "src/language-config.ts": "13cf224e936b387850b533e5db3a858c5ce5ffa9091987b45c479629ab4b40c2",
+    "src/main.ts": "bfc0ebff2d4b275f892bc62747b79ae495230efcddb4310fb671d11ad2d160d7",
+    "scripts/ci-plan.mjs": "974cde064e259f1289eab1910005b5c7053685aea69c4dd394fe6e4807c39a14",
+    "scripts/ci-status.mjs": "af70c3f422eef2c5ef8d4115094e7e9851259cd0a9712b387f6ec4989e9c37e7",
+    "scripts/ci-plan-contract.mjs": "0c00d7096d8ece9d0df3d51be7c8fb7b9691114f73be6c6ce3212d81cf2b57d7",
+    "scripts/ci-plan-contract.d.mts": "45decf26455e4a8f4f33a5af6fafeee7a7ac4ac957a58c73be094b09edb76a6b",
+    "scripts/source-checkout.mjs": "59da5f8df97544ef3ff9fc7a20d0eea800fd28bb21137ba740155690ec87f6e7",
+    "scripts/test-coverage.mjs": "a62b2458f7ee6797b4c7d3638876ab91941d25ccdebee680121a1c8d02ceadf3",
+    "tests/ci_selection.test.mjs": "1249e1ab96beb26073c116295c64f8761d5d59183e4cc1bfb79085f6866fa3c0",
+    "tests/ci_selection_policy.test.mjs": "fa98cfcba945811149eb2f8755c49c46cdf68f68a1a643a337efcfcbc69a93cc",
+    "tests/ci_selection_execution.test.mjs": "0bc345052b917973a6e1496a73c1d8b263309649279e72cee5cc7f951988ccf2",
+    "tests/ci_planning.test.mjs": "31c08836104e7fd24571c639f18f7391ea61c55ae2105189dd420888b79d9ce0",
+    "tests/fixtures/ci.mjs": "4f9acf380794848a843c4c7971614e752d2126089ebac1fa59ab6bd5c6d9bba5",
+    "scripts/keys/ubuntu.asc": "648a5f817b32605977d2cb9f100f84b7ba1402b45b84221d719563ef2d8f7042"
+  }
+}

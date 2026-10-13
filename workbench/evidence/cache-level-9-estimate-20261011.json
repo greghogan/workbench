@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-11",
+  "baseline_run": 38147824694,
+  "baseline_run_complete": true,
+  "method": "All completed hosted job logs, deduplicated by exact cache key. No previous-run size substitutions remain.",
+  "observed_completed_job_logs": 34,
+  "estimated_entries_from_previous_run": [],
+  "groups_compressed_bytes": {
+    "rust": 2239226406,
+    "package-managers": 111791913,
+    "downloads": 745436408,
+    "builds": 2428630178,
+    "tools": 4064548960,
+    "guix-source": 484007595,
+    "llvm": 2757390065,
+    "gcc": 509875604,
+    "clang": 1264659078
+  },
+  "approximate_level_3_working_set_bytes": 14605566207,
+  "measured_linux_llvm_level_9_saving_fraction": 0.1239084116079552,
+  "estimates": {
+    "llvm_and_clang_only": {
+      "scope": "Apply the local LLVM saving fraction to all platform LLVM/Clang cache bytes; hold every other group constant.",
+      "bytes": 14107200486.281733
+    },
+    "uniform_saving_illustration": {
+      "scope": "Illustration only: apply the LLVM saving fraction uniformly to every cache group. Other groups were not benchmarked, so this is not a measured or validated forecast.",
+      "bytes": 12795813697.655804
+    },
+    "category_specific_illustration": {
+      "scope": "Illustration only: use local category-specific size ratios for LLVM/Clang, Rust, other tools, and build/dependency archives; hold downloads, GCC, Guix source and package managers constant. Linux samples do not establish cross-platform ratios.",
+      "retained_fraction_by_group": {
+        "llvm": 0.8760915883920448,
+        "clang": 0.8760915883920448,
+        "tools": 0.9116967297044886,
+        "rust": 0.8947721548863591,
+        "builds": 0.8607038007560784
+      },
+      "bytes": 13174359598.248081
+    }
+  },
+  "limitations": [
+    "A Linux x64 LLVM sample cannot establish compression savings for other operating systems, Rust toolchains, installed tools, dependency stores or compiled outputs.",
+    "No new full CI run at level 9 is selected. Actual repository inventory is limited by eviction and is not a measurement of the complete working set."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Workbench with Guix",
+  "remoteUser": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../..",
+    "options": ["--ulimit=nofile=65536:65536"]
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "overrideCommand": false,
+  "containerEnv": { "WORKBENCH_DEVCONTAINER": "1" },
+  "runArgs": ["--security-opt=seccomp=unconfined", "--security-opt=systempaths=unconfined"]
+}

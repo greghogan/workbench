@@ -1,0 +1,88 @@
+schema_version = 1
+
+[[command]]
+role = "setup"
+command = [ "uv", "sync", "--locked" ]
+heavy = true
+
+[[command]]
+role = "format"
+command = [ "uv", "run", "--locked", "ruff", "format", "--check", "." ]
+
+[[command]]
+role = "lint"
+command = [ "uv", "run", "--locked", "ruff", "check", "." ]
+
+[[command]]
+role = "type"
+command = [ "uv", "run", "--locked", "mypy", "src", "tests" ]
+
+[[command]]
+role = "test"
+warn_seconds = 120
+command = [ "uv", "run", "--locked", "pytest", "--durations=10", "--durations-min=2" ]
+heavy = true
+
+[command.coverage]
+command = [ "uv", "run", "--locked", "pytest", "--cov", "--cov-report=term-missing", "--cov-report=json:coverage/report.json" ]
+stages = [ "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[command]]
+role = "build"
+command = [ "node", "{workbench}/scripts/check-python.mjs", "build" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "node", "{workbench}/scripts/check-python.mjs", "release" ]
+heavy = true
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "uv", "run", "--locked", "ruff", "format", "." ]
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "htmlcov", ".coverage", ".pytest_cache", ".mypy_cache", ".ruff_cache", "--python-caches" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "dist", "coverage", "htmlcov", ".coverage", ".pytest_cache", ".mypy_cache", ".ruff_cache", "--python-caches", ".venv" ]
+stages = []
+
+
+[[command]]
+role = "advisory"
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "python" ]
+stages = [ "ci" ]
+heavy = true
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-setup-1"
+role = "compatibility-setup"
+command = ["uv", "sync", "--locked", "--python", "{runtimeVersion}"]
+heavy = true
+stages = []
+
+[[command]]
+name = "compatibility-test-2"
+role = "compatibility-test"
+command = ["uv", "run", "--no-sync", "--python", "{runtimeVersion}", "python", "-m", "pytest"]
+heavy = true
+stages = []

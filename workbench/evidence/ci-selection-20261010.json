@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "task": "workbench:TSK-8",
+  "date": "2026-10-10",
+  "platform": "linux-x64",
+  "hosted_execution": false,
+  "root_gate": {
+    "command": "workbench checks run --path . --stage ci",
+    "passed": true,
+    "tests_passed": 268,
+    "test_files_passed": 56,
+    "selector_regressions": 13,
+    "coverage": {
+      "lines": 88.65,
+      "statements": 82.82,
+      "functions": 90.43,
+      "branches": 75.85
+    },
+    "coverage_floors_passed": true,
+    "checks": [
+      "format",
+      "lint",
+      "types",
+      "bundle parity and license policy",
+      "structural validation",
+      "coverage",
+      "shell format/lint",
+      "actionlint",
+      "executable README examples",
+      "locked dependency advisories",
+      "recognized credentials"
+    ],
+    "log": "/tmp/workbench-tsk8-root-gate-verified.log"
+  },
+  "documentation_only": {
+    "selected_roots": [],
+    "native_groups": 0,
+    "compatibility_groups": 0,
+    "managed_groups": 0,
+    "devcontainer_roots": [],
+    "empty_local_execution_passed": true,
+    "no_example_tools_or_dependencies_or_caches_acquired": true,
+    "validation_and_aggregate_status_remain_required": true
+  },
+  "affected_python": {
+    "comparison": {
+      "version": 1,
+      "mode": "affected",
+      "base": "e6d2062885b88c2b9eddbae7c384dd518962ca54",
+      "head": "working tree",
+      "changed": [
+        "examples/languages/python/src/workbench_python_reference/__init__.py"
+      ],
+      "selected": [
+        {
+          "path": "examples/languages/python",
+          "reasons": [
+            "examples/languages/python/src/workbench_python_reference/__init__.py: root input"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "path": ".",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/languages/typescript",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/languages/rust",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/frameworks/react",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/languages/c",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/languages/cpp",
+          "reason": "no changed inputs or dependencies"
+        },
+        {
+          "path": "examples/languages/go",
+          "reason": "no changed inputs or dependencies"
+        }
+      ],
+      "reason": "changed inputs and dependencies in both revisions"
+    },
+    "cpus_per_job": 4,
+    "max_jobs": 7,
+    "targets": [
+      {
+        "id": "native:linux:x64:native:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:18.485Z",
+        "finished": "2026-10-10T16:58:29.449Z"
+      },
+      {
+        "id": "compatibility:linux:x64:native:python:3.11.17:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:18.834Z",
+        "finished": "2026-10-10T16:58:22.089Z"
+      },
+      {
+        "id": "compatibility:linux:x64:native:python:3.12.15:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:18.461Z",
+        "finished": "2026-10-10T16:58:21.343Z"
+      },
+      {
+        "id": "compatibility:linux:x64:native:python:3.13.16:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:18.828Z",
+        "finished": "2026-10-10T16:58:23.265Z"
+      },
+      {
+        "id": "environment:linux:x64:guix:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:17.701Z",
+        "finished": "2026-10-10T16:58:28.328Z"
+      },
+      {
+        "id": "environment:linux:x64:nix-docker:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:17.807Z",
+        "finished": "2026-10-10T16:58:30.275Z"
+      },
+      {
+        "id": "environment:linux:x64:devcontainer:examples%2Flanguages%2Fpython",
+        "success": true,
+        "started": "2026-10-10T16:58:18.220Z",
+        "finished": "2026-10-10T16:58:38.980Z"
+      }
+    ],
+    "infrastructure_errors": [],
+    "release_verified": true,
+    "log": "/tmp/workbench-tsk8-python-ci-final.log",
+    "reports": "/tmp/workbench-ci-reports-VHbLW7/reports",
+    "cleanup": {
+      "coordinator_lock_remaining": false,
+      "canonical_workspace_remaining": false,
+      "job_workspaces_remaining": 0
+    }
+  },
+  "hosted_adapter_local_cases": [
+    {
+      "name": "python-push",
+      "mode": "affected",
+      "roots": [
+        "examples/languages/python"
+      ],
+      "groups": {
+        "native": 4,
+        "compatibility": 3,
+        "environments": 2
+      },
+      "devcontainer": [
+        "examples/languages/python"
+      ]
+    },
+    {
+      "name": "documentation-push",
+      "mode": "affected",
+      "roots": [],
+      "groups": {
+        "native": 0,
+        "compatibility": 0,
+        "environments": 0
+      },
+      "devcontainer": []
+    },
+    {
+      "name": "documentation-pr",
+      "mode": "affected",
+      "roots": [],
+      "groups": {
+        "native": 0,
+        "compatibility": 0,
+        "environments": 0
+      },
+      "devcontainer": []
+    },
+    {
+      "name": "initial-verification",
+      "mode": "full",
+      "roots": [
+        ".",
+        "examples/languages/typescript",
+        "examples/languages/rust",
+        "examples/frameworks/react",
+        "examples/languages/python",
+        "examples/languages/c",
+        "examples/languages/cpp",
+        "examples/languages/go"
+      ],
+      "groups": {
+        "native": 4,
+        "compatibility": 15,
+        "environments": 2
+      },
+      "devcontainer": [
+        ".",
+        "examples/languages/typescript",
+        "examples/languages/rust",
+        "examples/frameworks/react",
+        "examples/languages/python",
+        "examples/languages/c",
+        "examples/languages/cpp",
+        "examples/languages/go"
+      ]
+    },
+    {
+      "name": "missing-base",
+      "mode": "fallback",
+      "roots": [
+        ".",
+        "examples/languages/typescript",
+        "examples/languages/rust",
+        "examples/frameworks/react",
+        "examples/languages/python",
+        "examples/languages/c",
+        "examples/languages/cpp",
+        "examples/languages/go"
+      ],
+      "groups": {
+        "native": 4,
+        "compatibility": 15,
+        "environments": 2
+      },
+      "devcontainer": [
+        ".",
+        "examples/languages/typescript",
+        "examples/languages/rust",
+        "examples/frameworks/react",
+        "examples/languages/python",
+        "examples/languages/c",
+        "examples/languages/cpp",
+        "examples/languages/go"
+      ]
+    }
+  ],
+  "full_linux_catalog_targets": 49,
+  "full_linux_matrix_rerun": false,
+  "full_linux_execution_baseline": "workbench/evidence/execution-refactors-20261010.json",
+  "constraints": {
+    "commit_gate_uses_complete_proposed_tree": true,
+    "selected_roots_retain_complete_matrices": true,
+    "initial_and_release_verification_use_full_matrices": true,
+    "guix_or_nix_pins_changed": false,
+    "emulation_used": false,
+    "pushed": false,
+    "published": false,
+    "deployed": false,
+    "draft_adr_acceptance_pending": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Workbench offline native",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../../..",
+    "options": ["--network=host"]
+  },
+  "remoteUser": "ubuntu",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1"
+  }
+}

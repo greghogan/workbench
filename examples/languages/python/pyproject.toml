@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workbench-python-reference"
+version = "0.1.0"
+description = "Executable Python reference project for Workbench"
+requires-python = ">=3.11.17"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0,<3",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-xdist==3.8.0",
+    "ruff>=0.16.10,<1",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+# The formatter owns trailing commas; choose no blank before a class docstring and summary on its first line.
+ignore = ["COM812", "D203", "D213", "CPY001"] # Projects choose their own copyright-header policy.
+
+[tool.ruff.lint.per-file-ignores]
+# Unittest discovery does not need a package; test names serve as descriptions and unittest owns assertions.
+"tests/**" = ["D102", "D103", "INP001", "PT009", "PT027"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+enable_error_code = ["exhaustive-match", "ignore-without-code", "possibly-undefined"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+addopts = "-n auto --strict-config --strict-markers --doctest-modules --junitxml=coverage/tests.xml"
+
+[tool.coverage.run]
+branch = true
+source = ["workbench_python_reference"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]

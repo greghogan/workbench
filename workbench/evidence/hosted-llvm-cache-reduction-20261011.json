@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-11",
+  "observed_at": "2026-10-11T15:43:23.413783+00:00",
+  "baseline_run": 38131699407,
+  "candidate_run": 38147824694,
+  "candidate_revision": "622f6204dc2f3dfea99e6e96e26a2b9af1c1074f",
+  "candidate_url": "https://github.com/greghogan/workbench/actions/runs/38147824694",
+  "scope": "Dedicated LLVM and Clang compressed cache groups; compiler matrix unchanged. Full candidate CI run completed successfully.",
+  "baseline": {
+    "entries": [
+      {
+        "key": "llvm-v2-darwin-arm64-e3a61c13a849568accaa58e7",
+        "compressed_bytes": 864553952
+      },
+      {
+        "key": "llvm-v2-linux-arm64-4af82af37ce60ae83ded326b",
+        "compressed_bytes": 853658256
+      },
+      {
+        "key": "llvm-v2-linux-x64-5accc74841732556beea2578",
+        "compressed_bytes": 1614658638
+      },
+      {
+        "key": "llvm-v2-linux-x64-9dc8ce4fcd4d41edc208a795",
+        "compressed_bytes": 1800084988
+      },
+      {
+        "key": "llvm-v2-linux-x64-d9aa2158c655646a920a1b45",
+        "compressed_bytes": 830544982
+      },
+      {
+        "key": "llvm-v2-win32-x64-db6b74d09250695e703716a9",
+        "compressed_bytes": 885604732
+      }
+    ],
+    "compressed_bytes": 6849105548
+  },
+  "candidate": {
+    "entries": [
+      {
+        "key": "clang-v3-linux-x64-5605d0fc4557fb1b0ddcbce7",
+        "compressed_bytes": 618802771
+      },
+      {
+        "key": "clang-v3-linux-x64-91e565bdea2584dee54402d9",
+        "compressed_bytes": 645856307
+      },
+      {
+        "key": "llvm-v3-darwin-arm64-55d4acc83d2043f8fc0356c9",
+        "compressed_bytes": 470890933
+      },
+      {
+        "key": "llvm-v3-linux-arm64-07c0a1c36a891b16fdb2a83f",
+        "compressed_bytes": 714927621
+      },
+      {
+        "key": "llvm-v3-linux-x64-e705995968e575e051e242e8",
+        "compressed_bytes": 686070817
+      },
+      {
+        "key": "llvm-v3-win32-x64-844ae48ac5e29592d9be76be",
+        "compressed_bytes": 885500694
+      }
+    ],
+    "compressed_bytes": 4022049143
+  },
+  "saved_bytes": 2827056405,
+  "saved_percent": 41.276286154263246,
+  "limitations": [
+    "Repository cache inventory alone does not measure a complete working set because entries can be evicted during execution. Baseline sizes were recovered from the completed run logs; all six candidate keys were present in the cache API at observation.",
+    "This comparison excludes other tool, Rust, GCC, package-manager, dependency/build, download, and Guix source caches. It also excludes the previous Dev Container LLVM installation embedded within its broad tools cache.",
+    "The baseline combines selected compatibility Clang with development LLVM in separate entries. The candidate separates those installations and shares the matching development LLVM cache across targets.",
+    "No compression level or supported compiler window changed for this hosted comparison."
+  ],
+  "candidate_conclusion": "success",
+  "candidate_jobs_passed": 34
+}

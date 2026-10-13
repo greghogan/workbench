@@ -1,0 +1,7 @@
+schema_version = 1
+
+id = "python"
+name = "Python"
+summary = "locked uv environments, Ruff formatting and linting, strict mypy, and pytest coverage"
+reference = "examples/languages/python"
+manifests = [ "pyproject.toml", "setup.py", "setup.cfg" ]

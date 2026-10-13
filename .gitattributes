@@ -1,0 +1,6 @@
+# Generated bundles contain third-party string literals whose whitespace is significant.
+bundle/*.cjs -whitespace linguist-generated=true
+bundle/THIRD_PARTY_NOTICES.txt -whitespace linguist-generated=true
+bundle/*.br binary linguist-generated=true
+bundle/*.gz binary linguist-generated=true
+bundle/*.zst binary linguist-generated=true

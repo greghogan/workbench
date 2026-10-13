@@ -1,0 +1,2 @@
+schema_version = 1
+languages = [ "typescript", "javascript", "java", "rust", "python", "c", "cpp", "go", "ruby", "php" ]

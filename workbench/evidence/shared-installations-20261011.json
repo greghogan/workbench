@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-11",
+  "scope": "Local shared-installation verification; hosted native platforms remain TSK-7 work",
+  "focused_tests": {
+    "passed": 9,
+    "job": "01a1294bc06f7081b73cb8bd16d778de",
+    "log": "/tmp/workbench-I-final-focused.log"
+  },
+  "system_store": {
+    "platform": "linux-x64",
+    "owners": [
+      1001,
+      1002
+    ],
+    "privilege_separation": true,
+    "project_code_executed_with_administrator_authority": false,
+    "remaining_versions_after_all_roots_released": 0,
+    "job": "01a129365eb07b63875531ec4655d963",
+    "log": "/tmp/workbench-I-system-test-r3.log"
+  },
+  "consumer_devcontainer": {
+    "passed": true,
+    "workspace": "/workspaces/consumer",
+    "read_only_distribution": true,
+    "job": "01a1294b94ea7393976b297f9c56a07c",
+    "log": "/tmp/workbench-I-consumer-devcontainer-r5.log"
+  },
+  "consumer_local_ci": {
+    "version": 1,
+    "targets": [
+      {
+        "id": "native:linux:x64:native:app",
+        "success": true,
+        "report": "/tmp/workbench-ci-reports-6xlXWM/reports/3572e783357311477356eb08/3572e783357311477356eb08",
+        "started": "2026-10-11T04:51:20.081Z",
+        "finished": "2026-10-11T04:51:43.403Z"
+      },
+      {
+        "id": "compatibility:linux:x64:native:node:22.23.3:app",
+        "success": true,
+        "report": "/tmp/workbench-ci-reports-6xlXWM/reports/948c803b1d340267333833f0/948c803b1d340267333833f0",
+        "started": "2026-10-11T04:51:20.186Z",
+        "finished": "2026-10-11T04:51:26.751Z"
+      }
+    ],
+    "errors": []
+  },
+  "consumer_local_ci_job": "01a1294ca38c7580860e340a15518af7",
+  "primary_index_unchanged": true,
+  "hosted_verification": {
+    "pending": [
+      "linux-arm64",
+      "macos-arm64",
+      "windows-x64",
+      "Windows native ACLs"
+    ]
+  },
+  "root_gate": {
+    "passed": true,
+    "tests": 366,
+    "files": 67,
+    "checks": 13,
+    "job": "01a1294d850875e2abaa757c816d9408",
+    "log": "/tmp/workbench-I-gate-r3.log"
+  },
+  "reference_material_omission": {
+    "passed": true,
+    "job": "01a129520b377a728dd036dea356233d",
+    "log": "/tmp/workbench-I-no-reference-r2.log",
+    "omitted": [
+      "src",
+      "tests",
+      "examples"
+    ],
+    "consumer_validation": true,
+    "source_cache_identity": true
+  }
+}
