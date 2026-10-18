@@ -1,0 +1,46 @@
+// Generated from bundle-artifacts.mts; edit the TypeScript source.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse } from "smol-toml";
+import { isRecord } from "./values.mjs";
+import * as zlib from "node:zlib";
+const bundleFormats = { brotli: "br", zlib: "gz", zstd: "zst" };
+const isCompression = (value) => typeof value === "string" && Object.hasOwn(bundleFormats, value);
+function bundleCompression(root) {
+  const bundle = parse(readFileSync(join(root, "workbench/config.toml"), "utf8")).bundle;
+  const selected = (isRecord(bundle) ? bundle.compression : void 0) ?? "brotli";
+  if (!isCompression(selected)) throw new Error(`Unknown bundle.compression: ${JSON.stringify(selected)}`);
+  return selected;
+}
+function bundleArtifacts(name, contents, compression) {
+  if (!isCompression(compression)) throw new Error(`Unknown bundle.compression: ${String(compression)}`);
+  const compress = {
+    brotli: () => zlib.brotliCompressSync(contents),
+    zlib: () => {
+      const compressed = zlib.gzipSync(contents, { level: 9 });
+      compressed[9] = 255;
+      return compressed;
+    },
+    zstd: () => {
+      if (!("zstdCompressSync" in zlib))
+        throw new Error("Zstandard bundling requires Node.js with built-in Zstandard support");
+      return zlib.zstdCompressSync(contents, { params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 } });
+    }
+  }[compression];
+  return /* @__PURE__ */ new Map([
+    [
+      `${name}.cjs`,
+      Buffer.from(
+        `require("../bin/bundle-runtime.cjs")(module, __filename, ${JSON.stringify(compression)}, require);
+`
+      )
+    ],
+    [`${name}.cjs.${bundleFormats[compression]}`, compress()]
+  ]);
+}
+export {
+  bundleArtifacts,
+  bundleCompression,
+  bundleFormats
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImJ1bmRsZS1hcnRpZmFjdHMubXRzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHJlYWRGaWxlU3luYyB9IGZyb20gXCJub2RlOmZzXCI7XG5pbXBvcnQgeyBqb2luIH0gZnJvbSBcIm5vZGU6cGF0aFwiO1xuaW1wb3J0IHsgcGFyc2UgfSBmcm9tIFwic21vbC10b21sXCI7XG5pbXBvcnQgeyBpc1JlY29yZCB9IGZyb20gXCIuL3ZhbHVlcy5tanNcIjtcbmltcG9ydCAqIGFzIHpsaWIgZnJvbSBcIm5vZGU6emxpYlwiO1xuXG5leHBvcnQgY29uc3QgYnVuZGxlRm9ybWF0cyA9IHsgYnJvdGxpOiBcImJyXCIsIHpsaWI6IFwiZ3pcIiwgenN0ZDogXCJ6c3RcIiB9IGFzIGNvbnN0O1xuZXhwb3J0IHR5cGUgQnVuZGxlQ29tcHJlc3Npb24gPSBrZXlvZiB0eXBlb2YgYnVuZGxlRm9ybWF0cztcbmNvbnN0IGlzQ29tcHJlc3Npb24gPSAodmFsdWU6IHVua25vd24pOiB2YWx1ZSBpcyBCdW5kbGVDb21wcmVzc2lvbiA9PlxuICB0eXBlb2YgdmFsdWUgPT09IFwic3RyaW5nXCIgJiYgT2JqZWN0Lmhhc093bihidW5kbGVGb3JtYXRzLCB2YWx1ZSk7XG5cbmV4cG9ydCBmdW5jdGlvbiBidW5kbGVDb21wcmVzc2lvbihyb290OiBzdHJpbmcpIHtcbiAgY29uc3QgYnVuZGxlID0gcGFyc2UocmVhZEZpbGVTeW5jKGpvaW4ocm9vdCwgXCJ3b3JrYmVuY2gvY29uZmlnLnRvbWxcIiksIFwidXRmOFwiKSkuYnVuZGxlO1xuICBjb25zdCBzZWxlY3RlZCA9IChpc1JlY29yZChidW5kbGUpID8gYnVuZGxlLmNvbXByZXNzaW9uIDogdW5kZWZpbmVkKSA/PyBcImJyb3RsaVwiO1xuICBpZiAoIWlzQ29tcHJlc3Npb24oc2VsZWN0ZWQpKSB0aHJvdyBuZXcgRXJyb3IoYFVua25vd24gYnVuZGxlLmNvbXByZXNzaW9uOiAke0pTT04uc3RyaW5naWZ5KHNlbGVjdGVkKX1gKTtcbiAgcmV0dXJuIHNlbGVjdGVkO1xufVxuXG5leHBvcnQgZnVuY3Rpb24gYnVuZGxlQXJ0aWZhY3RzKG5hbWU6IHN0cmluZywgY29udGVudHM6IEJ1ZmZlcjxBcnJheUJ1ZmZlcj4gfCB6bGliLklucHV0VHlwZSwgY29tcHJlc3Npb246IHVua25vd24pIHtcbiAgaWYgKCFpc0NvbXByZXNzaW9uKGNvbXByZXNzaW9uKSkgdGhyb3cgbmV3IEVycm9yKGBVbmtub3duIGJ1bmRsZS5jb21wcmVzc2lvbjogJHtTdHJpbmcoY29tcHJlc3Npb24pfWApO1xuICBjb25zdCBjb21wcmVzcyA9IHtcbiAgICBicm90bGk6ICgpID0+IHpsaWIuYnJvdGxpQ29tcHJlc3NTeW5jKGNvbnRlbnRzKSxcbiAgICB6bGliOiAoKSA9PiB7XG4gICAgICBjb25zdCBjb21wcmVzc2VkID0gemxpYi5nemlwU3luYyhjb250ZW50cywgeyBsZXZlbDogOSB9KTtcbiAgICAgIGNvbXByZXNzZWRbOV0gPSAyNTU7IC8vIFVzZSB0aGUgcG9ydGFibGUgZ3ppcCBPUyBtYXJrZXIgZm9yIGlkZW50aWNhbCBoZWFkZXJzIGFjcm9zcyBob3N0cy5cbiAgICAgIHJldHVybiBjb21wcmVzc2VkO1xuICAgIH0sXG4gICAgenN0ZDogKCkgPT4ge1xuICAgICAgaWYgKCEoXCJ6c3RkQ29tcHJlc3NTeW5jXCIgaW4gemxpYikpXG4gICAgICAgIHRocm93IG5ldyBFcnJvcihcIlpzdGFuZGFyZCBidW5kbGluZyByZXF1aXJlcyBOb2RlLmpzIHdpdGggYnVpbHQtaW4gWnN0YW5kYXJkIHN1cHBvcnRcIik7XG4gICAgICByZXR1cm4gemxpYi56c3RkQ29tcHJlc3NTeW5jKGNvbnRlbnRzLCB7IHBhcmFtczogeyBbemxpYi5jb25zdGFudHMuWlNURF9jX2NvbXByZXNzaW9uTGV2ZWxdOiAxOSB9IH0pO1xuICAgIH0sXG4gIH1bY29tcHJlc3Npb25dO1xuICByZXR1cm4gbmV3IE1hcChbXG4gICAgW1xuICAgICAgYCR7bmFtZX0uY2pzYCxcbiAgICAgIEJ1ZmZlci5mcm9tKFxuICAgICAgICBgcmVxdWlyZShcIi4uL2Jpbi9idW5kbGUtcnVudGltZS5janNcIikobW9kdWxlLCBfX2ZpbGVuYW1lLCAke0pTT04uc3RyaW5naWZ5KGNvbXByZXNzaW9uKX0sIHJlcXVpcmUpO1xcbmAsXG4gICAgICApLFxuICAgIF0sXG4gICAgW2Ake25hbWV9LmNqcy4ke2J1bmRsZUZvcm1hdHNbY29tcHJlc3Npb25dfWAsIGNvbXByZXNzKCldLFxuICBdKTtcbn1cbiJdLCJtYXBwaW5ncyI6IjtBQUFBLFNBQVMsb0JBQW9CO0FBQzdCLFNBQVMsWUFBWTtBQUNyQixTQUFTLGFBQWE7QUFDdEIsU0FBUyxnQkFBZ0I7QUFDekIsWUFBWSxVQUFVO0FBRWYsTUFBTSxnQkFBZ0IsRUFBRSxRQUFRLE1BQU0sTUFBTSxNQUFNLE1BQU0sTUFBTTtBQUVyRSxNQUFNLGdCQUFnQixDQUFDLFVBQ3JCLE9BQU8sVUFBVSxZQUFZLE9BQU8sT0FBTyxlQUFlLEtBQUs7QUFFMUQsU0FBUyxrQkFBa0IsTUFBYztBQUM5QyxRQUFNLFNBQVMsTUFBTSxhQUFhLEtBQUssTUFBTSx1QkFBdUIsR0FBRyxNQUFNLENBQUMsRUFBRTtBQUNoRixRQUFNLFlBQVksU0FBUyxNQUFNLElBQUksT0FBTyxjQUFjLFdBQWM7QUFDeEUsTUFBSSxDQUFDLGNBQWMsUUFBUSxFQUFHLE9BQU0sSUFBSSxNQUFNLCtCQUErQixLQUFLLFVBQVUsUUFBUSxDQUFDLEVBQUU7QUFDdkcsU0FBTztBQUNUO0FBRU8sU0FBUyxnQkFBZ0IsTUFBYyxVQUFnRCxhQUFzQjtBQUNsSCxNQUFJLENBQUMsY0FBYyxXQUFXLEVBQUcsT0FBTSxJQUFJLE1BQU0sK0JBQStCLE9BQU8sV0FBVyxDQUFDLEVBQUU7QUFDckcsUUFBTSxXQUFXO0FBQUEsSUFDZixRQUFRLE1BQU0sS0FBSyxtQkFBbUIsUUFBUTtBQUFBLElBQzlDLE1BQU0sTUFBTTtBQUNWLFlBQU0sYUFBYSxLQUFLLFNBQVMsVUFBVSxFQUFFLE9BQU8sRUFBRSxDQUFDO0FBQ3ZELGlCQUFXLENBQUMsSUFBSTtBQUNoQixhQUFPO0FBQUEsSUFDVDtBQUFBLElBQ0EsTUFBTSxNQUFNO0FBQ1YsVUFBSSxFQUFFLHNCQUFzQjtBQUMxQixjQUFNLElBQUksTUFBTSxxRUFBcUU7QUFDdkYsYUFBTyxLQUFLLGlCQUFpQixVQUFVLEVBQUUsUUFBUSxFQUFFLENBQUMsS0FBSyxVQUFVLHVCQUF1QixHQUFHLEdBQUcsRUFBRSxDQUFDO0FBQUEsSUFDckc7QUFBQSxFQUNGLEVBQUUsV0FBVztBQUNiLFNBQU8sb0JBQUksSUFBSTtBQUFBLElBQ2I7QUFBQSxNQUNFLEdBQUcsSUFBSTtBQUFBLE1BQ1AsT0FBTztBQUFBLFFBQ0wsNERBQTRELEtBQUssVUFBVSxXQUFXLENBQUM7QUFBQTtBQUFBLE1BQ3pGO0FBQUEsSUFDRjtBQUFBLElBQ0EsQ0FBQyxHQUFHLElBQUksUUFBUSxjQUFjLFdBQVcsQ0FBQyxJQUFJLFNBQVMsQ0FBQztBQUFBLEVBQzFELENBQUM7QUFDSDsiLCJuYW1lcyI6W10sImZpbGUiOiJzY3JpcHRzL2J1bmRsZS1hcnRpZmFjdHMubWpzIn0=

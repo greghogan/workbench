@@ -1,0 +1,21 @@
+{
+  "image": "node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4",
+  "commands": [
+    {
+      "argv": ["{bin}/count", "a", "banana"],
+      "stdout": "3\n"
+    },
+    {
+      "argv": ["{bin}/count", "a", ""],
+      "stdout": "0\n"
+    },
+    {
+      "argv": ["{bin}/count", "invalid", "banana"],
+      "status": "nonzero"
+    },
+    {
+      "argv": ["{bin}/count", "--json", "a", "banana"],
+      "stdout": "{\"count\":3}\n"
+    }
+  ]
+}

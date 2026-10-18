@@ -1,0 +1,7 @@
+{
+  "name": "workbench-container-tools",
+  "private": true,
+  "dependencies": {
+    "@devcontainers/cli": "0.89.0"
+  }
+}

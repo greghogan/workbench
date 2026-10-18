@@ -1,0 +1,8 @@
+# GitHub-hosted labels missing from actionlint 1.7.12's built-in list:
+# https://github.com/actions/runner-images#available-images
+# This setting extends actionlint's known labels; it does not select self-hosted runners.
+# Remove these entries when the pinned actionlint release recognizes them.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm

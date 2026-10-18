@@ -1,0 +1,33 @@
+schema_version = 1
+
+id = "typescript"
+name = "TypeScript"
+summary = "strict TypeScript 7, locked pnpm dependencies, typed ESLint, Prettier, and Vitest"
+reference = "examples/languages/typescript"
+manifests = [ "tsconfig.json" ]
+
+starter = [
+  "LICENSE",
+  "scripts/release-verify.mjs",
+  "README.md",
+  ".gitignore",
+  ".node-version",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  ".pnpmfile.cjs",
+  "eslint.config.mjs",
+  ".prettierrc.json",
+  "vitest.config.mjs",
+  "scripts/build.mjs",
+  "tsconfig.json",
+  "src/arithmetic.ts",
+  "test/arithmetic.test.ts",
+  "test/count.test.ts",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "NODE_V8_COVERAGE", "NODE_EXTRA_CA_CERTS", "npm_config_userconfig",
+  "npm_config_globalconfig"
+]

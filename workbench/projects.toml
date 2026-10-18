@@ -1,0 +1,76 @@
+
+[[project]]
+id = "workbench"
+path = "."
+
+[[language_root]]
+ci_compatibility = false
+language = "typescript"
+path = "."
+
+[[language_root]]
+ci_compatibility = false
+language = "typescript"
+path = "examples/languages/typescript"
+
+[[language_root]]
+ci_compatibility = false
+language = "rust"
+path = "examples/languages/rust"
+
+[[language_root]]
+ci_compatibility = false
+language = "typescript"
+path = "examples/frameworks/react"
+
+[[language_root]]
+ci_compatibility = false
+language = "python"
+path = "examples/languages/python"
+
+[[language_root]]
+ci_compatibility = false
+language = "c"
+path = "examples/languages/c"
+lto = "full"
+standard = "17"
+compiler = "clang"
+managed_compilers = { guix = "gcc", nix = "gcc" }
+compilers.clang = { minimum = "21.1.8", ci_versions = [ "21.1.8", "22.1.8", "23.1.4" ] }
+compilers.gcc = { minimum = "14.4.0", ci_versions = [ "14.4.0", "15.3.0", "16.2.0" ], ci_architectures = [ "x64", "arm64" ] }
+
+[[language_root]]
+ci_compatibility = false
+language = "cpp"
+path = "examples/languages/cpp"
+lto = "full"
+standard = "20"
+compiler = "clang"
+managed_compilers = { guix = "gcc", nix = "gcc" }
+compilers.clang = { minimum = "21.1.8", ci_versions = [ "21.1.8", "22.1.8", "23.1.4" ] }
+compilers.gcc = { minimum = "14.4.0", ci_versions = [ "14.4.0", "15.3.0", "16.2.0" ], ci_architectures = [ "x64", "arm64" ] }
+
+[[language_root]]
+ci_compatibility = false
+language = "go"
+path = "examples/languages/go"
+
+[[language_root]]
+ci_compatibility = false
+language = "javascript"
+path = "examples/languages/javascript"
+
+[[language_root]]
+ci_compatibility = false
+language = "java"
+path = "examples/languages/java"
+
+[[language_root]]
+ci_compatibility = false
+language = "ruby"
+path = "examples/languages/ruby"
+
+[[language_root]]
+ci_compatibility = false
+path = "examples/languages/php"
+language = "php"

@@ -1,0 +1,13 @@
+schema_version = 1
+
+id = "python"
+name = "Python"
+summary = "locked uv environments, Ruff formatting and linting, strict mypy, and pytest coverage"
+reference = "examples/languages/python"
+manifests = [ "pyproject.toml", "setup.py", "setup.cfg" ]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "UV_NATIVE_TLS", "UV_OFFLINE", "UV_INDEX_URL",
+  "UV_EXTRA_INDEX_URL", "UV_CONFIG_FILE", "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR", "UV_PYTHON_CACHE_DIR"
+]

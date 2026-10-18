@@ -1,0 +1,563 @@
+{
+  "schema_version": 1,
+  "source_hashes": {
+    ".composer-version": "65fcc9f7f590a80170f0d1e32a706b61c8a5f64fb515f4d68cfb76edc094cc09",
+    ".composer/checksums.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+    "composer.json": "99cb46443b8282c92ba20dfe7587d49919f40ba1975aeedc4ad7900c2eac1753",
+    "composer.lock": "2368b623f3410cd6b2b68c83d1636ee67a375ddfbc9c1f2ac4014e13283a3c70",
+    "managed-extra-inputs.json": "e591d628bcbc97b2c2de2680a7cfd588c789e241928a5114984fec7bbba430bd",
+    "tools/.composer/checksums.json": "27e1360a22f120b1abfaa130b5cc09a6e53e35e76628e390e0c2e8838244cecb",
+    "tools/compat/.composer/checksums.json": "9d8fedb67ef861e3136862c946aa16b0e80903f2be2d48dce10934c402226d65",
+    "tools/compat/composer.json": "6dcbf9a20b5f8719e4d434efd6fded5c0edd3afda664140394e5a558279d3f9f",
+    "tools/compat/composer.lock": "76ecc5ba9f3e89596bc126ea04111c12f3fa04599f63d661232db2c249a9edfc",
+    "tools/composer.json": "85feebefcdccb3ae37efb43d15a63db84b14bb5728b916fc3d1ee720ec96e609",
+    "tools/composer.lock": "648fbdbfe5375312e7e543b932714e794c878ac1ba735bc7c75bd2fa3af0bebf"
+  },
+  "inputs": [
+    {
+      "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+      "hash": "sha256-ei03nVuP/aoChYDvJklMNtL+70sXjT3RRzpNvF4XyNY=",
+      "destination": "bootstrap/composer.phar"
+    },
+    {
+      "url": "https://getcomposer.org/download/2.10.3/composer.phar.asc",
+      "hash": "sha256-9F63yEXWaN2eys+UwhurCJBeA4iI1KVfq/qZsKvNDMY=",
+      "destination": "bootstrap/composer.phar.asc"
+    },
+    {
+      "url": "https://api.github.com/repos/paratestphp/paratest/zipball/6d73b615611a2da7af85637d99d1b0efac9fcd00",
+      "hash": "sha256-B+cROXF1fUsB5ilOU0/DlJ1mnGLE+OEYNkFQOLFdYTE=",
+      "destination": "composer/tools/brianium/paratest/07e7113971757d4b01e6294e534fc3949d669c62c4f8e11836415038b15d6131.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/clue/reactphp-ndjson/zipball/392dc165fce93b5bb5c637b67e59619223c931b0",
+      "hash": "sha256-rsDAuA9/shP1HFoXCD+CWKda50QrxEEBv5JCpzKRUoM=",
+      "destination": "composer/tools/clue/ndjson-react/aec0c0b80f7fb213f51c5a17083f8258a75ae7442bc44101bf9242a732915283.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/paratestphp/paratest/zipball/58988a27ede69f89a1dcc27a6af6b1e1c3936df0",
+      "hash": "sha256-y3EkRCAZeDYfUEoM3iiwQ57Cbc+rWo9WAEDqL940vnc=",
+      "destination": "composer/tools/compat/brianium/paratest/cb712444201978361f504a0cde28b0439ec26dcfab5a8f560040ea2fde34be77.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/theofidry/cpu-core-counter/zipball/d384a7d0d6e67aa497327260ca95023e92dc2032",
+      "hash": "sha256-7HOS2JsYtMWjANfFG6obtKsKn7qRaeHW3orCgD/Vfyc=",
+      "destination": "composer/tools/compat/fidry/cpu-core-counter/ec7392d89b18b4c5a300d7c51baa1bb4ab0a9fba9169e1d6de8ac2803fd57f27.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/Jean85/pretty-package-versions/zipball/4d7aa5dab42e2a76d99559706022885de0e18e1a",
+      "hash": "sha256-sDba9rVK5bFkP5xRafzaAg1g2Dzl83s3qBYn+/iVkOk=",
+      "destination": "composer/tools/compat/jean85/pretty-package-versions/b036daf6b54ae5b1643f9c5169fcda020d60d83ce5f37b37a81627fbf89590e9.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/myclabs/DeepCopy/zipball/8680aa248f8e07bc8fb43f56f0f5fc77a0c96aae",
+      "hash": "sha256-Vr1c/w2KwVgYMB/MJnEt/v/vMi0hILtPTWfcqAieY4A=",
+      "destination": "composer/tools/compat/myclabs/deep-copy/56bd5cff0d8ac15818301fcc26712dfeffef322d2120bb4f4d67dca8089e6380.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/9e33da9553fe7786f0962b35f4e4ecf01be89def",
+      "hash": "sha256-wwcmDEZqEF8SRg8YZtw2AJOO9Pf4Zl6G8NdDpUSEiEY=",
+      "destination": "composer/tools/compat/nikic/php-parser/c307260c466a105f12460f1866dc3600938ef4f7f8665e86f0d743a544848846.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/phar-io/manifest/zipball/54750ef60c58e43759730615a392c31c80e23176",
+      "hash": "sha256-tDaLRNJMYKBWHh4ShNqodD37L9eNr+rshISbJk8EWnU=",
+      "destination": "composer/tools/compat/phar-io/manifest/b4368b44d24c60a0561e1e1284daa8743dfb2fd78dafeaec84849b264f045a75.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/phar-io/version/zipball/4f7fd7836c6f332bb2933569e566a0d6c4cbed74",
+      "hash": "sha256-T29Pq4v+rJWTTOx1viN0Pji22GSHb1Lc3VtU4AP8q1U=",
+      "destination": "composer/tools/compat/phar-io/version/4f6f4fab8bfeac95934cec75be23743e38b6d864876f52dcdd5b54e003fcab55.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/2c1ed04922802c15e1de5d7447b4856de949cf56",
+      "hash": "sha256-H0esQyr6KRMf5pdSoJTeE297zGsx5KQol3LxbEWkwVQ=",
+      "destination": "composer/tools/compat/phpunit/php-code-coverage/1f47ac432afa29131fe69752a094de136f7bcc6b31e4a4289772f16c45a4c154.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-file-iterator/zipball/2f3a64888c814fc235386b7387dd5b5ed92ad903",
+      "hash": "sha256-IwM3MjA4mmAGdSw4GRcVOEkWCp7mXWHVfpRR74ZJjZw=",
+      "destination": "composer/tools/compat/phpunit/php-file-iterator/2303373230389a6006752c381917153849160a9ee65d61d57e9451ef86498d9c.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-invoker/zipball/c1ca3814734c07492b3d4c5f794f4b0995333da2",
+      "hash": "sha256-sz6jCT4rK4opihpQ5GCCrbDyXEY9KKy/MMlwRu6xFNU=",
+      "destination": "composer/tools/compat/phpunit/php-invoker/b33ea3093e2b2b8a298a1a50e46082adb0f25c463d28acbf30c97046eeb114d5.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-text-template/zipball/3e0404dc6b300e6bf56415467ebcb3fe4f33e964",
+      "hash": "sha256-cPgL8N+/M3vKBp38d7qkNN8p2vKK1vvwDDyYYLKYjV8=",
+      "destination": "composer/tools/compat/phpunit/php-text-template/70f80bf0dfbf337bca069dfc77baa434df29daf28ad6fbf00c3c9860b2988d5f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-timer/zipball/3b415def83fbcb41f991d9ebf16ae4ad8b7837b3",
+      "hash": "sha256-qOxVqDJOza9cpR6PXTyYo5Wb3gIa/Cwtzzyfu6JTzlk=",
+      "destination": "composer/tools/compat/phpunit/php-timer/a8ec55a8324ecdaf5ca51e8f5d3c98a3959bde021afc2c2dcf3c9fbba253ce59.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/36b75bf56a8535623f5b3e24b27ea1823759da1a",
+      "hash": "sha256-W58W0JT905l/eOeV+vNYhTmEjy0jT2KUJl8/xdalRgo=",
+      "destination": "composer/tools/compat/phpunit/phpunit/5b9f16d094fdd3997f78e795faf3588539848f2d234f6294265f3fc5d6a5460a.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/php-fig/container/zipball/c71ecc56dfe541dbd90c5360474fbc405f8d5963",
+      "hash": "sha256-MRH1tp06D2kPX5LXrqz7JH9evTwXUIjM5LCY5dGwatc=",
+      "destination": "composer/tools/compat/psr/container/3111f5b69d3a0f690f5f92d7aeacfb247f5ebd3c175088cce4b098e5d1b06ad7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/cli-parser/zipball/15c5dd40dc4f38794d383bb95465193f5e0ae180",
+      "hash": "sha256-OEEceRKhZcakCwHCFSEDl4hb5cHJ4Xs02QfO6Dk5YlE=",
+      "destination": "composer/tools/compat/sebastian/cli-parser/38411c7912a165c6a40b01c215210397885be5c1c9e17b34d907cee839396251.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/code-unit-reverse-lookup/zipball/183a9b2632194febd219bb9246eee421dad8d45e",
+      "hash": "sha256-ZDgMPgzWd2+xAzXZ45e/irSkNeCzM9NeNGAVyCpAG3U=",
+      "destination": "composer/tools/compat/sebastian/code-unit-reverse-lookup/64380c3e0cd6776fb10335d9e397bf8ab4a435e0b333d35e346015c82a401b75.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/code-unit/zipball/54391c61e4af8078e5b276ab082b6d3c54c9ad64",
+      "hash": "sha256-nDxureJtSHsgV2TFF2rJkyDWnwta5eBV5zzqW+hGBSw=",
+      "destination": "composer/tools/compat/sebastian/code-unit/9c3c6eade26d487b205764c5176ac99320d69f0b5ae5e055e73cea5be846052c.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/comparator/zipball/2c95e1e86cb8dd41beb8d502057d1081ccc8eca9",
+      "hash": "sha256-K4bSF9kF0gRYdKftyN4/glnEuNCOXukP+gANI9SLXtg=",
+      "destination": "composer/tools/compat/sebastian/comparator/2b86d217d905d2045874a7edc8de3f8259c4b8d08e5ee90ffa000d23d48b5ed8.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/complexity/zipball/ee41d384ab1906c68852636b6de493846e13e5a0",
+      "hash": "sha256-XJusf6xCkfxE3m252rko1IzjrmZGOO85aCG9GM0q+hA=",
+      "destination": "composer/tools/compat/sebastian/complexity/5c9bac7fac4291fc44de6db9dab928d48ce3ae664638ef396821bd18cd2afa10.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/diff/zipball/b4ccd857127db5d41a5b676f24b51371d76d8544",
+      "hash": "sha256-S4EdpxZmvI0VT8ka7q1+9U9mPS0Ldo+V2Fca/Gvy5oY=",
+      "destination": "composer/tools/compat/sebastian/diff/4b811da71666bc8d154fc91aeead7ef54f663d2d0b768f95d8571afc6bf2e686.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/environment/zipball/a5c75038693ad2e8d4b6c15ba2403532647830c4",
+      "hash": "sha256-bhc7vgDGu5MnOZNdi4vwzgonhhM/WL/ZuLpaQz54QLU=",
+      "destination": "composer/tools/compat/sebastian/environment/6e173bbe00c6bb932739935d8b8bf0ce0a2786133f58bfd9b8ba5a433e7840b5.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/exporter/zipball/70a298763b40b213ec087c51c739efcaa90bcd74",
+      "hash": "sha256-Htl0RfbF6j6d/rXNzUcpDfs5H5UDXoeaAw1WRtBNSr4=",
+      "destination": "composer/tools/compat/sebastian/exporter/1ed97445f6c5ea3e9dfeb5cdcd47290dfb391f95035e879a030d5646d04d4abe.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/global-state/zipball/3be331570a721f9a4b5917f4209773de17f747d7",
+      "hash": "sha256-xHGi8cvcitsaijiF1c8x1yYCdFDAxLF3SmCvcNIY/ZQ=",
+      "destination": "composer/tools/compat/sebastian/global-state/c471a2f1cbdc8adb1a8a3885d5cf31d726027450c0c4b1774a60af70d218fd94.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/lines-of-code/zipball/d36ad0d782e5756913e42ad87cb2890f4ffe467a",
+      "hash": "sha256-/dmv69I6X5WGNc3DbSrUfq5iGft7RPt2IKs4+39dDcY=",
+      "destination": "composer/tools/compat/sebastian/lines-of-code/fdd9afebd23a5f958635cdc36d2ad47eae6219fb7b44fb7620ab38fb7f5d0dc6.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/object-enumerator/zipball/f5b498e631a74204185071eb41f33f38d64608aa",
+      "hash": "sha256-inlwGY38P5MydIFVUtOARu9Oy748USaNf9ZeHv70owQ=",
+      "destination": "composer/tools/compat/sebastian/object-enumerator/8a7970198dfc3f933274815552d38046ef4ecbbe3c51268d7fd65e1efef4a304.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/object-reflector/zipball/6e1a43b411b2ad34146dee7524cb13a068bb35f9",
+      "hash": "sha256-Dwxl8swgAExOaW50yQzTvKrw6AlOYUzrjAKX6dL3KpE=",
+      "destination": "composer/tools/compat/sebastian/object-reflector/0f0c65f2cc20004c4e696e74c90cd3bcaaf0e8094e614ceb8c0297e9d2f72a91.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/recursion-context/zipball/f6458abbf32a6c8174f8f26261475dc133b3d9dc",
+      "hash": "sha256-ijTH01LWETvIR44ZmGXJCUrUSn0HqSic0Mmatr0izUA=",
+      "destination": "composer/tools/compat/sebastian/recursion-context/8a34c7d352d6113bc8478e199865c9094ad44a7d07a9289cd0c99ab6bd22cd40.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/type/zipball/f77d2d4e78738c98d9a68d2596fe5e8fa380f449",
+      "hash": "sha256-Rtl0NUrllEwWByuNvM3stC+vffaQv+sIyeLfx0jSpGA=",
+      "destination": "composer/tools/compat/sebastian/type/46d974354ae5944c16072b8dbccdecb42faf7df690bfeb08c9e2dfc748d2a460.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/version/zipball/c687e3387b99f5b03b6caa64c74b63e2936ff874",
+      "hash": "sha256-oQFnb8vxfvy4u6d5MOhW2u6F1mpzTOX0NvK4ycxWEdw=",
+      "destination": "composer/tools/compat/sebastian/version/a101676fcbf17efcb8bba77930e856daee85d66a734ce5f436f2b8c9cc5611dc.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/staabm/side-effects-detector/zipball/d8334211a140ce329c13726d4a715adbddd0a163",
+      "hash": "sha256-kNgsyttizlQzH8jZ8QvQ7VMBFBHUhFH5sMy+y5/7exI=",
+      "destination": "composer/tools/compat/staabm/side-effects-detector/90d82ccadb62ce54331fc8d9f10bd0ed53011411d48451f9b0ccbecb9ffb7b12.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/console/zipball/21f1bc2296f7ff6043241a8dcbc09559b3732820",
+      "hash": "sha256-0QfXT1oN8GUL7f3UIKpRcNDqowhiTtabhaGkdq5MCm8=",
+      "destination": "composer/tools/compat/symfony/console/d107d74f5a0df0650bedfdd420aa5170d0eaa308624ed69b85a1a476ae4c0a6f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/deprecation-contracts/zipball/f3202fa1b5097b0af062dc978b32ecf63404e31d",
+      "hash": "sha256-PZFBBgmqT1eUBqSQjilgFV/D79bGQ4hIafh1qnP5aH0=",
+      "destination": "composer/tools/compat/symfony/deprecation-contracts/3d91410609aa4f579406a4908e2960155fc3efd6c643884869f875aa73f9687d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-ctype/zipball/141046a8f9477948ff284fa65be2095baafb94f2",
+      "hash": "sha256-kisMayTRvLZEfQUe3B/EUmvMpfiN3Eon2IVQeHLO7ME=",
+      "destination": "composer/tools/compat/symfony/polyfill-ctype/922b0c6b24d1bcb6447d051edc1fc4526bcca5f88ddc4a27d885507872ceecc1.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-intl-grapheme/zipball/5cac8f4db97208823aa353f59a01faad2da52c75",
+      "hash": "sha256-rnERwg8cYedbV0aNEwPdUbG2rwni/Lq+J9VrsnXiJMI=",
+      "destination": "composer/tools/compat/symfony/polyfill-intl-grapheme/ae7111c20f1c61e75b57468d1303dd51b1b6af09e2fcbabe27d56bb275e224c2.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-intl-normalizer/zipball/ebd57ccc7edb93d632e184efbe7693d2517bab3b",
+      "hash": "sha256-57s5Tk1ntcUM54u0CP/ib3dKP8OcjNCLi/H1Jlox8/w=",
+      "destination": "composer/tools/compat/symfony/polyfill-intl-normalizer/e7bb394e4d67b5c50ce78bb408ffe26f774a3fc39c8cd08b8bf1f5265a31f3fc.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-mbstring/zipball/4d5d331bf731e0aedbc6b2f5e61135b7b7996a72",
+      "hash": "sha256-jpL44g61uFdwkn5nJGwDscjq5jJsep5hhoJzAnGwJXM=",
+      "destination": "composer/tools/compat/symfony/polyfill-mbstring/8e92f8e20eb5b85770927e67246c03b1c8eae6326c7a9e618682730271b02573.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/process/zipball/e5247f4a5e0797d232ad8e8e6803aeb341843c83",
+      "hash": "sha256-34OyW7mFiuQN04Qz9a8oG9VBbiyYh+qvRZAzVkfVU5w=",
+      "destination": "composer/tools/compat/symfony/process/df83b25bb9858ae40dd38433f5af281bd5416e2c9887eaaf4590335647d5539c.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/service-contracts/zipball/15e6a07ec2a2c75ceb1b21dd98105ee8456d2257",
+      "hash": "sha256-7DBRVYldeBvIvsgQEaNd6lXIj4SbKmouC2iRlfSw9m0=",
+      "destination": "composer/tools/compat/symfony/service-contracts/ec305155895d781bc8bec81011a35dea55c88f849b2a6a2e0b689195f4b0f66d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/string/zipball/9bc35d074ad16a58c21cd52b18c5cacc4f4c3981",
+      "hash": "sha256-WayLLIVaU13D9v6g9qgV2gVNaaio0ciGSr6dPSFvoBs=",
+      "destination": "composer/tools/compat/symfony/string/59ac8b2c855a535dc3f6fea0f6a815da054d69a8a8d1c8864abe9d3d216fa01b.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/theseer/tokenizer/zipball/b7489ce515e168639d17feec34b8847c326b0b3c",
+      "hash": "sha256-Hp1qIHh47LhclIy1tWmnfyC9zZlmbOLwNHnasXUZhSQ=",
+      "destination": "composer/tools/compat/theseer/tokenizer/1e9d6a207878ecb85c948cb5b569a77f20bdcd99666ce2f03479dab175198524.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/composer/pcre/zipball/d5a341b3fb61f3001970940afb1d332968a183ed",
+      "hash": "sha256-3Jy7UDIzjA79ah5Q0KJj8dWqFiRSJZ9W8DH34WsycTU=",
+      "destination": "composer/tools/composer/pcre/dc9cbb5032338c0efd6a1e50d0a263f1d5aa162452259f56f031f7e16b327135.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/composer/semver/zipball/9dfce66f1e97360ea5e6d3e38ab14277e4cc591e",
+      "hash": "sha256-54Oe7XTAf1OOdEyQe4FsJc/gLL5MgfCk3TFsiALRf38=",
+      "destination": "composer/tools/composer/semver/e7839eed74c07f538e744c907b816c25cfe02cbe4c81f0a4dd316c8802d17f7f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/composer/xdebug-handler/zipball/6c1925561632e83d60a44492e0b344cf48ab85ef",
+      "hash": "sha256-s2J3SYv2Boy7TJ8Sx5uSKrkikSxWaU8P2N1fcYqo4LE=",
+      "destination": "composer/tools/composer/xdebug-handler/b36277498bf6068cbb4c9f12c79b922ab922912c56694f0fd8dd5f718aa8e0b1.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/ergebnis/agent-detector/zipball/0cd815cec1207873c37624d33f0f2853523152f3",
+      "hash": "sha256-NsjQWLPcKfhKY8PrxWj5Mhd4b9+4xvtC0nst2WGRksc=",
+      "destination": "composer/tools/ergebnis/agent-detector/36c8d058b3dc29f84a63c3ebc568f93217786fdfb8c6fb42d27b2dd9619192c7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/igorw/evenement/zipball/0a16b0d71ab13284339abb99d9d2bd813640efbc",
+      "hash": "sha256-Td3u3uPlEZLEwyfq4BdotJcBea4vt44phhDBoaANdb0=",
+      "destination": "composer/tools/evenement/evenement/4dddeedee3e51192c4c327eae01768b4970179ae2fb78e298610c1a1a00d75bd.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/theofidry/cpu-core-counter/zipball/d384a7d0d6e67aa497327260ca95023e92dc2032",
+      "hash": "sha256-7HOS2JsYtMWjANfFG6obtKsKn7qRaeHW3orCgD/Vfyc=",
+      "destination": "composer/tools/fidry/cpu-core-counter/ec7392d89b18b4c5a300d7c51baa1bb4ab0a9fba9169e1d6de8ac2803fd57f27.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/PHP-CS-Fixer/PHP-CS-Fixer/zipball/1d0c68ee5f37446d8ad5970b82384cd1bb0a3317",
+      "hash": "sha256-aSVGSUK2zUaRIUAGXYclxJwLhJPV8MdOKyr16EYgW2g=",
+      "destination": "composer/tools/friendsofphp/php-cs-fixer/6925464942b6cd46912140065d8725c49c0b8493d5f0c74e2b2af5e846205b68.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/Jean85/pretty-package-versions/zipball/4d7aa5dab42e2a76d99559706022885de0e18e1a",
+      "hash": "sha256-sDba9rVK5bFkP5xRafzaAg1g2Dzl83s3qBYn+/iVkOk=",
+      "destination": "composer/tools/jean85/pretty-package-versions/b036daf6b54ae5b1643f9c5169fcda020d60d83ce5f37b37a81627fbf89590e9.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/myclabs/DeepCopy/zipball/8680aa248f8e07bc8fb43f56f0f5fc77a0c96aae",
+      "hash": "sha256-Vr1c/w2KwVgYMB/MJnEt/v/vMi0hILtPTWfcqAieY4A=",
+      "destination": "composer/tools/myclabs/deep-copy/56bd5cff0d8ac15818301fcc26712dfeffef322d2120bb4f4d67dca8089e6380.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/9e33da9553fe7786f0962b35f4e4ecf01be89def",
+      "hash": "sha256-wwcmDEZqEF8SRg8YZtw2AJOO9Pf4Zl6G8NdDpUSEiEY=",
+      "destination": "composer/tools/nikic/php-parser/c307260c466a105f12460f1866dc3600938ef4f7f8665e86f0d743a544848846.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/phar-io/manifest/zipball/54750ef60c58e43759730615a392c31c80e23176",
+      "hash": "sha256-tDaLRNJMYKBWHh4ShNqodD37L9eNr+rshISbJk8EWnU=",
+      "destination": "composer/tools/phar-io/manifest/b4368b44d24c60a0561e1e1284daa8743dfb2fd78dafeaec84849b264f045a75.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/phar-io/version/zipball/4f7fd7836c6f332bb2933569e566a0d6c4cbed74",
+      "hash": "sha256-T29Pq4v+rJWTTOx1viN0Pji22GSHb1Lc3VtU4AP8q1U=",
+      "destination": "composer/tools/phar-io/version/4f6f4fab8bfeac95934cec75be23743e38b6d864876f52dcdd5b54e003fcab55.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/phpstan/phpstan/zipball/6155239b488e95d26d1ebd95c6b4bb294d7f09db",
+      "hash": "sha256-rBxCOe4ULH4/7Jf5KQCOd4t3c2mTYkpGx6//bZwq4Gk=",
+      "destination": "composer/tools/phpstan/phpstan/ac1c4239ee142c7e3fec97f929008e778b77736993624a46c7afff6d9c2ae069.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-code-coverage/zipball/f1e54f06b6b4cea73cd6104ba3c0cfa0efa6d73f",
+      "hash": "sha256-8y4d9ji8Q5zI4elX36yzCnUDny9onR439ikzYQN9ecc=",
+      "destination": "composer/tools/phpunit/php-code-coverage/f32e1df638bc439cc8e1e957dfacb30a75039f2f689d1e37f6293361037d79c7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-file-iterator/zipball/9bb4e6c58b62c1e043be995c66abec7c97307aae",
+      "hash": "sha256-VqV44LLrTUYm28eJWmrLkkkCkjNSl//FZjgyuHJbCc0=",
+      "destination": "composer/tools/phpunit/php-file-iterator/56a578e0b2eb4d4626dbc7895a6acb92490292335297ffc5663832b8725b09cd.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-invoker/zipball/42e5c5cae0c65df12d1b1a3ab52bf3f50f244d88",
+      "hash": "sha256-UclAn7AZsuNEvdejHaxngWv9xi96zegnhUCBnGFKxZQ=",
+      "destination": "composer/tools/phpunit/php-invoker/51c9409fb019b2e344bdd7a31dac67816bfdc62f7acde8278540819c614ac594.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-text-template/zipball/97107691cb2b6c743b5e0c44be19e983cb337a02",
+      "hash": "sha256-Xxd7KgBqHJKerEc8vkMMYfVOUyANoIAKgeeg8QglFR4=",
+      "destination": "composer/tools/phpunit/php-text-template/5f177b2a006a1c929eac473cbe430c61f54e53200da0800a81e7a0f10825151e.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/php-timer/zipball/a0e12065831f6ab0d83120dc61513eb8d9a966f6",
+      "hash": "sha256-qGCS/uqWa3/FlFlL2quMRga0lHh9v0oQRFjSqn4NMrc=",
+      "destination": "composer/tools/phpunit/php-timer/a86092feea966b7fc594594bdaab8c4606b494787dbf4a104458d2aa7e0d32b7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/2180c47c4229e5da117ff248753370443c074f10",
+      "hash": "sha256-DVECDgg5o1RNuzp9OSBsRf7q4Ke020TNkZyAaHSJcLU=",
+      "destination": "composer/tools/phpunit/phpunit/0d51020e0839a3544dbb3a7d39206c45feeae0a7b4db44cd919c8068748970b5.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/php-fig/container/zipball/c71ecc56dfe541dbd90c5360474fbc405f8d5963",
+      "hash": "sha256-MRH1tp06D2kPX5LXrqz7JH9evTwXUIjM5LCY5dGwatc=",
+      "destination": "composer/tools/psr/container/3111f5b69d3a0f690f5f92d7aeacfb247f5ebd3c175088cce4b098e5d1b06ad7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/php-fig/event-dispatcher/zipball/dbefd12671e8a14ec7f180cab83036ed26714bb0",
+      "hash": "sha256-TWpnTP2JqZV+rYLjHuTfeFsrHSFWk63XMYRymppm0RY=",
+      "destination": "composer/tools/psr/event-dispatcher/4d6a674cfd89a9957ead82e31ee4df785b2b1d215693add73184729a9a66d116.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+      "hash": "sha256-Ho3PLfkz/DRAspFGxcpOk+zlHFx6msllPZJuyXHJCJI=",
+      "destination": "composer/tools/psr/log/1e8dcf2df933fc3440b29146c5ca4e93ece51c5c7a9ac9653d926ec971c90892.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/cache/zipball/d47c472b64aa5608225f47965a484b75c7817d5b",
+      "hash": "sha256-V5Op0305SzMCgwsoqDF4vZbn/Aan/2b/6nFlWaAa5GM=",
+      "destination": "composer/tools/react/cache/5793a9d37d394b3302830b28a83178bd96e7fc06a7ff66ffea716559a01ae463.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/child-process/zipball/970f0e71945556422ee4570ccbabaedc3cf04ad3",
+      "hash": "sha256-RAXo+zphVBY5cwVYCFA/8Nfyr0FCmDPOJc6ekJ21+Ow=",
+      "destination": "composer/tools/react/child-process/4405e8fb3a6154163973055808503ff0d7f2af41429833ce25ce9e909db5f8ec.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/dns/zipball/7562c05391f42701c1fccf189c8225fece1cd7c3",
+      "hash": "sha256-hd47Qq6QpGKHqAQwJACHeThQqa4QKzvavNkjzdAi+es=",
+      "destination": "composer/tools/react/dns/85de3b42ae90a46287a80430240087793850a9ae102b3bdabcd923cdd022f9eb.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/event-loop/zipball/ba276bda6083df7e0050fd9b33f66ad7a4ac747a",
+      "hash": "sha256-n+CHbN3cyH1/w0EFTB/hbipIooUSnMjHFhF0kVkJ2DE=",
+      "destination": "composer/tools/react/event-loop/9fe0876cdddcc87d7fc341054c1fe16e2a48a285129cc8c7161174915909d831.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/promise/zipball/23444f53a813a3296c1368bb104793ce8d88f04a",
+      "hash": "sha256-OvTJWPS9YY9ubcAAp4yOW88+pSogMDmTVYWIS3QdfcE=",
+      "destination": "composer/tools/react/promise/3af4c958f4bd618f6e6dc000a78c8e5bcf3ea52a203039935585884b741d7dc1.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/socket/zipball/ef5b17b81f6f60504c539313f94f2d826c5faa08",
+      "hash": "sha256-nzbo9F/SIDcAfcXd97EEKFtCfxoTCSiyeEz4ORczKdM=",
+      "destination": "composer/tools/react/socket/9f36e8f45fd22037007dc5ddf7b104285b427f1a130928b2784cf839173329d3.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/reactphp/stream/zipball/1e5b0acb8fe55143b5b426817155190eb6f5b18d",
+      "hash": "sha256-NCl6KOdsxGNP7v7IKp6akKaF6NQYsqssjPtBJMCACD8=",
+      "destination": "composer/tools/react/stream/34297a28e76cc4634feefec82a9e9a90a685e8d418b2ab2c8cfb4124c080083f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/cli-parser/zipball/eeb759ad3146b7096fb59c3195d39e071cd409e3",
+      "hash": "sha256-KMouXlTlfZv7uIBzhlcGlX213mJuaDziFW6Ql9DX3H4=",
+      "destination": "composer/tools/sebastian/cli-parser/28ca2e5e54e57d9bfbb88073865706957db5de626e683ce2156e9097d0d7dc7e.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/comparator/zipball/3b070e608146cba00fd6fd1f0ffba89e5a8897fb",
+      "hash": "sha256-q6Mdat3eBwJj+hKw+0ALk6iXoYqzADUp4QRqz1hpe/c=",
+      "destination": "composer/tools/sebastian/comparator/aba31d6addde070263fa12b0fb400b93a897a18ab3003529e1046acf58697bf7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/complexity/zipball/c5651c795c98093480df79350cb050813fc7a2f3",
+      "hash": "sha256-Fm7Y8iDhPq9RFXCWCVwoePpgaJDUbXsrbOSLOrr8zik=",
+      "destination": "composer/tools/sebastian/complexity/166ed8f220e13eaf51157096095c2878fa606890d46d7b2b6ce48b3abafcce29.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/diff/zipball/a2df6626c1baf31d5a88674882a3072f151b5a26",
+      "hash": "sha256-F8mU38a2CFPvv6JCaLSMxTTy+ysZdrtXRgfdmRHPPQ4=",
+      "destination": "composer/tools/sebastian/diff/17c994dfc6b60853efbfa24268b48cc534f2fb2b1976bb574607dd9911cf3d0e.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/environment/zipball/d4dd10267a11055066a2a78ae04583d8ddd4f595",
+      "hash": "sha256-o3d/GH86L6kLwVskP0tUZkRSNkAoXoURXWO8ES9FyHY=",
+      "destination": "composer/tools/sebastian/environment/a3777f187f3a2fa90bc15b243f4b546644523640285e85115d63bc112f45c876.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/exporter/zipball/24a3b69bba4a12ab615fca9d34680c5598d9ab7a",
+      "hash": "sha256-1wdzNb0EXv3QA1zXSvuYakmGUM1ZcgsrayYjj0abE24=",
+      "destination": "composer/tools/sebastian/exporter/d7077335bd045efdd0035cd74afb986a498650cd59720b2b6b26238f469b136e.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/file-filter/zipball/33a26f394330f6faa7684bb9cc73afb7727aae93",
+      "hash": "sha256-o/3tH/fI1SBWRCvE5tOcGz5OimnmBRSaozVtgAoxfG8=",
+      "destination": "composer/tools/sebastian/file-filter/a3fded1ff7c8d52056442bc4e6d39c1b3e4e8a69e605149aa3356d800a317c6f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/git-state/zipball/31a565f463686f0eefa85f899549256bf5805985",
+      "hash": "sha256-lbZhQ1OG3u0gu0/t6bt1QZUnnr3Y2GiZKLZg7VPIdeA=",
+      "destination": "composer/tools/sebastian/git-state/95b661435386deed20bb4fede9bb754195279ebdd8d8689928b660ed53c875e0.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/global-state/zipball/ba68ba79da690cf7eddefd3ce5b78b20b9ba9945",
+      "hash": "sha256-QMP7Jb82HFadRs4PmfuEJ+4wp2O/cUpirsWUZase++w=",
+      "destination": "composer/tools/sebastian/global-state/40c3fb25bf361c569d46ce0f99fb8427ee30a763bf714a62aec59465ab1efbec.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/lines-of-code/zipball/d1b6f8fce682505dbd048977f1abedf1b8ad3ff8",
+      "hash": "sha256-6EWQG0h6Ahth90zYtp3FBtUMi5k5Wz1UwiSdqNrYgkk=",
+      "destination": "composer/tools/sebastian/lines-of-code/e845901b487a021b61f74cd8b69dc506d50c8b99395b3d54c2249da8dad88249.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/object-enumerator/zipball/511064ecde82bd747e2ba2fab3dda8d977b59576",
+      "hash": "sha256-iU1Gb3dXykytJmeTVJXo8VRQXv5u0JbY+9/xFiqq+zo=",
+      "destination": "composer/tools/sebastian/object-enumerator/894d466f7757ca4cad2667935495e8f154505efe6ed096d8fbdff1162aaafb3a.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/object-reflector/zipball/f71bbcdc4f95456b4622810bec64eb06372e25b2",
+      "hash": "sha256-pNHTTbjjetpZqpxoMF4s9Zux1Otu49+pmrTTcqvvjBo=",
+      "destination": "composer/tools/sebastian/object-reflector/a4d1d34db8e37ada59aa9c68305e2cf59bb1d4eb6ee3dfa99ab4d372abef8c1a.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/recursion-context/zipball/32dba72f2b4642d6a93db22d6c0a9280ff2e3ca0",
+      "hash": "sha256-40yhRq/G3b6o/bn6GKvW1bAO7cA6pUYZA1YqB3giPD0=",
+      "destination": "composer/tools/sebastian/recursion-context/e34ca146afc6ddbea8fdb9fa18abd6d5b00eedc03aa5461903562a0778223c3d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/type/zipball/bd1df467864cb95140414059a535b2d906173fcf",
+      "hash": "sha256-Y18wxul03Cbx637fIU+nozmguKky7FVKgBJRoCRB8W8=",
+      "destination": "composer/tools/sebastian/type/635f30c6e974dc26f1eb7edf214fa7a339a0b8a932ec554a801251a02441f16f.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/sebastianbergmann/version/zipball/f1598cf1d8d1ca4c0f194a52f2fe72a559a7b0b1",
+      "hash": "sha256-BAxV7Mt74nvSJMP6W0jYsKKB7KB485QWckyhyqip7iU=",
+      "destination": "composer/tools/sebastian/version/040c55eccb7be27bd224c3fa5b48d8b0a281eca078f39416724ca1caa8a9ee25.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/staabm/side-effects-detector/zipball/d8334211a140ce329c13726d4a715adbddd0a163",
+      "hash": "sha256-kNgsyttizlQzH8jZ8QvQ7VMBFBHUhFH5sMy+y5/7exI=",
+      "destination": "composer/tools/staabm/side-effects-detector/90d82ccadb62ce54331fc8d9f10bd0ed53011411d48451f9b0ccbecb9ffb7b12.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/console/zipball/630e74196a2635ec0f06c12bd3fb47cfedf85157",
+      "hash": "sha256-TEOs6U9P0QqobXmnsdZlua/1eJmU7CDlFAMYfjDZwqc=",
+      "destination": "composer/tools/symfony/console/4c43ace94f4fd10aa86d79a7b1d665b9aff5789994ec20e51403187e30d9c2a7.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/deprecation-contracts/zipball/f3202fa1b5097b0af062dc978b32ecf63404e31d",
+      "hash": "sha256-PZFBBgmqT1eUBqSQjilgFV/D79bGQ4hIafh1qnP5aH0=",
+      "destination": "composer/tools/symfony/deprecation-contracts/3d91410609aa4f579406a4908e2960155fc3efd6c643884869f875aa73f9687d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/event-dispatcher-contracts/zipball/c7de7a00ffb67842132da02ea92988a39ccd9f4e",
+      "hash": "sha256-zUR/OBxlgD29P9yUFGsvTIj5IeeDrToS/rFEF9VLe20=",
+      "destination": "composer/tools/symfony/event-dispatcher-contracts/cd447f381c65803dbd3fdc94146b2f4c88f921e783ad3a12feb14417d54b7b6d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/event-dispatcher/zipball/7458da64220376b2e0dc2d8451bf43382c1ad297",
+      "hash": "sha256-kCYytXC5z3RobZdnaFAS6ZKeOXJ5iJ0CO0O7En92MzM=",
+      "destination": "composer/tools/symfony/event-dispatcher/902632b570b9cf74686d9767685012e9929e397279889d023b43bb127f763333.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/filesystem/zipball/43d109c803d22c00bb820ed45df250b6a8792ca2",
+      "hash": "sha256-CsrFH4z5hnyt7uwyPvFOT9Fdy9nvkqpILhtb0WlvEUc=",
+      "destination": "composer/tools/symfony/filesystem/0acac51f8cf9867cadeeec323ef14e4fd15dcbd9ef92aa482e1b5bd1696f1147.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/finder/zipball/bd4fed193a3132c91c5c93595cbfc78988915822",
+      "hash": "sha256-U92zC0HLXuihWgUcHG1JgaTm8sg/q3W6khoRC39RYnE=",
+      "destination": "composer/tools/symfony/finder/53ddb30b41cb5ee8a15a051c1c6d4981a4e6f2c83fab75ba921a110b7f516271.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/options-resolver/zipball/88f9c561f678a02d54b897014049fa839e33ff82",
+      "hash": "sha256-mYy5T0TndT/vYTIDONTr207KpBwQwjqLbDjpB9vSAWs=",
+      "destination": "composer/tools/symfony/options-resolver/998cb94f44e7753fef61320338d4ebdb4ecaa41c10c23a8b6c38e907dbd2016b.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-ctype/zipball/141046a8f9477948ff284fa65be2095baafb94f2",
+      "hash": "sha256-kisMayTRvLZEfQUe3B/EUmvMpfiN3Eon2IVQeHLO7ME=",
+      "destination": "composer/tools/symfony/polyfill-ctype/922b0c6b24d1bcb6447d051edc1fc4526bcca5f88ddc4a27d885507872ceecc1.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-intl-grapheme/zipball/5cac8f4db97208823aa353f59a01faad2da52c75",
+      "hash": "sha256-rnERwg8cYedbV0aNEwPdUbG2rwni/Lq+J9VrsnXiJMI=",
+      "destination": "composer/tools/symfony/polyfill-intl-grapheme/ae7111c20f1c61e75b57468d1303dd51b1b6af09e2fcbabe27d56bb275e224c2.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-intl-normalizer/zipball/ebd57ccc7edb93d632e184efbe7693d2517bab3b",
+      "hash": "sha256-57s5Tk1ntcUM54u0CP/ib3dKP8OcjNCLi/H1Jlox8/w=",
+      "destination": "composer/tools/symfony/polyfill-intl-normalizer/e7bb394e4d67b5c50ce78bb408ffe26f774a3fc39c8cd08b8bf1f5265a31f3fc.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-mbstring/zipball/4d5d331bf731e0aedbc6b2f5e61135b7b7996a72",
+      "hash": "sha256-jpL44g61uFdwkn5nJGwDscjq5jJsep5hhoJzAnGwJXM=",
+      "destination": "composer/tools/symfony/polyfill-mbstring/8e92f8e20eb5b85770927e67246c03b1c8eae6326c7a9e618682730271b02573.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-php80/zipball/9c6a5d6b01ca51d486c813e9a9c0ed55f208bb74",
+      "hash": "sha256-UVeYZMUqzaG4NIEfL3+YGDAWQTKTh0ksM9KineTVS8U=",
+      "destination": "composer/tools/symfony/polyfill-php80/51579864c52acda1b834811f2f7f9818301641329387492c33d2a29de4d54bc5.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-php81/zipball/6bfb9c766cacffbc8e118cb87217d08ed84e5cd7",
+      "hash": "sha256-CQCq9sB7hfmC32UXSetDaFsFA6/DLQOsQSHzue6COLI=",
+      "destination": "composer/tools/symfony/polyfill-php81/0900aaf6c07b85f982df651749eb43685b0503afc32d03ac4121f3b9ee8238b2.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-php84/zipball/22c6548499cbe5c5bb072fc0c42312dff062a015",
+      "hash": "sha256-WNQJIPF8VHrgFpKCFu0zQyWYB0Uh82RqtoNctPWoUVI=",
+      "destination": "composer/tools/symfony/polyfill-php84/58d40920f17c547ae016928216ed33432598074521f3646ab6835cb4f5a85152.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/polyfill-php85/zipball/86a42cbcc07adc331481a5ab310a4024bfc227f6",
+      "hash": "sha256-FidrnuiV6ZU7cd1VEHvdtaraZBEoAHdYHxlopcT8CMw=",
+      "destination": "composer/tools/symfony/polyfill-php85/16276b9ee895e9953b71dd55107bddb5aada6411280077581f1968a5c4fc08cc.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/process/zipball/59a682fd049b2d4d37c444f5ac21b7d01b8c7189",
+      "hash": "sha256-uIXqQJb6b427ghJFssKMvaEp58RsUEaBA48JFcUt6II=",
+      "destination": "composer/tools/symfony/process/b885ea4096fa6f8dbb821245b2c28cbda129e7c46c504681038f0915c52de882.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/service-contracts/zipball/15e6a07ec2a2c75ceb1b21dd98105ee8456d2257",
+      "hash": "sha256-7DBRVYldeBvIvsgQEaNd6lXIj4SbKmouC2iRlfSw9m0=",
+      "destination": "composer/tools/symfony/service-contracts/ec305155895d781bc8bec81011a35dea55c88f849b2a6a2e0b689195f4b0f66d.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/stopwatch/zipball/21c07b026905d596e8379caeb115d87aa479499d",
+      "hash": "sha256-htu/WrWi4ZQLPPMjDc1yJ2VChbNrzhTNqhFYlv/20PY=",
+      "destination": "composer/tools/symfony/stopwatch/86dbbf5ab5a2e1940b3cf3230dcd7227654285b36bce14cdaa115896fff6d0f6.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/symfony/string/zipball/07fb208558f941eab50ec49c89c2a6a93fb11f01",
+      "hash": "sha256-L0p1yghBfjhuNOWWWB1g1gIzKbj0dTT2y/HP1LNpwzw=",
+      "destination": "composer/tools/symfony/string/2f4a75ca08417e386e34e596581d60d6023329b8f47534f6cbf1cfd4b369c33c.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/theseer/tokenizer/zipball/7989e43bf381af0eac72e4f0ca5bcbfa81658be4",
+      "hash": "sha256-l81nP9z5Cy8VG8aiHHGllfVbcObUgwjtlot6aVLXGbQ=",
+      "destination": "composer/tools/theseer/tokenizer/97cd673fdcf90b2f151bc6a21c71a595f55b70e6d48308ed968b7a6952d719b4.zip"
+    }
+  ]
+}
