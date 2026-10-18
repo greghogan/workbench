@@ -1,0 +1,2344 @@
+{
+  "schema_version": 1,
+  "source_hashes": {
+    ".mvn/checksums/checksums.sha256": "3133edbc91c168efd44036ad04188c300da727e7b9892fd1b286fe271f526f1d",
+    "pom.xml": "c67280063994d69ccdbc9577710dcc2ac25ea520de9c3def8a3da0c51d2c8b1c"
+  },
+  "inputs": [
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-collect/1.2.0/durian-collect-1.2.0.jar",
+      "hash": "sha256-sZTAuIAhzBFsIcHcdvScLB/hda9by3TIume527+aSMw=",
+      "destination": "maven/com/diffplug/durian/durian-collect/1.2.0/durian-collect-1.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-collect/1.2.0/durian-collect-1.2.0.pom",
+      "hash": "sha256-i7diCGoKT9KmRzu/kFx0R2OvodWaVjD3O7BLeHLAn/M=",
+      "destination": "maven/com/diffplug/durian/durian-collect/1.2.0/durian-collect-1.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-core/1.2.0/durian-core-1.2.0.jar",
+      "hash": "sha256-F+0KrLOjwWMjMyFou96thpTzKACytH1p1KTEmxFNXa4=",
+      "destination": "maven/com/diffplug/durian/durian-core/1.2.0/durian-core-1.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-core/1.2.0/durian-core-1.2.0.pom",
+      "hash": "sha256-hwMg6QdVNxsBeW/oG6Ul/R3ui3A0b1VFUe7dQonwtmI=",
+      "destination": "maven/com/diffplug/durian/durian-core/1.2.0/durian-core-1.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-io/1.2.0/durian-io-1.2.0.jar",
+      "hash": "sha256-CV/R3HeIjAc/C+OaAYFW7lJnInmLCd6eKF7yE14W6sQ=",
+      "destination": "maven/com/diffplug/durian/durian-io/1.2.0/durian-io-1.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-io/1.2.0/durian-io-1.2.0.pom",
+      "hash": "sha256-NQkZQkMk4nUKPdwvobzmqQrIziklaYpgqbTR1uSSL/4=",
+      "destination": "maven/com/diffplug/durian/durian-io/1.2.0/durian-io-1.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-swt.os/4.3.0/durian-swt.os-4.3.0.jar",
+      "hash": "sha256-geK2Oafkvm3JtyRXE88G9cq1HynbLha5tXZFyW/eKIQ=",
+      "destination": "maven/com/diffplug/durian/durian-swt.os/4.3.0/durian-swt.os-4.3.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/durian/durian-swt.os/4.3.0/durian-swt.os-4.3.0.pom",
+      "hash": "sha256-Q1z/VXiZht7arXF/aPuo1UgklHhWLc2EsirU1lZvRAs=",
+      "destination": "maven/com/diffplug/durian/durian-swt.os/4.3.0/durian-swt.os-4.3.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-lib-extra/4.10.4/spotless-lib-extra-4.10.4.jar",
+      "hash": "sha256-g4Tzj28x/ZAq7K33iIdxENa0AxzVwn4GYESx5zg7Chs=",
+      "destination": "maven/com/diffplug/spotless/spotless-lib-extra/4.10.4/spotless-lib-extra-4.10.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-lib-extra/4.10.4/spotless-lib-extra-4.10.4.pom",
+      "hash": "sha256-oGe1iOL5eXSyXlsZb3mEev984twFH9aVTGdxRVVxm6w=",
+      "destination": "maven/com/diffplug/spotless/spotless-lib-extra/4.10.4/spotless-lib-extra-4.10.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-lib/4.10.4/spotless-lib-4.10.4.jar",
+      "hash": "sha256-79Qo+eT98YfcDsoK7gINY5h0zYObRY85VmvxBfYVAqo=",
+      "destination": "maven/com/diffplug/spotless/spotless-lib/4.10.4/spotless-lib-4.10.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-lib/4.10.4/spotless-lib-4.10.4.pom",
+      "hash": "sha256-dfbXLrWG4Ys0TJRf3s+QuXeTOkgYr/CiLxN9zYvzhiY=",
+      "destination": "maven/com/diffplug/spotless/spotless-lib/4.10.4/spotless-lib-4.10.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-maven-plugin/3.10.4/spotless-maven-plugin-3.10.4.jar",
+      "hash": "sha256-YHVD1WuiLRDSeqcsxr50bizfc+L0Pc7ySoWpeCVRqHc=",
+      "destination": "maven/com/diffplug/spotless/spotless-maven-plugin/3.10.4/spotless-maven-plugin-3.10.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/diffplug/spotless/spotless-maven-plugin/3.10.4/spotless-maven-plugin-3.10.4.pom",
+      "hash": "sha256-bNyRwWLldO+NPWxxd35dwtaWAsp93uzNppyLG4sg4jg=",
+      "destination": "maven/com/diffplug/spotless/spotless-maven-plugin/3.10.4/spotless-maven-plugin-3.10.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/fasterxml/jackson/jackson-bom/2.19.2/jackson-bom-2.19.2.pom",
+      "hash": "sha256-IgBr5w/QGAmemcbCesCYIyDzoPPCzgU8VXA1eaXuowM=",
+      "destination": "maven/com/fasterxml/jackson/jackson-bom/2.19.2/jackson-bom-2.19.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/fasterxml/jackson/jackson-parent/2.19.3/jackson-parent-2.19.3.pom",
+      "hash": "sha256-I9GGyNjNBgFdAixxDHFUI9Zg1J4pc7FYcLApzCYBhoI=",
+      "destination": "maven/com/fasterxml/jackson/jackson-parent/2.19.3/jackson-parent-2.19.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/fasterxml/oss-parent/69/oss-parent-69.pom",
+      "hash": "sha256-OFbVhKqhyOM86UxnJE9x9vcFOKJZ/+jngXYbn6qth18=",
+      "destination": "maven/com/fasterxml/oss-parent/69/oss-parent-69.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/cliftonlabs/json-simple/3.0.2/json-simple-3.0.2.jar",
+      "hash": "sha256-/aZamtDhrAyImHEG6Jqk2LKiSV5+BCNx76g4E/ZbcpU=",
+      "destination": "maven/com/github/cliftonlabs/json-simple/3.0.2/json-simple-3.0.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/cliftonlabs/json-simple/3.0.2/json-simple-3.0.2.pom",
+      "hash": "sha256-sNrLFHnNTb4IENGqM1vw+5vDxP9VNpyHWXumj1h5/k8=",
+      "destination": "maven/com/github/cliftonlabs/json-simple/3.0.2/json-simple-3.0.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/hazendaz/base-parent/62/base-parent-62.pom",
+      "hash": "sha256-XdAFdRxhV1SFXHO1zGELbIbW1JsfhXTzcp8qeBuOIPM=",
+      "destination": "maven/com/github/hazendaz/base-parent/62/base-parent-62.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.jar",
+      "hash": "sha256-tUmaOxxAsWwGcfq+R4yar+qzgWDG/edKbBP0LYZxbs0=",
+      "destination": "maven/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.pom",
+      "hash": "sha256-h9KzM9/sloltWknoCpW5LvVy9hDoSCdrReqgYeBbQTI=",
+      "destination": "maven/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/javaparser/javaparser-parent/3.28.2/javaparser-parent-3.28.2.pom",
+      "hash": "sha256-A1jOdbyhpUwUHha38WIelz+hd932T+ArDzjfI61ABUM=",
+      "destination": "maven/com/github/javaparser/javaparser-parent/3.28.2/javaparser-parent-3.28.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/luben/zstd-jni/1.5.7-16/zstd-jni-1.5.7-16.jar",
+      "hash": "sha256-2ENg059XpA3B4m6i1Ltm2gy4gFe6EX7a5nQxpxkFftw=",
+      "destination": "maven/com/github/luben/zstd-jni/1.5.7-16/zstd-jni-1.5.7-16.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/luben/zstd-jni/1.5.7-16/zstd-jni-1.5.7-16.pom",
+      "hash": "sha256-fhZ6raWuDZCZEbQut1q+WSzhfusHnqrxmkbmc1QiqjU=",
+      "destination": "maven/com/github/luben/zstd-jni/1.5.7-16/zstd-jni-1.5.7-16.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs-annotations/4.10.5/spotbugs-annotations-4.10.5.jar",
+      "hash": "sha256-LyivF61hp9qtDz3wcBmMSlgH0//ZilQI9nDNGfwtzoQ=",
+      "destination": "maven/com/github/spotbugs/spotbugs-annotations/4.10.5/spotbugs-annotations-4.10.5.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs-annotations/4.10.5/spotbugs-annotations-4.10.5.pom",
+      "hash": "sha256-bDOnvdEVLbltV7EGWcKd9cssoyAyaYt+WEhngyaZc+8=",
+      "destination": "maven/com/github/spotbugs/spotbugs-annotations/4.10.5/spotbugs-annotations-4.10.5.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs-maven-plugin/4.10.5.0/spotbugs-maven-plugin-4.10.5.0.jar",
+      "hash": "sha256-4fYmCKxh7IV6KXOcgERz/lx1paHWMWNIDfbo9a3bf0Y=",
+      "destination": "maven/com/github/spotbugs/spotbugs-maven-plugin/4.10.5.0/spotbugs-maven-plugin-4.10.5.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs-maven-plugin/4.10.5.0/spotbugs-maven-plugin-4.10.5.0.pom",
+      "hash": "sha256-/E0ngEi+Jqyn2YtRvAoDMcL+mGL8YApBdfyT561Y7hQ=",
+      "destination": "maven/com/github/spotbugs/spotbugs-maven-plugin/4.10.5.0/spotbugs-maven-plugin-4.10.5.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs/4.10.5/spotbugs-4.10.5.jar",
+      "hash": "sha256-jQr3GoilMk++EJCcwqxBRaNYya9S/W95a9wLDkLHZl8=",
+      "destination": "maven/com/github/spotbugs/spotbugs/4.10.5/spotbugs-4.10.5.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/spotbugs/spotbugs/4.10.5/spotbugs-4.10.5.pom",
+      "hash": "sha256-G1PaOQOls7gvlTvdvXhRhRt0nIVJwEOOvHWZZWom45s=",
+      "destination": "maven/com/github/spotbugs/spotbugs/4.10.5/spotbugs-4.10.5.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/stephenc/jcip/jcip-annotations/1.0-1/jcip-annotations-1.0-1.jar",
+      "hash": "sha256-T8z/g4Kq/FiZYsTtsmL2qlleNPHhHmEFfRxqluj8cyM=",
+      "destination": "maven/com/github/stephenc/jcip/jcip-annotations/1.0-1/jcip-annotations-1.0-1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/github/stephenc/jcip/jcip-annotations/1.0-1/jcip-annotations-1.0-1.pom",
+      "hash": "sha256-aMKlqm6PNFdDCT5StbngGQuk1aUhXApZtNfTNkcgjLs=",
+      "destination": "maven/com/github/stephenc/jcip/jcip-annotations/1.0-1/jcip-annotations-1.0-1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+      "hash": "sha256-dmrSoHg/JoeWLIrXTO7MOKKLn3Ki0IXuQ4t4E+ko0Mc=",
+      "destination": "maven/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom",
+      "hash": "sha256-GYidvfGyVLJgGl7mRbgUepdGRIgil2hMeYr+XWPXjf4=",
+      "destination": "maven/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/code/gson/gson-parent/2.14.0/gson-parent-2.14.0.pom",
+      "hash": "sha256-grD2aUxXWKuLsH4FYwII1Q9YnUteBP0KBG1Zzfe6PR0=",
+      "destination": "maven/com/google/code/gson/gson-parent/2.14.0/gson-parent-2.14.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/code/gson/gson/2.14.0/gson-2.14.0.jar",
+      "hash": "sha256-LL0Rm/GWHCh4gxCWPcgLpl9Yze7B3ROci9sSQPqiw28=",
+      "destination": "maven/com/google/code/gson/gson/2.14.0/gson-2.14.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/code/gson/gson/2.14.0/gson-2.14.0.pom",
+      "hash": "sha256-H6ASLA43MxkmQoYcNr5Mb3maeVMnojvdKSJpG26bpIA=",
+      "destination": "maven/com/google/code/gson/gson/2.14.0/gson-2.14.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_annotations/2.21.1/error_prone_annotations-2.21.1.jar",
+      "hash": "sha256-0fPGaqkaxSVJ4Arjsgi6S5r31y1o8jBkNVO+s45hGKw=",
+      "destination": "maven/com/google/errorprone/error_prone_annotations/2.21.1/error_prone_annotations-2.21.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_annotations/2.21.1/error_prone_annotations-2.21.1.pom",
+      "hash": "sha256-9ZiID+766p1nTcQdsTqzcAS/A3drW7IcBN7ejpIMHxI=",
+      "destination": "maven/com/google/errorprone/error_prone_annotations/2.21.1/error_prone_annotations-2.21.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_annotations/2.48.0/error_prone_annotations-2.48.0.jar",
+      "hash": "sha256-tJxclYMW7WegnGmd2pqnScr0NNUdhj3qWZ7zakm5yFU=",
+      "destination": "maven/com/google/errorprone/error_prone_annotations/2.48.0/error_prone_annotations-2.48.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_annotations/2.48.0/error_prone_annotations-2.48.0.pom",
+      "hash": "sha256-GJ4JrQSJwyXpDaqp1cj0BjMGAvo2Zgm8oHy82tA6udo=",
+      "destination": "maven/com/google/errorprone/error_prone_annotations/2.48.0/error_prone_annotations-2.48.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_parent/2.21.1/error_prone_parent-2.21.1.pom",
+      "hash": "sha256-MrsLX/JB/Wuh/upEiuu5zt7xaZvnPLbzGTZTh7gr+Sw=",
+      "destination": "maven/com/google/errorprone/error_prone_parent/2.21.1/error_prone_parent-2.21.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/errorprone/error_prone_parent/2.48.0/error_prone_parent-2.48.0.pom",
+      "hash": "sha256-sz+opFyfF5SlAIwLLYOoTrKLXQEXptFW8AP58JvnQQ8=",
+      "destination": "maven/com/google/errorprone/error_prone_parent/2.48.0/error_prone_parent-2.48.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/googlejavaformat/google-java-format-parent/1.36.1/google-java-format-parent-1.36.1.pom",
+      "hash": "sha256-C4lNeHmkM0Ng2ypkvcaBHm6TyMAYD3mViSfPQja4KIU=",
+      "destination": "maven/com/google/googlejavaformat/google-java-format-parent/1.36.1/google-java-format-parent-1.36.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/googlejavaformat/google-java-format/1.36.1/google-java-format-1.36.1.jar",
+      "hash": "sha256-V/m1UKZi3LvfNEBz4/WBK4N6Dm5DBUjYoKPJCQytpl0=",
+      "destination": "maven/com/google/googlejavaformat/google-java-format/1.36.1/google-java-format-1.36.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/googlejavaformat/google-java-format/1.36.1/google-java-format-1.36.1.pom",
+      "hash": "sha256-arg8RzjPUl50v05Lg/5NrNJtd1HxGDvNXw7LEyJA1OM=",
+      "destination": "maven/com/google/googlejavaformat/google-java-format/1.36.1/google-java-format-1.36.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar",
+      "hash": "sha256-oXHuTHNN0tqDfksWvp30Zhr6typBra8x64Tf2vk2yiY=",
+      "destination": "maven/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.pom",
+      "hash": "sha256-6WBCznj+y6DaK+lkUilHyHtAopG1/TzWcqQ0kkEDxLk=",
+      "destination": "maven/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/guava-parent/26.0-android/guava-parent-26.0-android.pom",
+      "hash": "sha256-+GmKtGypls6InBr8jKTyXrisawNNyJjUWDdCNgAWzAQ=",
+      "destination": "maven/com/google/guava/guava-parent/26.0-android/guava-parent-26.0-android.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/guava-parent/32.1.3-jre/guava-parent-32.1.3-jre.pom",
+      "hash": "sha256-8oPB8EiXqaiKP6T/RoBOZeghFICaCc0ECUv33gGxhXs=",
+      "destination": "maven/com/google/guava/guava-parent/32.1.3-jre/guava-parent-32.1.3-jre.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar",
+      "hash": "sha256-bU4rWhGKq2Lm5eKdGFoCJO7YLIXECsPTPPBKJww7N0Q=",
+      "destination": "maven/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.pom",
+      "hash": "sha256-cA5tRudbWTmiKkHCXsK7Ei88vvTv7UXjMS/dy+mT2zM=",
+      "destination": "maven/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+      "hash": "sha256-s3KgN9QjCqV/vv/e8w/WEj+cDC24XQrO0AyRuXTzP5k=",
+      "destination": "maven/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.pom",
+      "hash": "sha256-GNSx2yYVPU5VB5zh92ux/gXNuGLvmVSojLzE/zi4Z5s=",
+      "destination": "maven/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar",
+      "hash": "sha256-8CqV+hpele2z7YWf0Pt99wnRIaNSkO/4t03OKrf01u0=",
+      "destination": "maven/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.pom",
+      "hash": "sha256-N/h3mLGDhRE8kYv6nhJ2/lBzXvj6hJtYAMUZ1U2/Efg=",
+      "destination": "maven/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/googlecode/concurrent-trees/concurrent-trees/2.6.1/concurrent-trees-2.6.1.jar",
+      "hash": "sha256-BONySYTipcv1VgbPo3KlvT08XSohUzpwBOPN5Tl2H6U=",
+      "destination": "maven/com/googlecode/concurrent-trees/concurrent-trees/2.6.1/concurrent-trees-2.6.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/googlecode/concurrent-trees/concurrent-trees/2.6.1/concurrent-trees-2.6.1.pom",
+      "hash": "sha256-Q8K5sULnBV0fKlgn8QlEkl0idH2XVrMlDAeqtHU4qXE=",
+      "destination": "maven/com/googlecode/concurrent-trees/concurrent-trees/2.6.1/concurrent-trees-2.6.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/googlecode/javaewah/JavaEWAH/1.2.3/JavaEWAH-1.2.3.jar",
+      "hash": "sha256-1lImlJcTxMYaeE9BxRFn57Axb5N2Q5jrup5DNrPZVMI=",
+      "destination": "maven/com/googlecode/javaewah/JavaEWAH/1.2.3/JavaEWAH-1.2.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/googlecode/javaewah/JavaEWAH/1.2.3/JavaEWAH-1.2.3.pom",
+      "hash": "sha256-5O1sZpYgNm+ZOSBln+CsfLyD11PbwNwOseUplzr5byM=",
+      "destination": "maven/com/googlecode/javaewah/JavaEWAH/1.2.3/JavaEWAH-1.2.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.jar",
+      "hash": "sha256-sQUAgbFLt6On5VpNPvAbXc+rxFO0VzpPwBl2cZHV9OA=",
+      "destination": "maven/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.pom",
+      "hash": "sha256-fHNwQKlBlSLnxQzAJ0FqcP58dinlKyGZNa3mtBGcfTg=",
+      "destination": "maven/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.jar",
+      "hash": "sha256-Z1Q/Bzb8QirpJ+0OUEuYvF4mn9oNNQBXkzfLcT2ihBI=",
+      "destination": "maven/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.pom",
+      "hash": "sha256-YbTXxRWgiU/62SX9cFJiDBQlqGQz/TURO1+rDeiQpX8=",
+      "destination": "maven/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okio/okio/3.6.0/okio-3.6.0.jar",
+      "hash": "sha256-jmMpLlxTu5PEprDCE+efFZkP7SUME0Dxw0OIDhycObU=",
+      "destination": "maven/com/squareup/okio/okio/3.6.0/okio-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/squareup/okio/okio/3.6.0/okio-3.6.0.pom",
+      "hash": "sha256-rrO3CiTBA+0MVFQfNfXFEdJ85gyuN2pZbX1lNpf4zJU=",
+      "destination": "maven/com/squareup/okio/okio/3.6.0/okio-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/thoughtworks/qdox/qdox/2.2.0/qdox-2.2.0.jar",
+      "hash": "sha256-wmDDIwsjQK+X1UvwH39n68V8kBkic2yIG7EcuYEwK+I=",
+      "destination": "maven/com/thoughtworks/qdox/qdox/2.2.0/qdox-2.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/com/thoughtworks/qdox/qdox/2.2.0/qdox-2.2.0.pom",
+      "hash": "sha256-yFD7rQsF6tqFyhvOIkCadfdYrqDKHkeoKMalBa02H6s=",
+      "destination": "maven/com/thoughtworks/qdox/qdox/2.2.0/qdox-2.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-beanutils/commons-beanutils/1.11.0/commons-beanutils-1.11.0.jar",
+      "hash": "sha256-nkS6aOyaPyEob6Kou7ADtzXA9pEBu0MUS3n0+KqnRwk=",
+      "destination": "maven/commons-beanutils/commons-beanutils/1.11.0/commons-beanutils-1.11.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-beanutils/commons-beanutils/1.11.0/commons-beanutils-1.11.0.pom",
+      "hash": "sha256-z/nqsddRJkvXdbbj6+0WUHlMrJzYvhxBa0jjpcYTnZM=",
+      "destination": "maven/commons-beanutils/commons-beanutils/1.11.0/commons-beanutils-1.11.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-codec/commons-codec/1.19.0/commons-codec-1.19.0.jar",
+      "hash": "sha256-XDiB5PVWhV6cUykn7gyd/elMxmdg1YBcAxpZiHBwr18=",
+      "destination": "maven/commons-codec/commons-codec/1.19.0/commons-codec-1.19.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-codec/commons-codec/1.19.0/commons-codec-1.19.0.pom",
+      "hash": "sha256-4PMmn6I94MgxMMVln1+VFMxUIsC830Xy6uAEp4ufyjQ=",
+      "destination": "maven/commons-codec/commons-codec/1.19.0/commons-codec-1.19.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-codec/commons-codec/1.22.1/commons-codec-1.22.1.jar",
+      "hash": "sha256-eKXXMvvXFeLRC9cVDS+AMLrlcmf4qsxciPZCy2wuXT8=",
+      "destination": "maven/commons-codec/commons-codec/1.22.1/commons-codec-1.22.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-codec/commons-codec/1.22.1/commons-codec-1.22.1.pom",
+      "hash": "sha256-TPxaogES0THGlJ+Aux6K3OOf/qmlqTW0yaN7fJqrHJE=",
+      "destination": "maven/commons-codec/commons-codec/1.22.1/commons-codec-1.22.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.jar",
+      "hash": "sha256-7urpF5FxRKaKdB1MDf9mqlxcX9hVk/8he87T/Iyng7g=",
+      "destination": "maven/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.pom",
+      "hash": "sha256-1dgfzCiMDYxxHDAgB8raSqmiJu0aES1LqmTLHWMiFws=",
+      "destination": "maven/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-io/commons-io/2.11.0/commons-io-2.11.0.pom",
+      "hash": "sha256-LgFv1+MkS18sIKytg02TqkeQSG7h5FZGQTYaPoMe71k=",
+      "destination": "maven/commons-io/commons-io/2.11.0/commons-io-2.11.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-io/commons-io/2.19.0/commons-io-2.19.0.pom",
+      "hash": "sha256-VCt6UC7WGVDRuDEStRsWF9NAfjpN9atWqY12Dg+MWVA=",
+      "destination": "maven/commons-io/commons-io/2.19.0/commons-io-2.19.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-io/commons-io/2.20.0/commons-io-2.20.0.pom",
+      "hash": "sha256-vb34EHLBkO6aixgaXFj1vZF6dQ+xOiVt679T9dvTOio=",
+      "destination": "maven/commons-io/commons-io/2.20.0/commons-io-2.20.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-io/commons-io/2.22.0/commons-io-2.22.0.jar",
+      "hash": "sha256-K5p7H3JvuGIW29LIMh6r4CIdvVsb6BwY4ctTgRsQR1g=",
+      "destination": "maven/commons-io/commons-io/2.22.0/commons-io-2.22.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-io/commons-io/2.22.0/commons-io-2.22.0.pom",
+      "hash": "sha256-ZCXOwOp2ADXvp3J33oX4n6bb7RR6s92VuNLLxVNArM8=",
+      "destination": "maven/commons-io/commons-io/2.22.0/commons-io-2.22.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.jar",
+      "hash": "sha256-0XXb11HdeCpjveKMegOVIOlx8l6Et5wZuENe3DYD4Nw=",
+      "destination": "maven/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.pom",
+      "hash": "sha256-ktnHNYCO2mMqIUx/LBZAJmz8cmnDpj/SNG4VyYiusR4=",
+      "destination": "maven/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/dev/equo/ide/solstice/1.8.2/solstice-1.8.2.jar",
+      "hash": "sha256-nslXwJZgBSDcmfN6EEp/TJkNQMLdN17pYOt8bNUMEvM=",
+      "destination": "maven/dev/equo/ide/solstice/1.8.2/solstice-1.8.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/dev/equo/ide/solstice/1.8.2/solstice-1.8.2.pom",
+      "hash": "sha256-70jsrBwclJAdj/ML8J16CClTQCNnLdXiVyek6Vh+oFM=",
+      "destination": "maven/dev/equo/ide/solstice/1.8.2/solstice-1.8.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/jakarta/platform/jakarta.jakartaee-bom/9.1.0/jakarta.jakartaee-bom-9.1.0.pom",
+      "hash": "sha256-35jgJmIZ/buCVigm15o6IHdqi6Aqp4fw8HZaU4ZUyKQ=",
+      "destination": "maven/jakarta/platform/jakarta.jakartaee-bom/9.1.0/jakarta.jakartaee-bom-9.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/jakarta/platform/jakartaee-api-parent/9.1.0/jakartaee-api-parent-9.1.0.pom",
+      "hash": "sha256-p3AsSHAmgCeEtXl7YjMKi41lkr8PRzeyXGel6sgmWcA=",
+      "destination": "maven/jakarta/platform/jakartaee-api-parent/9.1.0/jakartaee-api-parent-9.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/javax/inject/javax.inject/1/javax.inject-1.jar",
+      "hash": "sha256-kcdwRKUMSBY2wy2Rb9ickRinIZU5BFLIEGUID5V95/8=",
+      "destination": "maven/javax/inject/javax.inject/1/javax.inject-1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/javax/inject/javax.inject/1/javax.inject-1.pom",
+      "hash": "sha256-lD4SsQBieARjj6KFgFoKt4imgCZlMeZQkh6/5GIai/o=",
+      "destination": "maven/javax/inject/javax.inject/1/javax.inject-1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/jaxen/jaxen-parent/2.0.6/jaxen-parent-2.0.6.pom",
+      "hash": "sha256-IbRba9xuj8TCf5OKwRGx6GMixWJ7ebs+OB+M5y5k/hY=",
+      "destination": "maven/jaxen/jaxen-parent/2.0.6/jaxen-parent-2.0.6.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/jaxen/jaxen/2.0.6/jaxen-2.0.6.jar",
+      "hash": "sha256-Pip1Wyg/1JL6S+IEKUx6u3zWOslPs2a6q5x7ua+wC20=",
+      "destination": "maven/jaxen/jaxen/2.0.6/jaxen-2.0.6.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/jaxen/jaxen/2.0.6/jaxen-2.0.6.pom",
+      "hash": "sha256-FU2hQAw6QFhg7DrljpdMcAAzpkYofAu2qlXHY4cetQM=",
+      "destination": "maven/jaxen/jaxen/2.0.6/jaxen-2.0.6.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/net/sf/saxon/Saxon-HE/12.10/Saxon-HE-12.10.jar",
+      "hash": "sha256-tXGvKC8l1zAQWfeIuaFJqri1zcFO89IS3FQl09y7mpc=",
+      "destination": "maven/net/sf/saxon/Saxon-HE/12.10/Saxon-HE-12.10.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/net/sf/saxon/Saxon-HE/12.10/Saxon-HE-12.10.pom",
+      "hash": "sha256-vzO2WDpYjcaGENtrDbOQlnBHCTwUUzv78Ri+gdfDe48=",
+      "destination": "maven/net/sf/saxon/Saxon-HE/12.10/Saxon-HE-12.10.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/13/apache-13.pom",
+      "hash": "sha256-/1E9sDYf1BI3vvR4SWi8FarkeNTsCpSW+BEHLMrzhB0=",
+      "destination": "maven/org/apache/apache/13/apache-13.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/16/apache-16.pom",
+      "hash": "sha256-n4X/L9fWyzCXqkf7QZ7n8OvoaRCfmKup9Oyj9J50pA4=",
+      "destination": "maven/org/apache/apache/16/apache-16.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/21/apache-21.pom",
+      "hash": "sha256-rxDBCNoBTxfK+se1KytLWjocGCZfoq+XoyXZFDU3s4A=",
+      "destination": "maven/org/apache/apache/21/apache-21.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/23/apache-23.pom",
+      "hash": "sha256-vBBiTgYj82V3+sVjnKKTbTJA7RUvttjVM6tNJwVDSRw=",
+      "destination": "maven/org/apache/apache/23/apache-23.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/29/apache-29.pom",
+      "hash": "sha256-PkkDcXSCC70N9jQgqXclWIY5iVTCoGKR+mH3J6w1s3c=",
+      "destination": "maven/org/apache/apache/29/apache-29.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/31/apache-31.pom",
+      "hash": "sha256-VV0MnqppwEKv+SSSe5OB6PgXQTbTVe6tRFIkRS5ikcw=",
+      "destination": "maven/org/apache/apache/31/apache-31.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/32/apache-32.pom",
+      "hash": "sha256-z9hywOwn9Trmj0PbwP7N7YrddzB5pTr705DkB7Qs5y8=",
+      "destination": "maven/org/apache/apache/32/apache-32.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/33/apache-33.pom",
+      "hash": "sha256-14vYUkxfg4ChkKZSVoZimpXf5RLfIRETg6bYwJI6RBU=",
+      "destination": "maven/org/apache/apache/33/apache-33.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/34/apache-34.pom",
+      "hash": "sha256-NnGunU0GKuO7mFcxx2CIuy9vfXJU4tME7p9pC5dlEyg=",
+      "destination": "maven/org/apache/apache/34/apache-34.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/35/apache-35.pom",
+      "hash": "sha256-6il9zRFBNui46LYwIw1Sp2wvxp9sXbJdZysYVwAHKLg=",
+      "destination": "maven/org/apache/apache/35/apache-35.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/37/apache-37.pom",
+      "hash": "sha256-Uk7EeHr/c69rOp+voVTH8YgbZIKZtmP9v8rdoShvI1M=",
+      "destination": "maven/org/apache/apache/37/apache-37.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/38/apache-38.pom",
+      "hash": "sha256-mwpfKN37S3UAo3AivugkXv3QRPuaPXn7gnVQkj7MxLU=",
+      "destination": "maven/org/apache/apache/38/apache-38.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/39/apache-39.pom",
+      "hash": "sha256-cXUu1MJDWh2Dhf4KTTMPOdBO/sifDRul0VmNOfc5ekQ=",
+      "destination": "maven/org/apache/apache/39/apache-39.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/4/apache-4.pom",
+      "hash": "sha256-npMjomuo6yOU7+8MltMbcN9XCAhjDcFHyrHnNUHMUZQ=",
+      "destination": "maven/org/apache/apache/4/apache-4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/7/apache-7.pom",
+      "hash": "sha256-E5fOHbQzrcnyI9vwdJbRM2gUSHUfSuKeWPaOePtLbCU=",
+      "destination": "maven/org/apache/apache/7/apache-7.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/9/apache-9.pom",
+      "hash": "sha256-SUbmClR8jtpp87wjxbbw2tz4Rp6kmx0dp940rs/PGN0=",
+      "destination": "maven/org/apache/apache/9/apache-9.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/bcel/bcel/6.13.0/bcel-6.13.0.jar",
+      "hash": "sha256-o3pldS6GHAfTE8pHvvDrdb92QxUsgspUxPQtA2hQtPs=",
+      "destination": "maven/org/apache/bcel/bcel/6.13.0/bcel-6.13.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/bcel/bcel/6.13.0/bcel-6.13.0.pom",
+      "hash": "sha256-Uyd/3jbnQE3DQO7LRLcYbcf1z7/TOBJ4uK1SowF3i4I=",
+      "destination": "maven/org/apache/bcel/bcel/6.13.0/bcel-6.13.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-compress/1.28.0/commons-compress-1.28.0.jar",
+      "hash": "sha256-4VIpRSGEVvNkmjm8Sv1wzkvUZiIVGdun03jyFBpGQso=",
+      "destination": "maven/org/apache/commons/commons-compress/1.28.0/commons-compress-1.28.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-compress/1.28.0/commons-compress-1.28.0.pom",
+      "hash": "sha256-Az9MeNYy2ojQ646tl0/BSiZDks6/EqtsaNbOp63wxko=",
+      "destination": "maven/org/apache/commons/commons-compress/1.28.0/commons-compress-1.28.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-digester3/3.2/commons-digester3-3.2.jar",
+      "hash": "sha256-HBUOPS30tCN7R+KP6iB5+w2jJFeNXMpqX+0uN6Ygguw=",
+      "destination": "maven/org/apache/commons/commons-digester3/3.2/commons-digester3-3.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-digester3/3.2/commons-digester3-3.2.pom",
+      "hash": "sha256-W7ihmK21l8MCBLTxwzb9s9KBZTZAPprTNJqyAAMuVEU=",
+      "destination": "maven/org/apache/commons/commons-digester3/3.2/commons-digester3-3.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.jar",
+      "hash": "sha256-Tu6ujSDAeKu2SwFewVit04OsWBVxzdxFxo8MmuAjByA=",
+      "destination": "maven/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.pom",
+      "hash": "sha256-qiVLNztvbUa8ncqGMxsHKoq4brJeqZIf1Dlhg5LpihY=",
+      "destination": "maven/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.21.0/commons-lang3-3.21.0.jar",
+      "hash": "sha256-oq8kfsTbbriUfhjiPgQz5IcafF0KQOH5Lkbt5Urh3v4=",
+      "destination": "maven/org/apache/commons/commons-lang3/3.21.0/commons-lang3-3.21.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.21.0/commons-lang3-3.21.0.pom",
+      "hash": "sha256-lCCsPF77W8+ARVKnvsAKLYVxIJd/wSFR92BqZ7p6GE0=",
+      "destination": "maven/org/apache/commons/commons-lang3/3.21.0/commons-lang3-3.21.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/102/commons-parent-102.pom",
+      "hash": "sha256-Gjd1+ksmWRCUHKfwnGsN9LMPYeMB8D2+u/01xJynQK8=",
+      "destination": "maven/org/apache/commons/commons-parent/102/commons-parent-102.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/103/commons-parent-103.pom",
+      "hash": "sha256-B0B4FfPBRBoHjhbl3eLer2UqPb378uujtWPVYSEHlL8=",
+      "destination": "maven/org/apache/commons/commons-parent/103/commons-parent-103.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/104/commons-parent-104.pom",
+      "hash": "sha256-YKUIBxxPjXUhLdkTgRwZIhsU7LrVvjojo/HRD3aIEG0=",
+      "destination": "maven/org/apache/commons/commons-parent/104/commons-parent-104.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/105/commons-parent-105.pom",
+      "hash": "sha256-MaaNqrtLNhRTeIuQRayHpq6HxwXlePrNmeTZ3bakgek=",
+      "destination": "maven/org/apache/commons/commons-parent/105/commons-parent-105.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/22/commons-parent-22.pom",
+      "hash": "sha256-+4xeVeMKet20/yEIWKDo0klO1nV7vhkBLamdUVhsPLs=",
+      "destination": "maven/org/apache/commons/commons-parent/22/commons-parent-22.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/39/commons-parent-39.pom",
+      "hash": "sha256-h80n4aAqXD622FBZzphpa7G0TCuLZQ8FZ8ht9g+mHac=",
+      "destination": "maven/org/apache/commons/commons-parent/39/commons-parent-39.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/52/commons-parent-52.pom",
+      "hash": "sha256-ddvo806Y5MP/QtquSi+etMvNO18QR9VEYKzpBtu0UC4=",
+      "destination": "maven/org/apache/commons/commons-parent/52/commons-parent-52.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/81/commons-parent-81.pom",
+      "hash": "sha256-NI1OfBMb5hFMhUpxnOekQwenw5vTZghJd7JP0prQ7bQ=",
+      "destination": "maven/org/apache/commons/commons-parent/81/commons-parent-81.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/84/commons-parent-84.pom",
+      "hash": "sha256-kjn7lxAdsnBw5Jg9ENM6DpHPZ2ytkb9TgVQiw1Ye+bE=",
+      "destination": "maven/org/apache/commons/commons-parent/84/commons-parent-84.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/85/commons-parent-85.pom",
+      "hash": "sha256-0Yn/LAAn6Wu2XTHm8iftKvlmFps2rx6XPdW6CJJtx7U=",
+      "destination": "maven/org/apache/commons/commons-parent/85/commons-parent-85.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/93/commons-parent-93.pom",
+      "hash": "sha256-qItfYWWmWb+DVEGDe8xcU+mf3nm5LPu4aYjOKVTNUmc=",
+      "destination": "maven/org/apache/commons/commons-parent/93/commons-parent-93.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/98/commons-parent-98.pom",
+      "hash": "sha256-1AMYUn9WAz4P8HiZccw4yFaqmaaF7qEScIFOfx7an7o=",
+      "destination": "maven/org/apache/commons/commons-parent/98/commons-parent-98.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-text/1.15.0/commons-text-1.15.0.jar",
+      "hash": "sha256-WNLaMPBYUSoef5FOOSQd7KTf9cJ6CFtO0vqp5yCAZ/Y=",
+      "destination": "maven/org/apache/commons/commons-text/1.15.0/commons-text-1.15.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-text/1.15.0/commons-text-1.15.0.pom",
+      "hash": "sha256-XlFoaHvO2uoqqFVrizL1r6CO/Lwx0RuUfIZ2mHvJ0jk=",
+      "destination": "maven/org/apache/commons/commons-text/1.15.0/commons-text-1.15.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-bom/4.0.27/groovy-bom-4.0.27.pom",
+      "hash": "sha256-qkTrUr/f5h0ns+RQ0rNI2I3qo0N6tNnUmoQJU0j59vs=",
+      "destination": "maven/org/apache/groovy/groovy-bom/4.0.27/groovy-bom-4.0.27.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-bom/5.1.3/groovy-bom-5.1.3.pom",
+      "hash": "sha256-SB553VHLAOWBI7ChxMZ9zGCiZLp8sJ+2CEwrkPdmdcw=",
+      "destination": "maven/org/apache/groovy/groovy-bom/5.1.3/groovy-bom-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-docgenerator/5.1.3/groovy-docgenerator-5.1.3.jar",
+      "hash": "sha256-gIeB3Dre2MaY9h9FXlwoul/O2jBb9+/NWW8PIGDphWQ=",
+      "destination": "maven/org/apache/groovy/groovy-docgenerator/5.1.3/groovy-docgenerator-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-docgenerator/5.1.3/groovy-docgenerator-5.1.3.pom",
+      "hash": "sha256-6pTm5bZ9dtK8PztAtEyTsLfAK6ez4Zzh0G8GhHybdSo=",
+      "destination": "maven/org/apache/groovy/groovy-docgenerator/5.1.3/groovy-docgenerator-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-groovydoc/5.1.3/groovy-groovydoc-5.1.3.jar",
+      "hash": "sha256-Mb81tTASM9yJ5Cf1Efnkb12NYjiElqNGnDLyxboGEcQ=",
+      "destination": "maven/org/apache/groovy/groovy-groovydoc/5.1.3/groovy-groovydoc-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-groovydoc/5.1.3/groovy-groovydoc-5.1.3.pom",
+      "hash": "sha256-bsNZiYtw+K0WKu6Fs/1ZPMzR9j3N/sh0EeBBUjUTFQk=",
+      "destination": "maven/org/apache/groovy/groovy-groovydoc/5.1.3/groovy-groovydoc-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-json/5.1.3/groovy-json-5.1.3.jar",
+      "hash": "sha256-4O7gnVkW8lEteBhO9Birwm+kKYiGevruaNCWoEoMu+Y=",
+      "destination": "maven/org/apache/groovy/groovy-json/5.1.3/groovy-json-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-json/5.1.3/groovy-json-5.1.3.pom",
+      "hash": "sha256-DMZUDWsW8Ry7LJUjxrui0eHUqVU6r5V+kFjA7KbXL9U=",
+      "destination": "maven/org/apache/groovy/groovy-json/5.1.3/groovy-json-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-templates/5.1.3/groovy-templates-5.1.3.jar",
+      "hash": "sha256-r3mgoWosKkPJnBFvu9YVJmxVCKfW/evmAe9U2R9laBA=",
+      "destination": "maven/org/apache/groovy/groovy-templates/5.1.3/groovy-templates-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-templates/5.1.3/groovy-templates-5.1.3.pom",
+      "hash": "sha256-4CduRDCReXJJJ0+Qgpo5S7QBi6WZtdXdiQf8v5Q+iEo=",
+      "destination": "maven/org/apache/groovy/groovy-templates/5.1.3/groovy-templates-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-xml/5.1.3/groovy-xml-5.1.3.jar",
+      "hash": "sha256-5+YZhv3A8s8h/dwqwLemprTueTK54rCaDcezVnmfW1g=",
+      "destination": "maven/org/apache/groovy/groovy-xml/5.1.3/groovy-xml-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy-xml/5.1.3/groovy-xml-5.1.3.pom",
+      "hash": "sha256-be/knNTaew01ScDTPB9r/JGZSus8q2LPpy4UsBS1NsI=",
+      "destination": "maven/org/apache/groovy/groovy-xml/5.1.3/groovy-xml-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy/5.1.3/groovy-5.1.3.jar",
+      "hash": "sha256-cFNGIH8HNvNBmCa75sfPd7qq0T2cFLKckW51vEPdkhA=",
+      "destination": "maven/org/apache/groovy/groovy/5.1.3/groovy-5.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/groovy/groovy/5.1.3/groovy-5.1.3.pom",
+      "hash": "sha256-xvIGSfx3yw1pDTw1OCBRrUhsQk3XhCxQzpAbxz46EGE=",
+      "destination": "maven/org/apache/groovy/groovy/5.1.3/groovy-5.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j-api/2.26.1/log4j-api-2.26.1.jar",
+      "hash": "sha256-8YEKRwTMzgGdArugKdwCpPKsDJl/ZHtGXn1AnBkn+CI=",
+      "destination": "maven/org/apache/logging/log4j/log4j-api/2.26.1/log4j-api-2.26.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j-api/2.26.1/log4j-api-2.26.1.pom",
+      "hash": "sha256-yKuGj5xTIjO9EvMRzqkKP23mXqB6eqRww+K7+Dtcefs=",
+      "destination": "maven/org/apache/logging/log4j/log4j-api/2.26.1/log4j-api-2.26.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j-bom/2.26.1/log4j-bom-2.26.1.pom",
+      "hash": "sha256-RBWtGJ3QTbVJWKQ+I7N8w5eh7e6eiIIUuL1H++gZBy4=",
+      "destination": "maven/org/apache/logging/log4j/log4j-bom/2.26.1/log4j-bom-2.26.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j-to-slf4j/2.26.1/log4j-to-slf4j-2.26.1.jar",
+      "hash": "sha256-axC8g4o8dzs/0Cl5x+9OekQzcfqJvaRBXYkJm77iJN8=",
+      "destination": "maven/org/apache/logging/log4j/log4j-to-slf4j/2.26.1/log4j-to-slf4j-2.26.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j-to-slf4j/2.26.1/log4j-to-slf4j-2.26.1.pom",
+      "hash": "sha256-GIIiwzxfUcK/GThNg3u/LWMEFSKe3EzYSA4ggmEGW5M=",
+      "destination": "maven/org/apache/logging/log4j/log4j-to-slf4j/2.26.1/log4j-to-slf4j-2.26.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/logging/log4j/log4j/2.26.1/log4j-2.26.1.pom",
+      "hash": "sha256-6kcFcl/ZS/XevikR1Op68giYYD9oNU5kskYaDySeRF0=",
+      "destination": "maven/org/apache/logging/log4j/log4j/2.26.1/log4j-2.26.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-core/2.1.0/doxia-core-2.1.0.jar",
+      "hash": "sha256-KkOeD0ZytprmI+qZIUng2lLrD6O+v73EyClYXX0zWMc=",
+      "destination": "maven/org/apache/maven/doxia/doxia-core/2.1.0/doxia-core-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-core/2.1.0/doxia-core-2.1.0.pom",
+      "hash": "sha256-c2yMJbC9fr4up62g+6s3tSpoG8LyUbzyxhSNEFMd5hM=",
+      "destination": "maven/org/apache/maven/doxia/doxia-core/2.1.0/doxia-core-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-integration-tools/2.1.0/doxia-integration-tools-2.1.0.jar",
+      "hash": "sha256-BcXTtJjpSkEH9YUch6694VXn3qJMHdTt+YO649EXJ7I=",
+      "destination": "maven/org/apache/maven/doxia/doxia-integration-tools/2.1.0/doxia-integration-tools-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-integration-tools/2.1.0/doxia-integration-tools-2.1.0.pom",
+      "hash": "sha256-cQVCPkAYI0xl7aek08zJJW9pbh7+GO1VIMvB/HZuwg4=",
+      "destination": "maven/org/apache/maven/doxia/doxia-integration-tools/2.1.0/doxia-integration-tools-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-apt/2.0.0/doxia-module-apt-2.0.0.jar",
+      "hash": "sha256-9KhGxEjKhTWCeRhKMQ9u4/Rvo5aI90pylhwb/iIvKKY=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-apt/2.0.0/doxia-module-apt-2.0.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-apt/2.0.0/doxia-module-apt-2.0.0.pom",
+      "hash": "sha256-FdXSvNb+ADxNGB8bnoiz4JYR6FOFJGEF/Fl3MB8sfpY=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-apt/2.0.0/doxia-module-apt-2.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-xdoc/2.0.0/doxia-module-xdoc-2.0.0.jar",
+      "hash": "sha256-eVasoU+K28SLrIayGHAd1EzJkAY6ae2/yjY7EFmUpHQ=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-xdoc/2.0.0/doxia-module-xdoc-2.0.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-xdoc/2.0.0/doxia-module-xdoc-2.0.0.pom",
+      "hash": "sha256-wuWR+sXmIyfBOiZ8Qewh0TMOX8u5Q8VvvWgDEy57ERU=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-xdoc/2.0.0/doxia-module-xdoc-2.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-xhtml5/2.1.0/doxia-module-xhtml5-2.1.0.jar",
+      "hash": "sha256-cEYCjMWfCI9h2u6j7ccfGY8ZzPk3doWZ+S5bOdpYVSw=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-xhtml5/2.1.0/doxia-module-xhtml5-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-module-xhtml5/2.1.0/doxia-module-xhtml5-2.1.0.pom",
+      "hash": "sha256-g/Hzlbh2h5BzSF21mqzcPuSfjg16PYGFiY+waZ3Plzs=",
+      "destination": "maven/org/apache/maven/doxia/doxia-module-xhtml5/2.1.0/doxia-module-xhtml5-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-modules/2.0.0/doxia-modules-2.0.0.pom",
+      "hash": "sha256-nFZlTO/2LQixm4AtfU133KVLF1SLmAKgukk/cvKtrzQ=",
+      "destination": "maven/org/apache/maven/doxia/doxia-modules/2.0.0/doxia-modules-2.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-modules/2.1.0/doxia-modules-2.1.0.pom",
+      "hash": "sha256-z0NK8U67xPn0KxbWqsZlIPUPuJbCT2a77f+1NipZS18=",
+      "destination": "maven/org/apache/maven/doxia/doxia-modules/2.1.0/doxia-modules-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-sink-api/1.0/doxia-sink-api-1.0.jar",
+      "hash": "sha256-HNaOm0z0J6K2ualDqb722oedJXAjNOpa3bDRU7uPiRE=",
+      "destination": "maven/org/apache/maven/doxia/doxia-sink-api/1.0/doxia-sink-api-1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-sink-api/1.0/doxia-sink-api-1.0.pom",
+      "hash": "sha256-UNaZ+GNpgCuvLNFsMdk2rY8MGol2EgzR3D3HDIq+2Zo=",
+      "destination": "maven/org/apache/maven/doxia/doxia-sink-api/1.0/doxia-sink-api-1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-sink-api/2.1.0/doxia-sink-api-2.1.0.jar",
+      "hash": "sha256-tGXbg43UgqmU0yoIi+pLy6piz7iyhTURqfjD52lALHQ=",
+      "destination": "maven/org/apache/maven/doxia/doxia-sink-api/2.1.0/doxia-sink-api-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-sink-api/2.1.0/doxia-sink-api-2.1.0.pom",
+      "hash": "sha256-YYES9ha4S5zYcWWoHJmFY8fxFOK5856uqgkmChE1Vww=",
+      "destination": "maven/org/apache/maven/doxia/doxia-sink-api/2.1.0/doxia-sink-api-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-site-model/2.1.0/doxia-site-model-2.1.0.jar",
+      "hash": "sha256-Ee7reUM/7Bo29a0zMFsBD0sJM6+3C6bxKF2/7O25DYk=",
+      "destination": "maven/org/apache/maven/doxia/doxia-site-model/2.1.0/doxia-site-model-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-site-model/2.1.0/doxia-site-model-2.1.0.pom",
+      "hash": "sha256-4ohv2NTb4qOlHLEH3HHIfduef4XSCbzjacUrkXXSC6U=",
+      "destination": "maven/org/apache/maven/doxia/doxia-site-model/2.1.0/doxia-site-model-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-site-renderer/2.1.0/doxia-site-renderer-2.1.0.jar",
+      "hash": "sha256-3P9xtjVVlpVkPYp+zsPCLYQ3q1pG21TbzSi5WFuGaLA=",
+      "destination": "maven/org/apache/maven/doxia/doxia-site-renderer/2.1.0/doxia-site-renderer-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-site-renderer/2.1.0/doxia-site-renderer-2.1.0.pom",
+      "hash": "sha256-2dvRcB8Ox4XxOcGmWnlqerUZSrUqwdchkpS1S7UgB7I=",
+      "destination": "maven/org/apache/maven/doxia/doxia-site-renderer/2.1.0/doxia-site-renderer-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-sitetools/2.1.0/doxia-sitetools-2.1.0.pom",
+      "hash": "sha256-HQ3uQNTk010InV1ReFIAocJkQivFvHCijJtGVhX6vsk=",
+      "destination": "maven/org/apache/maven/doxia/doxia-sitetools/2.1.0/doxia-sitetools-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-skin-model/2.1.0/doxia-skin-model-2.1.0.jar",
+      "hash": "sha256-bsNKM+OTWS9tIsw5t+qzj6xLXYlBxgGHoplpalt8jgA=",
+      "destination": "maven/org/apache/maven/doxia/doxia-skin-model/2.1.0/doxia-skin-model-2.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia-skin-model/2.1.0/doxia-skin-model-2.1.0.pom",
+      "hash": "sha256-PFbqKC7zNdWHcqEKwFcbiPiWIpnBcc+7MDHtw0uPU04=",
+      "destination": "maven/org/apache/maven/doxia/doxia-skin-model/2.1.0/doxia-skin-model-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia/1.0/doxia-1.0.pom",
+      "hash": "sha256-OCRikUOTk/0I9Uxtf+3eLbD9XJTQkQ8XuZ6NWaKFjpg=",
+      "destination": "maven/org/apache/maven/doxia/doxia/1.0/doxia-1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia/2.0.0/doxia-2.0.0.pom",
+      "hash": "sha256-WfQMkrn1JbtspviEXsY7E9qxjDwdqT0XYgy40upMYbg=",
+      "destination": "maven/org/apache/maven/doxia/doxia/2.0.0/doxia-2.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/doxia/doxia/2.1.0/doxia-2.1.0.pom",
+      "hash": "sha256-YNMg86ezYEfMKWk5eqjwzmc6/NiKYO8E4rAyt8ABGWk=",
+      "destination": "maven/org/apache/maven/doxia/doxia/2.1.0/doxia-2.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.jar",
+      "hash": "sha256-H4laWH30hE2bdWXo6aY1Kv4dVVMkWKDb63RrwdAukhY=",
+      "destination": "maven/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.pom",
+      "hash": "sha256-ixF7DcIFpxq9ozRj+Mf/iRUTz7kiQdigEfnorF6iHnc=",
+      "destination": "maven/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.jar",
+      "hash": "sha256-kDfe4ximjX7l3S4g8uZXo5WX7SYitS4yWrm+zd+8TTg=",
+      "destination": "maven/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.pom",
+      "hash": "sha256-QjKiR3vKrMpMsbZ68DLYaD/Gphrr2WphqQHrx+fjkeE=",
+      "destination": "maven/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/10/maven-parent-10.pom",
+      "hash": "sha256-gf4Uy5d5024MYQ4QSeWzKmuZdJV/JXkhrPYosxxUhsg=",
+      "destination": "maven/org/apache/maven/maven-parent/10/maven-parent-10.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/16/maven-parent-16.pom",
+      "hash": "sha256-cM74PSRjCaKqNVw48gBO3aNiGuC8XFWnoTnq7vTRIxo=",
+      "destination": "maven/org/apache/maven/maven-parent/16/maven-parent-16.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/23/maven-parent-23.pom",
+      "hash": "sha256-VCVQHt2eC9ewHspTzJLgaDbSSFEVEwT5xnWeFxNUFoU=",
+      "destination": "maven/org/apache/maven/maven-parent/23/maven-parent-23.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/33/maven-parent-33.pom",
+      "hash": "sha256-OFbj/NFpUC1fEv4kUmBOv2x8Al8VZWv6VY6pntKdc+o=",
+      "destination": "maven/org/apache/maven/maven-parent/33/maven-parent-33.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/39/maven-parent-39.pom",
+      "hash": "sha256-z+SCCqHZauUdHcWw4qncWCxCR4wkyVyoI49UfmC+9yE=",
+      "destination": "maven/org/apache/maven/maven-parent/39/maven-parent-39.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/41/maven-parent-41.pom",
+      "hash": "sha256-di/N1M6GIcX6Ciz2SVrSaXKoCT60Mqo+QCvC1OJQDFM=",
+      "destination": "maven/org/apache/maven/maven-parent/41/maven-parent-41.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/42/maven-parent-42.pom",
+      "hash": "sha256-BFNN6jUKIYeXClt0REM4vPeLqOU31E8mKs+6FuuzMFY=",
+      "destination": "maven/org/apache/maven/maven-parent/42/maven-parent-42.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/43/maven-parent-43.pom",
+      "hash": "sha256-RooSYumqpf6/nWBOKDYmf4FTUfK0Ug8o+xf1PHHjNVQ=",
+      "destination": "maven/org/apache/maven/maven-parent/43/maven-parent-43.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/44/maven-parent-44.pom",
+      "hash": "sha256-HAoIjXNS1S6o81gdBXeMDEpnlhP/8sWHN/ulXxAH/iQ=",
+      "destination": "maven/org/apache/maven/maven-parent/44/maven-parent-44.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/45/maven-parent-45.pom",
+      "hash": "sha256-lP6Gnrm0zp/OOZXQXqhrFoyF2Sf50XvrgUoZYMdtfm8=",
+      "destination": "maven/org/apache/maven/maven-parent/45/maven-parent-45.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/47/maven-parent-47.pom",
+      "hash": "sha256-gtARK6GQf/X9E6JIWCnJffZsaoHgdTWaVhpCL30VgtM=",
+      "destination": "maven/org/apache/maven/maven-parent/47/maven-parent-47.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/maven-parent/49/maven-parent-49.pom",
+      "hash": "sha256-ypBiAe403gnnZjLF3sBKm4aO44zmjBNLdl/Rhx0dPu0=",
+      "destination": "maven/org/apache/maven/maven-parent/49/maven-parent-49.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-compiler-plugin/3.16.0/maven-compiler-plugin-3.16.0.jar",
+      "hash": "sha256-8qakZo3YM8/lWd00WSkZbnth7RP2wD+OCH/7o9hb6Ac=",
+      "destination": "maven/org/apache/maven/plugins/maven-compiler-plugin/3.16.0/maven-compiler-plugin-3.16.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-compiler-plugin/3.16.0/maven-compiler-plugin-3.16.0.pom",
+      "hash": "sha256-0LJBLyDy6s+lFCmeao4UEKj8pS5BceuZd5zKVYvpNDw=",
+      "destination": "maven/org/apache/maven/plugins/maven-compiler-plugin/3.16.0/maven-compiler-plugin-3.16.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.jar",
+      "hash": "sha256-yD22BZvj/smkpooOImyu+qlEZjAIYXxpfgh0REFRgdU=",
+      "destination": "maven/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.pom",
+      "hash": "sha256-Mt447jmmmF53cBmmNkd0wCeB7jEvn05TC720W4dbHjg=",
+      "destination": "maven/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-plugins/47/maven-plugins-47.pom",
+      "hash": "sha256-WN27jkKctekFTC9fe3zf63rbzf2iHZK2f2f6K5Tt+YI=",
+      "destination": "maven/org/apache/maven/plugins/maven-plugins/47/maven-plugins-47.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-plugins/49/maven-plugins-49.pom",
+      "hash": "sha256-QiX4YLzNy0ijFd5HjnCrgXtBEHeXTeXJ0bjidhvl9RU=",
+      "destination": "maven/org/apache/maven/plugins/maven-plugins/49/maven-plugins-49.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.jar",
+      "hash": "sha256-LJI8Y6GXVlo+ePKxbXYtD0m7gyUN0rHmKGcE6g9EcGA=",
+      "destination": "maven/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.pom",
+      "hash": "sha256-nyJ1yiujo6s4yvbCvCG+eHxzBepTM9HDP1KlMK/AvH8=",
+      "destination": "maven/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-surefire-plugin/3.6.0/maven-surefire-plugin-3.6.0.jar",
+      "hash": "sha256-BxF8dFaSDBS50725segvvLL8UAT/KjvRnI/G0l1vFbs=",
+      "destination": "maven/org/apache/maven/plugins/maven-surefire-plugin/3.6.0/maven-surefire-plugin-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/plugins/maven-surefire-plugin/3.6.0/maven-surefire-plugin-3.6.0.pom",
+      "hash": "sha256-ioa+jHb2ke8iE+3gUohuVpLi/Jow5KCvjvsDjEHrVyE=",
+      "destination": "maven/org/apache/maven/plugins/maven-surefire-plugin/3.6.0/maven-surefire-plugin-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-api/3.0/maven-reporting-api-3.0.jar",
+      "hash": "sha256-SYlJ5VdrAiVZ0WIuU0wY4FL5TeyIOSS2fgpOhnbAexc=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-api/3.0/maven-reporting-api-3.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-api/3.0/maven-reporting-api-3.0.pom",
+      "hash": "sha256-76pPxIMqrZcD30a4nLAoRdv0229qyIU0t4JMSVajpfs=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-api/3.0/maven-reporting-api-3.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-api/4.0.0/maven-reporting-api-4.0.0.jar",
+      "hash": "sha256-yyy948nHKI9zmKJQ3PPJDPknFM/zAfIrKY4QkbXe8zw=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-api/4.0.0/maven-reporting-api-4.0.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-api/4.0.0/maven-reporting-api-4.0.0.pom",
+      "hash": "sha256-IDJTHwWZQSHC/bXfcjXtVI9T0pTQt6xF55cUjYWjDuI=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-api/4.0.0/maven-reporting-api-4.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-impl/4.0.0/maven-reporting-impl-4.0.0.jar",
+      "hash": "sha256-6ecP2yb/ix8VQ146aIZqJchbFpQAfg+9/oTkjpRv5GM=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-impl/4.0.0/maven-reporting-impl-4.0.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/reporting/maven-reporting-impl/4.0.0/maven-reporting-impl-4.0.0.pom",
+      "hash": "sha256-4EnPW3fQnCToPbn9j1AZvfhtw3ozV/VjTFb7FX7Nokg=",
+      "destination": "maven/org/apache/maven/reporting/maven-reporting-impl/4.0.0/maven-reporting-impl-4.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-api/1.4.1/maven-resolver-api-1.4.1.jar",
+      "hash": "sha256-M9xnMGzJXaFOVETotJTZZ5JKvx0BuuGJRnYWTL0/YRI=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-api/1.4.1/maven-resolver-api-1.4.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-api/1.4.1/maven-resolver-api-1.4.1.pom",
+      "hash": "sha256-M1UTzh3Sz0x9Hb+huKoUZW2b5fnz8NCHWsUoiTyfDwY=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-api/1.4.1/maven-resolver-api-1.4.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.jar",
+      "hash": "sha256-qJXSIig2ZqcyDdx2YV4uk6Qfq9k86aa/nd7jknK7h7Q=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.pom",
+      "hash": "sha256-mNwDH3Xyybfv7vNE4cdLs9AJxYTjboKg7D0mPSv+83M=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-util/1.4.1/maven-resolver-util-1.4.1.pom",
+      "hash": "sha256-pYyTLpZ+hee8uNStrt0UpSIaF1Ch0InFCGxNc99QUVU=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-util/1.4.1/maven-resolver-util-1.4.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.jar",
+      "hash": "sha256-dKElSPDWqtE8coZmKIwegSAcJL0Fu05OyMFVhRezeac=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.pom",
+      "hash": "sha256-srPHd0zcYYh9qBS0IzjJQhururmx6Hw+ZJOIX/2lMjE=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver/1.4.1/maven-resolver-1.4.1.pom",
+      "hash": "sha256-gxw4SXURASJklaz+kRlYL+tzSkU5sHDg+9noWwO1Ac4=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver/1.4.1/maven-resolver-1.4.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/resolver/maven-resolver/1.9.27/maven-resolver-1.9.27.pom",
+      "hash": "sha256-iSS0FxHM4Fj4PEbXmtg9bgTtzxPtVjHsERNWVuC4f1Y=",
+      "destination": "maven/org/apache/maven/resolver/maven-resolver/1.9.27/maven-resolver-1.9.27.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/file-management/3.2.0/file-management-3.2.0.jar",
+      "hash": "sha256-MqxGl4XdFUescUN+TDkWxKVqPWkwPLCNeJ7N0L/R1t4=",
+      "destination": "maven/org/apache/maven/shared/file-management/3.2.0/file-management-3.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/file-management/3.2.0/file-management-3.2.0.pom",
+      "hash": "sha256-BOO91tGSDRzboga8Nd08bgZGxXMJafi11Tl+Xxx7Xt0=",
+      "destination": "maven/org/apache/maven/shared/file-management/3.2.0/file-management-3.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.4.0/maven-common-artifact-filters-3.4.0.jar",
+      "hash": "sha256-kxp3qp2tbJHxD8+vpwrcdgjABFdrSSTHTsv/snVoqIA=",
+      "destination": "maven/org/apache/maven/shared/maven-common-artifact-filters/3.4.0/maven-common-artifact-filters-3.4.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.4.0/maven-common-artifact-filters-3.4.0.pom",
+      "hash": "sha256-yTWB1pszfB/MCVfHJ8QwGAtjhydu8dPCl2wXXpN2XrE=",
+      "destination": "maven/org/apache/maven/shared/maven-common-artifact-filters/3.4.0/maven-common-artifact-filters-3.4.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.jar",
+      "hash": "sha256-etsORrX/9PwDqrS6r73uCynkRM/+RHiFjGMILUlyIL8=",
+      "destination": "maven/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.pom",
+      "hash": "sha256-BrSSsCRKgkNEcBYfhRskcnHsj9ruocKd6Yq94Gb4DGQ=",
+      "destination": "maven/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/15/maven-shared-components-15.pom",
+      "hash": "sha256-aljrJCkWAPdc4P42m3P+ZwD1dazktmRyTTzQprhbY+4=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/15/maven-shared-components-15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/19/maven-shared-components-19.pom",
+      "hash": "sha256-2CQIJpqtousVIe6P8X98ZzM2hPjtKgmp41ut0udXWVc=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/19/maven-shared-components-19.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/39/maven-shared-components-39.pom",
+      "hash": "sha256-F+gTiNiLphxAVUUOyQoy7jCs0H9G3G4x4Ja45Tc19LI=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/39/maven-shared-components-39.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/41/maven-shared-components-41.pom",
+      "hash": "sha256-xr2B4liODw+HOS1NtZDh2BwSaiXuklMlLvicUGzeHjQ=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/41/maven-shared-components-41.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/42/maven-shared-components-42.pom",
+      "hash": "sha256-qmb6oRwRuQDQmb/vDun+hIXX5/x06HGT4fdFcu2Vh8U=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/42/maven-shared-components-42.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/43/maven-shared-components-43.pom",
+      "hash": "sha256-YHLdEDvboxmVhMW3PtRbAFZ80+qRjiFgsQvHQ3yegYE=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/43/maven-shared-components-43.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/44/maven-shared-components-44.pom",
+      "hash": "sha256-Qfurl5Er6zoGGx44RdLgbSuyFMxx+S+n85ZIDcdloU4=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/44/maven-shared-components-44.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/45/maven-shared-components-45.pom",
+      "hash": "sha256-WHngI9m8r9oAbSi0KySVxvPbWH0+ce76Cjzt7uo22Yc=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/45/maven-shared-components-45.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/47/maven-shared-components-47.pom",
+      "hash": "sha256-O9PQfJEEdwkbuWAvkx9pbEqhFchqMiv/amBOx1Q6/Ac=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/47/maven-shared-components-47.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-components/49/maven-shared-components-49.pom",
+      "hash": "sha256-v/wzWmj3syODgbr/P6h/DHMm016RrC0+fjUTXJnGj+Y=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-components/49/maven-shared-components-49.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-incremental/1.1/maven-shared-incremental-1.1.jar",
+      "hash": "sha256-YZiOVEhqXcOPBscP2uWxCFVsY71DNpe59DBfzbMPpA4=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-incremental/1.1/maven-shared-incremental-1.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-incremental/1.1/maven-shared-incremental-1.1.pom",
+      "hash": "sha256-8h0Z60m0pmzYU1Sp7nM1Q56pKjaBc3YKICdmAIzBmSQ=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-incremental/1.1/maven-shared-incremental-1.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-utils/3.4.2/maven-shared-utils-3.4.2.jar",
+      "hash": "sha256-thM1fhutTfwd6tgBaRyUYPlYX+fGtGa8JRhiEtfRhIc=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-utils/3.4.2/maven-shared-utils-3.4.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-utils/3.4.2/maven-shared-utils-3.4.2.pom",
+      "hash": "sha256-qUF0XX+uuNyade3CwzDJlLdEC5pE0hFCcWtgU5Z6QcE=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-utils/3.4.2/maven-shared-utils-3.4.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-utils/3.5.0/maven-shared-utils-3.5.0.jar",
+      "hash": "sha256-177sWfj79uSfiLlUyb2hbhXSqE+4yToxP6+8LdLH8Yo=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-utils/3.5.0/maven-shared-utils-3.5.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/shared/maven-shared-utils/3.5.0/maven-shared-utils-3.5.0.pom",
+      "hash": "sha256-A6eO9XZZ3EmM5PmeFSMjMyd7WRobLwzy4b3BWbew8z0=",
+      "destination": "maven/org/apache/maven/shared/maven-shared-utils/3.5.0/maven-shared-utils-3.5.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/common-java5/3.6.0/common-java5-3.6.0.jar",
+      "hash": "sha256-hhzkXKQ9/U7bjAmP7oWeAQeTW6KmnxefnBFU5AN0E+c=",
+      "destination": "maven/org/apache/maven/surefire/common-java5/3.6.0/common-java5-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/common-java5/3.6.0/common-java5-3.6.0.pom",
+      "hash": "sha256-mgOKpK0NXFsEwGSwL1wH4HoJ5J9L+O3cXi4r3qmdMJ4=",
+      "destination": "maven/org/apache/maven/surefire/common-java5/3.6.0/common-java5-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/maven-surefire-common/3.6.0/maven-surefire-common-3.6.0.jar",
+      "hash": "sha256-rPVMml3NrUxaMML3Me6YkqgLTMUSYBTE8ohRpdwyxqs=",
+      "destination": "maven/org/apache/maven/surefire/maven-surefire-common/3.6.0/maven-surefire-common-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/maven-surefire-common/3.6.0/maven-surefire-common-3.6.0.pom",
+      "hash": "sha256-cFywob/EJnD4FHMVyHf4sDEybAtGjQCIs9gn8b6ikMU=",
+      "destination": "maven/org/apache/maven/surefire/maven-surefire-common/3.6.0/maven-surefire-common-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-api/3.6.0/surefire-api-3.6.0.jar",
+      "hash": "sha256-uMrnh2fbjGZg+fB+Y17D4AG4g/TnQIf2DplfOahIYn4=",
+      "destination": "maven/org/apache/maven/surefire/surefire-api/3.6.0/surefire-api-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-api/3.6.0/surefire-api-3.6.0.pom",
+      "hash": "sha256-07VBuTA5qHgtJvjzQCN07B3RvU7mEGiMWZ8yEVxymHw=",
+      "destination": "maven/org/apache/maven/surefire/surefire-api/3.6.0/surefire-api-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-booter/3.6.0/surefire-booter-3.6.0.jar",
+      "hash": "sha256-1KUSGYjsIjVbVNhPaKJji9tzFYFOZQdWGDupCpt80NI=",
+      "destination": "maven/org/apache/maven/surefire/surefire-booter/3.6.0/surefire-booter-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-booter/3.6.0/surefire-booter-3.6.0.pom",
+      "hash": "sha256-d2FPb8xmOO73ue1XKUujSfNYAkl/vth/s8/f1csH970=",
+      "destination": "maven/org/apache/maven/surefire/surefire-booter/3.6.0/surefire-booter-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-extensions-api/3.6.0/surefire-extensions-api-3.6.0.jar",
+      "hash": "sha256-jiwwVID955MRjPEldpa3eXuiXzpAxrP0SjSf2UReMCI=",
+      "destination": "maven/org/apache/maven/surefire/surefire-extensions-api/3.6.0/surefire-extensions-api-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-extensions-api/3.6.0/surefire-extensions-api-3.6.0.pom",
+      "hash": "sha256-6Pccl0Q7Ivq2Azn4NQiBLE9JyrstUSak6jWSqKW4Imc=",
+      "destination": "maven/org/apache/maven/surefire/surefire-extensions-api/3.6.0/surefire-extensions-api-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-extensions-spi/3.6.0/surefire-extensions-spi-3.6.0.jar",
+      "hash": "sha256-vq3rBIX8fzUF8msM/PJmAmObg+m62uusSjzlNFzBnA4=",
+      "destination": "maven/org/apache/maven/surefire/surefire-extensions-spi/3.6.0/surefire-extensions-spi-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-extensions-spi/3.6.0/surefire-extensions-spi-3.6.0.pom",
+      "hash": "sha256-oaKsI72SYu5PAeNtOlhXWxMg4DXhJ2sJlCmMB/SDRnw=",
+      "destination": "maven/org/apache/maven/surefire/surefire-extensions-spi/3.6.0/surefire-extensions-spi-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-junit-platform/3.6.0/surefire-junit-platform-3.6.0.jar",
+      "hash": "sha256-8R6Owf5j7I1oQspSy6QH6FxbZMwgEt9cCmf759i9erE=",
+      "destination": "maven/org/apache/maven/surefire/surefire-junit-platform/3.6.0/surefire-junit-platform-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-junit-platform/3.6.0/surefire-junit-platform-3.6.0.pom",
+      "hash": "sha256-y38/Ol+NMtyoIkr9qEdRMqceRaPnY7XFltFjuCRqKZA=",
+      "destination": "maven/org/apache/maven/surefire/surefire-junit-platform/3.6.0/surefire-junit-platform-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-logger-api/3.6.0/surefire-logger-api-3.6.0.jar",
+      "hash": "sha256-OHL5UGJChBgxs+4yHVrjJRKNMymQbGuDR0BW2R0qMJo=",
+      "destination": "maven/org/apache/maven/surefire/surefire-logger-api/3.6.0/surefire-logger-api-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-logger-api/3.6.0/surefire-logger-api-3.6.0.pom",
+      "hash": "sha256-/+YpxvyKXJvGZnZmh2diSPu0BaqIYw8vti6h+Wk1+VQ=",
+      "destination": "maven/org/apache/maven/surefire/surefire-logger-api/3.6.0/surefire-logger-api-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-providers/3.6.0/surefire-providers-3.6.0.pom",
+      "hash": "sha256-S+MqakSnD8wcsIkP64pRq/RAzAq5INRScVmKR93Vl7Q=",
+      "destination": "maven/org/apache/maven/surefire/surefire-providers/3.6.0/surefire-providers-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-shared-utils/3.6.0/surefire-shared-utils-3.6.0.jar",
+      "hash": "sha256-zozBD/sOhIqAeKzJ3f1Ef/aeMI+C9DHGMRr1DENATGs=",
+      "destination": "maven/org/apache/maven/surefire/surefire-shared-utils/3.6.0/surefire-shared-utils-3.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire-shared-utils/3.6.0/surefire-shared-utils-3.6.0.pom",
+      "hash": "sha256-fTJ4Sajs9DJ42scpD1cS5SePcrX+Hu2O+zUulsZXW6M=",
+      "destination": "maven/org/apache/maven/surefire/surefire-shared-utils/3.6.0/surefire-shared-utils-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/maven/surefire/surefire/3.6.0/surefire-3.6.0.pom",
+      "hash": "sha256-Fy926K2UoHpwDtfVr8d1yR+Ay9Ex62A3iw2D1X2BMdk=",
+      "destination": "maven/org/apache/maven/surefire/surefire/3.6.0/surefire-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/tools/velocity-tools-generic/3.1/velocity-tools-generic-3.1.jar",
+      "hash": "sha256-gljP3KoWEn81/+YQo/pPdrfr5RuIkixzxO45zo83jOU=",
+      "destination": "maven/org/apache/velocity/tools/velocity-tools-generic/3.1/velocity-tools-generic-3.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/tools/velocity-tools-generic/3.1/velocity-tools-generic-3.1.pom",
+      "hash": "sha256-pvUMs/QTh1wDllImnSqJ+IeNDZ/IzGYvwTWRyiDYR1g=",
+      "destination": "maven/org/apache/velocity/tools/velocity-tools-generic/3.1/velocity-tools-generic-3.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/tools/velocity-tools-parent/3.1/velocity-tools-parent-3.1.pom",
+      "hash": "sha256-Wll7iNunlQkOdwFbzfU0YbQdRdotfRdk5Ozoswoib80=",
+      "destination": "maven/org/apache/velocity/tools/velocity-tools-parent/3.1/velocity-tools-parent-3.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/velocity-engine-core/2.4.1/velocity-engine-core-2.4.1.jar",
+      "hash": "sha256-HBkVfRFx1WAIjkhb6XyTp6L36fVuUX8KMCc8XDnfYjE=",
+      "destination": "maven/org/apache/velocity/velocity-engine-core/2.4.1/velocity-engine-core-2.4.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/velocity-engine-core/2.4.1/velocity-engine-core-2.4.1.pom",
+      "hash": "sha256-rHzZTw2fs5vLo7KCh8TEAAXcD1OphvtYfk9npMyz5bY=",
+      "destination": "maven/org/apache/velocity/velocity-engine-core/2.4.1/velocity-engine-core-2.4.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/velocity-engine-parent/2.4.1/velocity-engine-parent-2.4.1.pom",
+      "hash": "sha256-jvtmG34bRLegVvI2UKsrQ7j82wm74uw9PQIYXVZY/Uo=",
+      "destination": "maven/org/apache/velocity/velocity-engine-parent/2.4.1/velocity-engine-parent-2.4.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/velocity-master/4/velocity-master-4.pom",
+      "hash": "sha256-eirHPJDdEEtaB+bizQPpXsKNKfO4ME891//87LBJcS4=",
+      "destination": "maven/org/apache/velocity/velocity-master/4/velocity-master-4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/velocity/velocity-master/7/velocity-master-7.pom",
+      "hash": "sha256-lDoEbB/jayizzqEfsNNOi4NrJFQzCH+PqRbAp1I5MYE=",
+      "destination": "maven/org/apache/velocity/velocity-master/7/velocity-master-7.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar",
+      "hash": "sha256-tQlEisUG1gcxnxglN/CzXXEAdYLsdBgyofER5bW3Czg=",
+      "destination": "maven/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.pom",
+      "hash": "sha256-MjVQgdEJCVw9XTdNWkO09MG3XVSemD71ByPidy5TAqA=",
+      "destination": "maven/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/checkerframework/checker-qual/3.37.0/checker-qual-3.37.0.jar",
+      "hash": "sha256-5M4TdswnNeHd4iC2KtCRP1EpdwTarRVaM/OGvF2w2fc=",
+      "destination": "maven/org/checkerframework/checker-qual/3.37.0/checker-qual-3.37.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/checkerframework/checker-qual/3.37.0/checker-qual-3.37.0.pom",
+      "hash": "sha256-AjkvvUziGQH5RWFUcrHU1NNZGzqr3wExBfXJLsMstPA=",
+      "destination": "maven/org/checkerframework/checker-qual/3.37.0/checker-qual-3.37.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/checkerframework/checker-qual/4.2.3/checker-qual-4.2.3.jar",
+      "hash": "sha256-+Gj3MfbjfbPhwhQNBgFkd5iZWaLRP8W+2cRnYM/9W6A=",
+      "destination": "maven/org/checkerframework/checker-qual/4.2.3/checker-qual-4.2.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/checkerframework/checker-qual/4.2.3/checker-qual-4.2.3.pom",
+      "hash": "sha256-15F1wnQ0rROb7ahKhCBu1rnYcHRILUxQR3k6nfVTlK8=",
+      "destination": "maven/org/checkerframework/checker-qual/4.2.3/checker-qual-4.2.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.10.4/plexus-archiver-4.10.4.pom",
+      "hash": "sha256-U6IQPZJXyAGo/JwhHZ/t6n4+4b9Ra7vCgCHvRcGiGcU=",
+      "destination": "maven/org/codehaus/plexus/plexus-archiver/4.10.4/plexus-archiver-4.10.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.jar",
+      "hash": "sha256-iXAQ3+vMkznzar74s7Kmh59JqLk9g+OIG5+2sLOCzVs=",
+      "destination": "maven/org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.pom",
+      "hash": "sha256-MPrEqFr3GZqzqO27/n+rKTyY94jPkvM/GDaodnIIkQY=",
+      "destination": "maven/org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.pom",
+      "hash": "sha256-e0pWnJL2DIWa5pWU+JNdEby7lA2GxRh0LDDwklpIup8=",
+      "destination": "maven/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.jar",
+      "hash": "sha256-VwrlWpXhiHwwBIgtMNxOkDXSpGuo1YuZHeBBdfFB2I8=",
+      "destination": "maven/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.pom",
+      "hash": "sha256-R8ew5lcYyonfb99cs/JKSeB2ys2UmSNsfhiteOmTzds=",
+      "destination": "maven/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-classworlds/2.12.0/plexus-classworlds-2.12.0.jar",
+      "hash": "sha256-0/gcYWwojn3wVdzB9AqLDyEKBw6UAGGd4K46FcYtlOs=",
+      "destination": "maven/org/codehaus/plexus/plexus-classworlds/2.12.0/plexus-classworlds-2.12.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-classworlds/2.12.0/plexus-classworlds-2.12.0.pom",
+      "hash": "sha256-sxBxLEHllAoezRG/DWtELkoEyqbGE5I21KWvV/UfwOA=",
+      "destination": "maven/org/codehaus/plexus/plexus-classworlds/2.12.0/plexus-classworlds-2.12.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-api/2.17.0/plexus-compiler-api-2.17.0.jar",
+      "hash": "sha256-t0jAVlix/tHOtz9SegWYNZNXLjUdkLQR94DtH6BbSvo=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-api/2.17.0/plexus-compiler-api-2.17.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-api/2.17.0/plexus-compiler-api-2.17.0.pom",
+      "hash": "sha256-7ZiWqzhuFkhIokgB+4u0RmT7oLGw6qzUHvCSMUIpRsw=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-api/2.17.0/plexus-compiler-api-2.17.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-javac/2.17.0/plexus-compiler-javac-2.17.0.jar",
+      "hash": "sha256-sYOrdlhYK+W3cQWpa2mldkP6AJjTAhe5uxmWeIH2HeQ=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-javac/2.17.0/plexus-compiler-javac-2.17.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-javac/2.17.0/plexus-compiler-javac-2.17.0.pom",
+      "hash": "sha256-RAjWm+u/f01jvNV/Ena5bxSiq01mYATV18T5d60YyRw=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-javac/2.17.0/plexus-compiler-javac-2.17.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-manager/2.17.0/plexus-compiler-manager-2.17.0.jar",
+      "hash": "sha256-Dxj4WlUsbT9wKGeTiYXXXsMmMiCThP6Ndu34AUzt8sI=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-manager/2.17.0/plexus-compiler-manager-2.17.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler-manager/2.17.0/plexus-compiler-manager-2.17.0.pom",
+      "hash": "sha256-AOrs4iJdX/Lgk2pwQWmaqBj2aLh4+TmWBlJY/AuJBMc=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler-manager/2.17.0/plexus-compiler-manager-2.17.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compiler/2.17.0/plexus-compiler-2.17.0.pom",
+      "hash": "sha256-YurjsbsFMGC0N1w5NmSpVZr9+v1t4TOST4F5SqIMr2g=",
+      "destination": "maven/org/codehaus/plexus/plexus-compiler/2.17.0/plexus-compiler-2.17.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-compilers/2.17.0/plexus-compilers-2.17.0.pom",
+      "hash": "sha256-p71izlnNOCK4ICIoRx6zY68mkSivcducOyTsVsKxqFA=",
+      "destination": "maven/org/codehaus/plexus/plexus-compilers/2.17.0/plexus-compilers-2.17.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-component-annotations/2.2.0/plexus-component-annotations-2.2.0.jar",
+      "hash": "sha256-UO25PHN4bmKCK0/hM24iiA/fFHGRNzz1yRE3DhZ0j88=",
+      "destination": "maven/org/codehaus/plexus/plexus-component-annotations/2.2.0/plexus-component-annotations-2.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-component-annotations/2.2.0/plexus-component-annotations-2.2.0.pom",
+      "hash": "sha256-xUg/ycjhp+9rD4meN6qmzi+K+uVJVb+lWf1joz27Bls=",
+      "destination": "maven/org/codehaus/plexus/plexus-component-annotations/2.2.0/plexus-component-annotations-2.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-containers/2.2.0/plexus-containers-2.2.0.pom",
+      "hash": "sha256-dD9C2WfQKCbuefBgEQji3usR3T5q3ST8XydYsbaGNOw=",
+      "destination": "maven/org/codehaus/plexus/plexus-containers/2.2.0/plexus-containers-2.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-i18n/1.1.0/plexus-i18n-1.1.0.jar",
+      "hash": "sha256-mVwHkmaaAxyU2Rlgpb62DhUWq87BehBPn0dHCzblbic=",
+      "destination": "maven/org/codehaus/plexus/plexus-i18n/1.1.0/plexus-i18n-1.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-i18n/1.1.0/plexus-i18n-1.1.0.pom",
+      "hash": "sha256-SRWgo2g+mvrQPbFV7oUFA5a7zcJAqDvwSrpYcBs22Lo=",
+      "destination": "maven/org/codehaus/plexus/plexus-i18n/1.1.0/plexus-i18n-1.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.jar",
+      "hash": "sha256-CI1ETbzt+zhGMNhoZpfs48QB1vM8j4s6pyWeocaZaHg=",
+      "destination": "maven/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.pom",
+      "hash": "sha256-zg1WNCl7seBl3d/ciipWdXF8COj0eD7c9YFUNxFRaTg=",
+      "destination": "maven/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-interpolation/1.30.0/plexus-interpolation-1.30.0.jar",
+      "hash": "sha256-RXMHJn9tLqJYL1RJ35NQuGco9GwjzNSGNBCHrORz6aE=",
+      "destination": "maven/org/codehaus/plexus/plexus-interpolation/1.30.0/plexus-interpolation-1.30.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-interpolation/1.30.0/plexus-interpolation-1.30.0.pom",
+      "hash": "sha256-wm4lcKAs0o/PRQqqmxpRet2DYrtMbJk2qh40jM+gs1o=",
+      "destination": "maven/org/codehaus/plexus/plexus-interpolation/1.30.0/plexus-interpolation-1.30.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.jar",
+      "hash": "sha256-44hjOizwXSVpwKOIc1Hz8053fd5cVIK/uXScLsufSDs=",
+      "destination": "maven/org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.pom",
+      "hash": "sha256-PfmSX2Ki++DNXRVq69KXx7Hu9PgWTZXahHNZCB7TDf4=",
+      "destination": "maven/org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-java/1.6.0/plexus-java-1.6.0.jar",
+      "hash": "sha256-a69NOf4Hl6XWIyGCFVaCUrK5QEnJhNcei02ikl4CRwU=",
+      "destination": "maven/org/codehaus/plexus/plexus-java/1.6.0/plexus-java-1.6.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-java/1.6.0/plexus-java-1.6.0.pom",
+      "hash": "sha256-51ij8UZGJ4R9ReO5Cfxt0vWHwUceDQ2qKXXWQ0RYMY0=",
+      "destination": "maven/org/codehaus/plexus/plexus-java/1.6.0/plexus-java-1.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-languages/1.6.0/plexus-languages-1.6.0.pom",
+      "hash": "sha256-V7mLX9nIG/eL00y+D68R2WE7L0cv+tAZTAOVZ3zPywo=",
+      "destination": "maven/org/codehaus/plexus/plexus-languages/1.6.0/plexus-languages-1.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-resources/1.4.0/plexus-resources-1.4.0.jar",
+      "hash": "sha256-MueHCgTsZJPDSENTUM2jV8ot40bhMOSWC8H2m3SgJ1E=",
+      "destination": "maven/org/codehaus/plexus/plexus-resources/1.4.0/plexus-resources-1.4.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-resources/1.4.0/plexus-resources-1.4.0.pom",
+      "hash": "sha256-r3+tLRnbMsDdne2Ok4SdvRooCcIu2zkgUBTIgRlJd6g=",
+      "destination": "maven/org/codehaus/plexus/plexus-resources/1.4.0/plexus-resources-1.4.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/1.5.8/plexus-utils-1.5.8.pom",
+      "hash": "sha256-H/T7lcIYr0pG9x1iUhLHDzd8z5etLibLjUwQcJJlv2I=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/1.5.8/plexus-utils-1.5.8.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.pom",
+      "hash": "sha256-YTgwBIFHHH/mrrEV+RKWH4huGkbunCvShBtlGEgk2ig=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.jar",
+      "hash": "sha256-fCzfi0oCou4/BRS410rV624jZe6wc6XKvW8tYdj4cd8=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.pom",
+      "hash": "sha256-XuJrnwUpA4gC/BwgWlzlW+Xv8kevCl5bVc+DFlLBc+0=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.0.2/plexus-utils-4.0.2.pom",
+      "hash": "sha256-UVHBO918w6VWlYOn9CZzkvAT/9MRXquNtfht5CCjZq8=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/4.0.2/plexus-utils-4.0.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.jar",
+      "hash": "sha256-Qh/27RRsU6nU6q3o9im1KxKvcYcQHxvQbCxk6QQBnzw=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.pom",
+      "hash": "sha256-NXNmWPP+Hvo5UIbJHfJZJmT6+iTD8mCP2roRNtF/02A=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.jar",
+      "hash": "sha256-ai/mnpgwGIK7K7Ba/jZBTrgtb3xjKZzM2y3AK0NYqWg=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.pom",
+      "hash": "sha256-RJ8A7PCKnnjsZ2Yaw7FVtqRJPJCutNy34oae7x8GcSc=",
+      "destination": "maven/org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-velocity/2.4.0/plexus-velocity-2.4.0.jar",
+      "hash": "sha256-gg7M9tZtCs/fxP/PxFKkOiPB1fN12o1Yrl8XmGzoqBc=",
+      "destination": "maven/org/codehaus/plexus/plexus-velocity/2.4.0/plexus-velocity-2.4.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-velocity/2.4.0/plexus-velocity-2.4.0.pom",
+      "hash": "sha256-ycPhSGbkAeo8TWfGspIa520w2xUW4EpZ/haPgTSUvxE=",
+      "destination": "maven/org/codehaus/plexus/plexus-velocity/2.4.0/plexus-velocity-2.4.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-xml/3.0.1/plexus-xml-3.0.1.jar",
+      "hash": "sha256-waUQqHpivS10rBRy3THD+emwuLhWjzfXfA8TVBW+vQU=",
+      "destination": "maven/org/codehaus/plexus/plexus-xml/3.0.1/plexus-xml-3.0.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-xml/3.0.1/plexus-xml-3.0.1.pom",
+      "hash": "sha256-MkLdwghz9xs4HDM7Iq+5zzWW1qY7ZoMDaha9UbyHIaQ=",
+      "destination": "maven/org/codehaus/plexus/plexus-xml/3.0.1/plexus-xml-3.0.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-xml/3.1.0/plexus-xml-3.1.0.jar",
+      "hash": "sha256-wr+THdFRLSKN1M2+dVEA3wQwwyhOcStNHTh5XdJ2Kb0=",
+      "destination": "maven/org/codehaus/plexus/plexus-xml/3.1.0/plexus-xml-3.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-xml/3.1.0/plexus-xml-3.1.0.pom",
+      "hash": "sha256-Uh1dj26Q/QnIpvQZ5FjD7CrEGbfgrT9fTz9Uwe/76WQ=",
+      "destination": "maven/org/codehaus/plexus/plexus-xml/3.1.0/plexus-xml-3.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/13/plexus-13.pom",
+      "hash": "sha256-V1lF3AiWbGbrA9W66RNb0iyjkgoYZbuZ0+zZO+9Vq9M=",
+      "destination": "maven/org/codehaus/plexus/plexus/13/plexus-13.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/16/plexus-16.pom",
+      "hash": "sha256-aNTu1lo9u8NC7YDdE4++nGfLf7TCq8T1IBzbW59kWGg=",
+      "destination": "maven/org/codehaus/plexus/plexus/16/plexus-16.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/17/plexus-17.pom",
+      "hash": "sha256-kVJu5mMnx/UPuyW9Qb/LkW4oRBS4aOMdUKIwBL197qc=",
+      "destination": "maven/org/codehaus/plexus/plexus/17/plexus-17.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/18/plexus-18.pom",
+      "hash": "sha256-tD7onIiQueW8SNB5/LTETwgrUTklM1bcRVgGozw92P0=",
+      "destination": "maven/org/codehaus/plexus/plexus/18/plexus-18.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/19/plexus-19.pom",
+      "hash": "sha256-jT5Rw5Av11luVI6rEh6/aw1KpzhXB38mok/Ib5uEVbQ=",
+      "destination": "maven/org/codehaus/plexus/plexus/19/plexus-19.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/2.0.2/plexus-2.0.2.pom",
+      "hash": "sha256-4kbioGK12Yn978UhycVkMbpVVP+NI0Tt7pIYo0pUajM=",
+      "destination": "maven/org/codehaus/plexus/plexus/2.0.2/plexus-2.0.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/24/plexus-24.pom",
+      "hash": "sha256-iaG8eeRsNasQi34hW7LFwhX/jzrxrjz++C2aKzOwbFE=",
+      "destination": "maven/org/codehaus/plexus/plexus/24/plexus-24.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/25/plexus-25.pom",
+      "hash": "sha256-+qeUfCAglnrQySslnun6Nh0F6QzQNtF8NwmLse2uo6M=",
+      "destination": "maven/org/codehaus/plexus/plexus/25/plexus-25.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus/27/plexus-27.pom",
+      "hash": "sha256-28fYDXnTdg/td3vqnkGxwKNwRC6o7Pkw0EpqViDTa24=",
+      "destination": "maven/org/codehaus/plexus/plexus/27/plexus-27.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/commonmark/commonmark-ext-gfm-tables/0.28.0/commonmark-ext-gfm-tables-0.28.0.jar",
+      "hash": "sha256-gEOcfEgJ2qbDXMsmD0j4txzaMOjMkj29aLs74Ek1nss=",
+      "destination": "maven/org/commonmark/commonmark-ext-gfm-tables/0.28.0/commonmark-ext-gfm-tables-0.28.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/commonmark/commonmark-ext-gfm-tables/0.28.0/commonmark-ext-gfm-tables-0.28.0.pom",
+      "hash": "sha256-1Pn/X400ZsAjlfELlhiPut/DQb/d/qzHYIYE9k1OXuE=",
+      "destination": "maven/org/commonmark/commonmark-ext-gfm-tables/0.28.0/commonmark-ext-gfm-tables-0.28.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/commonmark/commonmark-parent/0.28.0/commonmark-parent-0.28.0.pom",
+      "hash": "sha256-gjD+W9sdCbZ/Ee2f0SK5uL7VmvgQMeT4Ne+fhpsyebw=",
+      "destination": "maven/org/commonmark/commonmark-parent/0.28.0/commonmark-parent-0.28.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/commonmark/commonmark/0.28.0/commonmark-0.28.0.jar",
+      "hash": "sha256-+LKOAPl8VoMp7hskls/sXD74ZktWXqCc+JiIlBg7lW0=",
+      "destination": "maven/org/commonmark/commonmark/0.28.0/commonmark-0.28.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/commonmark/commonmark/0.28.0/commonmark-0.28.0.pom",
+      "hash": "sha256-laUUYzb0grM/stcwozQMJv54B5wjmPnV/fmy+sX1Se0=",
+      "destination": "maven/org/commonmark/commonmark/0.28.0/commonmark-0.28.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/dom4j/dom4j/2.2.0/dom4j-2.2.0.jar",
+      "hash": "sha256-P6554IEJbhQQZF6zVXxjt5yiZtUQq0eYiVERCb7NFpA=",
+      "destination": "maven/org/dom4j/dom4j/2.2.0/dom4j-2.2.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/dom4j/dom4j/2.2.0/dom4j-2.2.0.pom",
+      "hash": "sha256-5/3QKNw9yZXX6nubTE4jxGfMUxFPOjImEMTKRgNcSdw=",
+      "destination": "maven/org/dom4j/dom4j/2.2.0/dom4j-2.2.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/ee4j/project/1.0.7/project-1.0.7.pom",
+      "hash": "sha256-IFwDmkLLrjVW776wSkg+s6PPlVC9db+EJg3I8oIY8QU=",
+      "destination": "maven/org/eclipse/ee4j/project/1.0.7/project-1.0.7.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/jgit/org.eclipse.jgit-parent/7.8.0.202609011348-r/org.eclipse.jgit-parent-7.8.0.202609011348-r.pom",
+      "hash": "sha256-ysVspgJQZtG1GH+DT3Xn5zqV0wy00FQyzwnlErd2feA=",
+      "destination": "maven/org/eclipse/jgit/org.eclipse.jgit-parent/7.8.0.202609011348-r/org.eclipse.jgit-parent-7.8.0.202609011348-r.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/jgit/org.eclipse.jgit/7.8.0.202609011348-r/org.eclipse.jgit-7.8.0.202609011348-r.jar",
+      "hash": "sha256-zGOXb5LoBY0FpUPzIKYjeszy8Xt0WrIJRvJGrAtU39Y=",
+      "destination": "maven/org/eclipse/jgit/org.eclipse.jgit/7.8.0.202609011348-r/org.eclipse.jgit-7.8.0.202609011348-r.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/jgit/org.eclipse.jgit/7.8.0.202609011348-r/org.eclipse.jgit-7.8.0.202609011348-r.pom",
+      "hash": "sha256-COjUghQksHuzaUZnAAs7LO7owNilQsvOyFMlz/QYkbs=",
+      "destination": "maven/org/eclipse/jgit/org.eclipse.jgit/7.8.0.202609011348-r/org.eclipse.jgit-7.8.0.202609011348-r.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/platform/org.eclipse.osgi/3.18.300/org.eclipse.osgi-3.18.300.pom",
+      "hash": "sha256-4nl2N1mZxUJ/y8//PzvCD77a+tiqRRArN59cL5fI/rQ=",
+      "destination": "maven/org/eclipse/platform/org.eclipse.osgi/3.18.300/org.eclipse.osgi-3.18.300.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/platform/org.eclipse.osgi/3.24.300/org.eclipse.osgi-3.24.300.jar",
+      "hash": "sha256-SncKpKeN9lOvhxBzyLTd1WiEiV9fxx0QxAtCiax8i58=",
+      "destination": "maven/org/eclipse/platform/org.eclipse.osgi/3.24.300/org.eclipse.osgi-3.24.300.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/platform/org.eclipse.osgi/3.24.300/org.eclipse.osgi-3.24.300.pom",
+      "hash": "sha256-1veLGCOq+Buu5rHOTqA+7KYUwfVMxe5gkiRm6sX9VaA=",
+      "destination": "maven/org/eclipse/platform/org.eclipse.osgi/3.24.300/org.eclipse.osgi-3.24.300.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/1.1.0/org.eclipse.sisu.inject-1.1.0.jar",
+      "hash": "sha256-8+3qURnJG+SW4/9VlI+hbInNus+cLnS9yfr9oaP6uiA=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.inject/1.1.0/org.eclipse.sisu.inject-1.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.inject/1.1.0/org.eclipse.sisu.inject-1.1.0.pom",
+      "hash": "sha256-Xg4YRAMn2Ewf0EzHoeFggMFnWMsLOjvSXBOUZ2iauCU=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.inject/1.1.0/org.eclipse.sisu.inject-1.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.jar",
+      "hash": "sha256-uQV5vGUurHMxQ24KJVM/zhQTC5xuAV8t06PUuwfpQrc=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.pom",
+      "hash": "sha256-kLS+enHJedDE3qIMIKKOuedqKd9oq5AYzwEQGaPk9WI=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/1.1.0/org.eclipse.sisu.plexus-1.1.0.jar",
+      "hash": "sha256-frxSc4Vn4EULaFekBKFHY5Uz01w4pbpC5MWrKRDG35Q=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.plexus/1.1.0/org.eclipse.sisu.plexus-1.1.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/1.1.0/org.eclipse.sisu.plexus-1.1.0.pom",
+      "hash": "sha256-qh14Z6ZhIgGjHmG/ljZnOdwkCL+Knm8wBTDrNZYMLC0=",
+      "destination": "maven/org/eclipse/sisu/org.eclipse.sisu.plexus/1.1.0/org.eclipse.sisu.plexus-1.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/sisu-inject/0.9.0.M4/sisu-inject-0.9.0.M4.pom",
+      "hash": "sha256-DIKclkHMrIcNfX/wEsu62ER+kS65om0NcoPwnLpEwNk=",
+      "destination": "maven/org/eclipse/sisu/sisu-inject/0.9.0.M4/sisu-inject-0.9.0.M4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/eclipse/sisu/sisu-inject/1.1.0/sisu-inject-1.1.0.pom",
+      "hash": "sha256-E3owTy583b1ceHJuLEw30uL4pvYzVxrXwLOSEeq2w+U=",
+      "destination": "maven/org/eclipse/sisu/sisu-inject/1.1.0/sisu-inject-1.1.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/jacoco-maven-plugin/0.8.15/jacoco-maven-plugin-0.8.15.jar",
+      "hash": "sha256-8bWnNHQvmVc/mcCvIU9jwoFW70f3Rn5DSnobcjzbqbI=",
+      "destination": "maven/org/jacoco/jacoco-maven-plugin/0.8.15/jacoco-maven-plugin-0.8.15.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/jacoco-maven-plugin/0.8.15/jacoco-maven-plugin-0.8.15.pom",
+      "hash": "sha256-RteQQSJDP1R5sXXuJ7NDteGkzOooSJ6hQUcya2E4luM=",
+      "destination": "maven/org/jacoco/jacoco-maven-plugin/0.8.15/jacoco-maven-plugin-0.8.15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar",
+      "hash": "sha256-+1sANqCJnql+36D8LHmFtV8/fFaVAoFj5eYNTzz2B10=",
+      "destination": "maven/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15.pom",
+      "hash": "sha256-R+sksVd+Rzy7pjQ5m8Vv57NmsYQBv5EdDYdx9W8iiWY=",
+      "destination": "maven/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.build/0.8.15/org.jacoco.build-0.8.15.pom",
+      "hash": "sha256-OiyJ+AwqucrxtAOmLaS8vZCe5S6lN0c5EmelzclowSM=",
+      "destination": "maven/org/jacoco/org.jacoco.build/0.8.15/org.jacoco.build-0.8.15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.core/0.8.15/org.jacoco.core-0.8.15.jar",
+      "hash": "sha256-reHg/bTNgNhTe1fG7bcKE2DEf9xRjCDGUxRRdHm8TQ0=",
+      "destination": "maven/org/jacoco/org.jacoco.core/0.8.15/org.jacoco.core-0.8.15.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.core/0.8.15/org.jacoco.core-0.8.15.pom",
+      "hash": "sha256-eyg7Nbsr2juCe02onOlo0lfR2Y3YWU18jLWy9tjNmxU=",
+      "destination": "maven/org/jacoco/org.jacoco.core/0.8.15/org.jacoco.core-0.8.15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.report/0.8.15/org.jacoco.report-0.8.15.jar",
+      "hash": "sha256-ZqeeNu3Heh6/ZonnapduEqtPGvUVy9CVVYQPundXFPQ=",
+      "destination": "maven/org/jacoco/org.jacoco.report/0.8.15/org.jacoco.report-0.8.15.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jacoco/org.jacoco.report/0.8.15/org.jacoco.report-0.8.15.pom",
+      "hash": "sha256-oeqQHKBFR/HcJOdd3hBLOnFx/50MK49DsxU74JrDwIo=",
+      "destination": "maven/org/jacoco/org.jacoco.report/0.8.15/org.jacoco.report-0.8.15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+      "hash": "sha256-rOKhDcji1f00kl7KwD5JiLLA+FFlDJS4zvSbob0RFHg=",
+      "destination": "maven/org/jetbrains/annotations/13.0/annotations-13.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/annotations/13.0/annotations-13.0.pom",
+      "hash": "sha256-llrrK+3/NpgZvd4b96CzuJuCR91pyIuGN112Fju4w5c=",
+      "destination": "maven/org/jetbrains/annotations/13.0/annotations-13.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.8.21/kotlin-stdlib-common-1.8.21.pom",
+      "hash": "sha256-4ZpVd8vOqJcolw21MzyCZMjGmuci7recv0HV8LDJrmU=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-common/1.8.21/kotlin-stdlib-common-1.8.21.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.10/kotlin-stdlib-common-1.9.10.jar",
+      "hash": "sha256-zeM0G6GKK6JisLfPbFWyDJDo1DTkLJoT5qP3cNuWWog=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.10/kotlin-stdlib-common-1.9.10.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.10/kotlin-stdlib-common-1.9.10.pom",
+      "hash": "sha256-fUtwVHkQZ2s738iSWojztr+yRYLJeEVCgFVEzu9JCpI=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.10/kotlin-stdlib-common-1.9.10.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.8.21/kotlin-stdlib-jdk7-1.8.21.jar",
+      "hash": "sha256-M9FI2w4R3r0NkGd9KCQrztkH+cd3MAAP1ZeGcIkDnYY=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.8.21/kotlin-stdlib-jdk7-1.8.21.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.8.21/kotlin-stdlib-jdk7-1.8.21.pom",
+      "hash": "sha256-m7EH1dXjkwvFl38AekPNILfSTZGxweUo6m7g8kjxTTY=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.8.21/kotlin-stdlib-jdk7-1.8.21.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.8.21/kotlin-stdlib-jdk8-1.8.21.jar",
+      "hash": "sha256-PbdSowB08G7mxXmEqm8n2kT00rvH9UQmUfaYjxyyt9c=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.8.21/kotlin-stdlib-jdk8-1.8.21.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.8.21/kotlin-stdlib-jdk8-1.8.21.pom",
+      "hash": "sha256-ODnXKNfDCaXDaLAnC0S08ceHj/XKXTKpogT6o0kUWdg=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.8.21/kotlin-stdlib-jdk8-1.8.21.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.10/kotlin-stdlib-jdk8-1.9.10.pom",
+      "hash": "sha256-X0uU3TBlp3ZMN/oV3irW2B9A1Z+Msz8X0YHGOE+3py4=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.10/kotlin-stdlib-jdk8-1.9.10.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.8.21/kotlin-stdlib-1.8.21.jar",
+      "hash": "sha256-BCoc0ayXbNz+XrY/HY4LC4kskkjhWmnIz7pJXVRupSo=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib/1.8.21/kotlin-stdlib-1.8.21.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.8.21/kotlin-stdlib-1.8.21.pom",
+      "hash": "sha256-/gzZ4yGT5FMzP9Kx9XfmYvtavGkHECu5Z4F7wTEoD9c=",
+      "destination": "maven/org/jetbrains/kotlin/kotlin-stdlib/1.8.21/kotlin-stdlib-1.8.21.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+      "hash": "sha256-H61ua+dVd4Hk0zcp1Jrhzcj92m/kd7sMxozjUer9+6s=",
+      "destination": "maven/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.pom",
+      "hash": "sha256-zauSmjuVIR9D0gkMXi0N/oRllg43i8MrNYQdqzJEM6Y=",
+      "destination": "maven/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.jar",
+      "hash": "sha256-Bw118mH+TFuCAlCDZnFffy1GYPiMjvfm01deSMloO2Y=",
+      "destination": "maven/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.pom",
+      "hash": "sha256-VbOL8aex2OpRjPL0866aqiNuYbvwtr0x/7SXU6BZ3V4=",
+      "destination": "maven/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.10.1/junit-bom-5.10.1.pom",
+      "hash": "sha256-IcSwKG9LIAaVd/9LIJeKhcEArIpGtvHIZy+6qzN7w/I=",
+      "destination": "maven/org/junit/junit-bom/5.10.1/junit-bom-5.10.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.10.2/junit-bom-5.10.2.pom",
+      "hash": "sha256-Fp3ZBKSw9lIM/+ZYzGIpK/6fPBSpifqSEgckzeQ6mWg=",
+      "destination": "maven/org/junit/junit-bom/5.10.2/junit-bom-5.10.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.10.3/junit-bom-5.10.3.pom",
+      "hash": "sha256-EJN9RMQlmEy4c5Il00cS4aMUVkHKk6w/fvGG+iX2urw=",
+      "destination": "maven/org/junit/junit-bom/5.10.3/junit-bom-5.10.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.11.1/junit-bom-5.11.1.pom",
+      "hash": "sha256-xyEkqcmnmRDBhYdmtyw1Dho5JEy/tLB2NI+/4HgoGWU=",
+      "destination": "maven/org/junit/junit-bom/5.11.1/junit-bom-5.11.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.11.2/junit-bom-5.11.2.pom",
+      "hash": "sha256-9I6IU4qsFF6zrgNFqevQVbKPMpo13OjR6SgTJcqbDqI=",
+      "destination": "maven/org/junit/junit-bom/5.11.2/junit-bom-5.11.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.11.4/junit-bom-5.11.4.pom",
+      "hash": "sha256-GdS3R7IEgFMltjNFUylvmGViJ3pKwcteWTpeTE9eQRU=",
+      "destination": "maven/org/junit/junit-bom/5.11.4/junit-bom-5.11.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.12.1/junit-bom-5.12.1.pom",
+      "hash": "sha256-fIJrxyvt3IF9rZJjAn+QEqD1Wjd9ON+JxCkyolAcK/A=",
+      "destination": "maven/org/junit/junit-bom/5.12.1/junit-bom-5.12.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.12.2/junit-bom-5.12.2.pom",
+      "hash": "sha256-zvgP7IZFT2gGv7DfJGabXG8y4styhTnqhZ9H39ybvBc=",
+      "destination": "maven/org/junit/junit-bom/5.12.2/junit-bom-5.12.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.13.1/junit-bom-5.13.1.pom",
+      "hash": "sha256-+mhFHqgwVy7UP/5R11tqBfel5mWmAqUfSda+AgY6ZfM=",
+      "destination": "maven/org/junit/junit-bom/5.13.1/junit-bom-5.13.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.13.4/junit-bom-5.13.4.pom",
+      "hash": "sha256-16CKmbJQLwu2jNTh+YTwv2kySqogi9D3M2bAP8NUikI=",
+      "destination": "maven/org/junit/junit-bom/5.13.4/junit-bom-5.13.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.14.1/junit-bom-5.14.1.pom",
+      "hash": "sha256-AbAd+jZlULQKxXYFSKfXKLYQnRfEUeg4ZNHl4M6GLJQ=",
+      "destination": "maven/org/junit/junit-bom/5.14.1/junit-bom-5.14.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.14.2/junit-bom-5.14.2.pom",
+      "hash": "sha256-7S3MeFW9RgvMyTob8Mli5jtWb/fY8d7Q8fJZO6gYOq8=",
+      "destination": "maven/org/junit/junit-bom/5.14.2/junit-bom-5.14.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.14.3/junit-bom-5.14.3.pom",
+      "hash": "sha256-CKAoVuSHyTV/mynjh0X4roBYSBEectFarQNSM48WMuE=",
+      "destination": "maven/org/junit/junit-bom/5.14.3/junit-bom-5.14.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.14.4/junit-bom-5.14.4.pom",
+      "hash": "sha256-Vwbo8poKB/Vu+76koGcHk0FBlLuNJNgUO6Hnh6LzKFY=",
+      "destination": "maven/org/junit/junit-bom/5.14.4/junit-bom-5.14.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.7.2/junit-bom-5.7.2.pom",
+      "hash": "sha256-zRSqqGmZH4ICHFhdVw0x/zQry6WLtEIztwGTdxuWSHs=",
+      "destination": "maven/org/junit/junit-bom/5.7.2/junit-bom-5.7.2.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/5.9.3/junit-bom-5.9.3.pom",
+      "hash": "sha256-TQMpzZ5y8kIOXKFXJMv+b/puX9KIg2FRYnEZD9w0Ltc=",
+      "destination": "maven/org/junit/junit-bom/5.9.3/junit-bom-5.9.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/junit-bom/6.1.3/junit-bom-6.1.3.pom",
+      "hash": "sha256-qQAAQ2EKPpDIUud5prGo63JKnzEs9ffd1XhisBDGXcg=",
+      "destination": "maven/org/junit/junit-bom/6.1.3/junit-bom-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-api/6.1.3/junit-jupiter-api-6.1.3.jar",
+      "hash": "sha256-VV1s8g+hcQiE3QG4bMV4U5e6c+Ia2i1LeE9fGhTcr8Q=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-api/6.1.3/junit-jupiter-api-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-api/6.1.3/junit-jupiter-api-6.1.3.pom",
+      "hash": "sha256-qdY0faAym/EY6YeGF+ULVTfrnsPF/NCIUmUHE4MtGsE=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-api/6.1.3/junit-jupiter-api-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-engine/6.1.3/junit-jupiter-engine-6.1.3.jar",
+      "hash": "sha256-QUVZ54u/o72y6rAJrDqx4iNprDERfCcKC9Zm2hFcXGw=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-engine/6.1.3/junit-jupiter-engine-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-engine/6.1.3/junit-jupiter-engine-6.1.3.pom",
+      "hash": "sha256-BR/GXZfBXnzWRoMTaK+K/sWQsAjIBNKTr/EUx0oeJTA=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-engine/6.1.3/junit-jupiter-engine-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-params/6.1.3/junit-jupiter-params-6.1.3.jar",
+      "hash": "sha256-BcUc7bosBql3Bwc5HgBs7oJYdpN96lgLlKJlzhRdSTk=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-params/6.1.3/junit-jupiter-params-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter-params/6.1.3/junit-jupiter-params-6.1.3.pom",
+      "hash": "sha256-EPfoW1zlMBTJRrFMdQsJCXvtGJLsryzqBdEqq26Gd9I=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter-params/6.1.3/junit-jupiter-params-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter/6.1.3/junit-jupiter-6.1.3.jar",
+      "hash": "sha256-awoUB1x0Ih3lMEfjY4YLfRn86AK+vBUt8sNcQInGw3k=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter/6.1.3/junit-jupiter-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/jupiter/junit-jupiter/6.1.3/junit-jupiter-6.1.3.pom",
+      "hash": "sha256-6//7QYYasczJid4snC0Rkk5d3e0nKLBT9fL93IQJwOE=",
+      "destination": "maven/org/junit/jupiter/junit-jupiter/6.1.3/junit-jupiter-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-commons/1.14.4/junit-platform-commons-1.14.4.jar",
+      "hash": "sha256-VcigwGmsG8Th+Luya16ulcvRDk/xsjJIRBq2GmBzgeE=",
+      "destination": "maven/org/junit/platform/junit-platform-commons/1.14.4/junit-platform-commons-1.14.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-commons/1.14.4/junit-platform-commons-1.14.4.pom",
+      "hash": "sha256-13voFwjPmDbbegmQjm2eTZTFJ+CQvVlMxK8GcRudhT0=",
+      "destination": "maven/org/junit/platform/junit-platform-commons/1.14.4/junit-platform-commons-1.14.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.jar",
+      "hash": "sha256-pHdK6SPBCVRANK6ufHYs8Bf7zdE0JAO6kOCSGYS2CMM=",
+      "destination": "maven/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.pom",
+      "hash": "sha256-paOhrslhE7HpU1RcPYxRF/8CIMVvcpPG//fTWxzTfBQ=",
+      "destination": "maven/org/junit/platform/junit-platform-commons/6.1.3/junit-platform-commons-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-engine/1.14.4/junit-platform-engine-1.14.4.jar",
+      "hash": "sha256-PH8/hKZ0eu8Ntr1f3Spsj+NxMuZTyTm9Zzhzd69m2Rw=",
+      "destination": "maven/org/junit/platform/junit-platform-engine/1.14.4/junit-platform-engine-1.14.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-engine/1.14.4/junit-platform-engine-1.14.4.pom",
+      "hash": "sha256-GArxVHKsackZAvu9IQVm54qC/W005j0/utpof1FhTmQ=",
+      "destination": "maven/org/junit/platform/junit-platform-engine/1.14.4/junit-platform-engine-1.14.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.jar",
+      "hash": "sha256-Ia1606Nb7aFjh5eTF74YM6cqcdgS+aZu5LmnuvtWM0w=",
+      "destination": "maven/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.pom",
+      "hash": "sha256-UZTa0l2HiYVkaknfcb2YXo0t1Ma2dlcXCTrIoxvbMuQ=",
+      "destination": "maven/org/junit/platform/junit-platform-engine/6.1.3/junit-platform-engine-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-launcher/1.14.4/junit-platform-launcher-1.14.4.jar",
+      "hash": "sha256-do1i8bKlI3E7cC21NgnCMK9iu9ZF/CwHp9eU302jIig=",
+      "destination": "maven/org/junit/platform/junit-platform-launcher/1.14.4/junit-platform-launcher-1.14.4.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-launcher/1.14.4/junit-platform-launcher-1.14.4.pom",
+      "hash": "sha256-EZenSsK01xFy9Wy5xLCeVMAB5q6J9Gp4c7OMbmtgi9U=",
+      "destination": "maven/org/junit/platform/junit-platform-launcher/1.14.4/junit-platform-launcher-1.14.4.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-launcher/6.1.3/junit-platform-launcher-6.1.3.jar",
+      "hash": "sha256-HexksfwLfEehEwKqW0032BYMBBs5bicGdwnOd1YBp7Y=",
+      "destination": "maven/org/junit/platform/junit-platform-launcher/6.1.3/junit-platform-launcher-6.1.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/junit/platform/junit-platform-launcher/6.1.3/junit-platform-launcher-6.1.3.pom",
+      "hash": "sha256-La87Q2C6ngc0QhDM8ptr6XA9Crxm3kEh9l2QEZ/plso=",
+      "destination": "maven/org/junit/platform/junit-platform-launcher/6.1.3/junit-platform-launcher-6.1.3.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/mockito/mockito-bom/4.11.0/mockito-bom-4.11.0.pom",
+      "hash": "sha256-2FMadGyYj39o7V8YjN6pRQBq6pk+xd+eUk4NJ9YUkdo=",
+      "destination": "maven/org/mockito/mockito-bom/4.11.0/mockito-bom-4.11.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar",
+      "hash": "sha256-SOLfY2yrZWPO1k3N/4q7I1VifLI27wvzdZhoLd90Lxs=",
+      "destination": "maven/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.pom",
+      "hash": "sha256-m/fP/EEPPoNywlIleN+cpW2dQ72TfjCUhwbCMqlDs1U=",
+      "destination": "maven/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-analysis/9.11/asm-analysis-9.11.jar",
+      "hash": "sha256-oUIcIJeMoKMw8kGxeSOnUaI/sclCP9oaunWRuwhrAdg=",
+      "destination": "maven/org/ow2/asm/asm-analysis/9.11/asm-analysis-9.11.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-analysis/9.11/asm-analysis-9.11.pom",
+      "hash": "sha256-FL4u2BF+Lpc3DvkYbQjPmsdswQ9bxYu2xuaiQGzc5qo=",
+      "destination": "maven/org/ow2/asm/asm-analysis/9.11/asm-analysis-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-bom/9.10.1/asm-bom-9.10.1.pom",
+      "hash": "sha256-cJRy1pz3hdS2ee7g5uBXXUsQRHbd81Jl7xEX5zwSnNQ=",
+      "destination": "maven/org/ow2/asm/asm-bom/9.10.1/asm-bom-9.10.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-bom/9.11/asm-bom-9.11.pom",
+      "hash": "sha256-Wx//neZK+d8yY0LuHOaRTFRnQpBmQHk8vZ9tSor0jjA=",
+      "destination": "maven/org/ow2/asm/asm-bom/9.11/asm-bom-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar",
+      "hash": "sha256-bQq++3y/ly6hbts37BSDU3JQUGOkX5dqt+qIntlJeJU=",
+      "destination": "maven/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.pom",
+      "hash": "sha256-zrLEPzonPbiK+GUtie1jEvPpGhoeD/xveCMWknjPeVw=",
+      "destination": "maven/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-commons/9.11/asm-commons-9.11.jar",
+      "hash": "sha256-/P835qAiep9e6Bp8B/USSTB/oViJtWo1mub3c8Fkwis=",
+      "destination": "maven/org/ow2/asm/asm-commons/9.11/asm-commons-9.11.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-commons/9.11/asm-commons-9.11.pom",
+      "hash": "sha256-y5iIOxRRv0mC9snny/tKlsOekV0hq7Sfzl2c6PdjXks=",
+      "destination": "maven/org/ow2/asm/asm-commons/9.11/asm-commons-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar",
+      "hash": "sha256-PfsNW2oQbNQLWyUOOZNfvy+Sf0R3VGpTaaOsYJzwUGs=",
+      "destination": "maven/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.pom",
+      "hash": "sha256-lj7r3qbi4f8lyQaLZKI44Vhcmfis1FVZWsFZp/UrbEE=",
+      "destination": "maven/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-tree/9.11/asm-tree-9.11.jar",
+      "hash": "sha256-2orSTQv377BnSpBvWafUQWkrZBcYNx87zmdisZGhaf0=",
+      "destination": "maven/org/ow2/asm/asm-tree/9.11/asm-tree-9.11.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-tree/9.11/asm-tree-9.11.pom",
+      "hash": "sha256-ejfZfpPdBVANJwokB0rbNN9Qt0hMdB056YS1sqqXh30=",
+      "destination": "maven/org/ow2/asm/asm-tree/9.11/asm-tree-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-util/9.11/asm-util-9.11.jar",
+      "hash": "sha256-1aI6Z38xuKfSQZiVkG4fy9msmVvv+yCUTIYQwbw3dgk=",
+      "destination": "maven/org/ow2/asm/asm-util/9.11/asm-util-9.11.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm-util/9.11/asm-util-9.11.pom",
+      "hash": "sha256-G1xELBDEwAsHZO+JY+gBUv33J2DWQ/pW9HzXOscU3Ek=",
+      "destination": "maven/org/ow2/asm/asm-util/9.11/asm-util-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar",
+      "hash": "sha256-7YJdEKsTmcjAy2aeaIzwyMgmKbTIOZtYNSto6SyhD8s=",
+      "destination": "maven/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm/9.10.1/asm-9.10.1.pom",
+      "hash": "sha256-4bHDgyyjrAqeVjxAX0x2ARi1VWpJINruFAWIhhl+CU0=",
+      "destination": "maven/org/ow2/asm/asm/9.10.1/asm-9.10.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm/9.11/asm-9.11.jar",
+      "hash": "sha256-X+O0abhkblvFOol4QJUtY7cS1JI9KnomrrxYXx/sdnY=",
+      "destination": "maven/org/ow2/asm/asm/9.11/asm-9.11.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/asm/asm/9.11/asm-9.11.pom",
+      "hash": "sha256-xqVcmd9VTjppSW3hhKUH4dOwz64aX0FUKApgDwQlLR8=",
+      "destination": "maven/org/ow2/asm/asm/9.11/asm-9.11.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/ow2/ow2/1.5.1/ow2-1.5.1.pom",
+      "hash": "sha256-Mh3bt+5v5PU96mtM1tt0FU1r+kI5HB92OzYbn0hazwU=",
+      "destination": "maven/org/ow2/ow2/1.5.1/ow2-1.5.1.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar",
+      "hash": "sha256-0+9XXj5JeWeNwBvx3M5RAhSTtNEft/G+itmCh3wWocA=",
+      "destination": "maven/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.pom",
+      "hash": "sha256-+wRqnCKUN5KLsRwtJ8i113PriiXmDL0lPZhSEN7cJoQ=",
+      "destination": "maven/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.pom",
+      "hash": "sha256-bCx/LAJ3TMK3thn70t94c82tKXGJJuRHVLh/cNHrQ8s=",
+      "destination": "maven/org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.jar",
+      "hash": "sha256-fhRGSZs1lnXYqr5q8t6GuF5yrooqkywLQNDlulcJdDk=",
+      "destination": "maven/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.pom",
+      "hash": "sha256-LmJcP1U83dSfhVTOqZJsv3BnOz1oM0ZPDFoC9NkTBZQ=",
+      "destination": "maven/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-bom/2.0.18/slf4j-bom-2.0.18.pom",
+      "hash": "sha256-khmqtgFXUSbE5m4TMesrDGwXozCsTVoH480R1YCgwS0=",
+      "destination": "maven/org/slf4j/slf4j-bom/2.0.18/slf4j-bom-2.0.18.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-bom/2.0.20/slf4j-bom-2.0.20.pom",
+      "hash": "sha256-NRo9NPCIaUImjvzykXCMSN+tzn8mQ4N+/bSmlU1ObGI=",
+      "destination": "maven/org/slf4j/slf4j-bom/2.0.20/slf4j-bom-2.0.20.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-parent/1.7.36/slf4j-parent-1.7.36.pom",
+      "hash": "sha256-uziNN/vN083mTDzt4hg4aTIY3EUfBAQMXfNgp47X6BI=",
+      "destination": "maven/org/slf4j/slf4j-parent/1.7.36/slf4j-parent-1.7.36.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-parent/2.0.18/slf4j-parent-2.0.18.pom",
+      "hash": "sha256-CziWvtrSye2Wl+3L6h2gxUzSOKcjWDqBNYqDv7eC6fo=",
+      "destination": "maven/org/slf4j/slf4j-parent/2.0.18/slf4j-parent-2.0.18.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-parent/2.0.20/slf4j-parent-2.0.20.pom",
+      "hash": "sha256-2THPmc/TVU0yKAnfA8Q++JcILNSA1v+RtE2PBnyjJMg=",
+      "destination": "maven/org/slf4j/slf4j-parent/2.0.20/slf4j-parent-2.0.20.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-simple/2.0.20/slf4j-simple-2.0.20.jar",
+      "hash": "sha256-jnAUBHhqT4chnTnUhTyG3+ToaumTdqOXSd9sCOdQIuA=",
+      "destination": "maven/org/slf4j/slf4j-simple/2.0.20/slf4j-simple-2.0.20.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/slf4j/slf4j-simple/2.0.20/slf4j-simple-2.0.20.pom",
+      "hash": "sha256-rh7kQFmIPJIXDCjkVImY+QXCoWmYKAk2ZCzjwpsZYFY=",
+      "destination": "maven/org/slf4j/slf4j-simple/2.0.20/slf4j-simple-2.0.20.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/forge/forge-parent/5/forge-parent-5.pom",
+      "hash": "sha256-5WGIqozlEngAaqkLx+DzBKgeLxIZ9GLn0h8mJTXNJ5U=",
+      "destination": "maven/org/sonatype/forge/forge-parent/5/forge-parent-5.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/oss/oss-parent/5/oss-parent-5.pom",
+      "hash": "sha256-FnjUEgpYXYpjATGu7ExSTZKDmFg7fqthbufVqH9SDT0=",
+      "destination": "maven/org/sonatype/oss/oss-parent/5/oss-parent-5.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/oss/oss-parent/7/oss-parent-7.pom",
+      "hash": "sha256-tR+IZ8kranIkmVV/w6H96ne9+e9XRyL+kM5DailVlFQ=",
+      "destination": "maven/org/sonatype/oss/oss-parent/7/oss-parent-7.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/oss/oss-parent/9/oss-parent-9.pom",
+      "hash": "sha256-+0AmX5glSCEv+C42LllzKyGH7G8NgBgohcFO8fmCgno=",
+      "destination": "maven/org/sonatype/oss/oss-parent/9/oss-parent-9.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/plexus/plexus-build-api/0.0.7/plexus-build-api-0.0.7.jar",
+      "hash": "sha256-k0FxZA+9PSSVxQt5sNmtsR4sg+ZbrRV9+P40vKwP95g=",
+      "destination": "maven/org/sonatype/plexus/plexus-build-api/0.0.7/plexus-build-api-0.0.7.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/plexus/plexus-build-api/0.0.7/plexus-build-api-0.0.7.pom",
+      "hash": "sha256-4GcxekftnoSyuoWnbTz3KYDisNyHOpC5y/50/oDDfBc=",
+      "destination": "maven/org/sonatype/plexus/plexus-build-api/0.0.7/plexus-build-api-0.0.7.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/sonatype/spice/spice-parent/15/spice-parent-15.pom",
+      "hash": "sha256-E9Fd3+mUa4Qnu3tLCBq2OWIoXu0L9vpRQq6iWkbhWBQ=",
+      "destination": "maven/org/sonatype/spice/spice-parent/15/spice-parent-15.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/springframework/spring-framework-bom/5.3.39/spring-framework-bom-5.3.39.pom",
+      "hash": "sha256-9tSBCT51dny6Gsfh2zj49pLL4+OHRGkzcada6yHGFIs=",
+      "destination": "maven/org/springframework/spring-framework-bom/5.3.39/spring-framework-bom-5.3.39.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/tukaani/xz/1.12/xz-1.12.jar",
+      "hash": "sha256-PhWKh71z2K+0tugjnAE7fQScSFY/RYYM6ZzS5EjPSms=",
+      "destination": "maven/org/tukaani/xz/1.12/xz-1.12.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/tukaani/xz/1.12/xz-1.12.pom",
+      "hash": "sha256-k3tE2GnAWcOfB64ZTYzWIZ9a6/IgDvlwfwtQt4N9ooE=",
+      "destination": "maven/org/tukaani/xz/1.12/xz-1.12.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/tukaani/xz/1.9/xz-1.9.jar",
+      "hash": "sha256-IRswbPxE+Plt86Cj3a91uoxSie7XfWDXL4ibuFX1NeU=",
+      "destination": "maven/org/tukaani/xz/1.9/xz-1.9.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/tukaani/xz/1.9/xz-1.9.pom",
+      "hash": "sha256-CTvhsDMxvOKTLWglw36YJy12Ieap6fuTKJoAJRi43Vo=",
+      "destination": "maven/org/tukaani/xz/1.9/xz-1.9.pom"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3-data.jar",
+      "hash": "sha256-sMSHrS8+VYvo2CnJFtJFjRCspqW6+npNBSS3CEXkilw=",
+      "destination": "maven/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3-data.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3.jar",
+      "hash": "sha256-H+TVuS9wjc24LbzhKRngFx5rXKYsbcpiIEg2JQmP618=",
+      "destination": "maven/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3.jar"
+    },
+    {
+      "url": "https://maven-central.storage-download.googleapis.com/maven2/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3.pom",
+      "hash": "sha256-JhradtnmZ2AI3Kw3ek1FiXSRZrYGVZ9Z8uRepi2Ldew=",
+      "destination": "maven/org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3.pom"
+    }
+  ]
+}

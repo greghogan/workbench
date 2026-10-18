@@ -1,0 +1,16 @@
+{
+  "entry_point": "bin/workbench-start",
+  "local_state": true,
+  "symlinks": {
+    "/bin": "bin",
+    "/usr": "usr",
+    "/lib64": "lib64",
+    "/opt/workbench-guix": "opt/workbench-guix",
+    "/opt/workbench-environments": "opt/workbench-environments",
+    "/etc/passwd": "etc/passwd",
+    "/etc/group": "etc/group",
+    "/etc/ssl": "etc/ssl",
+    "/etc/os-release": "etc/os-release"
+  },
+  "materialize": ["/etc/passwd", "/etc/group"]
+}

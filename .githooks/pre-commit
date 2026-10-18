@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Git prepends its helper directory for hooks. Restore the caller's tool selection
+# so working-directory checks and staged checks use the same environment.
+git_exec_path=$(git --exec-path)
+if command -v cygpath >/dev/null 2>&1; then
+    git_exec_path=$(cygpath -u "$git_exec_path")
+fi
+if [[ "${PATH:-}" == "$git_exec_path":* ]]; then
+    export PATH="${PATH#"$git_exec_path":}"
+fi
+
+repository_root=$(git rev-parse --show-toplevel)
+staged_snapshot=$(mktemp -d)
+trap 'rm -rf -- "$staged_snapshot"' EXIT
+
+git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+git -C "$repository_root" diff --cached --check
+
+for required_path in workbench/config.toml workbench/projects.toml; do
+    if [[ ! -f "$staged_snapshot/$required_path" ]]; then
+        printf 'workbench: cannot check proposed commit: %s is missing from the staged tree.\n' "$required_path" >&2
+        printf 'Stage the project configuration and required project files before committing. Unstaged and untracked files are excluded from commit checks.\n' >&2
+        exit 1
+    fi
+done
+
+if git -C "$repository_root" grep --cached -n -I -E '^(<<<<<<<|=======|>>>>>>>)( |$)' --; then
+    echo 'workbench: staged content contains an unresolved merge marker' >&2
+    exit 1
+else
+    scan_status=$?
+    if [[ "$scan_status" != 1 ]]; then
+        echo 'workbench: could not inspect staged content for merge markers' >&2
+        exit "$scan_status"
+    fi
+fi
+if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
+    snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
+else
+    snapshot_launcher=(workbench)
+fi
+local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
+export WORKBENCH_PROJECT_ROOT="$staged_snapshot"
+"${snapshot_launcher[@]}" review check "$local_config_root"
+"${snapshot_launcher[@]}" secrets "$staged_snapshot"
+WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root" "${snapshot_launcher[@]}" pre-commit "$staged_snapshot"

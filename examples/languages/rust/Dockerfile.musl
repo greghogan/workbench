@@ -1,0 +1,17 @@
+FROM node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4 AS certificates
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
+COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Build on the engine's native architecture, with authenticated packages from a fixed snapshot.
+# cross supplies the project's selected Rust toolchain; this image does not install another Rust.
+# Cargo build scripts run on the glibc host, while application binaries target musl.
+RUN sed -i -E 's|^URIs:.*|URIs: https://snapshot.ubuntu.com/ubuntu/20261012T000000Z|' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt update \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates gcc libc6-dev musl-tools binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    CC_x86_64_unknown_linux_musl=musl-gcc CC_aarch64_unknown_linux_musl=musl-gcc
+
+LABEL org.opencontainers.image.title="Workbench Rust reference build environment"

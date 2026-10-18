@@ -1,0 +1,32 @@
+schema_version = 1
+id = "javascript"
+name = "JavaScript"
+summary = "checked JavaScript and JSDoc, locked pnpm dependencies, typed ESLint, Prettier, and Vitest"
+reference = "examples/languages/javascript"
+manifests = [ "jsconfig.json" ]
+
+starter = [
+  "LICENSE",
+  "scripts/release-verify.mjs",
+  "README.md",
+  ".gitignore",
+  ".node-version",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  ".pnpmfile.cjs",
+  "eslint.config.mjs",
+  ".prettierrc.json",
+  "vitest.config.mjs",
+  "scripts/build.mjs",
+  "jsconfig.json",
+  "src/arithmetic.js",
+  "test/arithmetic.test.js",
+  "test/count.test.js",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "NODE_V8_COVERAGE", "NODE_EXTRA_CA_CERTS", "npm_config_userconfig",
+  "npm_config_globalconfig"
+]

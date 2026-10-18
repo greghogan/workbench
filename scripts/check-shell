@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+files=(
+    .envrc
+    bin/workbench
+    scripts/check-shell
+    .githooks/pre-commit
+    .githooks/pre-push
+    .githooks/commit-msg
+)
+managed_files=()
+for file in .devcontainer/*.sh .devcontainer/*/*.sh; do
+    if [[ -f $file ]]; then
+        managed_files+=("$file")
+    fi
+done
+
+for file in examples/languages/*/.envrc examples/frameworks/*/.envrc; do
+    if [[ -f $file ]]; then
+        files+=("$file")
+    fi
+done
+
+case "${1:-}" in
+format)
+    command -v shfmt >/dev/null || {
+        printf 'check-shell: shfmt is required\n' >&2
+        exit 1
+    }
+    shfmt -i 4 -d -- "${files[@]}" "${managed_files[@]}"
+    ;;
+lint)
+    command -v shellcheck >/dev/null || {
+        printf 'check-shell: shellcheck is required\n' >&2
+        exit 1
+    }
+    for file in "${files[@]}"; do
+        bash -n -- "$file"
+    done
+    shellcheck -s bash -- "${files[@]}"
+    for file in "${managed_files[@]}"; do
+        sh -n -- "$file"
+    done
+    if ((${#managed_files[@]})); then
+        shellcheck -s sh -- "${managed_files[@]}"
+    fi
+    ;;
+*)
+    printf 'Usage: check-shell format|lint\n' >&2
+    exit 2
+    ;;
+esac

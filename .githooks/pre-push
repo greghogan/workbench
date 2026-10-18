@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Match ordinary command tool selection, as in the pre-commit hook.
+git_exec_path=$(git --exec-path)
+if command -v cygpath >/dev/null 2>&1; then
+    git_exec_path=$(cygpath -u "$git_exec_path")
+fi
+if [[ "${PATH:-}" == "$git_exec_path":* ]]; then
+    export PATH="${PATH#"$git_exec_path":}"
+fi
+
+repository_root=$(git rev-parse --show-toplevel)
+local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
+snapshots=$(mktemp -d)
+trap 'rm -rf -- "$snapshots"' EXIT
+checked_trees=()
+
+# Git provides local ref/object and remote ref/object on stdin. Check each distinct
+# outgoing tip tree; deletions and tags that do not name commits have no gate.
+while read -r local_ref local_object remote_ref remote_object extra; do
+    if [[ -z "$local_ref" || -z "$remote_ref" || -n "${extra:-}" ||
+        ! "$local_object" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ||
+        ! "$remote_object" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+        echo 'workbench: invalid pre-push ref update' >&2
+        exit 1
+    fi
+    [[ "$local_object" =~ ^0+$ ]] && continue
+    commit=$(git -C "$repository_root" rev-parse --verify "$local_object^{}")
+    object_type=$(git -C "$repository_root" cat-file -t "$commit")
+    if [[ "$object_type" != commit ]]; then
+        echo "workbench: $local_ref does not name a commit; no project checks apply."
+        continue
+    fi
+    tree=$(git -C "$repository_root" rev-parse "$commit^{tree}")
+    already_checked=false
+    for checked in "${checked_trees[@]+"${checked_trees[@]}"}"; do
+        [[ "$checked" == "$tree" ]] && already_checked=true
+    done
+    "$already_checked" && continue
+    checked_trees+=("$tree")
+    snapshot="$snapshots/$tree"
+    mkdir -- "$snapshot"
+    GIT_INDEX_FILE="$snapshots/index-$tree" git -C "$repository_root" read-tree "$commit"
+    GIT_INDEX_FILE="$snapshots/index-$tree" git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$snapshot/"
+    if [[ -f "$snapshot/bin/workbench.mjs" ]]; then
+        launcher=(node "$snapshot/bin/workbench.mjs")
+    else
+        launcher=(workbench)
+    fi
+    printf 'Checking outgoing %s (%s).\n' "$local_ref" "$commit"
+    WORKBENCH_PROJECT_ROOT="$snapshot" WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root" \
+        "${launcher[@]}" pre-push "$snapshot" </dev/null
+done

@@ -1,0 +1,9 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+build/
+target/
+dist/
+coverage/*
+!coverage/coverage-summary.json

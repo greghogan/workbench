@@ -1,0 +1,280 @@
+# Agent-maintained commands and documentation wiring.
+
+[[check]]
+name = "Locked pnpm dependencies"
+role = "setup"
+project = "workbench"
+command = [ "{packageManager}", "install", "--frozen-lockfile" ]
+
+[[check]]
+name = "TypeScript format"
+role = "format"
+project = "workbench"
+command = [ "{packageManager}", "run", "format:check" ]
+
+[[check]]
+name = "TypeScript lint"
+role = "lint"
+project = "workbench"
+command = [ "{packageManager}", "run", "lint" ]
+
+[[check]]
+name = "TypeScript types"
+role = "type"
+project = "workbench"
+command = [ "{packageManager}", "run", "typecheck" ]
+
+[[check]]
+name = "Bundle parity and license policy"
+role = "license"
+project = "workbench"
+command = [ "{packageManager}", "run", "bundle:check" ]
+
+[[check]]
+name = "Workbench validation"
+role = "lint"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "validate", "." ]
+
+[[check]]
+name = "TypeScript tests"
+role = "test"
+warn_seconds = 120
+project = "workbench"
+command = [ "{packageManager}", "run", "test" ]
+
+[check.coverage]
+command = [ "{packageManager}", "run", "coverage" ]
+stages = [ "commit", "ci" ]
+environments = [ "native" ]
+
+[check.coverage.ci]
+operating_systems = [ "linux" ]
+architectures = [ "x64" ]
+toolchain = false
+
+[[check]]
+name = "Shell format"
+role = "format"
+project = "workbench"
+command = [ "scripts/check-shell", "format" ]
+
+[[check]]
+name = "Shell lint"
+role = "lint"
+project = "workbench"
+command = [ "scripts/check-shell", "lint" ]
+
+[[check]]
+name = "GitHub workflow validation"
+role = "lint"
+project = "workbench"
+command = [ "node", "scripts/check-workflows.mjs" ]
+
+[[check]]
+name = "Workbench README examples"
+role = "docs"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "docs", "README.md" ]
+
+[[check]]
+name = "Workbench build"
+role = "build"
+project = "workbench"
+command = [ "{packageManager}", "run", "bundle:build" ]
+stages = []
+
+[[check]]
+name = "Workbench release"
+role = "release"
+project = "workbench"
+command = [ "{packageManager}", "run", "release" ]
+stages = []
+
+[[check]]
+name = "Workbench format files"
+role = "format-write"
+project = "workbench"
+command = [ "{packageManager}", "run", "format" ]
+stages = []
+
+[[check]]
+name = "Workbench clean"
+role = "clean"
+project = "workbench"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "build", "dist", "coverage" ]
+stages = []
+
+[[check]]
+name = "Workbench distclean"
+role = "distclean"
+project = "workbench"
+command = [ "node", "{workbench}/scripts/clean.mjs", "target", "build", "dist", "coverage", "node_modules" ]
+stages = []
+
+[[check]]
+name = "Locked dependency advisories"
+role = "advisory"
+requires_setup = false
+online = true
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "advisories", "typescript" ]
+stages = [ "ci" ]
+
+[[check]]
+name = "Recognized credentials"
+role = "secret"
+project = "workbench"
+command = [ "node", "bin/workbench.mjs", "secrets", "." ]
+
+[[check_suite]]
+language = "typescript"
+path = "examples/languages/typescript"
+
+[[check_suite]]
+language = "rust"
+path = "examples/languages/rust"
+
+[[check_suite]]
+language = "typescript"
+path = "examples/frameworks/react"
+
+[[check_suite]]
+language = "python"
+path = "examples/languages/python"
+
+[[check_suite]]
+language = "c"
+path = "examples/languages/c"
+
+[[check_suite]]
+language = "cpp"
+path = "examples/languages/cpp"
+
+[[check_suite]]
+language = "go"
+path = "examples/languages/go"
+
+[[documentation]]
+project = "workbench"
+source_map = "workbench/source-map.md"
+source_paths = [
+  "src",
+  "tests",
+  "scripts",
+  "bin",
+  ".githooks",
+  "examples/languages",
+  "examples/frameworks",
+  "languages",
+  "skills",
+  "bundle",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "tsconfig.json",
+  "eslint.config.mjs",
+  "vitest.config.mjs",
+  "workbench/quality.json",
+  ".prettierrc.json",
+  "Makefile",
+  "channels.scm",
+  "manifest.scm",
+  ".github",
+  ".devcontainer",
+  ".node-version",
+  ".tool-versions",
+]
+
+[[check_suite]]
+language = "javascript"
+path = "examples/languages/javascript"
+
+[[check_suite]]
+language = "java"
+path = "examples/languages/java"
+
+[[check_suite]]
+language = "ruby"
+path = "examples/languages/ruby"
+
+[[check_suite]]
+path = "examples/languages/php"
+language = "php"
+
+[[check]]
+name = "Verify release: ."
+role = "release-verify"
+path = "."
+command = [ "node", "{workbench}/scripts/check-release.mjs" ]
+stages = []
+
+[[check]]
+name = "Workbench compatibility locked dependencies"
+role = "compatibility-setup"
+project = "workbench"
+command = ["{packageManager}", "install", "--frozen-lockfile"]
+stages = []
+
+[[check]]
+name = "Workbench compatibility package tests"
+role = "compatibility-test"
+project = "workbench"
+command = ["{packageManager}", "run", "test"]
+stages = []
+
+# Each example owns its generated state after the root's locked dependency setup.
+[[check_order]]
+root = "examples/languages/typescript"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/rust"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/frameworks/react"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/python"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/c"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/cpp"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/go"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/javascript"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/java"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/ruby"
+after = "."
+phase = "setup"
+
+[[check_order]]
+root = "examples/languages/php"
+after = "."
+phase = "setup"

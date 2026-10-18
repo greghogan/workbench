@@ -1,0 +1,13 @@
+schema_version = 1
+
+id = "go"
+name = "Go"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/go"
+manifests = [ "go.mod" ]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "GOPATH", "GOMODCACHE", "GOCACHE", "GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB", "GOSUMDB",
+  "SDKROOT", "DEVELOPER_DIR"
+]

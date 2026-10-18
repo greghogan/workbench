@@ -1,0 +1,24 @@
+{
+  "cross_version": "0.2.5",
+  "cross_revision": "526d03ddcd2f70e683074b3ea6f75ed300f33132",
+  "targets": {
+    "x86_64-unknown-linux-musl": {
+      "platform": "linux-x64",
+      "cpu_baseline": "x86-64",
+      "kernel_baseline": "6.1",
+      "verification_images": [
+        "ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7",
+        "alpine:3.23@sha256:1f3591b8a02ea153f41c5bba878ad477f63ab3d19349762cb77504db02a23e15"
+      ]
+    },
+    "aarch64-unknown-linux-musl": {
+      "platform": "linux-arm64",
+      "cpu_baseline": "armv8-a",
+      "kernel_baseline": "6.1",
+      "verification_images": [
+        "ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7",
+        "alpine:3.23@sha256:ae959799024a09da597284763c417a6e820e020fad0634c5267cf4f125e682bf"
+      ]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_file=${1:?commit message path is required}
+hook_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+if [[ -f "$hook_directory/../bin/workbench.mjs" ]]; then
+    node "$hook_directory/../bin/workbench.mjs" commit check "$message_file"
+else
+    workbench commit check "$message_file"
+fi

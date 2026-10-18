@@ -1,0 +1,381 @@
+name: Checks
+
+# The checked-out configuration defines the complete gate on every run.
+on:
+  push:
+    # Publication branches select a separate operation on a revision whose Checks already passed.
+    branches-ignore: ["ci/publication-verification-**"]
+  pull_request:
+
+  workflow_dispatch:
+
+  # Release checks also cover every configured root. Publication uses its separate workflow.
+  release:
+    types: [published]
+
+# Shared authentication and host cache compression settings.
+env:
+  # Read-only API authentication avoids the shared unauthenticated attestation rate limit.
+  GH_TOKEN: ${{ github.token }}
+  # Applies to cache saves, including post-job saves. Retain Zstandard's default window.
+  ZSTD_CLEVEL: "9"
+
+# Pull request code runs with read-only repository access.
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Git Bash provides the same shell commands on Windows. Toolchain pins stay in each root.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Resolve the configuration once. Every root is covered on its configured platforms.
+  # Tool profiles remain inside their platform job rather than multiplying jobs.
+  plan:
+    name: Plan checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      # The adapter validates the matrix before GitHub expands it.
+      - id: plan
+        run: node scripts/ci-plan.mjs
+      - name: Retain the resolved matrix for publication verification
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-plan
+          path: ${{ runner.temp }}/workbench-ci-plan.json
+          retention-days: 14
+
+  # Small, unconditional checks: no example dependency or compiler installations.
+  # Keep this job independent of planning so invalid records remain visible.
+  validation:
+    name: Validate records and documentation
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node bin/workbench.mjs validate
+      - run: node bin/workbench.mjs docs README.md
+      - name: Select the minimum bootstrap runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "18.20.8"
+      - name: Verify older Node hands off before loading commands
+        run: node scripts/check-bootstrap.mjs
+      - id: runtime
+        name: Read the direct CLI runtime minimum
+        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT, "minimum=" + require("./bundle/launcher.cjs").minimumCliNode + "\n")'
+      - name: Select the minimum direct CLI runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.runtime.outputs.minimum }}
+      - name: Verify installed Node without runtime acquisition
+        run: node scripts/check-node-runtime.mjs
+
+  # ---------------------------------------------------------------------------
+  # Four native platforms, all examples. Linux may reuse a prepared development
+  # image; macOS and Windows verify their native tools using the configured caches.
+  # The job-level condition skips an empty matrix before matrix expansion.
+  # ---------------------------------------------------------------------------
+  native:
+    name: ${{ matrix.os }} ${{ matrix.architecture }} / all examples and tool profiles
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).native.include[0] != null
+    runs-on: ${{ matrix.runner }}
+    # Windows also needs time to archive verified SDKs and finish checkout cleanup.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).native }}
+    steps:
+      - name: Preserve canonical text and skill symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.architecture }}
+      - name: Verify native runtime architecture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: node -e 'if (process.arch !== process.env.EXPECTED_ARCHITECTURE) throw new Error("Expected " +
+          process.env.EXPECTED_ARCHITECTURE + ", got " + process.arch)'
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: matrix.msvc && runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Make room for LLVM and native build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          # These hosted-runner SDKs are unused by the declared language roots.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      - name: Select native persistence
+        id: persistence
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync } from 'node:fs';
+          const encoded = execFileSync(process.execPath, ['bin/workbench.mjs', 'config', 'get', 'ci.images', '--scope', 'project'], { encoding: 'utf8' }).trim();
+          const image = encoded === '<unset>' ? undefined : JSON.parse(encoded).native;
+          appendFileSync(process.env.GITHUB_OUTPUT, `container=${process.platform === 'linux' && Boolean(image)}\n`);
+          JS
+
+      - name: Authenticate for read-only registry access
+        if: steps.persistence.outputs.container == 'true'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+
+      # Derive cache paths and keys from the selected roots, platform, and tool pins.
+      - name: Select isolated CI cache paths
+        if: steps.persistence.outputs.container != 'true'
+        id: cache-plan
+        env:
+          CACHE_TARGET: ${{ toJSON(matrix) }}
+        run: node scripts/ci-cache.mjs
+      - name: Start cache and execution measurement
+        if: steps.persistence.outputs.container != 'true'
+        run: node scripts/ci-cache-metrics.mjs start
+      # Prebuilt SDKs and small tools are downloaded and verified during setup.
+      - name: Reuse retained native tool installations
+        if: steps.persistence.outputs.container != 'true' && steps.cache-plan.outputs.tools-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.tools-paths }}
+          key: ${{ steps.cache-plan.outputs.tools-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.tools-restore-keys }}
+      # Retain only the selected stable/MSRV installations, never the entire rustup home.
+      - name: Reuse selected Rust toolchains
+        if: steps.persistence.outputs.container != 'true' && steps.cache-plan.outputs.rust-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.rust-paths }}
+          key: ${{ steps.cache-plan.outputs.rust-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.rust-restore-keys }}
+      - name: Reuse verified package-manager bootstrap
+        if: steps.persistence.outputs.container != 'true' && steps.cache-plan.outputs.package-managers-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.package-managers-paths }}
+          key: ${{ steps.cache-plan.outputs.package-managers-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.package-managers-restore-keys }}
+      - name: Reuse package download stores
+        if: steps.persistence.outputs.container != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.downloads-paths }}
+          key: ${{ steps.cache-plan.outputs.downloads-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.downloads-restore-keys }}
+      - name: Reuse compiled outputs
+        if: steps.persistence.outputs.container != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.builds-paths }}
+          key: ${{ steps.cache-plan.outputs.builds-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.builds-restore-keys }}
+
+      # Restore compact compiler installations separately from dependency/build caches.
+      - name: Restore filtered LLVM installations
+        id: llvm-cache
+        if: steps.persistence.outputs.container != 'true' && steps.cache-plan.outputs.llvm-key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-plan.outputs.llvm-paths }}
+          key: ${{ steps.cache-plan.outputs.llvm-key }}
+          restore-keys: ${{ steps.cache-plan.outputs.llvm-restore-keys }}
+
+      - name: Prepare native SDK prerequisites
+        if: steps.persistence.outputs.container != 'true'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: node scripts/ci-native-prerequisites.mjs
+
+      - name: Run complete checks, tool profiles, and release verification
+        env:
+          CI_MATRIX: ${{ toJSON(matrix) }}
+          WORKBENCH_COVERAGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+        run: node scripts/ci-hosted.mjs native
+
+      - name: Retain reports and release artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.architecture }}
+          path: |
+            ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+
+      - name: Measure retained host caches
+        if: always() && steps.cache-plan.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mjs finish
+      - name: Remove transient registry credentials
+        if: always() && steps.persistence.outputs.container == 'true'
+        run: docker logout ghcr.io
+
+  # Portable Rust artifacts are explicit releases, separate from each platform's
+  # ordinary native release. Each architecture builds and executes without emulation.
+  rust-portable:
+    name: Rust musl / Linux ${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { architecture: x64, runner: ubuntu-26.04 }
+          - { architecture: arm64, runner: ubuntu-26.04-arm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          architecture: ${{ matrix.architecture }}
+      - name: Install declared Rust tools and the pinned cross driver
+        run: |
+          node bin/workbench.mjs tools install --path examples/languages/rust
+          cross_revision=$(node -p 'require("./examples/languages/rust/release-musl.json").cross_revision')
+          node bin/workbench.mjs shell --path examples/languages/rust --environment native -- \
+            cargo install --git https://github.com/cross-rs/cross --rev "$cross_revision" --locked \
+              --root "${CARGO_HOME:-$HOME/.cargo}" cross
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+      - name: Test, package, and verify portable release in glibc and musl containers
+        id: portable
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          profile="rust-linux-${ARCHITECTURE}-musl"
+          node bin/workbench.mjs release prepare "$profile"
+          node bin/workbench.mjs release prepare "$profile" --json > "$RUNNER_TEMP/rust-release-plan.json"
+          node --input-type=module - "$RUNNER_TEMP/rust-release-plan.json" <<'JS'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `directory=${plan.profiles[0].output}\n`);
+          JS
+      - name: Retain verified portable release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-musl-${{ matrix.architecture }}
+          path: ${{ steps.portable.outputs.directory }}
+          retention-days: 30
+
+  # Nix and Guix keep their own tool authority. The same retained image serves
+  # local offline development and this full Workbench + examples CI gate.
+  environments:
+    name: ${{ matrix.environment }} / all examples
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).environments.include[0] != null
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).environments }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Make room for the retained builder stores
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+      - name: Authenticate for read-only registry access
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Acquire or prepare the environment, then run every root
+        env:
+          CI_MATRIX: ${{ toJSON(matrix) }}
+        run: node scripts/ci-hosted.mjs environment
+      - name: Retain reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: environment-${{ matrix.environment }}
+          path: |
+            ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+      - name: Remove transient registry credentials
+        if: always()
+        run: docker logout ghcr.io
+
+  # Consumers may select an ordinary Dev Container without preparing an offline image.
+  # Workbench's prepared profiles above already exercise the Dev Container builder.
+  devcontainer:
+    name: Configured Dev Container
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).devcontainer.paths[0] != null
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Run all configured container roots
+        env:
+          CI_MATRIX: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer) }}
+        run: |
+          CI_MATRIX=$(node -e 'console.log(JSON.stringify({...JSON.parse(process.env.CI_MATRIX), environment: "devcontainer"}))')
+          export CI_MATRIX
+          node scripts/ci-hosted.mjs environment
+      - name: Retain reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: devcontainer
+          path: ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+
+  # A stable required status accepts only explicitly empty groups as skipped.
+  status:
+    name: Checks passed
+    needs: [plan, validation, native, environments, devcontainer]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Require validation and every configured platform
+        env:
+          WORKBENCH_CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-status.mjs

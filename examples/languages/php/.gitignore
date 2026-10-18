@@ -1,0 +1,11 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+/build/
+/dist/
+/vendor/
+/tools/vendor/
+/tools/compat/vendor/
+/coverage/*
+!/coverage/coverage-summary.json

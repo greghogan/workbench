@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "source_hashes": {
+    "Gemfile": "b82672a81319e01abc263ca7527f246412e89709e82e7524fdc87b23a401166a",
+    "Gemfile.lock": "95a9c5fdc23775d6759c44b34f09c0da32f36f46946908d25bde03a734725af3"
+  },
+  "inputs": [
+    {
+      "url": "https://rubygems.org/downloads/ast-2.4.3.gem",
+      "hash": "sha256-lUYVFXwdajgrwn1pDZcxleedt/Vel2WsfEgcYL2004M=",
+      "destination": "gems/ast-2.4.3.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/bundler-4.0.23.gem",
+      "hash": "sha256-QHuoodko9BKEf4Gapfi2rvfFn7Uf61FxEq+KFlSHKHs=",
+      "destination": "gems/bundler-4.0.23.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/concurrent-ruby-1.3.8.gem",
+      "hash": "sha256-svG+g26WjMx4zPzid+p5xyqIYz8iMGeCwW/yP7QV0eE=",
+      "destination": "gems/concurrent-ruby-1.3.8.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/csv-3.3.6.gem",
+      "hash": "sha256-q6YeflB6ZvA9RcsfPEtjWYYcNQQDi0IpYoddzgmeRFY=",
+      "destination": "gems/csv-3.3.6.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/drb-2.2.3.gem",
+      "hash": "sha256-CwDW/bUJlf5KRd6hNmNJPIQREuQGhlaFRkb0GP2hM3M=",
+      "destination": "gems/drb-2.2.3.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/ffi-1.17.4-aarch64-linux-gnu.gem",
+      "hash": "sha256-sgjwb5H/2PXhGT2jyuPSzPwn/Db7pXe69pjSbZHAgN8=",
+      "destination": "gems/ffi-1.17.4-aarch64-linux-gnu.gem",
+      "platforms": [
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/ffi-1.17.4-x86_64-linux-gnu.gem",
+      "hash": "sha256-nT2xTC6uB0s4L6nAg/6VrsbgoUUdoknqsJbDQAK8dS0=",
+      "destination": "gems/ffi-1.17.4-x86_64-linux-gnu.gem",
+      "platforms": [
+        "linux-x64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/ffi-1.17.4.gem",
+      "hash": "sha256-vNFkLgbw0W/J4JrG1Jw6cpi5eJvLWBJzAvk05DfWCs8=",
+      "destination": "gems/ffi-1.17.4.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/fileutils-1.8.1.gem",
+      "hash": "sha256-LVQaHuNKntXE8FS+j7gZomtdZUSIox3IgGkXz0SLnMM=",
+      "destination": "gems/fileutils-1.8.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/json-3.1.0.gem",
+      "hash": "sha256-POfM+P3liWAXejp1bDHykqTB4d7e6IRUcJalsGBOO9g=",
+      "destination": "gems/json-3.1.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/language_server-protocol-3.17.0.6.gem",
+      "hash": "sha256-XvLAwTj4Jn4bxjHTMoNH01T5ZySwryLyx5UWEgRDt/A=",
+      "destination": "gems/language_server-protocol-3.17.0.6.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/lint_roller-1.1.0.gem",
+      "hash": "sha256-LAyEW2MqfRcsuEnMkMG86TeijFyMzMtQ39RqSFADzIc=",
+      "destination": "gems/lint_roller-1.1.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/listen-3.10.1.gem",
+      "hash": "sha256-TD8yhVZX80h0faTdI3L/N5DZCmsdPk8ho3Bq2y0EeDw=",
+      "destination": "gems/listen-3.10.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/logger-1.7.0.gem",
+      "hash": "sha256-GW7ex8xEtmz7QPl1XOEbOS8h95Z2lq8V0nTd5+3/AgM=",
+      "destination": "gems/logger-1.7.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/minitest-6.0.6.gem",
+      "hash": "sha256-FT6jbR2YemKUI4K2EHV0UEKisxI7HNSPTDZ1r5zH1vE=",
+      "destination": "gems/minitest-6.0.6.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/parallel-2.3.0.gem",
+      "hash": "sha256-91o+kEEBzmocy2uNyADLr9QhZtgzMBkkONzyk5UWem8=",
+      "destination": "gems/parallel-2.3.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/parser-3.3.13.0.gem",
+      "hash": "sha256-4C+bY8L+BbDGj2krpN+Js8sRO2Y5ZPddmI++v9bD3so=",
+      "destination": "gems/parser-3.3.13.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/prism-1.9.0.gem",
+      "hash": "sha256-e1MMap+SwkMAAUkZydy8BVv0zfUewwrtCZsGzWZ074U=",
+      "destination": "gems/prism-1.9.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/racc-1.8.1.gem",
+      "hash": "sha256-Sn9pKWkdvsi1IJoLNzvCYUiCtV/F0uRHohqqaRMD1i8=",
+      "destination": "gems/racc-1.8.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rainbow-3.1.1.gem",
+      "hash": "sha256-A5SRqjqJ9C76HW3sL8TmLt6W62rNleUvGtWBGCt5vGo=",
+      "destination": "gems/rainbow-3.1.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rake-13.4.2.gem",
+      "hash": "sha256-y4JbK9Xx+Okco3vdtLmq80VVG0cx2mKUm+AC+okoNwE=",
+      "destination": "gems/rake-13.4.2.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rb-fsevent-0.11.2.gem",
+      "hash": "sha256-Q5ALly5zAdZXD2S4UKWqZ4M+59h7RY7pKAXVa3MYrv4=",
+      "destination": "gems/rb-fsevent-0.11.2.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rb-inotify-0.11.1.gem",
+      "hash": "sha256-oKcARBI5sP8Y62XjhmI2zXhhPWufeP6h+axHqF5Hvm4=",
+      "destination": "gems/rb-inotify-0.11.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rbs-4.2.0.gem",
+      "hash": "sha256-Ufe4htzAW8CeELkB2qaoGCn2rcAxAdbKnqSqxhA+BnQ=",
+      "destination": "gems/rbs-4.2.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/regexp_parser-2.13.1.gem",
+      "hash": "sha256-Wu22t8NWiPUehu7xehU3Tf0ofIP0ymRLLF8+xQoztEs=",
+      "destination": "gems/regexp_parser-2.13.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rubocop-1.92.1.gem",
+      "hash": "sha256-qQU4GlNEIVp5q8/oD2yUNmRH5qVTR8mlJbWiSZDjP2I=",
+      "destination": "gems/rubocop-1.92.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/rubocop-ast-1.50.0.gem",
+      "hash": "sha256-ucqIMA2ggD7iIq0gzbMElMCnhO7Qb9w10lSwbWYniNs=",
+      "destination": "gems/rubocop-ast-1.50.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/ruby-lsp-0.26.11.gem",
+      "hash": "sha256-TMjxWHI3/4yQMWgLVJHfkBqCVZ7qoa6Whj/+cAsyWD0=",
+      "destination": "gems/ruby-lsp-0.26.11.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/ruby-progressbar-1.13.0.gem",
+      "hash": "sha256-gPycR6m2QNaDTg3Hs8lMnfN/CMsHK3dh5KceIs/ymzM=",
+      "destination": "gems/ruby-progressbar-1.13.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/securerandom-0.4.1.gem",
+      "hash": "sha256-zFGT1BSkNBtuIl8MtERqzsqOUNXhiIdD+sFph2OOoLE=",
+      "destination": "gems/securerandom-0.4.1.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/simplecov-1.3.2.gem",
+      "hash": "sha256-KiLsF1nxuNtgiBouA4dYlW/Gnvk+1mm+C94GeN5tDoU=",
+      "destination": "gems/simplecov-1.3.2.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/steep-2.1.0.gem",
+      "hash": "sha256-Ha9TVzKDsObUBKcnPMpB/lwVsU7OBRZ5NPX/wXnhcdk=",
+      "destination": "gems/steep-2.1.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/strscan-3.1.8.gem",
+      "hash": "sha256-quLbYRoiVVnyH/u3F2XJpOYP0mJTSp6oT08Rx/MvZ54=",
+      "destination": "gems/strscan-3.1.8.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/terminal-table-4.0.0.gem",
+      "hash": "sha256-9QR5MgP4JRsup8cGgzMFPwvu6iYJPsmWLmLqeflDAdI=",
+      "destination": "gems/terminal-table-4.0.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/tsort-0.2.0.gem",
+      "hash": "sha256-llCnk/aFmkO2ZBZxJ495z+rWCscUFIqr5OPwBgSACJ8=",
+      "destination": "gems/tsort-0.2.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/unicode-display_width-3.3.0.gem",
+      "hash": "sha256-S3qmaksR21D29+mEESFc0N0Q6uy2ZdNu7FvKyz+gthM=",
+      "destination": "gems/unicode-display_width-3.3.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/unicode-emoji-4.3.0.gem",
+      "hash": "sha256-EcAvpzKQN4wGa7BWLNTIfY4bcG+74AWcoSdGpCRN6M4=",
+      "destination": "gems/unicode-emoji-4.3.0.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://rubygems.org/downloads/uri-1.1.2.gem",
+      "hash": "sha256-iSkumOq772JIsKDtXn45jhUvg/F1YAI6bZSn9JKxafs=",
+      "destination": "gems/uri-1.1.2.gem",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    }
+  ]
+}

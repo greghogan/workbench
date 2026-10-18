@@ -1,0 +1,36 @@
+{
+  "name": "workbench/php-tools",
+  "description": "Workbench PHP reference",
+  "license": "Apache-2.0",
+  "type": "library",
+  "require": {
+    "php": ">=8.4.1"
+  },
+  "require-dev": {
+    "workbench/verified-composer": "1.0.0",
+    "phpstan/phpstan": "2.3.1",
+    "friendsofphp/php-cs-fixer": "3.95.27",
+    "phpunit/phpunit": "13.4.3",
+    "brianium/paratest": "7.27.4"
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../.composer/verify",
+      "options": {
+        "symlink": false
+      }
+    }
+  ],
+  "config": {
+    "platform": {
+      "php": "8.4.1"
+    },
+    "allow-plugins": {
+      "workbench/verified-composer": true
+    },
+    "preferred-install": "dist",
+    "sort-packages": true,
+    "source-fallback": false
+  }
+}

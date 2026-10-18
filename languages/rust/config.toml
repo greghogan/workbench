@@ -1,0 +1,15 @@
+schema_version = 1
+
+id = "rust"
+name = "Rust"
+summary = "rustfmt, strict Clippy, Nextest, doctests for libraries, and portable cross-built releases"
+reference = "examples/languages/rust"
+manifests = [ "Cargo.toml" ]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "CARGO_HOME", "RUSTUP_HOME",
+  "CARGO_NET_OFFLINE", "CARGO_HTTP_CAINFO", "CARGO_HTTP_PROXY", "RUSTUP_DIST_SERVER", "RUSTUP_UPDATE_ROOT",
+  "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", "INCLUDE", "LIB", "LIBPATH", "VCToolsInstallDir",
+  "WindowsSdkDir", "WindowsSDKVersion", "SDKROOT", "DEVELOPER_DIR"
+]

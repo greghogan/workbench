@@ -1,0 +1,91 @@
+schema_version = 1
+
+[[command]]
+role = "setup"
+command = [ "node", "scripts/check.mjs", "setup", "{workbench}" ]
+
+[[command]]
+role = "format"
+command = [ "node", "scripts/check.mjs", "format", "{workbench}" ]
+
+[[command]]
+role = "lint"
+command = [ "node", "scripts/check.mjs", "lint", "{workbench}" ]
+
+[[command]]
+role = "type"
+command = [ "node", "scripts/check.mjs", "type", "{workbench}" ]
+
+[[command]]
+role = "test"
+command = [ "node", "scripts/check.mjs", "test", "{workbench}" ]
+warn_seconds = 120
+
+[command.coverage]
+command = [ "node", "scripts/check.mjs", "coverage", "{workbench}" ]
+stages = [ "commit", "ci" ]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[command.coverage.ci]
+operating_systems = [ "linux" ]
+architectures = [ "x64" ]
+toolchain = false
+
+[[command]]
+role = "build"
+command = [ "node", "scripts/check.mjs", "build", "{workbench}" ]
+
+[[command]]
+role = "docs"
+command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+
+[[command]]
+role = "release"
+command = [ "node", "scripts/check.mjs", "release", "{workbench}" ]
+stages = []
+
+[[command]]
+role = "format-write"
+command = [ "node", "scripts/check.mjs", "format-write", "{workbench}" ]
+stages = []
+
+[[command]]
+role = "clean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "distclean"
+command = [ "node", "{workbench}/scripts/clean.mjs", "build", "target", "dist", "coverage" ]
+stages = []
+
+[[command]]
+role = "advisory"
+requires_setup = false
+online = true
+command = [ "node", "{workbench}/bin/workbench.mjs", "advisories", "php" ]
+stages = [ "ci" ]
+
+[[command]]
+role = "dependency-lock"
+requires_setup = false
+command = [ "node", "scripts/check.mjs", "dependency-lock", "{workbench}" ]
+stages = []
+
+[[command]]
+role = "release-verify"
+command = [ "node", "scripts/release-verify.mjs" ]
+stages = []
+
+[[command]]
+name = "compatibility locked Composer dependencies"
+role = "compatibility-setup"
+command = ["node", "scripts/check.mjs", "compatibility-setup", "{workbench}"]
+stages = []
+
+[[command]]
+name = "compatibility PHPUnit tests"
+role = "compatibility-test"
+command = ["node", "scripts/check.mjs", "compatibility-test", "{workbench}"]
+stages = []

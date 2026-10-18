@@ -1,0 +1,12 @@
+schema_version = 1
+
+id = "c"
+name = "C"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/c"
+manifests = [ "CMakeLists.txt" ]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "SDKROOT", "DEVELOPER_DIR", "INCLUDE", "LIB", "LIBPATH", "WindowsSdkDir", "WindowsSDKVersion", "VCToolsInstallDir"
+]

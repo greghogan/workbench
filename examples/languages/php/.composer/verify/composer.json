@@ -1,0 +1,10 @@
+{
+  "name": "workbench/verified-composer",
+  "version": "1.0.0",
+  "description": "Verify Composer distribution archives against reviewed project SHA-256 checksums",
+  "license": "Apache-2.0",
+  "type": "composer-plugin",
+  "require": { "php": ">=8.2", "composer-plugin-api": "^2.6" },
+  "autoload": { "psr-4": { "WorkbenchVerification\\": "src/" } },
+  "extra": { "class": "WorkbenchVerification\\VerifyPlugin", "plugin-modifies-downloads": true }
+}

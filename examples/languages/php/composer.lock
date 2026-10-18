@@ -1,0 +1,55 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "01d51112c47e17e6b45c7c1e092ceb6b",
+    "packages": [],
+    "packages-dev": [
+        {
+            "name": "workbench/verified-composer",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": ".composer/verify",
+                "reference": "6eb9c30203235f89970cee7dd1f67367632fbd43"
+            },
+            "require": {
+                "composer-plugin-api": "^2.6",
+                "php": ">=8.2"
+            },
+            "type": "composer-plugin",
+            "extra": {
+                "class": "WorkbenchVerification\\VerifyPlugin",
+                "plugin-modifies-downloads": true
+            },
+            "autoload": {
+                "psr-4": {
+                    "WorkbenchVerification\\": "src/"
+                }
+            },
+            "license": [
+                "Apache-2.0"
+            ],
+            "description": "Verify Composer distribution archives against reviewed project SHA-256 checksums",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        }
+    ],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">=8.2.34"
+    },
+    "platform-dev": {},
+    "platform-overrides": {
+        "php": "8.2.34"
+    },
+    "plugin-api-version": "2.9.0"
+}

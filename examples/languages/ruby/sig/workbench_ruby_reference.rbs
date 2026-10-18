@@ -1,0 +1,4 @@
+module WorkbenchRubyReference
+  def self.sum: (Array[Integer] values) -> Integer
+  def self.count_byte: (String data, Integer byte) -> Integer
+end
