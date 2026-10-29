@@ -1,0 +1,32 @@
+import { assetURL } from "./asset-manifest.js";
+import type { ComponentChildren } from "preact";
+import { renderToString } from "preact-render-to-string";
+
+interface PageDocument {
+  title: string;
+  interactive?: boolean;
+  contents: ComponentChildren;
+  attributes?: Record<`data-${string}`, string>;
+}
+export function pageDocument({ title, contents, attributes = {}, interactive = true }: PageDocument): string {
+  return (
+    "<!doctype html>" +
+    renderToString(
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <title>{title} · Workbench</title>
+          <link rel="stylesheet" href={assetURL("style")} />
+          {interactive && <script src={assetURL("client")} defer />}
+        </head>
+        <body {...attributes}>
+          <a class="skip" href="#main">
+            Skip to content
+          </a>
+          {contents}
+        </body>
+      </html>,
+    )
+  );
+}

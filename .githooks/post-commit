@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repository_root=$(git rev-parse --show-toplevel)
+if ! git -C "$repository_root" cat-file -e HEAD:bundle/main.cjs.br 2>/dev/null; then
+    export WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root"
+    exec workbench review finish-commit
+fi
+snapshot=$(mktemp -d)
+trap 'rm -rf -- "$snapshot"' EXIT
+git -C "$repository_root" archive HEAD | tar -xf - -C "$snapshot"
+export WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root"
+export WORKBENCH_DISTRIBUTION_ROOT="$snapshot"
+node "$snapshot/bin/workbench.mjs" review finish-commit

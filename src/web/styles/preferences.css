@@ -1,0 +1,29 @@
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .badge,
+  .panel {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* Status elements remain hidden until there is an update to announce. */
+[hidden] {
+  display: none !important;
+}
+#record-previous {
+  margin-bottom: var(--space-5);
+}
+
+#record-previous:empty {
+  display: none;
+}
+
+.citation-source + .citation-source {
+  border-top: 1px solid var(--line);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+}

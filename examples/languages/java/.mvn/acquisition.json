@@ -1,0 +1,316 @@
+{
+  "resolver": "org.apache.maven.plugins:maven-dependency-plugin:3.11.0:go-offline",
+  "trust": [
+    {
+      "prefix": "com/github/luben/zstd-jni/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["9AC5712CABE9635B65663AB0711C0A9A896FE336"]
+    },
+    {
+      "prefix": "commons-beanutils/commons-beanutils/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["B6E73D84EA4FCC47166087253FAAD2CD5ECBB314", "D196A5E3E70732EEB2E5007F1861C322C56014B2"]
+    },
+    {
+      "prefix": "commons-io/commons-io/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB"]
+    },
+    {
+      "prefix": "commons-logging/commons-logging/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": [
+        "0CC641C3A62453AB390066C4A41F13C999945293",
+        "2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB",
+        "B920D295BF0E61CB4CF0896C33CD6733AF5EC452"
+      ]
+    },
+    {
+      "prefix": "eu/maveniverse/maven/domtrip/domtrip-core/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["3F068505A1DF611935F03FB1A1011D0A89C9E497"]
+    },
+    {
+      "prefix": "eu/maveniverse/maven/domtrip/domtrip-maven/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["3F068505A1DF611935F03FB1A1011D0A89C9E497"]
+    },
+    {
+      "prefix": "eu/maveniverse/maven/domtrip/domtrip/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["3F068505A1DF611935F03FB1A1011D0A89C9E497"]
+    },
+    {
+      "prefix": "eu/maveniverse/maven/parent/parent/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/apache/apache/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "FA77DCFEF2EE6EB2DEBEDD2C012579464D01C06A"]
+    },
+    {
+      "prefix": "org/apache/commons/commons-lang3/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB"]
+    },
+    {
+      "prefix": "org/apache/commons/commons-parent/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": [
+        "2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB",
+        "B6E73D84EA4FCC47166087253FAAD2CD5ECBB314",
+        "B920D295BF0E61CB4CF0896C33CD6733AF5EC452",
+        "BC87A3FD0A54480F0BADBEBD21939FF0CA2A6567",
+        "D196A5E3E70732EEB2E5007F1861C322C56014B2",
+        "D6F1BC78607808EC8E9F69437A8860944FAD5F62"
+      ]
+    },
+    {
+      "prefix": "org/apache/commons/commons-text/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB"]
+    },
+    {
+      "prefix": "org/apache/maven/doxia/doxia-core/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/doxia/doxia-sink-api/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/doxia/doxia-site-model/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/doxia/doxia-sitetools/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/maven-parent/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "FA77DCFEF2EE6EB2DEBEDD2C012579464D01C06A"]
+    },
+    {
+      "prefix": "org/apache/maven/plugins/maven-clean-plugin/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/plugins/maven-dependency-plugin/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/plugins/maven-deploy-plugin/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/plugins/maven-install-plugin/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/plugins/maven-plugins/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/resolver/maven-resolver-api/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/apache/maven/resolver/maven-resolver-util/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/apache/maven/resolver/maven-resolver/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/apache/maven/shared/maven-artifact-transfer/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/shared/maven-common-artifact-filters/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["B02137D875D833D9B23392ECAE5A7FB608A0221C"]
+    },
+    {
+      "prefix": "org/apache/maven/shared/maven-dependency-analyzer/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/apache/maven/shared/maven-dependency-tree/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["6A814B1F869C2BBEAB7CB7271A2A1C94BDE89688"]
+    },
+    {
+      "prefix": "org/apache/maven/shared/maven-shared-components/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1", "FA77DCFEF2EE6EB2DEBEDD2C012579464D01C06A"]
+    },
+    {
+      "prefix": "org/apache/velocity/velocity-engine-core/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["CE4439C1BEF3DA83B1832F9DBEFEEF227A98B809"]
+    },
+    {
+      "prefix": "org/apache/velocity/velocity-engine-parent/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["CE4439C1BEF3DA83B1832F9DBEFEEF227A98B809"]
+    },
+    {
+      "prefix": "org/assertj/assertj-bom/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["BE685132AFD2740D9095F9040CC0B712FEE75827"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-archiver/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-classworlds/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-i18n/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-interpolation/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-io/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-utils/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA", "EA23DB1360D9029481E7F2EFECDFEA3CB4493B94"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus-velocity/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/codehaus/plexus/plexus/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["84789D24DF77A32433CE1F079EB80E92EB2135B1"]
+    },
+    {
+      "prefix": "org/eclipse/sisu/org.eclipse.sisu.inject/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/eclipse/sisu/org.eclipse.sisu.plexus/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/eclipse/sisu/sisu-inject/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"]
+    },
+    {
+      "prefix": "org/junit/junit-bom/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["FF6E2C001948C5F2F38B0CC385911F425EC61B51"]
+    },
+    {
+      "prefix": "org/junit/platform/junit-platform-launcher/",
+      "identity": "JUnit release authority independently published in the JUnit framework KEYS file; see .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["FF6E2C001948C5F2F38B0CC385911F425EC61B51"]
+    },
+    {
+      "prefix": "org/ow2/asm/asm/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["A5BD02B93E7A40482EB1D66A5F69AD087600B22C"]
+    },
+    {
+      "prefix": "org/slf4j/slf4j-api/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["475F3B8E59E6E63AA78067482C7B12F2A511E325"]
+    },
+    {
+      "prefix": "org/slf4j/slf4j-parent/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["475F3B8E59E6E63AA78067482C7B12F2A511E325"]
+    },
+    {
+      "prefix": "org/tukaani/xz/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["3690C240CE51B4670D30AD1C38EE757D69184620"]
+    }
+  ]
+}

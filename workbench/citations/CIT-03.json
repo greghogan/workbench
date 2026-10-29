@@ -1,0 +1,19 @@
+[
+  {
+    "id": "workbench-CIT-3",
+    "type": "standard",
+    "title": "Revised 508 Standards and 255 Guidelines",
+    "author": [
+      {
+        "literal": "United States Access Board"
+      }
+    ],
+    "issued": {
+      "date-parts": [[2017, 1, 18]]
+    },
+    "accessed": {
+      "date-parts": [[2026, 11, 8]]
+    },
+    "URL": "https://www.access-board.gov/ict/"
+  }
+]

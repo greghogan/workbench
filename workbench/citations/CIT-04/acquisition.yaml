@@ -1,0 +1,10 @@
+sources:
+  - kind: published
+    landing-url: https://www.w3.org/TR/2008/REC-WCAG20-20081211/
+    format: html
+    download-url: https://www.w3.org/TR/2008/REC-WCAG20-20081211/
+    status: acquired
+    sha256: 3a438f1a4aa7b6a0848ce9dcd8cc0388577b6109c3bace7c68bd44df159d19c3
+    extracted-sha256: e0150968b8270ed31a87f4100d28dfacd9cc7afeed34d0ee56c594a2ad009941
+    charset: utf-8
+    document-url: https://www.w3.org/TR/2008/REC-WCAG20-20081211/

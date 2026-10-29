@@ -1,0 +1,4 @@
+sources:
+  - kind: published
+    status: pending
+    landing-url: https://example.invalid/fixture

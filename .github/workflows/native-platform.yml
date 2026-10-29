@@ -1,0 +1,187 @@
+name: Native platform operations
+on:
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        required: true
+      candidate:
+        type: string
+        required: true
+      baseline:
+        type: string
+        required: true
+permissions:
+  contents: read
+  packages: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ZSTD_CLEVEL: "9"
+
+jobs:
+  prepare:
+    name: Acquire verified inputs
+    runs-on: ${{ fromJSON(inputs.platform).runner }}
+    timeout-minutes: 90
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      container: ${{ steps.plan.outputs.container }}
+      artifact: ${{ steps.identity.outputs.artifact }}
+    steps:
+      - name: Configure checkout text and symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ fromJSON(inputs.platform).node }}
+          architecture: ${{ fromJSON(inputs.platform).architecture }}
+      - id: plan
+        env:
+          CI_MATRIX: ${{ inputs.platform }}
+        run: node scripts/ci-platform.mts plan
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: fromJSON(inputs.platform).msvc && runner.os == 'Windows'
+        with:
+          arch: ${{ fromJSON(inputs.platform).architecture }}
+      - name: Make room for retained images
+        if: steps.plan.outputs.container == 'true'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+      - name: Authenticate for read-only image acquisition
+        if: steps.plan.outputs.container == 'true'
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - id: cache
+        uses: ./.github/actions/ci-cache
+        if: steps.plan.outputs.container != 'true'
+        with:
+          target: ${{ inputs.platform }}
+      - name: Prepare host SDK prerequisites
+        if: steps.plan.outputs.container != 'true'
+        env:
+          CHECK_ROOTS: ${{ toJSON(fromJSON(inputs.platform).paths) }}
+        run: node scripts/ci-native-prerequisites.mts
+      - name: Acquire declared tools or prepared image
+        env:
+          CI_MATRIX: ${{ inputs.platform }}
+        run: node scripts/ci-platform.mts prepare
+      - name: Measure retained host inputs
+        if: always() && steps.cache.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mts finish
+      - id: identity
+        run: echo "artifact=platform-inputs-${{ fromJSON(inputs.platform).os }}-${{ fromJSON(inputs.platform).architecture }}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.identity.outputs.artifact }}
+          path: ${{ runner.temp }}/platform-inputs/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Remove transient registry credentials
+        if: always() && steps.plan.outputs.container == 'true'
+        run: docker logout ghcr.io
+
+  operations:
+    name: ${{ matrix.label }}
+    needs: prepare
+    runs-on: ${{ fromJSON(inputs.platform).runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Configure checkout text and symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ fromJSON(inputs.platform).node }}
+          architecture: ${{ fromJSON(inputs.platform).architecture }}
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: fromJSON(inputs.platform).msvc && runner.os == 'Windows'
+        with:
+          arch: ${{ fromJSON(inputs.platform).architecture }}
+      - name: Make room for retained images
+        if: needs.prepare.outputs.container == 'true'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+      - name: Authenticate for read-only image acquisition
+        if: needs.prepare.outputs.container == 'true'
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - id: cache
+        uses: ./.github/actions/ci-cache
+        if: needs.prepare.outputs.container != 'true'
+        with:
+          target: ${{ inputs.platform }}
+      - name: Restore native SDK host prerequisites
+        if: needs.prepare.outputs.container != 'true'
+        env:
+          CHECK_ROOTS: ${{ toJSON(fromJSON(inputs.platform).paths) }}
+        run: node scripts/ci-native-prerequisites.mts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.prepare.outputs.artifact }}
+          path: ${{ runner.temp }}/platform-inputs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.candidate }}
+          path: ${{ runner.temp }}/candidate
+      - name: Run the complete configured operation
+        env:
+          CI_MATRIX: ${{ inputs.platform }}
+          CI_OPERATION: ${{ matrix.id }}
+          WORKBENCH_CI_CANDIDATE: ${{ runner.temp }}/candidate
+          WORKBENCH_COVERAGE_BASE: ${{ inputs.baseline }}
+        run: node scripts/ci-platform.mts run
+      - name: Measure retained host caches
+        if: always() && steps.cache.conclusion == 'success'
+        run: node scripts/ci-cache-metrics.mts finish
+      - name: Retain operation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ fromJSON(inputs.platform).os }}-${{ fromJSON(inputs.platform).architecture }}-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+      - name: Remove transient registry credentials
+        if: always() && needs.prepare.outputs.container == 'true'
+        run: docker logout ghcr.io
+
+  status:
+    name: Platform passed
+    needs: [prepare, operations]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every configured operation
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          OPERATIONS_RESULT: ${{ needs.operations.result }}
+        run: |
+          if [[ "$PREPARE_RESULT" == success && "$OPERATIONS_RESULT" == success ]]; then
+            echo "Every configured platform operation passed."
+          else
+            echo "::error::Platform prerequisites did not pass: acquisition=$PREPARE_RESULT; operations=$OPERATIONS_RESULT. Inspect the failed execution jobs for the causal error."
+            exit 1
+          fi

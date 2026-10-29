@@ -1,0 +1,444 @@
+name: Checks
+
+# The checked-out configuration defines the complete gate on every run.
+on:
+  push:
+    # Explicit preparation branches publish the environments that these check jobs require.
+    branches-ignore: ["ci/publication-verification-**"]
+    tags-ignore: ["**"]
+  pull_request:
+
+  workflow_dispatch:
+
+# Shared authentication and host cache compression settings.
+env:
+  # Read-only API authentication avoids the shared unauthenticated attestation rate limit.
+  GH_TOKEN: ${{ github.token }}
+  # Applies to cache saves, including post-job saves. Retain Zstandard's default window.
+  ZSTD_CLEVEL: "9"
+
+# Pull request code runs with read-only repository access.
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Git Bash provides the same shell commands on Windows. Toolchain pins stay in each root.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  engineering:
+    name: Extended engineering evidence
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node bin/workbench.mjs project add .
+      - run: node bin/workbench.mjs tools install --path .
+      - name: Explore inputs, verify test sensitivity, rebuild independently, and profile read-only workflows
+        run: node bin/workbench.mjs check --path . --role fuzz --role mutation --role reproducibility --role profile --no-cache --plain --report "$RUNNER_TEMP/engineering-checks.json"
+      - name: Locate retained evidence
+        id: evidence
+        if: always()
+        run: |
+          node bin/workbench.mjs paths > "$RUNNER_TEMP/engineering-paths.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const paths = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/engineering-paths.json', 'utf8'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `directory=${paths.directory}\n`);
+          NODE
+      - name: Retain engineering results and profiles
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engineering-evidence
+          path: |
+            ${{ runner.temp }}/engineering-checks.json
+            ${{ runner.temp }}/engineering-paths.json
+            ${{ steps.evidence.outputs.directory }}/fuzz-results.json
+            ${{ steps.evidence.outputs.directory }}/mutation-results.json
+            ${{ steps.evidence.outputs.directory }}/reproducibility.json
+            ${{ steps.evidence.outputs.directory }}/profiles/
+          if-no-files-found: warn
+          retention-days: 14
+
+  security:
+    name: Security data-flow analysis
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: github/codeql-action/init@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          config-file: ./.github/codeql.yml
+      - uses: github/codeql-action/analyze@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+        with:
+          output: ${{ runner.temp }}/codeql-sarif
+          upload: never
+      - name: Require clean analyzer results
+        run: node scripts/check-security-results.mjs "$RUNNER_TEMP/codeql-sarif"
+      - name: Publish code-scanning results when the token permits it
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-sarif
+      - name: Retain analysis evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-analysis
+          path: ${{ runner.temp }}/codeql-sarif
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Resolve the configuration once. Every root is covered on its configured platforms.
+  # Each platform delegates complete operation and tool-profile jobs to the shared adapter.
+  plan:
+    name: Plan checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      artifact: ${{ steps.plan.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      # The adapter validates the matrix before GitHub expands it.
+      - run: node bin/workbench.mjs project add .
+      - id: plan
+        run: node scripts/ci-plan.mts
+      - name: Retain the resolved matrix for publication verification
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.plan.outputs.artifact }}
+          path: ${{ runner.temp }}/workbench-ci-plan.json
+          retention-days: 14
+
+  # Small, unconditional checks: no example dependency or compiler installations.
+  # Keep this job independent of planning so invalid records remain visible.
+  validation:
+    name: Validate records and documentation
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node bin/workbench.mjs project add .
+      - run: node bin/workbench.mjs validate
+      - run: node bin/workbench.mjs docs README.md
+      - name: Select the minimum bootstrap runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "18.20.8"
+      - name: Verify older Node hands off before loading commands
+        run: node scripts/check-bootstrap.mjs
+      - id: runtime
+        name: Read the direct CLI runtime minimum
+        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT, "minimum=" + require("./bundle/launcher.cjs").minimumCliNode + "\n")'
+      - name: Select the minimum direct CLI runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.runtime.outputs.minimum }}
+      - name: Verify installed Node without runtime acquisition
+        run: node scripts/check-node-runtime.mjs
+
+  # ---------------------------------------------------------------------------
+  # Four native platforms, all examples. Linux may reuse a prepared development
+  # image; macOS and Windows verify their native tools using the configured caches.
+  # The job-level condition skips an empty matrix before matrix expansion.
+  # ---------------------------------------------------------------------------
+  candidate:
+    name: Build portable Workbench candidate
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    outputs:
+      artifact: ${{ steps.identity.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node bin/workbench.mjs project add .
+      - name: Acquire the declared root toolchain
+        run: node bin/workbench.mjs tools install --path .
+      - name: Build the configured root release once
+        run: |
+          node bin/workbench.mjs check --role release --path . --environment native --no-cache
+          node --input-type=module <<'JS'
+          import {execFileSync} from 'node:child_process';
+          import {cpSync} from 'node:fs';
+          import {join} from 'node:path';
+          const paths=JSON.parse(execFileSync(process.execPath,['bin/workbench.mjs','paths','--path','.','--environment','native'],{encoding:'utf8'}));
+          cpSync(join(paths.variables.WORKBENCH_DIST_DIR,'workbench-artifacts'),join(process.env.RUNNER_TEMP,'candidate/workbench-artifacts'),{recursive:true});
+          JS
+          node scripts/ci-candidate.mts record "$RUNNER_TEMP/candidate"
+      - id: identity
+        run: echo "artifact=workbench-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.identity.outputs.artifact }}
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+  native:
+    name: ${{ matrix.os }} ${{ matrix.architecture }}
+    needs: [plan, candidate]
+    if: fromJSON(needs.plan.outputs.matrix).native.include[0] != null
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).native }}
+    uses: ./.github/workflows/native-platform.yml
+    with:
+      platform: ${{ toJSON(matrix) }}
+      candidate: ${{ needs.candidate.outputs.artifact }}
+      baseline: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+
+  # Portable Rust artifacts are explicit releases, separate from each platform's
+  # ordinary native release. Each architecture builds and executes without emulation.
+  rust-portable:
+    name: Rust musl / Linux ${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { architecture: x64, runner: ubuntu-26.04 }
+          - { architecture: arm64, runner: ubuntu-26.04-arm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          architecture: ${{ matrix.architecture }}
+      - name: Install declared Rust tools and the pinned cross driver
+        run: |
+          node bin/workbench.mjs project add .
+          node bin/workbench.mjs tools install --path examples/languages/rust
+          cross_revision=$(node -p 'require("./examples/languages/rust/release-musl.json").cross_revision')
+          node bin/workbench.mjs shell --path examples/languages/rust --environment native -- \
+            node "${GITHUB_WORKSPACE}/scripts/ci-acquire.mts" "Acquire pinned cross driver" cargo install --git https://github.com/cross-rs/cross --rev "$cross_revision" --locked \
+              --root "${CARGO_HOME:-$HOME/.cargo}" cross
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+      # The configured release recipe acquires the qualified native SDK by immutable digest.
+      # Its OS toolset includes musl; routine CI does not construct another compiler image.
+      - name: Authenticate for read-only prepared-image access
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Test, package, and verify portable release in glibc and musl containers
+        id: portable
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          profile="rust-linux-${ARCHITECTURE}-musl"
+          node bin/workbench.mjs release prepare "$profile"
+          node bin/workbench.mjs release prepare "$profile" --json > "$RUNNER_TEMP/rust-release-plan.json"
+          node --input-type=module - "$RUNNER_TEMP/rust-release-plan.json" <<'JS'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `directory=${plan.profiles[0].output}\n`);
+          JS
+      - name: Retain verified portable release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-musl-${{ matrix.architecture }}
+          path: ${{ steps.portable.outputs.directory }}
+          retention-days: 30
+
+      - name: Remove transient registry credentials
+        if: always()
+        run: docker logout ghcr.io >/dev/null 2>&1 || true
+
+  # Nix and Guix keep their own tool authority. The same retained image serves
+  # local offline development and this full Workbench + examples CI gate.
+  environments:
+    name: ${{ matrix.environment }} / all examples
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).environments.include[0] != null
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix).environments }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Make room for the retained builder stores
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+      - name: Authenticate for read-only registry access
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Acquire or prepare the environment, then run every root
+        env:
+          CI_MATRIX: ${{ toJSON(matrix) }}
+        run: node scripts/ci-hosted.mts environment
+      - name: Retain reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: environment-${{ matrix.environment }}
+          path: |
+            ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+      - name: Remove transient registry credentials
+        if: always()
+        run: docker logout ghcr.io
+
+  # Consumers may select an ordinary Dev Container without preparing an offline image.
+  # Workbench's prepared profiles above already exercise the Dev Container builder.
+  devcontainer:
+    name: Configured Dev Container
+    needs: plan
+    if: fromJSON(needs.plan.outputs.matrix).devcontainer.paths[0] != null
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Run all configured container roots
+        env:
+          CI_MATRIX: ${{ toJSON(fromJSON(needs.plan.outputs.matrix).devcontainer) }}
+        run: |
+          CI_MATRIX=$(node -e 'console.log(JSON.stringify({...JSON.parse(process.env.CI_MATRIX), environment: "devcontainer"}))')
+          export CI_MATRIX
+          node scripts/ci-hosted.mts environment
+      - name: Retain reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: devcontainer
+          path: ${{ runner.temp }}/workbench-reports/
+          retention-days: 30
+
+  screen-reader:
+    name: ${{ matrix.reader }} workflows
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { reader: NVDA, runner: windows-2025 }
+          - { reader: VoiceOver, runner: macos-26 }
+    timeout-minutes: 20
+    env:
+      GUIDEPUP_SCREEN_READERS_PATH: ${{ github.workspace }}/.screen-reader-assets
+    steps:
+      - name: Preserve canonical text and skill symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Prepare locked screen-reader test tooling
+        run: |
+          node bin/workbench.mjs project add .
+          node bin/workbench.mjs package-manager-exec -- install --frozen-lockfile --ignore-scripts
+          node scripts/build-tooling.mts --maintainers-only
+      - name: Acquire verified browser and screen-reader assets
+        id: reader
+        run: node scripts/prepare-screen-reader.mjs
+      - name: Exercise the demonstration through the screen reader
+        env:
+          WORKBENCH_SCREEN_READER_BROWSER: ${{ steps.reader.outputs.browser }}
+        run: node scripts/check-screen-reader.mjs --browser "$WORKBENCH_SCREEN_READER_BROWSER" --output "$RUNNER_TEMP/screen-reader-evidence"
+      - name: Retain screen-reader transcripts and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screen-reader-${{ matrix.reader }}
+          path: ${{ runner.temp }}/screen-reader-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  # A stable required status accepts only explicitly empty groups as skipped.
+  status:
+    name: Checks passed
+    needs: [plan, validation, candidate, native, environments, devcontainer, rust-portable, screen-reader, security, engineering]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Require validation and every configured platform
+        env:
+          WORKBENCH_CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-status.mts
+      - name: Fetch the exact tested candidate
+        if: success()
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.candidate.outputs.artifact }}
+          path: ${{ runner.temp }}/candidate
+      - name: Record the release-ready candidate
+        env:
+          WORKBENCH_CI_CANDIDATE: ${{ runner.temp }}/candidate
+          CANDIDATE_ARTIFACT: ${{ needs.candidate.outputs.artifact }}
+        run: node scripts/ci-release-ready.mts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-ready-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-ready.json
+          if-no-files-found: error
+          retention-days: 30

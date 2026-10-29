@@ -1,0 +1,75 @@
+<!-- workbench:context:start -->
+## workbench
+
+Applies to: Entire repository.
+
+Decision map: [workbench](workbench/decision-map.md).
+
+### Charter
+
+Build a framework for organizing documents useful for agentic software development. Under this framework, collect best
+practices into a shareable module which can be referenced from any project. Continuously innovate and refine to match
+increasing agent intelligence and capabilities and project diversity and scope.
+
+AI agents accelerate software creation causing human attention to increasingly bottleneck development. Delineate
+documents which must be human-written and those requiring mandatory human review from the remainder of the project where
+human review is optional at the discretion of the agent.
+
+### Agent instructions
+
+- [workbench:ADR-0](workbench/decisions/ADR-00.md): While using Workbench, propose fixes, additions, and improvements to
+  the developer, explaining the observed need and expected benefit.
+
+- [workbench:ADR-1](workbench/decisions/ADR-01.md): Humans write charters and approve ADR additions, changes, and
+  removals.
+
+- [workbench:ADR-5](workbench/decisions/ADR-05.md): Read the applicable decision maps linked in AGENTS.md, then open the
+  ADRs relevant to your task.
+
+- [workbench:ADR-7](workbench/decisions/ADR-07.md): Obtain human approval of a concrete plan before implementing a major
+  feature or materially expanding its approved scope. Record significant implementation decisions and their reasons,
+  distinguishing agent choices from human direction.
+
+- [workbench:ADR-8](workbench/decisions/ADR-08.md): Obtain human review of completed experiments, environment records,
+  and their supporting files before commit. Before recommending rejection, evaluate plausible improvements to the
+  candidate's design and implementation.
+
+- [workbench:ADR-A](workbench/decisions/ADR-0A.md): Use the project's declared tool and dependency pins; enable broad
+  applicable strict checks and do not weaken them to make changes pass.
+
+- [workbench:ADR-B](workbench/decisions/ADR-0B.md): Obtain human approval before increasing advisory timing thresholds,
+  lowering coverage floors, expanding exclusions, or reducing required test or coverage scope.
+
+- [workbench:ADR-C](workbench/decisions/ADR-0C.md): Review the pending changeset before commit and the accumulated work
+  before task completion; fix findings and repeat until no further in-scope changes are needed and record applicable
+  review evidence. Keep implementation unpublished until human acceptance and publication authorization.
+
+- [workbench:ADR-D](workbench/decisions/ADR-0D.md): Only humans change `compatibility.required` and
+  `compatibility.data`; when compatibility is disabled, update project-owned callers without shims. Follow the selected
+  data policy or explicit user instructions.
+
+- [workbench:ADR-F](workbench/decisions/ADR-0F.md): Keep affected documentation and diagrams current with changes, using
+  visuals where they clarify.
+
+- [workbench:ADR-K](workbench/decisions/ADR-0K.md): Verify acquired dependencies and executables before execution or
+  activation; preserve required authentication and keep credentials out of tracked files and logs.
+
+- [workbench:ADR-L](workbench/decisions/ADR-0L.md): Obtain human approval before activating local policy changes;
+  acknowledge project/local compatibility only after review, referring conflicts to the human.
+
+- [workbench:ADR-P](workbench/decisions/ADR-0P.md): Prefer configured Workbench runners for builds and checks. Direct
+  tool commands are appropriate within an already prepared environment. Change Nix or Guix package versions or
+  environment pins only at a human's explicit request.
+
+- [workbench:ADR-U](workbench/decisions/ADR-0U.md): Before reporting a change complete, run Workbench validation and the
+  applicable configured checks.
+
+- [workbench:ADR-V](workbench/decisions/ADR-0V.md): Preserve user data and active work; obtain explicit human
+  authorization before destructive resets.
+
+## Local collections
+
+Before acting, run `workbench collection context` to load local instructions, then `workbench collection compatibility
+check`. Without Workbench, read the agent's configured local collection entry points and
+`workbench/.local-collections/AGENTS.md` when present.
+<!-- workbench:context:end -->

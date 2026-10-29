@@ -1,0 +1,163 @@
+// Generated from check.mts; edit the TypeScript source.
+import { pathToFileURL } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
+const emitCheckDetail = process.env.WORKBENCH_DISTRIBUTION_ROOT
+  ? (await import(pathToFileURL(join(process.env.WORKBENCH_DISTRIBUTION_ROOT, "scripts/check-detail-data.mjs")).href))
+      .emitCheckDetail
+  : () => void 0;
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  readdirSync,
+} from "node:fs";
+const role = process.argv[2];
+const builds = process.env.WORKBENCH_BUILD_DIR ?? "build";
+const policy = JSON.parse(readFileSync("workbench/quality.json", "utf8"));
+const env = { ...process.env, GOTOOLCHAIN: "local", GOFLAGS: `${process.env.GOFLAGS ?? ""} -mod=readonly`.trim() };
+function run(command, args, capture = false) {
+  const result = spawnSync(command, args, { env, encoding: "utf8", stdio: capture ? "pipe" : "inherit" });
+  if (result.error || result.status !== 0)
+    throw new Error(`${command} failed: ${String(result.error ?? (result.stderr || result.status))}`);
+  return result.stdout;
+}
+if (role === "format") {
+  const files = run("gofmt", ["-l", "."], true);
+  if (files.trim())
+    throw new Error(`gofmt would change:
+${files}`);
+} else if (role === "format-write") {
+  run("gofmt", ["-w", "."]);
+} else if (role === "build" || role === "release") {
+  const directory = `${builds}/${role === "release" ? "release" : "debug"}`;
+  mkdirSync(directory, { recursive: true });
+  run("go", [
+    "build",
+    "-pgo=off",
+    ...(role === "release" ? ["-trimpath", "-ldflags=-s -w"] : []),
+    "-o",
+    `${directory}/count${process.platform === "win32" ? ".exe" : ""}`,
+    "./cmd/count",
+  ]);
+  if (role === "release") {
+    const output = process.env.WORKBENCH_RELEASE_OUTPUT ?? process.env.WORKBENCH_DIST_DIR ?? "dist";
+    mkdirSync(output, { recursive: true });
+    const name = `count${process.platform === "win32" ? ".exe" : ""}`;
+    copyFileSync(`${directory}/${name}`, `${output}/${name}`);
+    copyFileSync("LICENSE", `${output}/LICENSE`);
+  }
+} else if (role === "lint") {
+  run("go", ["mod", "verify"]);
+  run("go", ["mod", "tidy", "-diff"]);
+  run("go", ["vet", "./..."]);
+  run("go", ["tool", "staticcheck", "-checks=all", "./..."]);
+} else if (role === "fuzz") {
+  const distribution = process.env.WORKBENCH_DISTRIBUTION_ROOT;
+  if (!distribution) throw new Error("Run Go fuzzing through a configured Workbench check or shell");
+  const { withEngineeringRun } = await import(pathToFileURL(join(distribution, "scripts/engineering-run.mjs")).href);
+  const { processFailure } = await import(pathToFileURL(join(distribution, "scripts/process-outcome.mjs")).href);
+  await withEngineeringRun(resolve(builds), "go-fuzz", async (job) => {
+    const scratch = job.directory,
+      source = process.cwd();
+    const copy = (path, destination) => {
+      const parts = relative(source, path).split(sep);
+      if (
+        parts.some((part) => [".git", ".workbench", "node_modules", "coverage", "build", "dist"].includes(part)) ||
+        path === resolve(builds) ||
+        path.startsWith(resolve(builds) + sep)
+      )
+        return;
+      if (lstatSync(path).isDirectory()) {
+        mkdirSync(destination, { recursive: true });
+        for (const name of readdirSync(path)) copy(join(path, name), join(destination, name));
+      } else cpSync(path, destination, { verbatimSymlinks: true });
+    };
+    for (const name of readdirSync(source)) copy(join(source, name), join(scratch, name));
+    const corpus = join(scratch, "testdata", "fuzz");
+    const entries = (directory) =>
+      !existsSync(directory)
+        ? []
+        : readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+            entry.isDirectory()
+              ? entries(join(directory, entry.name))
+              : entry.isFile()
+                ? [join(directory, entry.name)]
+                : [],
+          );
+    const before = new Map(entries(corpus).map((path) => [path, readFileSync(path)]));
+    const result = await job.command(
+      "go",
+      ["test", "-pgo=off", "-fuzz=FuzzCountByte", "-fuzztime=10000x", "-o", join(scratch, "fuzz.test"), "."],
+      { cwd: scratch, env },
+    );
+    const failure = processFailure("Go fuzzing", result, result);
+    if (failure) {
+      const counterexamples = entries(corpus).filter((path) => !before.get(path)?.equals(readFileSync(path)));
+      const destination = join(resolve(builds), "fuzz-failures", relative(resolve(builds), job.directory));
+      for (const path of counterexamples) {
+        const target = join(destination, relative(corpus, path));
+        mkdirSync(join(target, ".."), { recursive: true });
+        copyFileSync(path, target);
+      }
+      throw new Error(
+        counterexamples.length
+          ? `Go fuzzing failed; ${String(counterexamples.length)} new counterexample(s) retained at ${destination}`
+          : "Go fuzzing failed; no new counterexamples were produced",
+        { cause: failure },
+      );
+    }
+  });
+} else if (role === "test" || role === "coverage") {
+  mkdirSync("coverage", { recursive: true });
+  const args = [
+    "test",
+    "-pgo=off",
+    "-json",
+    "-count=1",
+    "-timeout=0",
+    "-race",
+    ...(role === "coverage" ? ["-covermode=atomic", "-coverpkg=./...", "-coverprofile=coverage/profile.out"] : []),
+    "./...",
+  ];
+  const result = spawnSync("go", args, {
+    env,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  writeFileSync("coverage/tests.jsonl", result.stdout ?? "");
+  for (const line of (result.stdout ?? "").split("\n").filter(Boolean)) {
+    const event = JSON.parse(line);
+    if (event.Action === "output") {
+      if (typeof event.Output !== "string") throw new Error("Go output event omitted its text");
+      process.stdout.write(event.Output);
+    }
+    if (role === "test" && event.Test && event.Elapsed !== void 0 && event.Elapsed > policy.slow_test_seconds) {
+      emitCheckDetail({
+        version: 1,
+        kind: "slow",
+        scope: "test",
+        name: `${String(event.Package)}/${event.Test}`,
+        elapsedSeconds: event.Elapsed,
+        thresholdSeconds: policy.slow_test_seconds,
+      });
+      console.error(
+        `SLOW ${String(event.Package)}/${event.Test}: ${String(event.Elapsed)}s (soft cap ${String(policy.slow_test_seconds)}s; advisory only)`,
+      );
+    }
+  }
+  if (result.error || result.status !== 0) throw new Error(`Go tests failed: ${String(result.error ?? result.stderr)}`);
+  if (role === "coverage") {
+    const report = run("go", ["tool", "cover", "-func=coverage/profile.out"], true);
+    console.log(report);
+    const match = /total:\s+\(statements\)\s+([\d.]+)%/.exec(report);
+    if (!match || Number(match[1]) < policy.coverage.statements)
+      throw new Error(`statement coverage is below ${String(policy.coverage.statements)}%`);
+  }
+} else {
+  throw new Error("expected build, release, format, format-write, lint, test, coverage, or fuzz");
+}

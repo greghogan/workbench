@@ -1,0 +1,88 @@
+name: Prepare and publish development images
+
+# Separate, explicit operation. These images must exist before Checks can use them.
+# Workbench release publication remains in release.yml and requires successful Checks.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["ci/publication-verification-**"]
+
+permissions:
+  contents: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish:
+    name: Verify and publish ${{ matrix.builder }} ${{ matrix.architecture }} development image
+    runs-on: ${{ matrix.architecture == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { builder: native, architecture: x64 }
+          - { builder: nix, architecture: x64 }
+          - { builder: guix, architecture: x64 }
+          - { builder: native, architecture: arm64 }
+          - { builder: nix, architecture: arm64 }
+          - { builder: guix, architecture: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          architecture: ${{ matrix.architecture }}
+      - name: Register this isolated checkout
+        run: node bin/workbench.mjs project add .
+      - name: Make room for builder stores
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+      # Offline development profiles need only Docker and the locked host CLI.
+      # Their verification uses fresh source, networking disabled, and no host caches.
+      - name: Prepare and verify the selected offline development image
+        env:
+          BUILDER: ${{ matrix.builder }}
+        run: |
+          node bin/workbench.mjs tools install --devcontainer
+          node bin/workbench.mjs development prepare "${BUILDER}" --assemble-only
+          reference=$(node bin/workbench.mjs development images "${BUILDER}" --json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s)[0].reference))')
+          image=$(docker image inspect --format '{{.Id}}' "$reference")
+          node bin/workbench.mjs development verify "${BUILDER}" --image "$image"
+
+      - name: Authenticate for this explicitly selected publication
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Publish and verify the offline development image by registry digest
+        env:
+          BUILDER: ${{ matrix.builder }}
+        run: |
+          node bin/workbench.mjs development publish "${BUILDER}"
+      - name: Remove transient credentials
+        if: always()
+        run: docker logout ghcr.io
+      - name: Retain publication evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: publication-development-${{ matrix.builder }}-${{ matrix.architecture }}
+          path: |
+            ${{ runner.temp }}/publication-evidence/
+            ~/.cache/workbench/offline-profiles/*/*.json
+            ~/.cache/workbench/check-logs/
+          if-no-files-found: ignore
+          retention-days: 14

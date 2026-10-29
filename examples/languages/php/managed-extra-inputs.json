@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source_hashes": {
+    ".composer-version": "f526f5e7f214e4916c51e16a61fb1be5d530d67e44c65d86db25b8416463b10c"
+  },
+  "inputs": [
+    {
+      "url": "https://getcomposer.org/download/2.11.0/composer.phar",
+      "hash": "sha256-lnTxKioYEQDYiev9C0UQgFs+lM6leGmxSzg3U9YCWZs=",
+      "destination": "bootstrap/composer.phar"
+    },
+    {
+      "url": "https://getcomposer.org/download/2.11.0/composer.phar.asc",
+      "hash": "sha256-1ayMKPHr2MXWpu9pIxfw+/78duzp3KQWyxb+0SWQUgY=",
+      "destination": "bootstrap/composer.phar.asc"
+    }
+  ]
+}

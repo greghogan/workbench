@@ -1,0 +1,60 @@
+.hub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.hub-header .brand {
+  margin-bottom: 0;
+}
+.hub-header nav {
+  display: flex;
+  gap: var(--space-6);
+}
+.table-scroll {
+  overflow-x: auto;
+  margin-block: var(--space-5);
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--paper);
+}
+.table-scroll th,
+.table-scroll td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.inline {
+  display: inline-block;
+  margin-inline-end: var(--space-2);
+}
+.project-name {
+  margin-top: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.worktree-list {
+  margin-block: var(--space-2);
+  padding-inline-start: var(--space-6);
+}
+.worktree-list li {
+  margin-block: var(--space-2);
+}
+
+.hub-header nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 680px) {
+  .hub-header {
+    flex-wrap: wrap;
+    padding: var(--space-4);
+  }
+}

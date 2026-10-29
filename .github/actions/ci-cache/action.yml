@@ -1,0 +1,58 @@
+name: Verified CI inputs
+description: Restore declared SDKs and package stores; installers revalidate restored contents.
+inputs:
+  target:
+    description: Configured platform and roots as JSON
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      env:
+        CACHE_TARGET: ${{ inputs.target }}
+      run: node scripts/ci-cache.mts
+    - shell: bash
+      run: node scripts/ci-cache-metrics.mts start
+    - name: Restore tools
+      if: steps.plan.outputs.tools-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.tools-paths }}
+        key: ${{ steps.plan.outputs.tools-key }}
+        restore-keys: ${{ steps.plan.outputs.tools-restore-keys }}
+    - name: Restore rust
+      if: steps.plan.outputs.rust-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.rust-paths }}
+        key: ${{ steps.plan.outputs.rust-key }}
+        restore-keys: ${{ steps.plan.outputs.rust-restore-keys }}
+    - name: Restore package-managers
+      if: steps.plan.outputs.package-managers-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.package-managers-paths }}
+        key: ${{ steps.plan.outputs.package-managers-key }}
+        restore-keys: ${{ steps.plan.outputs.package-managers-restore-keys }}
+    - name: Restore downloads
+      if: steps.plan.outputs.downloads-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.downloads-paths }}
+        key: ${{ steps.plan.outputs.downloads-key }}
+        restore-keys: ${{ steps.plan.outputs.downloads-restore-keys }}
+    - name: Restore builds
+      if: steps.plan.outputs.builds-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.builds-paths }}
+        key: ${{ steps.plan.outputs.builds-key }}
+        restore-keys: ${{ steps.plan.outputs.builds-restore-keys }}
+    - name: Restore llvm
+      if: steps.plan.outputs.llvm-key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.llvm-paths }}
+        key: ${{ steps.plan.outputs.llvm-key }}
+        restore-keys: ${{ steps.plan.outputs.llvm-restore-keys }}

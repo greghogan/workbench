@@ -1,0 +1,102 @@
+{
+  "total": {
+    "lines": {
+      "total": 90,
+      "covered": 86,
+      "skipped": 0,
+      "pct": 95.55
+    },
+    "functions": {
+      "total": 9,
+      "covered": 9,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 54,
+      "covered": 49,
+      "skipped": 0,
+      "pct": 90.74
+    }
+  },
+  "include/wb_cpu.h": {
+    "lines": {
+      "total": 16,
+      "covered": 16,
+      "skipped": 0,
+      "pct": 100
+    },
+    "functions": {
+      "total": 3,
+      "covered": 3,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 6,
+      "covered": 6,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "src/count.c": {
+    "lines": {
+      "total": 43,
+      "covered": 41,
+      "skipped": 0,
+      "pct": 95.34
+    },
+    "functions": {
+      "total": 4,
+      "covered": 4,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 28,
+      "covered": 25,
+      "skipped": 0,
+      "pct": 89.28
+    }
+  },
+  "src/count_json.c": {
+    "lines": {
+      "total": 15,
+      "covered": 15,
+      "skipped": 0,
+      "pct": 100
+    },
+    "functions": {
+      "total": 1,
+      "covered": 1,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 6,
+      "covered": 6,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "src/main.c": {
+    "lines": {
+      "total": 16,
+      "covered": 14,
+      "skipped": 0,
+      "pct": 87.5
+    },
+    "functions": {
+      "total": 1,
+      "covered": 1,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 14,
+      "covered": 12,
+      "skipped": 0,
+      "pct": 85.71
+    }
+  }
+}

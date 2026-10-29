@@ -1,0 +1,2 @@
+Protocol checklist: follow a link, dismiss its preview, select an excerpt, and return to the reading position.
+No usability session has been conducted.

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "workbench-CIT-1",
+    "type": "webpage",
+    "title": "Cool URIs don't change",
+    "author": [
+      {
+        "family": "Berners-Lee",
+        "given": "Tim"
+      }
+    ],
+    "issued": {
+      "date-parts": [[1998]]
+    },
+    "container-title": "W3C",
+    "URL": "https://www.w3.org/Provider/Style/URI"
+  }
+]

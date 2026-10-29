@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.venv
+**/.pnpm-store
+**/build
+**/target
+**/dist
+**/coverage
+**/__pycache__
+workbench/.local-collections
+workbench/image-catalog.json

@@ -1,0 +1,4 @@
+{
+  "before": "Each registered project scope owns a human-written charter and records. Register a subproject for distinct intent or\nrecords, not merely another language. Decisions apply to their scope and descendants, not siblings. Charters are not\ninherited: adopting a collection does not adopt the provider's charter as governing authority, and a missing project\ncharter has no fallback.\n",
+  "after": "Each registered project scope, including a registered subproject, requires its own human-written charter and owns its\nrecords. Register a scope for distinct intent or record ownership. A directory, package, or language check root does not\nby itself constitute a separate project scope.\n"
+}

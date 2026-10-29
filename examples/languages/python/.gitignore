@@ -1,0 +1,22 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+# Build outputs and reports
+build/
+coverage/*
+!coverage/coverage-summary.json
+dist/
+htmlcov/
+
+# Dependencies and caches; virtual environments may be links
+*.egg-info/
+*.pyc
+.coverage
+.coverage.*
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv
+.venv.workbench-backup
+__pycache__/

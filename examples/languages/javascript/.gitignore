@@ -1,0 +1,14 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+# Build outputs and reports
+build/
+coverage/*
+!coverage/coverage-summary.json
+dist/
+
+# Dependencies and compiler state; node_modules may be a link
+*.tsbuildinfo
+.pnpm-store/
+node_modules

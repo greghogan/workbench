@@ -1,0 +1,37 @@
+import { withView } from "./locations.js";
+import type { WorkspaceView } from "../workspace-service.js";
+import { sourceURL } from "./sources.js";
+import type { RouteQuery, Route } from "./routes.js";
+import type { SearchType } from "./view-context.js";
+
+export const DifferenceLayout = { Inline: "unified", Split: "split" } as const;
+export type DifferenceLayout = (typeof DifferenceLayout)[keyof typeof DifferenceLayout];
+export type DocumentView = "read" | "changes" | "edit";
+export type ReviewView = "diff" | "previous" | "current";
+export type ComparisonBaseline = "reviewed" | "upstream";
+export interface ViewState {
+  view?: DocumentView | ReviewView;
+  layout?: DifferenceLayout;
+  baseline?: ComparisonBaseline;
+}
+/** A view transition changes named parameters while retaining its source and comparison context. */
+export function viewLocation(context: WorkspaceView, base: string, parameters: ViewState, changes: ViewState): string {
+  return sourceURL(
+    context,
+    withView(base, {
+      ...(parameters.layout ? { layout: parameters.layout } : {}),
+      ...(parameters.baseline ? { baseline: parameters.baseline } : {}),
+      ...changes,
+    }),
+  );
+}
+export function differenceLayout(parameters: Pick<ViewState, "layout">): DifferenceLayout {
+  return parameters.layout ?? DifferenceLayout.Inline;
+}
+export function recordSearch(parameters: RouteQuery<typeof Route.Records>): {
+  query: string;
+  type: SearchType;
+  scope: string;
+} {
+  return { query: parameters.q ?? "", type: parameters.type ?? "", scope: parameters.scope ?? "" };
+}

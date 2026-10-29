@@ -1,0 +1,19 @@
+[
+  {
+    "id": "workbench-CIT-4",
+    "type": "standard",
+    "title": "Web Content Accessibility Guidelines (WCAG) 2.0",
+    "author": [
+      {
+        "literal": "World Wide Web Consortium"
+      }
+    ],
+    "issued": {
+      "date-parts": [[2008, 12, 11]]
+    },
+    "accessed": {
+      "date-parts": [[2026, 11, 8]]
+    },
+    "URL": "https://www.w3.org/TR/2008/REC-WCAG20-20081211/"
+  }
+]
