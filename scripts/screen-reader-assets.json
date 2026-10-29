@@ -1,0 +1,37 @@
+{
+  "156.0.8078.4": {
+    "win64": {
+      "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.4/win64/chrome-win64.zip",
+      "sha256": "220021ecfdad08c116fc71a153e65e3861ba841c531afc4f7acc7bd5d44b41db",
+      "format": "zip",
+      "strip": 1,
+      "bin": ".",
+      "executable": "chrome.exe",
+      "authenticationUnavailable": {
+        "reason": "No detached checksum signature or artifact attestation is advertised in Chrome for Testing release metadata.",
+        "source": "https://github.com/GoogleChromeLabs/chrome-for-testing",
+        "checked": "2026-10-31"
+      }
+    },
+    "mac-arm64": {
+      "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.4/mac-arm64/chrome-mac-arm64.zip",
+      "sha256": "987d2f8499c87d21676f78178550cfcbfb1bb53786821e2cff46c5a7e99b58be",
+      "format": "zip",
+      "strip": 1,
+      "bin": "Google Chrome for Testing.app/Contents/MacOS",
+      "executable": "Google Chrome for Testing",
+      "authenticationUnavailable": {
+        "reason": "The pinned macOS archive contains ad-hoc Mach-O signatures without a Google Apple Developer ID identity or bundle resource seals. No detached checksum signature or artifact attestation is advertised in Chrome for Testing release metadata.",
+        "source": "https://github.com/GoogleChromeLabs/chrome-for-testing",
+        "checked": "2026-10-31"
+      },
+      "zipLinks": {
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/Frameworks/Google Chrome for Testing Framework.framework/Resources": "Versions/Current/Resources",
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/Frameworks/Google Chrome for Testing Framework.framework/Versions/Current": "156.0.8078.4",
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/Frameworks/Google Chrome for Testing Framework.framework/Libraries": "Versions/Current/Libraries",
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/Frameworks/Google Chrome for Testing Framework.framework/Google Chrome for Testing Framework": "Versions/Current/Google Chrome for Testing Framework",
+        "chrome-mac-arm64/Google Chrome for Testing.app/Contents/Frameworks/Google Chrome for Testing Framework.framework/Helpers": "Versions/Current/Helpers"
+      }
+    }
+  }
+}

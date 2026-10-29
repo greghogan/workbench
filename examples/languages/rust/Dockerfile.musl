@@ -1,0 +1,23 @@
+FROM node:24-bookworm@sha256:e7add2a490bb17d97b485b8641bd88455fff7839ade0f5eba493c3508124d413 AS certificates
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
+ARG TARGETARCH
+COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Build on the engine's native architecture, with authenticated packages selected by the OS package manager.
+# cross supplies the project's selected Rust toolchain; this image does not install another Rust.
+# Cargo build scripts run on the glibc host, while application binaries target musl.
+RUN --mount=type=cache,id=workbench-rust-musl-${TARGETARCH}-archives,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=workbench-rust-musl-${TARGETARCH}-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && printf 'Acquire::Retries "3";\nAPT::Update::Error-Mode "any";\n' > /etc/apt/apt.conf.d/80workbench-retries \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt update \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt upgrade --no-install-recommends -y \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates gcc libc6-dev musl-tools binutils \
+    && mkdir -p /usr/local/share/workbench \
+    && dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' > /usr/local/share/workbench/os-packages.tsv
+
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    CC_x86_64_unknown_linux_musl=musl-gcc CC_aarch64_unknown_linux_musl=musl-gcc
+
+LABEL org.opencontainers.image.title="Workbench Rust reference build environment"

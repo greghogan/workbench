@@ -1,0 +1,39 @@
+---
+summary: Project ownership, collection adoption, complete definition replacement, and scoped references.
+---
+
+# ADR-2: Project scopes and adopted material
+
+Each registered project scope, including a registered subproject, requires its own human-written charter and owns its
+records. Register a scope for distinct intent or record ownership. A directory, package, or language check root does not
+by itself constitute a separate project scope.
+
+A subproject's charter states its distinctive intent and remains consistent with the enclosing project's charter. An
+ancestor's charter cannot substitute for a registered subproject's required charter. Decisions apply to their scope and
+descendants, not siblings. Resolve conflicts explicitly with the human.
+
+Published collections have human-written charters stating their purpose and boundaries and governing their published
+ADRs. A collection charter accompanies adopted records as context and provenance. The consuming project's charter
+governs its adopted and adapted ADRs; the collection charter supplies no additional governing authority there.
+
+Language check roots are independent of project scopes. A project may configure multiple languages and check roots
+without creating additional project scopes.
+
+Adopted record collections become editable project-owned copies. Their current text states applicable policy; upstream
+originals serve only as reconciliation inputs. Resolve policy conflicts by editing the affected records with human
+review. Neither source order nor a separate overriding decision silently changes another decision's meaning.
+
+When creating a group of ADRs, prefer a reading order from foundations to specializations. Preserve existing record IDs
+when later decisions add foundational material. References may name earlier or later ADRs; all references must resolve
+without cycles. Cross-namespace references name their owner and require applicability. Namespaces preserve identity, not
+policy precedence. Adopted namespaces add no governing charter or separate project registration.
+
+Language definitions use complete replacement: select a complete project definition when present; otherwise use the
+complete definition from the pinned executable distribution. Ignore the displaced definition without merging fields or
+filling omissions. Inspection identifies selected sources. Project definitions can introduce new identities.
+
+Copied automation, examples, and environment files become project-owned; updates do not implicitly replace them. Each
+material's defining decision states whether it uses adopted copies, complete replacement, or no inheritance.
+
+Rationale: Editable decisions keep current policy readable in place. Explicit scopes and complete definitions preserve
+clear ownership without requiring agents to discover overrides.

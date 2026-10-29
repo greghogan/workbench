@@ -1,0 +1,10 @@
+sources:
+  - kind: published
+    landing-url: https://www.w3.org/Provider/Style/URI
+    format: html
+    download-url: https://www.w3.org/Provider/Style/URI
+    status: acquired
+    sha256: 64984ac640052ef9565838f692254fd71f70c5bdf23fe376b88d14b4625bdb88
+    extracted-sha256: 2797bb44ad36375382350815bb799ec6ab981bc2356df29aebcc767e595da20b
+    charset: iso-8859-1
+    document-url: https://www.w3.org/Provider/Style/URI

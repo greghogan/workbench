@@ -1,0 +1,5 @@
+- description: Workbench security analysis with reviewed source exceptions
+- import: codeql-suites/javascript-security-extended.qls
+  from: codeql/javascript-queries
+- query: AlertSuppression.ql
+  from: codeql/javascript-queries

@@ -1,0 +1,6 @@
+{
+  "coverage": {
+    "statements": 85
+  },
+  "slow_test_seconds": 2
+}

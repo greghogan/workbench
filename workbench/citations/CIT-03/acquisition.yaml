@@ -1,0 +1,7 @@
+sources:
+  - kind: published
+    landing-url: https://www.access-board.gov/ict/
+    format: pdf
+    download-url: https://www.govinfo.gov/content/pkg/FR-2017-01-18/pdf/2017-00395.pdf
+    status: acquired
+    sha256: 2126b984dd86e4af7bd31af0ab050db219b6ae4fe6a179761ec564295169e160

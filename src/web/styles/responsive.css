@@ -1,0 +1,91 @@
+/* Responsive layout. */
+@media (max-width: 1000px) {
+  :root {
+    --sidebar-width: 205px;
+  }
+  .sidebar {
+    padding: 25px var(--space-4);
+  }
+  .workspace {
+    margin-left: var(--sidebar-width);
+  }
+  .topbar {
+    padding: 18px var(--space-6);
+  }
+  main {
+    padding: 28px var(--space-6);
+  }
+}
+@media (max-width: 680px) {
+  .sidebar {
+    position: static;
+    width: auto;
+    padding: var(--space-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .sidebar-foot {
+    display: none;
+  }
+  .sidebar .brand {
+    margin-bottom: var(--space-4);
+  }
+  .sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .nav-group {
+    display: contents;
+  }
+  .nav-group-label {
+    display: none;
+  }
+  .project-switch {
+    max-width: 100%;
+  }
+  .topbar form {
+    flex-basis: 100%;
+    max-width: none;
+    flex-wrap: wrap;
+  }
+  .topbar input {
+    flex-basis: 100%;
+  }
+  .topbar select {
+    flex: 1;
+    min-width: 0;
+  }
+  .nav-item {
+    white-space: nowrap;
+    padding: var(--space-2) 10px;
+  }
+  .workspace {
+    margin-left: 0;
+  }
+  .topbar {
+    padding: 15px;
+  }
+  main {
+    padding: 25px var(--space-4);
+  }
+  .panel-body,
+  .panel-heading {
+    padding: 18px;
+  }
+  .record-row {
+    padding: var(--space-4);
+  }
+  h1 {
+    font-size: 1.625rem;
+  }
+  #live-status {
+    margin: 15px;
+  }
+  .tabs {
+    padding: 0 18px;
+  }
+  .form-grid {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,18 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . "/../src/Arithmetic.php";
+
+use WorkbenchReference\Arithmetic;
+
+try {
+    if (!isset($argc, $argv) || $argc !== 3 || filter_var($argv[1], FILTER_VALIDATE_INT) === false) {
+        throw new InvalidArgumentException("usage: count BYTE DATA");
+    }
+    echo Arithmetic::countByte($argv[2], (int) $argv[1]) . PHP_EOL;
+} catch (InvalidArgumentException|OutOfRangeException $error) {
+    fwrite(STDERR, $error->getMessage() . PHP_EOL);
+    exit(2);
+}

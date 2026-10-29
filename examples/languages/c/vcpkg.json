@@ -1,0 +1,5 @@
+{
+  "name": "workbench-c-reference",
+  "version-string": "0.1.0",
+  "dependencies": [{ "name": "yyjson", "default-features": false, "features": ["writer"] }]
+}

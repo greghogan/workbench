@@ -1,0 +1,25 @@
+;; Use the bootstrap's native channel authentication and inferior cache layout.
+(use-modules (guix channels) (guix inferior) (guix store) (guix utils) (ice-9 match))
+
+(match (cdr (command-line))
+  (("cache-directory")
+   (display (%inferior-cache-directory)))
+  (("register-root" path)
+   (with-store store (add-indirect-root store path)))
+  (("register-roots" paths ...)
+   (with-store store (for-each (lambda (path) (add-indirect-root store path)) paths)))
+  (("profile" channels cpus)
+   (with-store store
+     (set-build-options store #:build-cores (string->number cpus)
+                        #:max-build-jobs 1)
+     (display (cached-channel-instance store (load channels)))))
+  (("profile-for-system" channels system cpus)
+   (unless (member system '("x86_64-linux" "aarch64-linux"))
+     (error "unsupported managed system" system))
+   (parameterize ((%current-system system))
+     (with-store store
+       (set-build-options store #:build-cores (string->number cpus)
+                          #:max-build-jobs 1)
+       (display (cached-channel-instance store (load channels)
+                  #:cache-directory (string-append (%inferior-cache-directory) "/" system))))))
+  (_ (error "expected cache-directory, register-root PATH, profile CHANNELS CPUS, or profile-for-system CHANNELS SYSTEM CPUS")))

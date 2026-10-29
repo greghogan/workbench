@@ -1,0 +1,80 @@
+/* Base elements and shared controls. */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+/* Prose and notice links remain recognizable without color. */
+.document a,
+.notice a,
+a:hover {
+  text-decoration: underline;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+.button {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-button);
+  background: var(--accent);
+  color: var(--paper);
+  padding: var(--space-2) var(--control-padding-inline);
+  cursor: pointer;
+  font-weight: 600;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--control-height);
+  block-size: var(--control-height);
+  padding: 0;
+  vertical-align: middle;
+}
+.secondary {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line);
+}
+input,
+select,
+textarea {
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  padding: 9px var(--space-3);
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 100%;
+}
+textarea {
+  width: 100%;
+  min-height: 55vh;
+  resize: vertical;
+  font: 0.8125rem/1.65 var(--font-mono);
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
