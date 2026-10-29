@@ -1,0 +1,172 @@
+import { required } from "../src/invariants.ts";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { test } from "vitest";
+import { readCoverageSummary } from "../scripts/check-coverage-summary.mjs";
+import { checkDetailPrefix } from "../scripts/check-detail-data.mjs";
+
+test("coverage boundaries resolve directory aliases, retain deleted sources, and reject symlink escapes", () => {
+  const base = mkdtempSync(join(tmpdir(), "workbench-summary-alias-"));
+  try {
+    const root = join(base, "source space 文"),
+      alias = join(base, "alias"),
+      outside = join(base, "outside");
+    mkdirSync(join(root, "src"), { recursive: true });
+    mkdirSync(join(root, "coverage"));
+    mkdirSync(outside);
+    writeFileSync(join(root, "src/count.c"), "int count(void) { return 1; }\n");
+    writeFileSync(join(outside, "external.c"), "int external(void) { return 0; }\n");
+    symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+    const counts = { lines: { count: 1, covered: 1 } };
+    const report = (filename: string) => {
+      writeFileSync(
+        join(root, "coverage/report.json"),
+        JSON.stringify({
+          data: [{ totals: counts, files: [{ filename, summary: counts }] }],
+        }),
+      );
+    };
+    report(realpathSync.native(join(root, "src/count.c")));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(alias), "Expected aliased summary")), [
+      "total",
+      "src/count.c",
+    ]);
+    report(join(alias, "src/count.c"));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected canonical summary")), [
+      "total",
+      "src/count.c",
+    ]);
+    rmSync(join(root, "src/count.c"));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected deleted source")), [
+      "total",
+      "src/count.c",
+    ]);
+    symlinkSync(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    report(join(root, "escape/external.c"));
+    assert.throws(() => readCoverageSummary(alias), /coverage source outside root/);
+    report("../outside/external.c");
+    assert.throws(() => readCoverageSummary(root), /coverage source outside root/);
+    const result = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, "../scripts/check-coverage-summary.mjs")],
+      {
+        cwd: root,
+        env: { ...process.env, WORKBENCH_CHECK_DETAILS: "1", WORKBENCH_PROJECT_ROOT: root },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    const detail = result.stdout.split(/\r?\n/).find((line) => line.startsWith(checkDetailPrefix));
+    assert.ok(detail, "Summary failure must reach the active check's details");
+    const fields = JSON.parse(detail.slice(checkDetailPrefix.length)) as { kind: string; reason: string };
+    assert.equal(fields.kind, "coverage-unavailable");
+    assert.match(fields.reason, /coverage summary failed: coverage source outside root/);
+    assert.match(result.stderr, /coverage source outside root/);
+  } finally {
+    rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test("language coverage summaries translate native reports without inventing unavailable metrics", () => {
+  const repository = mkdtempSync(join(tmpdir(), "workbench-language-coverage-"));
+  const root = join(repository, "project");
+  const output = join(root, "coverage");
+  try {
+    mkdirSync(output, { recursive: true });
+    assert.equal(readCoverageSummary(root), undefined);
+    const llvm = {
+      lines: { count: 3, covered: 2 },
+      functions: { count: 2, covered: 1 },
+      branches: { count: 4, covered: 3 },
+    };
+    writeFileSync(
+      join(output, "report.json"),
+      JSON.stringify({ data: [{ totals: llvm, files: [{ filename: "/work/project/src/value.c", summary: llvm }] }] }),
+    );
+    let summary = readCoverageSummary(root, repository);
+    assert.deepEqual(Object.keys(required(summary, "Expected fixture value")), ["total", "src/value.c"]);
+    assert.equal(
+      required(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").lines,
+        "Expected fixture value",
+      ).pct,
+      66.66,
+    );
+    assert.equal(
+      required(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").functions,
+        "Expected fixture value",
+      ).covered,
+      1,
+    );
+    assert.equal(
+      required(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").branches,
+        "Expected fixture value",
+      ).covered,
+      3,
+    );
+    const python = { num_statements: 3, covered_lines: 2, num_branches: 4, covered_branches: 3 };
+    writeFileSync(
+      join(output, "report.json"),
+      JSON.stringify({ totals: python, files: { "src/value.py": { summary: python } } }),
+    );
+    summary = readCoverageSummary(root);
+    assert.equal(
+      required(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").lines,
+        "Expected fixture value",
+      ).pct,
+      66.66,
+    );
+    assert.equal(
+      required(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").branches,
+        "Expected fixture value",
+      ).pct,
+      75,
+    );
+    assert.equal(
+      Object.hasOwn(
+        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value"),
+        "functions",
+      ),
+      false,
+    );
+    rmSync(join(output, "report.json"));
+    writeFileSync(join(root, "go.mod"), "module example.com/project\n");
+    writeFileSync(
+      join(output, "profile.out"),
+      "mode: atomic\nexample.com/project/value.go:1.1,2.1 2 0\nexample.com/project/value.go:1.1,2.1 2 1\nexample.com/project/value.go:3.1,4.1 1 0\n",
+    );
+    summary = readCoverageSummary(root);
+    assert.deepEqual(required(summary, "Expected fixture value: summary").total, {
+      statements: { total: 3, covered: 2, skipped: 0, pct: 66.66 },
+    });
+    assert.deepEqual(
+      required(summary, "Expected fixture value: summary")["value.go"],
+      required(summary, "Expected fixture value: summary").total,
+    );
+    rmSync(join(output, "profile.out"));
+    writeFileSync(
+      join(output, "coverage-summary.json"),
+      JSON.stringify({
+        total: required(summary, "Expected fixture value: summary").total,
+        [join(root, "src/value.ts")]: required(summary, "Expected fixture value: summary").total,
+      }),
+    );
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected fixture value")), [
+      "total",
+      "src/value.ts",
+    ]);
+    utimesSync(join(output, "coverage-summary.json"), 1, 1);
+    assert.equal(readCoverageSummary(root, root, Date.now()), undefined);
+    writeFileSync(join(output, "report.json"), "{}");
+    assert.throws(() => readCoverageSummary(root), /unsupported coverage\/report.json/);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,26 @@
+{
+  "total": {
+    "statements": {
+      "total": 8,
+      "covered": 7,
+      "skipped": 0,
+      "pct": 87.5
+    }
+  },
+  "cmd/count/main.go": {
+    "statements": {
+      "total": 7,
+      "covered": 6,
+      "skipped": 0,
+      "pct": 85.71
+    }
+  },
+  "count.go": {
+    "statements": {
+      "total": 1,
+      "covered": 1,
+      "skipped": 0,
+      "pct": 100
+    }
+  }
+}

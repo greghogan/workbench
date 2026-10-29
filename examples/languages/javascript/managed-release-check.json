@@ -1,0 +1,15 @@
+{
+  "image": "node:24-bookworm@sha256:e7add2a490bb17d97b485b8641bd88455fff7839ade0f5eba493c3508124d413",
+  "runtime": "node",
+  "commands": [
+    {
+      "argv": [
+        "{runtime}/node",
+        "--input-type=module",
+        "-e",
+        "import assert from 'node:assert/strict'; const m = await import('file://{package}/share/nodejs/workbench-javascript-reference/build/src/arithmetic.js'); assert.equal(m.sum([20,22]),42); assert.equal(m.countByte(new TextEncoder().encode('banana'),97),3); assert.equal(m.countByte(new Uint8Array(),97),0); assert.throws(()=>m.countByte(new Uint8Array(),256),RangeError);"
+      ],
+      "stdout": ""
+    }
+  ]
+}

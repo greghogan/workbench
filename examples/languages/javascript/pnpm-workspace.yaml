@@ -1,0 +1,9 @@
+allowBuilds:
+  esbuild@0.28.2: true
+engineStrict: true
+minimumReleaseAgeExclude:
+  - prettier@3.9.10
+
+# Security override for GHSA-g3hv-75wg-m249 until lint dependencies adopt minimatch 11.
+overrides:
+  minimatch: 11.0.3

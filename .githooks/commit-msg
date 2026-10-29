@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_file=${1:?commit message path is required}
+message_file=$(node -p 'require("node:path").resolve(process.argv[1])' "$message_file")
+repository_root=$(git rev-parse --show-toplevel)
+repository_git_dir=$(git rev-parse --absolute-git-dir)
+staged_snapshot=$(mktemp -d)
+trap 'rm -rf -- "$staged_snapshot"' EXIT
+
+git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+
+for required_path in workbench/config.toml workbench/projects.toml; do
+    if [[ ! -f "$staged_snapshot/$required_path" ]]; then
+        printf 'workbench: cannot check proposed commit message: %s is missing from the staged tree.\n' "$required_path" >&2
+        exit 1
+    fi
+done
+if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
+    snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
+else
+    snapshot_launcher=(workbench)
+fi
+
+# Match pre-commit's proposed tree while retaining checkout-owned policy receipts
+# and Git message settings such as core.commentChar and core.commentString.
+local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
+export WORKBENCH_PROJECT_ROOT="$staged_snapshot"
+export WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root"
+export GIT_DIR="$repository_git_dir" GIT_WORK_TREE="$staged_snapshot"
+"${snapshot_launcher[@]}" commit check "$message_file"

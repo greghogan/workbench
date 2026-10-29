@@ -1,0 +1,25 @@
+/* User accessibility preferences. */
+.reference-preview {
+  position: fixed;
+  z-index: 20;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  box-shadow: 0 6px 24px #222b3d22;
+  overflow-wrap: anywhere;
+}
+.reference-preview > span,
+.reference-preview > strong {
+  display: block;
+}
+.reference-preview > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.reference-preview > p {
+  margin-bottom: 0;
+}

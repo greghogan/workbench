@@ -1,0 +1,11 @@
+[
+  {
+    "id": "demo-CIT-2",
+    "type": "report",
+    "title": "Keyboard reading checklist for linked notes",
+    "author": [{ "literal": "Demonstration Project Design Group" }],
+    "issued": { "date-parts": [[2026, 2, 12]] },
+    "abstract": "An illustrative source for planning keyboard checks; no published research is represented.",
+    "URL": "https://example.invalid/keyboard-reading"
+  }
+]

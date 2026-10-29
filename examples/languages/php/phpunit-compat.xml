@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" failOnWarning="true" failOnRisky="true" failOnDeprecation="true" failOnNotice="true" cacheDirectory="build/phpunit-compat">
+  <testsuites><testsuite name="reference"><directory>tests</directory></testsuite></testsuites>
+</phpunit>

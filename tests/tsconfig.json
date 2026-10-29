@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024"]
+  },
+  "include": ["**/*.mts", "../scripts/vendor-types.d.mts"]
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "id": "demo-CIT-1",
+    "type": "article",
+    "title": "Searchable notebooks without a hosted service",
+    "author": [
+      { "family": "Rivera", "given": "Alex" },
+      { "family": "Chen", "given": "Sam" }
+    ],
+    "issued": { "date-parts": [[2025, 9]] },
+    "container-title": "Fictional Local Tools Workshop",
+    "abstract": "A fictional bibliography entry illustrating a source that is not available locally.",
+    "URL": "https://example.invalid/local-notebooks"
+  }
+]

@@ -1,0 +1,6 @@
+Checks: '-*,bugprone-*,cert-*,clang-analyzer-*,misc-*,performance-*,portability-*,readability-*'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/include/.*'
+# Numeric type conversions do not make a length and a byte interchangeable in this C API.
+CheckOptions:
+  bugprone-easily-swappable-parameters.ModelImplicitConversions: false

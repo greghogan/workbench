@@ -1,0 +1,26 @@
+AllCops:
+  TargetRubyVersion: 3.3
+  ParserEngine: parser_prism
+  NewCops: enable
+  SuggestExtensions: false
+  Include:
+    - "**/*.rb"
+    - "**/*.gemspec"
+    - Gemfile
+    - Rakefile
+    - Steepfile
+    - bin/*
+  Exclude:
+    - build/**/*
+    - dist/**/*
+    - vendor/**/*
+    - coverage/**/*
+Layout/LineLength:
+  Max: 120
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Layout/EndOfLine:
+  EnforcedStyle: lf

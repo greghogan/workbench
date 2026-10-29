@@ -1,0 +1,38 @@
+{
+  "name": "Workbench nix",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../..",
+    "options": ["--network=host"]
+  },
+  "remoteUser": "workbench",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1",
+    "WORKBENCH_CONTAINER_CHECKOUT": "${localWorkspaceFolder}",
+    "WORKBENCH_PREPARED": "1",
+    "WORKBENCH_ENVIRONMENTS": "/opt/workbench-environments",
+    "XDG_CACHE_HOME": "/opt/workbench/cache/xdg",
+    "XDG_STATE_HOME": "/opt/workbench/state",
+    "WORKBENCH_CACHE_HOME": "/opt/workbench/cache",
+    "WORKBENCH_DATA_HOME": "/opt/workbench/data",
+    "WORKBENCH_STORAGE_ROOT": "/opt/workbench/cache",
+    "WORKBENCH_STORAGE_EXTERNAL": "true",
+    "UV_CACHE_DIR": "/opt/workbench/cache/uv",
+    "UV_PYTHON_INSTALL_DIR": "/opt/workbench/cache/uv-python/python",
+    "WORKBENCH_MAVEN_REPOSITORY": "/opt/workbench/cache/downloads/maven",
+    "WORKBENCH_COMPOSER_CACHE": "/opt/workbench/cache/downloads/composer",
+    "GOMODCACHE": "/opt/workbench/cache/go-mod",
+    "GOCACHE": "/tmp/go-build",
+    "npm_config_cache": "/opt/workbench/cache/npm",
+    "PIP_CACHE_DIR": "/opt/workbench/cache/pip",
+    "CARGO_HOME": "/opt/workbench/cache/cargo",
+    "RUSTUP_HOME": "/opt/workbench/cache/rustup",
+    "HOME": "/home/workbench"
+  },
+  "overrideCommand": false,
+  "remoteEnv": {
+    "NIX_REMOTE": "daemon"
+  }
+}

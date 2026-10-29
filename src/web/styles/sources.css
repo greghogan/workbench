@@ -1,0 +1,124 @@
+/* Record sources and metadata. */
+.source-navigation {
+  margin-bottom: var(--space-6);
+}
+.sidebar .source-navigation {
+  display: block;
+}
+.source-navigation .nav-group-label {
+  display: block;
+}
+.source-navigation > .source-tree + .nav-group-label {
+  margin-top: var(--space-5);
+}
+.source-navigation .nav-group-label a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+.source-tree,
+.source-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.source-tree ul {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--line);
+  margin-left: 8px;
+}
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.source-link {
+  display: block;
+  padding: 7px var(--space-2);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-button);
+  min-width: 0;
+}
+.source-link[aria-current="page"] {
+  color: var(--accent);
+  background: var(--soft);
+  font-weight: 600;
+}
+.source-row .source-link {
+  flex: 1;
+}
+.source-toggle,
+.source-icon {
+  width: 24px;
+  flex: none;
+}
+.source-toggle {
+  padding: 0;
+  min-height: 28px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+.source-toggle span {
+  display: inline-block;
+  font-size: 1.25rem;
+}
+.source-toggle[aria-expanded="true"] span {
+  transform: rotate(90deg);
+}
+.source-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.source-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.source-group-label {
+  flex: 1;
+  min-width: 0;
+  padding: 7px var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.source-tree > li + li {
+  margin-top: 3px;
+}
+@media (max-width: 680px) {
+  .sidebar .source-navigation {
+    max-height: 300px;
+    overflow: auto;
+  }
+}
+.record-metadata {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-5);
+  margin-bottom: 25px;
+}
+.record-metadata section {
+  margin-bottom: 18px;
+}
+.record-metadata h2 {
+  font-size: 1.0625rem;
+  margin: 0 0 7px;
+}
+.metadata-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.record-metadata dl {
+  margin: var(--space-2) 0;
+}
+.record-metadata dt {
+  font-weight: 600;
+}
+.record-metadata dd {
+  margin: 0 0 10px;
+}
+#record-loader {
+  margin: var(--space-5) 0;
+}
