@@ -1,0 +1,29 @@
+[
+  {
+    "id": "workbench-CIT-6",
+    "type": "standard",
+    "title": "HTTP Semantics (RFC 9110)",
+    "author": [
+      {
+        "family": "Fielding",
+        "given": "R."
+      },
+      {
+        "family": "Nottingham",
+        "given": "M."
+      },
+      {
+        "family": "Reschke",
+        "given": "J."
+      }
+    ],
+    "issued": {
+      "date-parts": [[2022, 6]]
+    },
+    "accessed": {
+      "date-parts": [[2026, 11, 8]]
+    },
+    "URL": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "DOI": "10.17487/RFC9110"
+  }
+]

@@ -1,0 +1,13 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+# Build outputs and reports
+build/
+coverage/*
+!coverage/coverage-summary.json
+dist/
+
+# LLVM instrumentation
+*.profdata
+*.profraw

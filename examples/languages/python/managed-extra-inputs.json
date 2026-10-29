@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "source_hashes": {
+    "pyproject.toml": "d3303fa29c9fb5b5eb2bc1bd0438899eee8debb42b61141591435f0be760ee6f"
+  },
+  "inputs": [
+    {
+      "url": "https://files.pythonhosted.org/packages/ef/55/6dc6d6bb953bdfc52519a0059592c52b6e3b8ad51cf8256dffceb55b0610/setuptools-84.2.1-py3-none-any.whl",
+      "hash": "sha256-yhQLRdUyWpR4+IDjUUhPYv7xXzNkYuRJygwDyHPVicI=",
+      "destination": "python/setuptools-84.2.1-py3-none-any.whl"
+    }
+  ]
+}

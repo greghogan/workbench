@@ -1,0 +1,12 @@
+[
+  {
+    "id": "demo-CIT-0",
+    "type": "article",
+    "title": "An illustrative source document",
+    "author": [{ "literal": "Example Research Group" }],
+    "issued": { "date-parts": [[2026]] },
+    "container-title": "Demonstration Bibliography",
+    "abstract": "A fictional citation with a small offline PDF for exercising the interface.",
+    "URL": "https://example.invalid/paper"
+  }
+]

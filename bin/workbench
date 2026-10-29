@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+launcher=${BASH_SOURCE[0]}
+links=0
+while [[ -L "$launcher" ]]; do
+    if ((links >= 40)); then
+        echo "workbench: launcher symbolic links exceed 40 hops" >&2
+        exit 1
+    fi
+    links=$((links + 1))
+    launcher_dir=$(cd -- "$(dirname -- "$launcher")" && pwd -P)
+    target=$(readlink -- "$launcher")
+    if [[ "$target" = /* ]]; then
+        launcher=$target
+    else
+        launcher=$launcher_dir/$target
+    fi
+done
+launcher_dir=$(cd -- "$(dirname -- "$launcher")" && pwd -P)
+exec node "$launcher_dir/workbench.mjs" "$@"
