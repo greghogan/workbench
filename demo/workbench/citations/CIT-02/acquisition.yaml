@@ -1,0 +1,5 @@
+sources:
+  - kind: published
+    status: unavailable
+    reason: Fictional source for the demonstration; no document was published.
+    landing-url: https://example.invalid/keyboard-reading

@@ -1,0 +1,9 @@
+schema_version = 1
+[markdown]
+wrap_width = 120
+[compatibility]
+required = false
+[checks]
+allow_empty = true
+[citations]
+library_dir = "library/citations"

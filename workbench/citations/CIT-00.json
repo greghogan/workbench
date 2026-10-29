@@ -1,0 +1,52 @@
+[
+  {
+    "id": "workbench-CIT-0",
+    "type": "paper-conference",
+    "title": "Attention Is All You Need",
+    "author": [
+      {
+        "family": "Vaswani",
+        "given": "Ashish"
+      },
+      {
+        "family": "Shazeer",
+        "given": "Noam"
+      },
+      {
+        "family": "Parmar",
+        "given": "Niki"
+      },
+      {
+        "family": "Uszkoreit",
+        "given": "Jakob"
+      },
+      {
+        "family": "Jones",
+        "given": "Llion"
+      },
+      {
+        "family": "Gomez",
+        "given": "Aidan N."
+      },
+      {
+        "family": "Kaiser",
+        "given": "Łukasz"
+      },
+      {
+        "family": "Polosukhin",
+        "given": "Illia"
+      }
+    ],
+    "issued": {
+      "date-parts": [[2017]]
+    },
+    "container-title": "Advances in Neural Information Processing Systems",
+    "volume": "30",
+    "page": "5998-6008",
+    "publisher": "Curran Associates, Inc.",
+    "DOI": "10.48550/arXiv.1706.03762",
+    "URL": "https://papers.nips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+    "archive": "arXiv",
+    "archive_location": "1706.03762"
+  }
+]

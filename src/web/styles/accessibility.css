@@ -1,0 +1,26 @@
+/* Keyboard and assistive technology access. */
+.skip,
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip:focus {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  clip: auto;
+  width: auto;
+  height: auto;
+  padding: var(--space-3);
+  background: var(--paper);
+}
+.error {
+  color: var(--red);
+}

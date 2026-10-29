@@ -1,0 +1,15 @@
+{
+  "image": "node:24-bookworm@sha256:e7add2a490bb17d97b485b8641bd88455fff7839ade0f5eba493c3508124d413",
+  "runtime": "python3",
+  "commands": [
+    {
+      "argv": [
+        "{runtime}/python3",
+        "-I",
+        "-c",
+        "import glob,sys; paths=glob.glob('{package}/lib/python*/site-packages'); assert len(paths)==1; sys.path.insert(0,paths[0]); from workbench_python_reference.arithmetic import add,count_byte; assert add(20,22)==42; assert count_byte(b'banana',97)==3; assert count_byte(b'',97)==0;\ntry: count_byte(b'banana',256)\nexcept ValueError: pass\nelse: raise AssertionError('invalid byte accepted')"
+      ],
+      "stdout": ""
+    }
+  ]
+}

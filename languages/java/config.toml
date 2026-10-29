@@ -1,0 +1,35 @@
+schema_version = 1
+id = "java"
+name = "Java"
+summary = "maintained JDKs, Maven artifact verification, strict compiler diagnostics, SpotBugs, JUnit, and JaCoCo"
+reference = "examples/languages/java"
+manifests = [ "pom.xml" ]
+native_tools = [ "java", "maven" ]
+
+starter = [
+  "LICENSE",
+  "scripts/check.mjs",
+  "scripts/release-verify.mjs",
+  "README.md",
+  ".gitignore",
+  ".java-version",
+  ".tool-versions",
+  "pom.xml",
+  ".mvn/checksums/checksums.sha256",
+  ".mvn/checksums/authentication.json",
+  ".mvn/acquisition.json",
+  ".mvn/keys/resolver-publishers.asc",
+  ".mvn/keys/README.md",
+  ".mvn/settings.xml",
+  ".mvn/maven.config",
+  ".mvn/jvm.config",
+  "src/main/java/org/example/workbench/Count.java",
+  "src/test/java/org/example/workbench/CountTest.java",
+  "workbench/quality.json",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = []
+
+# Neutral names survive npm installation without renaming template assets.
+starter_assets = [{ path = ".gitignore", source = "starter.gitignore" }]

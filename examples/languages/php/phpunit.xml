@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" failOnWarning="true" failOnRisky="true" failOnDeprecation="true" failOnNotice="true" cacheDirectory="build/phpunit">
+  <testsuites><testsuite name="reference"><directory>tests</directory></testsuite></testsuites>
+  <source><include><directory>src</directory></include></source>
+  <coverage pathCoverage="true"/>
+</phpunit>

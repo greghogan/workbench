@@ -1,0 +1,4 @@
+[[project]]
+id = "demo"
+name = "Demonstration Project"
+path = "."

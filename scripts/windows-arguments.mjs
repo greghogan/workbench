@@ -1,0 +1,8 @@
+// Generated from windows-arguments.mts; edit the TypeScript source.
+function windowsExecutableArgument(value) {
+  return `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
+}
+export {
+  windowsExecutableArgument
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIndpbmRvd3MtYXJndW1lbnRzLm10cyJdLCJzb3VyY2VzQ29udGVudCI6WyIvKiogUXVvdGUgb25lIGFyZ3VtZW50IGZvciBhIFdpbmRvd3MgZXhlY3V0YWJsZSwgaW5kZXBlbmRlbnRseSBvZiBzaGVsbCBvciBiYXRjaC1maWxlIGVzY2FwaW5nLiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHdpbmRvd3NFeGVjdXRhYmxlQXJndW1lbnQodmFsdWU6IHN0cmluZyk6IHN0cmluZyB7XG4gIHJldHVybiBgXCIke3ZhbHVlLnJlcGxhY2UoLyhcXFxcKilcIi9nLCAnJDEkMVxcXFxcIicpLnJlcGxhY2UoLyhcXFxcKykkL2csIFwiJDEkMVwiKX1cImA7XG59XG4iXSwibWFwcGluZ3MiOiI7QUFDTyxTQUFTLDBCQUEwQixPQUF1QjtBQUMvRCxTQUFPLElBQUksTUFBTSxRQUFRLFdBQVcsU0FBUyxFQUFFLFFBQVEsV0FBVyxNQUFNLENBQUM7QUFDM0U7IiwibmFtZXMiOltdLCJmaWxlIjoic2NyaXB0cy93aW5kb3dzLWFyZ3VtZW50cy5tanMifQ==

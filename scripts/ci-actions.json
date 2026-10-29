@@ -1,0 +1,30 @@
+{
+  "actions/cache": {
+    "version": "6.1.0",
+    "revision": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+  },
+  "actions/checkout": {
+    "version": "7.0.1",
+    "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+  },
+  "actions/download-artifact": {
+    "version": "8.0.2",
+    "revision": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+  },
+  "actions/setup-node": {
+    "version": "7.1.0",
+    "revision": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+  },
+  "actions/upload-artifact": {
+    "version": "7.0.2",
+    "revision": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+  },
+  "github/codeql-action": {
+    "version": "4.39.2",
+    "revision": "bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4"
+  },
+  "ilammy/msvc-dev-cmd": {
+    "version": "1.13.0",
+    "revision": "0b201ec74fa43914dc39ae48a89fd1d8cb592756"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "21.1.8": {
+    "linux-x64": {
+      "name": "LLVM-21.1.8-Linux-X64.tar.xz",
+      "sha256": "b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b",
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-21.1.8"
+    },
+    "linux-arm64": {
+      "name": "LLVM-21.1.8-Linux-ARM64.tar.xz",
+      "sha256": "65ce0b329514e5643407db2d02a5bd34bf33d159055dafa82825c8385bd01993",
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-21.1.8"
+    }
+  },
+  "23.1.3": {
+    "linux-x64": {
+      "name": "LLVM-23.1.3-Linux-X64.tar.zst",
+      "sha256": "14d2f701eb68fb799001bdea6231048f3990690fa2f406d563555ff8f744daba",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.3"
+    },
+    "linux-arm64": {
+      "name": "LLVM-23.1.3-Linux-ARM64.tar.zst",
+      "sha256": "1154f37ec15b5654fcb8cc3a8a2352a4cc4eef44bdff7ddd47fb10ea85c82f01",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.3"
+    },
+    "darwin-arm64": {
+      "name": "LLVM-23.1.3-macOS-ARM64.tar.zst",
+      "sha256": "a3f181b1176406893c097443e21b2a54b85afeac2d10eca3b6d251e6dca32eb3",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.3"
+    },
+    "win32-x64": {
+      "name": "clang+llvm-23.1.3-x86_64-pc-windows-msvc.tar.zst",
+      "sha256": "7e69dc07a4536b79ff24a651a2611990bf8eaab17ea560f1092707c4f31ba01d",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.3"
+    }
+  },
+  "22.1.8": {
+    "linux-x64": {
+      "name": "LLVM-22.1.8-Linux-X64.tar.xz",
+      "sha256": "df0e1ecf16caf3489a272a5eea4eec9b0d82878f6477fa309504f918a0006384",
+      "signers": ["FFB3368980F3E6BB5737145A316C56D064CACBA5"]
+    },
+    "linux-arm64": {
+      "name": "LLVM-22.1.8-Linux-ARM64.tar.xz",
+      "sha256": "805efad2bb91cb4967fa569e0881d10c0f69c04461cf671cccbae19f547acc34",
+      "signers": ["FFB3368980F3E6BB5737145A316C56D064CACBA5"]
+    }
+  },
+  "23.1.4": {
+    "linux-x64": {
+      "name": "LLVM-23.1.4-Linux-X64.tar.zst",
+      "sha256": "efdd1dbd089b99bfcfcde7b8eb1236163f2e88df5a981cca4f783ec9cb5e0378",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.4"
+    },
+    "linux-arm64": {
+      "name": "LLVM-23.1.4-Linux-ARM64.tar.zst",
+      "sha256": "0975f753e0f9b5f83146a7a2f4678bc143e713496b56520716a4de047a63f99f",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.4"
+    },
+    "darwin-arm64": {
+      "name": "LLVM-23.1.4-macOS-ARM64.tar.zst",
+      "sha256": "0f8b0db925ab54a63028d788e85b14abaa25492e9608819728c17f6786948da4",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.4"
+    },
+    "win32-x64": {
+      "name": "clang+llvm-23.1.4-x86_64-pc-windows-msvc.tar.zst",
+      "sha256": "1a3f2f998e230b5791cc4e2bfe11a1f7c07fe42c96ff44f227c9db0bedfaf091",
+      "zstdWindowLogMax": 30,
+      "attestation": "https://github.com/llvm/llvm-project/.github/workflows/release-binaries.yml@refs/tags/llvmorg-23.1.4"
+    }
+  }
+}

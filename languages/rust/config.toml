@@ -1,0 +1,38 @@
+schema_version = 1
+
+id = "rust"
+name = "Rust"
+summary = "rustfmt, strict Clippy, Nextest, doctests for libraries, and portable cross-built releases"
+reference = "examples/languages/rust"
+manifests = [ "Cargo.toml" ]
+
+starter = [
+  "LICENSE",
+  "README.md",
+  ".gitignore",
+  ".tool-versions",
+  "Cargo.toml",
+  "Cargo.lock",
+  "rust-toolchain.toml",
+  "rust-toolchain-miri.toml",
+  ".config/nextest.toml",
+  "src/count.rs",
+  "src/lib.rs",
+  "src/main.rs",
+  "tests/count.rs",
+  "tests/cli.rs",
+  "scripts/miri.mjs",
+  "scripts/release-verify.mjs",
+  "workbench/quality.json",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "CARGO_HOME", "RUSTUP_HOME",
+  "CARGO_NET_OFFLINE", "CARGO_HTTP_CAINFO", "CARGO_HTTP_PROXY", "RUSTUP_DIST_SERVER", "RUSTUP_UPDATE_ROOT",
+  "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", "INCLUDE", "LIB", "LIBPATH", "VCToolsInstallDir",
+  "WindowsSdkDir", "WindowsSDKVersion", "SDKROOT", "DEVELOPER_DIR"
+]
+
+# Neutral names survive npm installation without renaming template assets.
+starter_assets = [{ path = ".gitignore", source = "starter.gitignore" }]

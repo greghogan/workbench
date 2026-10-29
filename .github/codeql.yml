@@ -1,0 +1,12 @@
+name: Authored Workbench security analysis
+paths:
+  - src
+  - scripts
+  - bin
+paths-ignore:
+  - "bin/bundle-runtime.cjs"
+  - "scripts/**/*.mjs"
+  - "scripts/**/*.cjs"
+  - "scripts/**/*.json"
+queries:
+  - uses: ./.github/codeql-queries/workbench.qls

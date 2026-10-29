@@ -1,0 +1,7 @@
+sources:
+  - kind: published
+    landing-url: https://www.rfc-editor.org/rfc/rfc9110.html
+    format: pdf
+    download-url: https://www.rfc-editor.org/rfc/rfc9110.pdf
+    status: acquired
+    sha256: 60b30efa1048900833d1758440247fe8ac85a3134f2327388dcb24e07d814c89

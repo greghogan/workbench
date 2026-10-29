@@ -1,0 +1,10 @@
+sources:
+  - kind: published
+    landing-url: https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven
+    format: html
+    download-url: https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven
+    status: acquired
+    sha256: b9c6f26eae46c485955df31041fcfecd25b61f5074fa004fcc08b580d30732b8
+    extracted-sha256: 505d7e243bfe34c1eab406d16fbba2a26065adcc41cedfdc41aa46f5cb44cb3c
+    charset: UTF-8
+    document-url: https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven

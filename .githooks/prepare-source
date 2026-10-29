@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root=$1
+snapshot=$2
+setup="$snapshot/scripts/setup-development.mjs"
+[[ -f "$setup" ]] || exit 0
+
+build=(node "$setup" --build-only --dependencies "$repository_root")
+if [[ "$(node -p process.versions.node)" != "$(cat "$snapshot/.node-version")" && -f "$repository_root/bundle/launcher.cjs" ]]; then
+    WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root" \
+        node "$repository_root/bin/workbench.mjs" shell --path . -- "${build[@]}"
+else
+    "${build[@]}"
+fi
