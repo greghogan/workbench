@@ -1,0 +1,10 @@
+[
+  {
+    "id": "fixture-CIT-0",
+    "type": "article",
+    "title": "Fixture citation",
+    "author": [{ "literal": "Fixture author" }],
+    "issued": { "date-parts": [[2026]] },
+    "URL": "https://example.invalid/fixture"
+  }
+]

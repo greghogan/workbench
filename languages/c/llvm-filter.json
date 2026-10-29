@@ -1,0 +1,23 @@
+{
+  "revision": 2,
+  "include": [
+    "^bin/(?:clang|clang\\+\\+|clang\\-cl|clang\\-cpp|clang\\-format|clang\\-tidy|clangd|llvm\\-cov|llvm\\-profdata|llvm\\-ar|llvm\\-ranlib|llvm\\-nm|llvm\\-objcopy|llvm\\-strip|llvm\\-symbolizer|lld|ld\\.lld|lld\\-link|ld64\\.lld|clang-\\d+)(?:\\.exe)?$",
+    "^bin/[^/]+\\.dll$",
+    "^lib/clang/[^/]+/(?:bin|include|share)/",
+    "^lib/clang/[^/]+/lib/(?:[^/]+/)?(?:lib)?(?:clang_rt|orc_rt)[^/]*$",
+    "^lib/(?:[^/]+/)?lib(?:LLVM|clang-cpp)[^/]*\\.(?:so(?:\\..*)?|dylib)$",
+    "^lib/(?:[^/]+/)?(?:lib(?:c\\+\\+|c\\+\\+abi|unwind|omp|clang_rt)[^/]*\\.(?:so(?:\\..*)?|a|dylib)|clang_rt[^/]*\\.(?:a|so))$",
+    "^(?:.*/)?(?:LICENSE[^/]*|COPYING[^/]*|NOTICE[^/]*)$"
+  ],
+  "required": [
+    "bin/clang",
+    "bin/clang-format",
+    "bin/clang-tidy",
+    "bin/clangd",
+    "bin/llvm-cov",
+    "bin/llvm-profdata",
+    "bin/llvm-ar",
+    "bin/llvm-ranlib",
+    "bin/lld"
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "node": {
+    "24.21.0": {
+      "linux-x64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+        "sha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt",
+          "subject": "node-v24.21.0-linux-x64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": [
+              "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"
+            ],
+            "backupUrls": [
+              "https://nodejs.org/download/release/v24.21.0/SHASUMS256.txt.sig"
+            ]
+          },
+          "backupUrls": [
+            "https://nodejs.org/download/release/v24.21.0/SHASUMS256.txt"
+          ]
+        },
+        "backupUrls": [
+          "https://nodejs.org/download/release/v24.21.0/node-v24.21.0-linux-x64.tar.gz"
+        ]
+      }
+    }
+  },
+  "cmake": {
+    "4.4.4": {
+      "linux-x64": {
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz",
+        "sha256": "e5bb807f7728cb60cd8b27ebc97a2edb469b68655f21e844a600c3575b76f5bb",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt",
+          "subject": "cmake-4.4.4-linux-x86_64.tar.gz",
+          "signature": {
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt.asc",
+            "keys": "scripts/keys/cmake.asc",
+            "signers": [
+              "C6C265324BBEBDC350B513D02D2CEF1034921684"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "cargo-nextest": {
+    "0.9.140": {
+      "linux-x64": {
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "bc2a998567816eef7b087b920036f49fb89aa2a8a603f6a3d84098be160b62c5",
+        "format": "tar",
+        "strip": 0,
+        "bin": ".",
+        "attestation": {
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:bc2a998567816eef7b087b920036f49fb89aa2a8a603f6a3d84098be160b62c5",
+          "subject": "cargo-nextest-0.9.140-x86_64-unknown-linux-musl.tar.gz",
+          "signer": "https://dotcom.releases.github.com",
+          "roots": "scripts/keys/sigstore-trusted-root.jsonl",
+          "release": {
+            "repository": "nextest-rs/nextest",
+            "tag": "cargo-nextest-0.9.140"
+          }
+        }
+      }
+    }
+  }
+}

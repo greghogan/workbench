@@ -1,0 +1,12 @@
+/* Component styles are bundled in cascade order by build-tooling. */
+@import "./styles/tokens.css";
+@import "./styles/controls.css";
+@import "./styles/workspace.css";
+@import "./styles/records.css";
+@import "./styles/differences.css";
+@import "./styles/accessibility.css";
+@import "./styles/sources.css";
+@import "./styles/responsive.css";
+@import "./styles/references.css";
+@import "./styles/hub.css";
+@import "./styles/preferences.css";

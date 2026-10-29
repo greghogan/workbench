@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild@0.28.2: true
+engineStrict: true
+minimumReleaseAgeExclude:
+  - prettier@3.9.10

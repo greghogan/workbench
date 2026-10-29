@@ -1,0 +1,55 @@
+schema_version = 1
+
+id = "c"
+name = "C"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/c"
+manifests = [ "CMakeLists.txt" ]
+
+starter = [
+  "LICENSE",
+  "README.md",
+  ".gitignore",
+  ".clang-format",
+  ".clang-tidy",
+  ".llvm-version",
+  ".gcc-version",
+  ".mvsc-version",
+  ".windows-sdk-version",
+  ".vcpkg-version",
+  ".tool-versions",
+  "CMakeLists.txt",
+  "cmake/WorkbenchCompiler.cmake",
+  "include/wb_cpu.h",
+  "tests/cpu_test.c",
+  "vcpkg.json",
+  "vcpkg-configuration.json",
+  "include/count.h",
+  "include/count_json.h",
+  "src/count.c",
+  "src/count_mvsc.c",
+  "src/count_json.c",
+  "src/main.c",
+  "tests/cli.cmake",
+  "tests/count_test.c",
+  "tests/count_json_test.c",
+  "scripts/check.mjs",
+  "scripts/release-verify.mjs",
+  "workbench/quality.json",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "SDKROOT", "DEVELOPER_DIR", "INCLUDE", "LIB", "LIBPATH", "WindowsSdkDir", "WindowsSDKVersion", "VCToolsInstallDir"
+]
+
+# Neutral names survive npm installation without renaming template assets.
+starter_assets = [{ path = ".gitignore", source = "starter.gitignore" }]
+
+[starter_root]
+standard = "17"
+compiler = "clang"
+lto = "full"
+compilers.clang = { minimum = "21.1.8", ci_versions = ["21.1.8", "22.1.8", "23.1.4"] }
+compilers.gcc = { minimum = "14.4.0", ci_versions = ["14.4.0", "15.3.0", "16.2.0"], ci_architectures = ["x64", "arm64"] }
+compilers.mvsc = { minimum = "14.44.35207", ci_versions = ["14.44.35207"], ci_architectures = ["x64"] }

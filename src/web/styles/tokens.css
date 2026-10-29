@@ -1,0 +1,45 @@
+/* Shared palette, type, spacing, and layout values. */
+:root {
+  --paper: #fff;
+  --bg: #f6f7f9;
+  --ink: #222b3d;
+  --muted: #566379;
+  --line: #dce1e8;
+  --accent: #4358a8;
+  --soft: #edf0fc;
+  --green: #166149;
+  --red: #96363d;
+  --control-border: #aab4c3;
+  --hover-bg: #fafbfe;
+  --code-bg: #f5f6f9;
+  --quote-border: #bcc5d8;
+  --success-border: #9fcab6;
+  --success-bg: #eff9f3;
+  --warning-border: #d9be7d;
+  --warning-bg: #fff9e8;
+  --warning-ink: #694800;
+  --pending-ink: #79540b;
+  --diff-add: #e8f5eb;
+  --diff-remove: #fdecef;
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --radius-control: 6px;
+  --control-height: 40px;
+  --control-padding-inline: 14px;
+  --radius-button: 7px;
+  --radius-panel: 10px;
+  --sidebar-width: 236px;
+  --page-width: 1450px;
+  --document-width: 920px;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--bg);
+}

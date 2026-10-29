@@ -1,0 +1,8 @@
+// Generated from package-output.mts; edit the TypeScript source.
+import { createRequire } from "node:module";
+const runtime = createRequire(import.meta.url)("../bundle/package.cjs");
+const { packageOutput } = runtime;
+export {
+  packageOutput
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInBhY2thZ2Utb3V0cHV0Lm10cyJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBjcmVhdGVSZXF1aXJlIH0gZnJvbSBcIm5vZGU6bW9kdWxlXCI7XG5cbmNvbnN0IHJ1bnRpbWUgPSBjcmVhdGVSZXF1aXJlKGltcG9ydC5tZXRhLnVybCkoXCIuLi9idW5kbGUvcGFja2FnZS5janNcIikgYXMgdHlwZW9mIGltcG9ydChcIi4uL3NyYy9wYWNrYWdlLW91dHB1dC5qc1wiKTtcbmV4cG9ydCBjb25zdCB7IHBhY2thZ2VPdXRwdXQgfSA9IHJ1bnRpbWU7XG4iXSwibWFwcGluZ3MiOiI7QUFBQSxTQUFTLHFCQUFxQjtBQUU5QixNQUFNLFVBQVUsY0FBYyxZQUFZLEdBQUcsRUFBRSx1QkFBdUI7QUFDL0QsTUFBTSxFQUFFLGNBQWMsSUFBSTsiLCJuYW1lcyI6W10sImZpbGUiOiJzY3JpcHRzL3BhY2thZ2Utb3V0cHV0Lm1qcyJ9

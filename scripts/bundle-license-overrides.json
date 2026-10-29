@@ -1,0 +1,7 @@
+{
+  "@sigstore/verify@4.1.2": {
+    "path": "scripts/licenses/sigstore-verify.LICENSE",
+    "sha256": "364a130d2ca340bd56eb1e6d045fc6929bb0f9d0aa018f2c1949b29517e1cdd0",
+    "source": "https://github.com/sigstore/sigstore-js/blob/769a53d8713248a8bf49edfc2a5d1955b0dcc24d/LICENSE"
+  }
+}

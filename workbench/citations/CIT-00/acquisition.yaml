@@ -1,0 +1,11 @@
+sources:
+  - kind: published
+    status: acquired
+    landing-url: https://papers.nips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html
+    download-url: https://papers.nips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf
+    sha256: d87d482d5ae7960e2e43d7dd6d21377e60e73e8fce1bf2a01aff7aca8a08c537
+  - kind: arxiv
+    status: acquired
+    landing-url: https://arxiv.org/abs/1706.03762
+    download-url: https://arxiv.org/pdf/1706.03762.pdf
+    sha256: bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697

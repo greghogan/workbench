@@ -1,0 +1,16 @@
+id: demo-REL-0
+version: 0.0.0-demo
+revision: "0000000000000000000000000000000000000000"
+tag: demonstration
+released: 2026-01-01
+yanked: false
+notes:
+  summary: Illustrative release record; no artifact was published.
+  changes:
+    - Demonstrate release metadata and artifact descriptions.
+artifacts:
+  - target: example
+    file: example.txt
+    url: https://example.invalid/releases/example.txt
+    bytes: 1
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000"

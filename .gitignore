@@ -1,0 +1,85 @@
+# Machine-local environment
+.direnv/
+.envrc.local
+
+# Editor recovery files
+*.swp
+*.swo
+
+# Build outputs and reports across language roots
+build/
+**/coverage/*
+!**/coverage/coverage-summary.json
+dist/
+htmlcov/
+target/
+
+# Node.js / TypeScript dependencies and compiler state; node_modules may be a link
+*.tsbuildinfo
+.pnpm-store/
+node_modules
+
+# Python dependencies and caches; virtual environments may be links
+*.egg-info/
+*.pyc
+.coverage
+.coverage.*
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv
+.venv.workbench-backup
+__pycache__/
+
+# LLVM instrumentation
+*.profdata
+*.profraw
+
+# Generated project skill links must remain visible even with a global .claude ignore.
+!.claude/
+.claude/*
+!.claude/skills/
+
+# Local citation documents; bibliographic records remain tracked.
+/library/citations/
+
+# Development JavaScript; emission policy: scripts/tooling-artifacts.mts.
+/scripts/maintenance/**/*.mjs
+/scripts/maintenance/**/*.cjs
+/eslint.config.mjs
+/vitest.config.mjs
+/tests/fixtures/ci-docker.mjs
+/tests/fixtures/ci-workbench.mjs
+/scripts/authored-tooling.mjs
+/scripts/build-bundle.mjs
+/scripts/bundle-artifacts.mjs
+/scripts/bundle-build.mjs
+/scripts/bundle-licenses.mjs
+/scripts/bundle-options.mjs
+/scripts/check-bundle.mjs
+/scripts/check-consumers.mjs
+/scripts/check-harnesses.mjs
+/scripts/check-release.mjs
+/scripts/check-web-browser.mjs
+/scripts/check-workflows.mjs
+/scripts/coverage-processing.mjs
+/scripts/coverage-worker.mjs
+/scripts/coverage-workers.mjs
+/scripts/evaluate-skills.mjs
+/scripts/jsx-rendering-lint.mjs
+/scripts/link-dependencies.mjs
+/scripts/node-coverage-reports.mjs
+/scripts/package-workbench.mjs
+/scripts/runtime-dependencies.mjs
+/scripts/setup-development.mjs
+/scripts/skill-evaluation-cases.mjs
+/scripts/source-checkout.mjs
+/scripts/source-snapshot.mjs
+/scripts/test-coverage.mjs
+/scripts/test-failures.mjs
+/scripts/tooling-artifacts.mjs
+/scripts/web-browser-fixtures.mjs
+/scripts/web-browser-scenarios.mjs
+/scripts/work-admission.mjs
+.*.????????-????-????-????-????????????.tmp
+# End generated development JavaScript.

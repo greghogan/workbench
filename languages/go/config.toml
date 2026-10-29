@@ -1,0 +1,33 @@
+schema_version = 1
+
+id = "go"
+name = "Go"
+summary = "strict checks, coverage floors, advisory timing, and executable documentation"
+reference = "examples/languages/go"
+manifests = [ "go.mod" ]
+
+starter = [
+  "LICENSE",
+  "README.md",
+  ".gitignore",
+  ".go-version",
+  "go.mod",
+  "go.sum",
+  "count.go",
+  "count_test.go",
+  "cmd/count/main.go",
+  "cmd/count/main_test.go",
+  "scripts/check.mjs",
+  "scripts/resources.mjs",
+  "scripts/release-verify.mjs",
+  "workbench/quality.json",
+]
+
+# Caller settings accepted by native checks; tool and storage selections are supplied by Workbench.
+pass_environment = [
+  "GOPATH", "GOMODCACHE", "GOCACHE", "GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB", "GOSUMDB",
+  "SDKROOT", "DEVELOPER_DIR"
+]
+
+# Neutral names survive npm installation without renaming template assets.
+starter_assets = [{ path = ".gitignore", source = "starter.gitignore" }]

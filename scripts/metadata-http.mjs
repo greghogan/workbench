@@ -1,0 +1,52 @@
+// Generated from metadata-http.mts; edit the TypeScript source.
+import { combineFailures } from "./diagnostic-errors.mjs";
+async function metadataBytes(response, maximum, label, signal) {
+  if (!Number.isSafeInteger(maximum) || maximum < 1) throw new Error("Invalid metadata response limit");
+  if (!response.ok) {
+    const failure = new Error(`${label}: HTTP ${String(response.status)}`);
+    try {
+      await response.body?.cancel();
+    } catch (cleanup) {
+      throw combineFailures(failure, cleanup, "Metadata rejection and cleanup failed");
+    }
+    throw failure;
+  }
+  if (!response.body) throw new Error(`${label}: response has no body`);
+  const reader = response.body.getReader(), chunks = [];
+  let bytes = 0;
+  const failures = [];
+  try {
+    for (; ; ) {
+      signal?.throwIfAborted();
+      const next = await reader.read();
+      if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > maximum) throw new Error(`${label}: metadata exceeds ${String(maximum)} bytes`);
+      chunks.push(next.value);
+    }
+    signal?.throwIfAborted();
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
+    await reader.cancel();
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
+    reader.releaseLock();
+  } catch (error) {
+    failures.push(error);
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, "Metadata read and cleanup failed", { cause: failures[0] });
+  return Buffer.concat(chunks, bytes);
+}
+async function metadataJSON(response, maximum, label, signal) {
+  return JSON.parse((await metadataBytes(response, maximum, label, signal)).toString("utf8"));
+}
+export {
+  metadataBytes,
+  metadataJSON
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIm1ldGFkYXRhLWh0dHAubXRzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGNvbWJpbmVGYWlsdXJlcyB9IGZyb20gXCIuL2RpYWdub3N0aWMtZXJyb3JzLm1qc1wiO1xuLyoqIFJlc3BvbnNlIG1lY2hhbmljcyBvbmx5OiBjYWxsZXJzIG93biBhdXRoZW50aWNhdGlvbiwgcmVkaXJlY3RzLCBkZWFkbGluZXMsIGFuZCByZXRyeSBwb2xpY3kuICovXG5leHBvcnQgYXN5bmMgZnVuY3Rpb24gbWV0YWRhdGFCeXRlcyhcbiAgcmVzcG9uc2U6IFJlc3BvbnNlLFxuICBtYXhpbXVtOiBudW1iZXIsXG4gIGxhYmVsOiBzdHJpbmcsXG4gIHNpZ25hbD86IEFib3J0U2lnbmFsLFxuKTogUHJvbWlzZTxCdWZmZXI+IHtcbiAgaWYgKCFOdW1iZXIuaXNTYWZlSW50ZWdlcihtYXhpbXVtKSB8fCBtYXhpbXVtIDwgMSkgdGhyb3cgbmV3IEVycm9yKFwiSW52YWxpZCBtZXRhZGF0YSByZXNwb25zZSBsaW1pdFwiKTtcbiAgaWYgKCFyZXNwb25zZS5vaykge1xuICAgIGNvbnN0IGZhaWx1cmUgPSBuZXcgRXJyb3IoYCR7bGFiZWx9OiBIVFRQICR7U3RyaW5nKHJlc3BvbnNlLnN0YXR1cyl9YCk7XG4gICAgdHJ5IHtcbiAgICAgIGF3YWl0IHJlc3BvbnNlLmJvZHk/LmNhbmNlbCgpO1xuICAgIH0gY2F0Y2ggKGNsZWFudXApIHtcbiAgICAgIHRocm93IGNvbWJpbmVGYWlsdXJlcyhmYWlsdXJlLCBjbGVhbnVwLCBcIk1ldGFkYXRhIHJlamVjdGlvbiBhbmQgY2xlYW51cCBmYWlsZWRcIik7XG4gICAgfVxuICAgIHRocm93IGZhaWx1cmU7XG4gIH1cbiAgaWYgKCFyZXNwb25zZS5ib2R5KSB0aHJvdyBuZXcgRXJyb3IoYCR7bGFiZWx9OiByZXNwb25zZSBoYXMgbm8gYm9keWApO1xuICBjb25zdCByZWFkZXIgPSByZXNwb25zZS5ib2R5LmdldFJlYWRlcigpLFxuICAgIGNodW5rczogVWludDhBcnJheVtdID0gW107XG4gIGxldCBieXRlcyA9IDA7XG4gIGNvbnN0IGZhaWx1cmVzOiB1bmtub3duW10gPSBbXTtcbiAgdHJ5IHtcbiAgICBmb3IgKDs7KSB7XG4gICAgICBzaWduYWw/LnRocm93SWZBYm9ydGVkKCk7XG4gICAgICBjb25zdCBuZXh0ID0gYXdhaXQgcmVhZGVyLnJlYWQoKTtcbiAgICAgIGlmIChuZXh0LmRvbmUpIGJyZWFrO1xuICAgICAgYnl0ZXMgKz0gbmV4dC52YWx1ZS5ieXRlTGVuZ3RoO1xuICAgICAgaWYgKGJ5dGVzID4gbWF4aW11bSkgdGhyb3cgbmV3IEVycm9yKGAke2xhYmVsfTogbWV0YWRhdGEgZXhjZWVkcyAke1N0cmluZyhtYXhpbXVtKX0gYnl0ZXNgKTtcbiAgICAgIGNodW5rcy5wdXNoKG5leHQudmFsdWUpO1xuICAgIH1cbiAgICBzaWduYWw/LnRocm93SWZBYm9ydGVkKCk7XG4gIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgZmFpbHVyZXMucHVzaChlcnJvcik7XG4gIH1cbiAgdHJ5IHtcbiAgICBhd2FpdCByZWFkZXIuY2FuY2VsKCk7XG4gIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgZmFpbHVyZXMucHVzaChlcnJvcik7XG4gIH1cbiAgdHJ5IHtcbiAgICByZWFkZXIucmVsZWFzZUxvY2soKTtcbiAgfSBjYXRjaCAoZXJyb3IpIHtcbiAgICBmYWlsdXJlcy5wdXNoKGVycm9yKTtcbiAgfVxuICBpZiAoZmFpbHVyZXMubGVuZ3RoID09PSAxKSB0aHJvdyBmYWlsdXJlc1swXTtcbiAgaWYgKGZhaWx1cmVzLmxlbmd0aCkgdGhyb3cgbmV3IEFnZ3JlZ2F0ZUVycm9yKGZhaWx1cmVzLCBcIk1ldGFkYXRhIHJlYWQgYW5kIGNsZWFudXAgZmFpbGVkXCIsIHsgY2F1c2U6IGZhaWx1cmVzWzBdIH0pO1xuICByZXR1cm4gQnVmZmVyLmNvbmNhdChjaHVua3MsIGJ5dGVzKTtcbn1cbmV4cG9ydCBhc3luYyBmdW5jdGlvbiBtZXRhZGF0YUpTT04oXG4gIHJlc3BvbnNlOiBSZXNwb25zZSxcbiAgbWF4aW11bTogbnVtYmVyLFxuICBsYWJlbDogc3RyaW5nLFxuICBzaWduYWw/OiBBYm9ydFNpZ25hbCxcbik6IFByb21pc2U8dW5rbm93bj4ge1xuICByZXR1cm4gSlNPTi5wYXJzZSgoYXdhaXQgbWV0YWRhdGFCeXRlcyhyZXNwb25zZSwgbWF4aW11bSwgbGFiZWwsIHNpZ25hbCkpLnRvU3RyaW5nKFwidXRmOFwiKSkgYXMgdW5rbm93bjtcbn1cbiJdLCJtYXBwaW5ncyI6IjtBQUFBLFNBQVMsdUJBQXVCO0FBRWhDLGVBQXNCLGNBQ3BCLFVBQ0EsU0FDQSxPQUNBLFFBQ2lCO0FBQ2pCLE1BQUksQ0FBQyxPQUFPLGNBQWMsT0FBTyxLQUFLLFVBQVUsRUFBRyxPQUFNLElBQUksTUFBTSxpQ0FBaUM7QUFDcEcsTUFBSSxDQUFDLFNBQVMsSUFBSTtBQUNoQixVQUFNLFVBQVUsSUFBSSxNQUFNLEdBQUcsS0FBSyxVQUFVLE9BQU8sU0FBUyxNQUFNLENBQUMsRUFBRTtBQUNyRSxRQUFJO0FBQ0YsWUFBTSxTQUFTLE1BQU0sT0FBTztBQUFBLElBQzlCLFNBQVMsU0FBUztBQUNoQixZQUFNLGdCQUFnQixTQUFTLFNBQVMsdUNBQXVDO0FBQUEsSUFDakY7QUFDQSxVQUFNO0FBQUEsRUFDUjtBQUNBLE1BQUksQ0FBQyxTQUFTLEtBQU0sT0FBTSxJQUFJLE1BQU0sR0FBRyxLQUFLLHdCQUF3QjtBQUNwRSxRQUFNLFNBQVMsU0FBUyxLQUFLLFVBQVUsR0FDckMsU0FBdUIsQ0FBQztBQUMxQixNQUFJLFFBQVE7QUFDWixRQUFNLFdBQXNCLENBQUM7QUFDN0IsTUFBSTtBQUNGLGVBQVM7QUFDUCxjQUFRLGVBQWU7QUFDdkIsWUFBTSxPQUFPLE1BQU0sT0FBTyxLQUFLO0FBQy9CLFVBQUksS0FBSyxLQUFNO0FBQ2YsZUFBUyxLQUFLLE1BQU07QUFDcEIsVUFBSSxRQUFRLFFBQVMsT0FBTSxJQUFJLE1BQU0sR0FBRyxLQUFLLHNCQUFzQixPQUFPLE9BQU8sQ0FBQyxRQUFRO0FBQzFGLGFBQU8sS0FBSyxLQUFLLEtBQUs7QUFBQSxJQUN4QjtBQUNBLFlBQVEsZUFBZTtBQUFBLEVBQ3pCLFNBQVMsT0FBTztBQUNkLGFBQVMsS0FBSyxLQUFLO0FBQUEsRUFDckI7QUFDQSxNQUFJO0FBQ0YsVUFBTSxPQUFPLE9BQU87QUFBQSxFQUN0QixTQUFTLE9BQU87QUFDZCxhQUFTLEtBQUssS0FBSztBQUFBLEVBQ3JCO0FBQ0EsTUFBSTtBQUNGLFdBQU8sWUFBWTtBQUFBLEVBQ3JCLFNBQVMsT0FBTztBQUNkLGFBQVMsS0FBSyxLQUFLO0FBQUEsRUFDckI7QUFDQSxNQUFJLFNBQVMsV0FBVyxFQUFHLE9BQU0sU0FBUyxDQUFDO0FBQzNDLE1BQUksU0FBUyxPQUFRLE9BQU0sSUFBSSxlQUFlLFVBQVUsb0NBQW9DLEVBQUUsT0FBTyxTQUFTLENBQUMsRUFBRSxDQUFDO0FBQ2xILFNBQU8sT0FBTyxPQUFPLFFBQVEsS0FBSztBQUNwQztBQUNBLGVBQXNCLGFBQ3BCLFVBQ0EsU0FDQSxPQUNBLFFBQ2tCO0FBQ2xCLFNBQU8sS0FBSyxPQUFPLE1BQU0sY0FBYyxVQUFVLFNBQVMsT0FBTyxNQUFNLEdBQUcsU0FBUyxNQUFNLENBQUM7QUFDNUY7IiwibmFtZXMiOltdLCJmaWxlIjoic2NyaXB0cy9tZXRhZGF0YS1odHRwLm1qcyJ9

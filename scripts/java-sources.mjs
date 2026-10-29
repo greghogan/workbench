@@ -1,0 +1,18 @@
+// Generated from java-sources.mts; edit the TypeScript source.
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+function canonicalJavaSources(directory, write = false) {
+  for (const entry of readdirSync(directory, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".java")) continue;
+    const path = join(entry.parentPath, entry.name);
+    const source = readFileSync(path, "utf8");
+    if (!source.includes("\r")) continue;
+    if (!write)
+      throw new Error(`${relative(directory, path)}: Java sources require LF line endings; run the format-write role`);
+    writeFileSync(path, source.replace(/\r\n?/g, "\n"));
+  }
+}
+export {
+  canonicalJavaSources
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImphdmEtc291cmNlcy5tdHMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgcmVhZEZpbGVTeW5jLCByZWFkZGlyU3luYywgd3JpdGVGaWxlU3luYyB9IGZyb20gXCJub2RlOmZzXCI7XG5pbXBvcnQgeyBqb2luLCByZWxhdGl2ZSB9IGZyb20gXCJub2RlOnBhdGhcIjtcblxuLyoqIEtlZXAgdGhlIHNvdXJjZSBuZXdsaW5lIGNvbnRyYWN0IGluZGVwZW5kZW50IG9mIHRoZSBzZWxlY3RlZCBmb3JtYXR0ZXIncyBkZWZhdWx0cy4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjYW5vbmljYWxKYXZhU291cmNlcyhkaXJlY3Rvcnk6IHN0cmluZywgd3JpdGUgPSBmYWxzZSk6IHZvaWQge1xuICBmb3IgKGNvbnN0IGVudHJ5IG9mIHJlYWRkaXJTeW5jKGRpcmVjdG9yeSwgeyByZWN1cnNpdmU6IHRydWUsIHdpdGhGaWxlVHlwZXM6IHRydWUgfSkpIHtcbiAgICBpZiAoIWVudHJ5LmlzRmlsZSgpIHx8ICFlbnRyeS5uYW1lLmVuZHNXaXRoKFwiLmphdmFcIikpIGNvbnRpbnVlO1xuICAgIGNvbnN0IHBhdGggPSBqb2luKGVudHJ5LnBhcmVudFBhdGgsIGVudHJ5Lm5hbWUpO1xuICAgIGNvbnN0IHNvdXJjZSA9IHJlYWRGaWxlU3luYyhwYXRoLCBcInV0ZjhcIik7XG4gICAgaWYgKCFzb3VyY2UuaW5jbHVkZXMoXCJcXHJcIikpIGNvbnRpbnVlO1xuICAgIGlmICghd3JpdGUpXG4gICAgICB0aHJvdyBuZXcgRXJyb3IoYCR7cmVsYXRpdmUoZGlyZWN0b3J5LCBwYXRoKX06IEphdmEgc291cmNlcyByZXF1aXJlIExGIGxpbmUgZW5kaW5nczsgcnVuIHRoZSBmb3JtYXQtd3JpdGUgcm9sZWApO1xuICAgIHdyaXRlRmlsZVN5bmMocGF0aCwgc291cmNlLnJlcGxhY2UoL1xcclxcbj8vZywgXCJcXG5cIikpO1xuICB9XG59XG4iXSwibWFwcGluZ3MiOiI7QUFBQSxTQUFTLGNBQWMsYUFBYSxxQkFBcUI7QUFDekQsU0FBUyxNQUFNLGdCQUFnQjtBQUd4QixTQUFTLHFCQUFxQixXQUFtQixRQUFRLE9BQWE7QUFDM0UsYUFBVyxTQUFTLFlBQVksV0FBVyxFQUFFLFdBQVcsTUFBTSxlQUFlLEtBQUssQ0FBQyxHQUFHO0FBQ3BGLFFBQUksQ0FBQyxNQUFNLE9BQU8sS0FBSyxDQUFDLE1BQU0sS0FBSyxTQUFTLE9BQU8sRUFBRztBQUN0RCxVQUFNLE9BQU8sS0FBSyxNQUFNLFlBQVksTUFBTSxJQUFJO0FBQzlDLFVBQU0sU0FBUyxhQUFhLE1BQU0sTUFBTTtBQUN4QyxRQUFJLENBQUMsT0FBTyxTQUFTLElBQUksRUFBRztBQUM1QixRQUFJLENBQUM7QUFDSCxZQUFNLElBQUksTUFBTSxHQUFHLFNBQVMsV0FBVyxJQUFJLENBQUMsbUVBQW1FO0FBQ2pILGtCQUFjLE1BQU0sT0FBTyxRQUFRLFVBQVUsSUFBSSxDQUFDO0FBQUEsRUFDcEQ7QUFDRjsiLCJuYW1lcyI6W10sImZpbGUiOiJzY3JpcHRzL2phdmEtc291cmNlcy5tanMifQ==

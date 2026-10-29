@@ -1,0 +1,238 @@
+import { beforeEach, expect, test } from "vitest";
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import type { startWebServer } from "../src/web/server.ts";
+import { webServers, readWebPage } from "./fixtures/web.mjs";
+import { provider, git } from "./fixtures/adoption.mjs";
+import { previewCollection, applyCollection } from "../src/web/collection-service.ts";
+import { citationMetadata } from "../src/record-metadata.ts";
+import { parseDOM } from "./fixtures/dom.mjs";
+const servers = webServers();
+let root: string;
+let web: Awaited<ReturnType<typeof startWebServer>>;
+beforeEach(async () => {
+  root = servers.project();
+  web = await servers.start(root, { port: 0 });
+});
+async function get(path: string) {
+  return readWebPage(web, path);
+}
+const recordIds = (html: string) =>
+  [...parseDOM(html).window.document.querySelectorAll("[data-record-id]")].map((element) =>
+    element.getAttribute("data-record-id"),
+  );
+const headings = (html: string) =>
+  [...parseDOM(html).window.document.querySelectorAll("h2")].map((element) => element.textContent);
+function adopt() {
+  const source = provider(root);
+  const request = { source: source.directory, commit: source.commit, collection: ".", visibility: "public" as const };
+  const plan = previewCollection(root, request);
+  applyCollection(root, request, plan.digest);
+  return source;
+}
+test("project records and each collection have separate navigation, search, counts, and reviews", async () => {
+  adopt();
+  const project = await get("/records?type=ADR");
+  expect(parseDOM(project.html).window.document.querySelector('[aria-label="Record sources"]')).not.toBeNull();
+  expect(recordIds(project.html)).toContain("demo:ADR-0");
+  expect(recordIds(project.html)).not.toContain("company:ADR-0");
+  const collection = await get("/records?type=ADR&collection=company");
+  expect(recordIds(collection.html)).toContain("company:ADR-0");
+  expect(recordIds(collection.html)).not.toContain("demo:ADR-0");
+  const collectionSearch = parseDOM(collection.html).window.document.querySelector('form[role="search"]');
+  expect(collectionSearch?.querySelector('input[name="all"]')?.getAttribute("value")).toBe("1");
+  expect(collectionSearch?.querySelector('input[name="collection"]')).toBeNull();
+  expect((await get("/records?q=Policy")).html).toContain("No matching records");
+  expect(recordIds((await get("/records?q=Policy&collection=company")).html)).toContain("company:ADR-0");
+  const collectionDocument = parseDOM((await get("/record?id=company:ADR-0")).html).window.document;
+  expect(collectionDocument.querySelector('[data-source-navigation] a[aria-current="page"]')?.textContent).toBe(
+    "company",
+  );
+  git(root, "add", "workbench");
+  const queue = await get("/review");
+  expect(headings(queue.html)).not.toContain("workbench/collections/company/decisions/ADR-00.md");
+  expect(headings((await get("/review?collection=company")).html)).toContain(
+    "workbench/collections/company/decisions/ADR-00.md",
+  );
+  expect((await get("/records?collection=missing")).response.status).toBe(404);
+});
+test("upstream adaptations remain visible after commit, with separate HEAD and upstream comparisons", async () => {
+  adopt();
+  const path = join(root, "workbench/collections/company/decisions/ADR-00.md");
+  writeFileSync(
+    path,
+    readFileSync(path, "utf8").replace("Use a bounded retry budget.", "Use project-specific bounded retries."),
+  );
+  git(root, "add", "workbench", ".gitmodules");
+  git(root, "commit", "-qm", "Adapt collection");
+  const list = await get("/records?collection=company&type=ADR");
+  expect(list.html).toContain("Adapted");
+  const upstream = await get("/record?id=company:ADR-0&view=changes");
+  expect(upstream.html).toContain("Pinned upstream → project copy");
+  for (const [side, text] of [
+    ["before", "Use a bounded retry budget."],
+    ["after", "Use project-specific bounded retries."],
+  ]) {
+    const dom = parseDOM(upstream.html),
+      region = dom.window.document.querySelector(".paragraph-diff");
+    for (const mark of region?.querySelectorAll(`${side === "before" ? "ins" : "del"}, .diff-separator`) ?? [])
+      mark.remove();
+    expect(region?.textContent).toContain(text);
+    dom.window.close();
+  }
+  expect((await get("/record?id=company:ADR-0&view=changes&baseline=head")).html).toContain("No source differences");
+  rmSync(path);
+  const removed = await get("/record?id=company:ADR-0&collection=company&view=changes");
+  expect(removed.response.status).toBe(200);
+  expect(removed.html).toContain("Removed from collection");
+  expect(removed.html).toContain("Side-by-side");
+  const removedHead = await get("/record?id=company:ADR-0&collection=company&view=changes&baseline=head&layout=split");
+  expect(removedHead.html).toContain("Committed HEAD → working file");
+  expect(parseDOM(removedHead.html).window.document.querySelector(".diff.split")).not.toBeNull();
+  expect((await get("/record?id=company:ADR-0&collection=company&view=source")).html).toContain(
+    "Use a bounded retry budget",
+  );
+});
+test("missing originals do not prevent reading or cause automatic acquisition", async () => {
+  adopt();
+  rmSync(join(root, ".git/modules/workbench-collection-company"), { recursive: true, force: true });
+  const read = await get("/record?id=company:ADR-0");
+  expect(read.response.status).toBe(200);
+  expect(read.html).toContain("Use a bounded retry budget");
+  const diff = await get("/record?id=company:ADR-0&view=changes");
+  expect(diff.html).toContain("never fetched automatically");
+  expect(diff.html).toContain("workbench collection fetch company");
+});
+test("record views reject unavailable capabilities and comparisons before rendering", async () => {
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "---\nstatus: Planned\n---\n\n# Task\n");
+  for (const id of ["demo:ADR-0", "demo:TSK-0"]) {
+    for (const view of ["read", "source"])
+      expect((await get(`/record?id=${id}&view=${view}`)).response.status).toBe(200);
+  }
+  for (const query of [
+    "id=demo:TSK-0&view=edit",
+    "id=demo:TSK-0&view=changes",
+    "id=demo:ADR-0&view=changes&baseline=upstream",
+    "id=demo:ADR-0&view=unknown",
+  ])
+    expect((await get("/record?" + query)).response.status).toBe(400);
+  expect((await get("/record?id=demo:ADR-0&view=edit")).response.status).toBe(200);
+  for (const baseline of ["head", "reviewed"])
+    expect((await get("/record?id=demo:ADR-0&view=changes&baseline=" + baseline)).response.status).toBe(200);
+});
+test("citation titles, authors, dates, and publication details are visible and searchable", async () => {
+  mkdirSync(join(root, "workbench/citations"));
+  const citation = [
+    {
+      id: "demo-CIT-0",
+      type: "article-journal",
+      title: "Reliable agent workflows",
+      author: [{ given: "Ada", family: "Lovelace" }, { literal: "Research group" }],
+      issued: { "date-parts": [[2026, 10, 1]] },
+      "container-title": "Engineering Journal",
+      volume: "12",
+      issue: "3",
+      page: "20–35",
+      DOI: "10.1234/example",
+      URL: "https://example.invalid/paper",
+      abstract: "A retained <abstract>.",
+    },
+  ];
+  writeFileSync(join(root, "workbench/citations/CIT-00.json"), JSON.stringify(citation));
+  const list = await get("/records?type=CIT");
+  for (const value of ["Reliable agent workflows", "Ada Lovelace", "Research group", "2026", "Engineering Journal"])
+    expect(list.html).toContain(value);
+  const detail = await get("/record?id=demo:CIT-0");
+  const detailDOM = parseDOM(detail.html);
+  const sourceDOM = parseDOM((await get("/record?id=demo:CIT-0&view=source")).html);
+  try {
+    const document = detailDOM.window.document;
+    const headings = [...document.querySelectorAll("h2")].map((node) => node.textContent);
+    expect(headings).toEqual(expect.arrayContaining(["Authors", "Year"]));
+    for (const value of ["10.1234/example", "20–35", "A retained <abstract>."])
+      expect(document.querySelector("main")?.textContent).toContain(value);
+    expect(document.querySelector("abstract")).toBeNull();
+    expect(JSON.parse(sourceDOM.window.document.querySelector("pre")?.textContent ?? "")).toEqual(citation);
+  } finally {
+    detailDOM.window.close();
+    sourceDOM.window.close();
+  }
+  expect(citationMetadata(JSON.stringify([{ title: "Draft" }])).title).toBe("Draft");
+});
+test("prose metadata is visible for ADRs, tasks and experiments, with readable release fields", async () => {
+  writeFileSync(
+    join(root, "workbench/decisions/ADR-00.md"),
+    "---\nsummary: Visible summary.\nagent_instruction: Visible human instruction.\n---\n\n# ADR-0: Files\n\nBody.\n",
+  );
+  const adr = await get("/record?id=demo:ADR-0");
+  expect(headings(adr.html)).toEqual(expect.arrayContaining(["Summary", "Agent instructions"]));
+  expect(
+    [...parseDOM(adr.html).window.document.querySelectorAll("summary")].map((element) => element.textContent),
+  ).not.toContain("Metadata");
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(
+    join(root, "workbench/tasks/TSK-00.md"),
+    "---\nstatus: Planned\nparent: null\ndepends_on: []\n---\n\n# Task\n",
+  );
+  expect(headings((await get("/record?id=demo:TSK-0")).html)).toContain("Dependencies");
+  mkdirSync(join(root, "workbench/experiments"));
+  writeFileSync(
+    join(root, "workbench/experiments/EXP-00.md"),
+    "---\nstatus: Running\nenvironment: null\n---\n\n# Experiment\n",
+  );
+  expect(headings((await get("/record?id=demo:EXP-0")).html)).toContain("Environment");
+  mkdirSync(join(root, "workbench/releases"));
+  writeFileSync(
+    join(root, "workbench/releases/REL-00.yaml"),
+    "version: 0.2.0\nreleased: '2026-10-25'\nyanked: false\n",
+  );
+  const release = await get("/record?id=demo:REL-0");
+  expect(release.html).toContain("Release 0.2.0");
+  expect(headings(release.html)).toContain("Released");
+});
+test("record batches use stable base-36 cursors and detect a changed list", async () => {
+  mkdirSync(join(root, "workbench/tasks"));
+  for (let number = 0; number < 120; number++)
+    writeFileSync(
+      join(root, `workbench/tasks/TSK-${number.toString(36).toUpperCase().padStart(2, "0")}.md`),
+      `---\nstatus: Planned\n---\n\n# Task ${String(number)}\n`,
+    );
+  const first = await get("/records?type=TSK");
+  expect(parseDOM(first.html).window.document.querySelectorAll("[data-record-id]")).toHaveLength(100);
+  const next = parseDOM(first.html).window.document.querySelector("[data-load-more]")?.getAttribute("href");
+  if (!next) throw new Error("missing load more link");
+  const second = await get(next);
+  expect(parseDOM(second.html).window.document.querySelectorAll("[data-record-id]")).toHaveLength(20);
+  expect(recordIds(second.html)).not.toContain("demo:TSK-0");
+  const expanded = await get("/records?type=TSK&through=demo:TSK-3B");
+  expect(parseDOM(expanded.html).window.document.querySelectorAll("[data-record-id]")).toHaveLength(120);
+  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "# Changed\n");
+  expect((await get(next)).response.status).toBe(409);
+});
+
+test("plain Markdown charters have readable previews and record diagnostics are selectable outside navigation", async () => {
+  const home = parseDOM((await get("/")).html, { url: web.url });
+  expect(home.window.document.querySelector('[data-record-id="demo:CHARTER"]')?.textContent).toContain("Human intent.");
+  expect(home.window.document.body.textContent).not.toContain("Preview unavailable");
+  home.window.close();
+  writeFileSync(join(root, "workbench/decisions/ADR-00.md"), "# Incomplete draft\n\nBody without frontmatter.\n");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const dom = parseDOM((await get("/records?type=ADR")).html, { url: web.url });
+    const row = dom.window.document.querySelector('[data-record-id="demo:ADR-0"]');
+    expect(row?.tagName).toBe("ARTICLE");
+    const problem = row?.querySelector("[data-preview-error]");
+    expect(problem?.textContent).toContain("expected YAML frontmatter");
+    expect(problem?.closest("a")).toBeNull();
+    expect(row?.querySelector("h2 a")?.getAttribute("href")).toContain("/record?id=demo%3AADR-0");
+    dom.window.close();
+  }
+});
+
+test("overview removes duplicate metric cards and the sidebar has a compact brand without a tagline", async () => {
+  const dom = parseDOM((await get("/")).html, { url: web.url });
+  expect(dom.window.document.querySelector(".metrics, .metric")).toBeNull();
+  expect(dom.window.document.querySelector(".brand svg")).not.toBeNull();
+  expect(dom.window.document.body.textContent).not.toContain("Documents for agentic development");
+  dom.window.close();
+});
