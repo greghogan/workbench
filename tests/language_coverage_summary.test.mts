@@ -1,10 +1,56 @@
 import { required } from "../src/invariants.ts";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "vitest";
 import { readCoverageSummary } from "../scripts/check-coverage-summary.mjs";
+
+test("coverage boundaries resolve directory aliases, retain deleted sources, and reject symlink escapes", () => {
+  const base = mkdtempSync(join(tmpdir(), "workbench-summary-alias-"));
+  try {
+    const root = join(base, "source space 文"),
+      alias = join(base, "alias"),
+      outside = join(base, "outside");
+    mkdirSync(join(root, "src"), { recursive: true });
+    mkdirSync(join(root, "coverage"));
+    mkdirSync(outside);
+    writeFileSync(join(root, "src/count.c"), "int count(void) { return 1; }\n");
+    writeFileSync(join(outside, "external.c"), "int external(void) { return 0; }\n");
+    symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+    const counts = { lines: { count: 1, covered: 1 } };
+    const report = (filename: string) => {
+      writeFileSync(
+        join(root, "coverage/report.json"),
+        JSON.stringify({
+          data: [{ totals: counts, files: [{ filename, summary: counts }] }],
+        }),
+      );
+    };
+    report(realpathSync.native(join(root, "src/count.c")));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(alias), "Expected aliased summary")), [
+      "total",
+      "src/count.c",
+    ]);
+    report(join(alias, "src/count.c"));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected canonical summary")), [
+      "total",
+      "src/count.c",
+    ]);
+    rmSync(join(root, "src/count.c"));
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected deleted source")), [
+      "total",
+      "src/count.c",
+    ]);
+    symlinkSync(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    report(join(root, "escape/external.c"));
+    assert.throws(() => readCoverageSummary(alias), /coverage source outside root/);
+    report("../outside/external.c");
+    assert.throws(() => readCoverageSummary(root), /coverage source outside root/);
+  } finally {
+    rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
 
 test("language coverage summaries translate native reports without inventing unavailable metrics", () => {
   const repository = mkdtempSync(join(tmpdir(), "workbench-language-coverage-"));

@@ -6,16 +6,28 @@ import {
   reportSummaryChange,
   readCoverageSummary as parseSummary,
 } from "./coverage-summary.mjs";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function readCoverageSummary(root: string, repository = root, freshSince?: number): Summary | undefined {
+  // Reports can retain deleted source entries; resolve their existing ancestors as well as live files.
+  const canonical = (path: string): string => {
+    try {
+      return realpathSync.native(path);
+    } catch (error) {
+      const parent = dirname(path);
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || parent === path) throw error;
+      return join(canonical(parent), basename(path));
+    }
+  };
+  root = canonical(resolve(root));
+  repository = canonical(resolve(repository));
   const available = (path: string) =>
     existsSync(path) && (freshSince === undefined || statSync(path).mtimeMs >= freshSince);
   const source = (path: string) => {
     if (path.startsWith("/work/")) path = join(repository, path.slice(6));
-    const normalized = isAbsolute(path) ? relative(root, resolve(path)) : path;
+    const normalized = relative(root, canonical(resolve(root, path)));
     if (normalized === ".." || normalized.startsWith(`..${sep}`))
       throw new Error(`coverage source outside root: ${path}`);
     return normalized.split(sep).join("/");

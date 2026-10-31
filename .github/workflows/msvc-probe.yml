@@ -41,7 +41,7 @@ jobs:
       - name: Verify native path and environment regressions
         run: |
           node scripts/setup-development.mts
-          node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts tests/vcpkg.test.mts tests/check_coordination_recovery.test.mts tests/windows_utf8_console.test.mts tests/native_coverage_sources.test.mts
+          node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts tests/vcpkg.test.mts tests/check_coordination_recovery.test.mts tests/windows_utf8_console.test.mts tests/native_coverage_sources.test.mts tests/language_coverage_summary.test.mts
       - name: Run the declared MSVC targets
         if: ${{ success() }}
         run: |
@@ -108,7 +108,7 @@ jobs:
         run: |
           node bin/workbench.mjs project add .
           node scripts/setup-development.mts
-          node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts tests/vcpkg.test.mts tests/check_coordination_recovery.test.mts tests/windows_utf8_console.test.mts tests/native_coverage_sources.test.mts
+          node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts tests/vcpkg.test.mts tests/check_coordination_recovery.test.mts tests/windows_utf8_console.test.mts tests/native_coverage_sources.test.mts tests/language_coverage_summary.test.mts
       - name: Exercise packaged PHP installation and project adoption
         if: ${{ success() }}
         run: |
