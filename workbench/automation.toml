@@ -69,7 +69,7 @@ command = [ "scripts/check-shell", "lint" ]
 name = "GitHub workflow validation"
 role = "lint"
 project = "workbench"
-command = [ "node", "scripts/check-workflows.mjs" ]
+command = [ "node", "scripts/check-workflows.mts" ]
 
 [[check]]
 name = "Workbench README examples"
