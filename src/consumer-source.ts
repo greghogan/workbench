@@ -26,6 +26,8 @@ export async function exerciseSourceCheckout(options: {
     const env = {
       ...options.environment,
       PNPM_CONFIG_STORE_DIR: join(options.environment.WORKBENCH_CACHE_HOME ?? options.temporary, "downloads/pnpm"),
+      PNPM_CONFIG_VIRTUAL_STORE_DIR: join(options.temporary, "development-dependencies/pnpm"),
+      WORKBENCH_STORAGE_PROJECT: snapshot.directory,
     };
     const root = snapshot.directory,
       cli = join(root, "bin/workbench.mjs");
