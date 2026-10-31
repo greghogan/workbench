@@ -21,6 +21,9 @@ import { withCacheLock } from "./cache-lock.js";
 import { executeCI } from "./ci-lifecycle.js";
 import { userDirectory } from "./storage.js";
 import { withToolCacheAdmission } from "./tool-cache-lock.js";
+import { keptCacheAssets } from "./project-registry.js";
+import { userConfigValues } from "./user-config.js";
+import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "./diagnostics.js";
 import { quote } from "./toolchains.js";
 import { parseDockerBytes } from "./byte-size.js";
 import type { BuilderCacheEntry, BuilderCacheReport } from "./builder-cache.js";
@@ -133,6 +136,34 @@ function save(value: Receipt): void {
   writeAtomic(receiptPath(value), JSON.stringify(value) + "\n", 0o600);
 }
 
+async function collectBuildkitCache(value: Receipt, client: string, env: NodeJS.ProcessEnv): Promise<void> {
+  try {
+    const config = userConfigValues();
+    if (config["cache.auto_prune"] === false || keptCacheAssets().has(receiptPath(value))) return;
+    const age = config["cache.max_age_days"] as number;
+    const maximum = config["cache.buildkit_max_bytes"] as number;
+    if (age === 0 && maximum === 0) return;
+    await verify(value);
+    const prune = (args: string[]) =>
+      executeCI(client, ["buildx", "prune", "--builder", value.name, "--force", ...args], { env, capture: true });
+    if (age > 0) await prune(["--filter", `until=${String(age * 24)}h`]);
+    if (maximum > 0) await prune(["--keep-storage", `${String(maximum)}B`]);
+  } catch (error) {
+    try {
+      diagnostic(
+        LogLevel.Warn,
+        DiagnosticOperation.Command,
+        DiagnosticOutcome.Failed,
+        { command: "owned BuildKit cache collection" },
+        error,
+        "image build completed; cache collection did not complete",
+      );
+    } catch {
+      /* Optional maintenance cannot invalidate the completed build. */
+    }
+  }
+}
+
 /** Serialize only Docker builds; Nix/Guix closure preparation keeps its own concurrency. */
 export async function withProjectBuilder<T>(root: string, action: (client: BuilderClient) => Promise<T>): Promise<T> {
   if (process.platform === "win32")
@@ -219,7 +250,9 @@ export async function withProjectBuilder<T>(root: string, action: (client: Build
         ].join("\n"),
         { mode: 0o700 },
       );
-      return await action({ name, docker: wrapper, env: { BUILDX_CONFIG: temporary, BUILDX_BUILDER: name } });
+      const result = await action({ name, docker: wrapper, env: { BUILDX_CONFIG: temporary, BUILDX_BUILDER: name } });
+      await collectBuildkitCache(value, client, env);
+      return result;
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
@@ -244,7 +277,21 @@ export async function buildProjectImage(root: string, args: string[]): Promise<v
 }
 
 /** Only receipt-owned builders enter the cache selector; discovery never creates or starts one. */
-export async function inspectBuildkitCache(checkout?: string, signal?: AbortSignal): Promise<BuilderCacheReport> {
+export function currentBuildkitCacheKeys(root: string): string[] {
+  if (!existsSync(base())) return [];
+  const image = readFileSync(join(distributionRoot(root), "scripts/container-tools/buildkit-image.txt"), "utf8").trim();
+  return readdirSync(base())
+    .filter((file) => /^workbench-buildkit-[a-f0-9]{24}\.json$/.test(file))
+    .map((file) => readReceipt(join(base(), file)))
+    .filter((value) => value.checkout === buildCheckout(root) && value.image === image)
+    .map((value) => value.name);
+}
+
+export async function inspectBuildkitCache(
+  checkout?: string,
+  signal?: AbortSignal,
+  measure = true,
+): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
   const query = (args: string[]) => dockerQuery(args, signal);
   const report: BuilderCacheReport = { entries: [], issues: [] };
@@ -267,11 +314,12 @@ export async function inspectBuildkitCache(checkout?: string, signal?: AbortSign
       if (!blockedBy && !actual.volume && !actual.container) continue;
       if (!blockedBy && existsSync(`${lockPath(value)}.lock`))
         blockedBy = "active or recovery-required preparation lock";
-      usage ??= JSON.parse(await query(["system", "df", "-v", "--format", "{{json .Volumes}}"])) as {
-        Name: string;
-        Size: string;
-      }[];
-      if (!usage.some((item) => item.Name === volumeName(value)))
+      if (measure)
+        usage ??= JSON.parse(await query(["system", "df", "-v", "--format", "{{json .Volumes}}"])) as {
+          Name: string;
+          Size: string;
+        }[];
+      if (measure && !usage?.some((item) => item.Name === volumeName(value)))
         throw new Error(`Docker volume usage is unavailable: ${volumeName(value)}`);
       report.entries.push({
         key: value.name,
@@ -281,7 +329,9 @@ export async function inspectBuildkitCache(checkout?: string, signal?: AbortSign
         lock: lockPath(value),
         identity: hash(JSON.stringify(value)),
         volumes: [volumeName(value)],
-        bytes: parseDockerBytes(usage.find((item) => item.Name === volumeName(value))?.Size ?? ""),
+        bytes: measure
+          ? parseDockerBytes(usage?.find((item) => item.Name === volumeName(value))?.Size ?? "")
+          : undefined,
         ...(blockedBy ? { blockedBy } : {}),
       });
     } catch (error) {

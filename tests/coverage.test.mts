@@ -30,14 +30,17 @@ test("project coverage attributes directly imported emitted helpers to authored 
     mkdirSync(join(root, "scripts"));
     writeFileSync(join(root, "package.json"), '{"type":"module"}');
     symlinkSync(resolve(import.meta.dirname, "../node_modules"), join(root, "node_modules"), "junction");
+    mkdirSync(join(root, "vendor"));
+    writeFileSync(join(root, "vendor/library.mjs"), "export function result() { return 42; }\n");
     const source = join(root, "scripts/helper.mts");
     writeFileSync(
       source,
-      "export function used(): number { return 42; }\nexport function unused(): number { return 0; }\n",
+      'import { result } from "../vendor/library.mjs";\nexport function used(): number { return result(); }\nexport function unused(): number { return 0; }\n',
     );
     await build({
       entryPoints: [source],
       outfile: join(root, "scripts/helper.mjs"),
+      bundle: true,
       format: "esm",
       platform: "node",
       sourcemap: "inline",
@@ -115,7 +118,15 @@ test("coverage keeps final evidence and cleans selected scratch storage after su
     }
     writeFileSync(
       join(root, "vitest.config.mjs"),
-      'export default { test: { include: ["tests/value.test.mjs"], setupFiles: ["tests/setup.mjs"], reporters: ["json"], outputFile: "coverage/tests.json", coverage: { provider: "v8", include: ["src/*.js"], reporter: ["json"] } } };',
+      `import base from ${JSON.stringify(pathToFileURL(resolve(import.meta.dirname, "../vitest.config.mjs")).href)};
+export default async (context) => {
+  const config = typeof base === "function" ? await base(context) : await base;
+  return { test: {
+    allowOnly: config.test.allowOnly, testTimeout: config.test.testTimeout, hookTimeout: config.test.hookTimeout,
+    include: ["tests/value.test.mjs"], setupFiles: ["tests/setup.mjs"], reporters: ["json"], outputFile: "coverage/tests.json",
+    coverage: { provider: "v8", include: ["src/*.js"], reporter: ["json"] }
+  }};
+};`,
     );
     writeFileSync(
       join(root, "tests/setup.mjs"),

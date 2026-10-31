@@ -160,7 +160,6 @@ test("bundled rendering dependencies cannot prevent measuring executed and unuse
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-render-coverage-")));
   temporary.push(root);
   for (const name of ["src", "bundle", "scripts", "raw"]) mkdirSync(join(root, name));
-  symlinkSync(resolve("node_modules"), join(root, "node_modules"), "junction");
   const source = join(root, "src/main.tsx");
   writeFileSync(
     source,
@@ -179,6 +178,7 @@ test("bundled rendering dependencies cannot prevent measuring executed and unuse
     sourcemap: "inline",
     jsx: "automatic",
     jsxImportSource: "preact",
+    nodePaths: [realpathSync(resolve("node_modules"))],
   });
   const helper = join(root, "scripts/helper.mjs");
   writeFileSync(helper, "console.log('independent helper');\n");

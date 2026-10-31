@@ -11,7 +11,7 @@ import { recordBatch } from "./record-listing.js";
 import { diffLayout, linkButton, tabs as viewTabs } from "./render-links.js";
 import { comparisonView, sourceDiffView } from "./diff-view.js";
 import { mutationForm } from "./action-forms.js";
-import { Route } from "./routes.js";
+import { Route, type RouteQuery } from "./routes.js";
 import { markdown } from "./markdown-view.js";
 import { metadataSections, recordList } from "./record-content.js";
 import { recordURL, routeURL, withView } from "./locations.js";
@@ -20,22 +20,18 @@ import { shell } from "./page-frame.js";
 import { type ViewContext } from "./view-context.js";
 import { sourceURL } from "./sources.js";
 
-export function recordsPage(context: ViewContext, parameters: URLSearchParams): string {
+export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof Route.Records>): string {
   const { type, scope, query } = recordSearch(parameters);
   const found = context.searchRecords({ type, scope, query });
-  if (
-    parameters.has("after") &&
-    parameters.get("cursor_revision") &&
-    parameters.get("cursor_revision") !== context.revision
-  )
+  if (parameters.after !== undefined && parameters.cursor_revision && parameters.cursor_revision !== context.revision)
     throw new WebError(409, "record list changed; refresh the list before loading more records");
   const { visible, more, previous, startAfter } = recordBatch(
     found,
-    parameters.get("after"),
-    parameters.get("through"),
-    parameters.get("before"),
+    parameters.after ?? null,
+    parameters.through ?? null,
+    parameters.before ?? null,
   );
-  const queryParameters = new URLSearchParams(parameters);
+  const queryParameters = new URLSearchParams(Object.entries(parameters));
   queryParameters.delete("through");
   queryParameters.delete("before");
   queryParameters.delete("page");
@@ -79,7 +75,11 @@ export function recordsPage(context: ViewContext, parameters: URLSearchParams): 
     { search: { query, type } },
   );
 }
-function removedDecisionPage(context: ViewContext, parameters: URLSearchParams, model: RemovedDecisionModel): string {
+function removedDecisionPage(
+  context: ViewContext,
+  parameters: RouteQuery<typeof Route.Record>,
+  model: RemovedDecisionModel,
+): string {
   const { decision, view, path, split, base } = model;
   const upstream = model.baseline === "upstream";
   const controls = (
@@ -195,7 +195,7 @@ function citationDocumentsPanel(context: ViewContext, id: string): JSX.Element {
 }
 export function recordPage(
   context: ViewContext,
-  parameters: URLSearchParams,
+  parameters: RouteQuery<typeof Route.Record>,
   draft?: { contents: string; expected: string; error: string },
 ): string {
   const model = recordPageModel(context, parameters);
@@ -324,7 +324,7 @@ export function recordPage(
           governs adapted decisions.
         </p>
       )}
-      {parameters.get("saved") === "1" && (
+      {parameters.saved === "1" && (
         <output class="notice">
           Saved to the working file. Run workbench sync and review the intended changes before committing.
         </output>

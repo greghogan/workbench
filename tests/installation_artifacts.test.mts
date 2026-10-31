@@ -76,12 +76,14 @@ test("the executable package verifies independent adoption and includes referenc
   expect(manifest.license).toBe("Apache-2.0");
   expect(readFileSync(join(packaged, "LICENSE"))).toEqual(readFileSync(join(distribution, "LICENSE")));
   expect(existsSync(join(packaged, "node_modules"))).toBe(false);
+  expect(existsSync(join(packaged, "src"))).toBe(false);
+  expect(existsSync(join(packaged, "tests/installations.test.mts"))).toBe(false);
   for (const reference of [
     "LICENSE",
     "README.md",
     "docs/records.md",
-    "src/main.ts",
-    "tests/installations.test.mts",
+    "bundle/main.cjs.br",
+    "tests/fixtures/records/CHARTER.md",
     "examples/languages/python/pyproject.toml",
   ])
     expect(readFileSync(join(packaged, reference))).toEqual(readFileSync(join(distribution, reference)));

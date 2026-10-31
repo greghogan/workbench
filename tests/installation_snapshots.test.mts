@@ -17,12 +17,14 @@ test("CI snapshots materialize external runtimes without using the retained-orig
   expect(copied).toBe(join(snapshot, ".git/workbench/runtime"));
   expect(readFileSync(join(copied, "bundle/main.cjs"))).toEqual(readFileSync(join(distribution, "bundle/main.cjs")));
   expect(existsSync(join(snapshot, ".workbench"))).toBe(false);
+  expect(existsSync(join(copied, "src"))).toBe(false);
+  expect(existsSync(join(copied, "tests/installations.test.mts"))).toBe(false);
   for (const reference of [
     "LICENSE",
     "README.md",
     "docs/records.md",
-    "src/main.ts",
-    "tests/installations.test.mts",
+    "bundle/main.cjs.br",
+    "tests/fixtures/records/CHARTER.md",
     "examples/languages/python/pyproject.toml",
   ])
     expect(readFileSync(join(copied, reference))).toEqual(readFileSync(join(distribution, reference)));

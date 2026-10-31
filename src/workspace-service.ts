@@ -283,28 +283,64 @@ export class WorkspaceView {
   }
 }
 
+const inputStamp = (path: string): string => {
+  try {
+    const stat = lstatSync(path);
+    return JSON.stringify([stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs]);
+  } catch {
+    return "missing";
+  }
+};
+
+/** Conservative retained graph accounting includes metadata, arrays, errors, and shared references once. */
+export function workspaceSnapshotBytes(value: unknown, seen = new Set<object>()): number {
+  if (typeof value === "string") return 24 + value.length * 2;
+  if (value === null || typeof value !== "object") return 8;
+  if (seen.has(value)) return 0;
+  seen.add(value);
+  if (value instanceof Map)
+    return (
+      64 +
+      [...value].reduce(
+        (total, [key, entry]: [unknown, unknown]) =>
+          total + 40 + workspaceSnapshotBytes(key, seen) + workspaceSnapshotBytes(entry, seen),
+        0,
+      )
+    );
+  if (Array.isArray(value))
+    return 32 + value.reduce((total: number, entry: unknown) => total + 8 + workspaceSnapshotBytes(entry, seen), 0);
+  return (
+    32 +
+    Object.entries(value).reduce(
+      (total, [key, entry]) => total + 16 + workspaceSnapshotBytes(key, seen) + workspaceSnapshotBytes(entry, seen),
+      0,
+    )
+  );
+}
+
 /** Synchronous acquisition belongs to a dedicated worker, never the listener or a renderer. */
 export class WorkspaceCollector {
   private readonly catalog: RecordCatalog;
   private readonly comparisons = new CollectionComparisons();
   private diffs = new Map<string, { key: string; diff: SourceDifference }>();
+  private previous: { snapshot: WorkspaceSnapshot; stamps: Map<string, string>; acquiredAt: number } | undefined;
   constructor(private readonly root: string) {
     this.catalog = new RecordCatalog(root);
   }
-  collect(): WorkspaceSnapshot {
+  collect(fresh = false): WorkspaceSnapshot {
+    const previous = this.previous;
+    if (
+      !fresh &&
+      previous &&
+      Date.now() - previous.acquiredAt < 60_000 &&
+      [...previous.stamps].every(([path, stamp]) => inputStamp(path) === stamp)
+    )
+      return previous.snapshot;
     const paths = new Set<string>();
-    const stamp = (path: string): string => {
-      try {
-        const stat = lstatSync(path);
-        return JSON.stringify([stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs]);
-      } catch {
-        return "missing";
-      }
-    };
     const observed = new Map<string, string>();
     const observe = (path: string) => {
       paths.add(path);
-      if (!observed.has(path)) observed.set(path, stamp(path));
+      if (!observed.has(path)) observed.set(path, inputStamp(path));
     };
     observe(join(this.root, "workbench/config.toml"));
     observe(join(this.root, "workbench/projects.toml"));
@@ -373,7 +409,14 @@ export class WorkspaceCollector {
         contents = bytes.toString("utf8");
         digest = contentDigest(bytes);
         files = supportingFiles(record);
-        for (const file of files) observe(join(record.directory, file.path));
+        const support = join(record.directory, record.path.replace(/\.[^.]+$/, ""));
+        observe(support);
+        for (const file of files) {
+          const absolute = join(record.directory, file.path);
+          observe(absolute);
+          for (let directory = dirname(absolute); directory.startsWith(support); directory = dirname(directory))
+            observe(directory);
+        }
       } catch (cause) {
         error = String(cause);
       }
@@ -516,9 +559,9 @@ export class WorkspaceCollector {
     for (const name of ["index", "HEAD", "packed-refs", "workbench/review.json"])
       paths.add(resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", name]).trim()));
     for (const [path, before] of observed)
-      if (stamp(path) !== before)
+      if (inputStamp(path) !== before)
         throw new StateConflict(`workspace changed during refresh (${path}); retaining the last complete snapshot`);
-    const stamps = [...paths].sort().map((path) => [path, stamp(path)]);
+    const stamps = [...paths].sort().map((path) => [path, inputStamp(path)] as const);
     this.diffs = nextDiffs;
     const directories = new Set<string>([join(this.root, "workbench")]);
     for (const path of paths) {
@@ -526,7 +569,7 @@ export class WorkspaceCollector {
       while (!existsSync(parent) && dirname(parent) !== parent) parent = dirname(parent);
       directories.add(parent);
     }
-    return {
+    const snapshot: WorkspaceSnapshot = {
       root: this.root,
       projects,
       revision: contentDigest(
@@ -581,5 +624,9 @@ export class WorkspaceCollector {
       removedHeadDiffs,
       directories: [...directories],
     };
+    if (workspaceSnapshotBytes(snapshot) > 64 * 1024 * 1024)
+      throw new Error("workspace browser snapshot exceeds 64 MiB; use the CLI for this workspace");
+    this.previous = { snapshot, stamps: new Map(stamps), acquiredAt: Date.now() };
+    return snapshot;
   }
 }

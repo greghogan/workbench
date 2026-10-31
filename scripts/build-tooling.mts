@@ -170,16 +170,29 @@ export async function buildTooling({ root, operation }: { root: string; operatio
     let code: string;
     if (policy.emission === "bundle") {
       const result = await build({
+        absWorkingDir: root,
         entryPoints: [source],
         outfile: destination,
         bundle: true,
-        packages: "external",
+        packages: policy.category === "runtime" ? "bundle" : "external",
         platform: "node",
         target: "es2022",
         format: "esm",
+        // Physical dependency-store labels must not enter portable generated files.
+        minify: policy.category === "runtime",
         sourcemap: "inline",
         sourcesContent: true,
-        banner: { js: banner },
+        banner: {
+          js: [
+            banner,
+            ...(policy.category === "runtime"
+              ? [
+                  'import { createRequire as __workbenchCreateRequire } from "node:module";',
+                  "const require = __workbenchCreateRequire(import.meta.url);",
+                ]
+              : []),
+          ].join("\n"),
+        },
         write: false,
         plugins: [authoredTooling()],
       });
@@ -210,6 +223,11 @@ export async function buildTooling({ root, operation }: { root: string; operatio
       (_, prefix: string, encoded: string) => {
         const map = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as CoverageSourceMap;
         map.file = relative(root, destination).split("\\").join("/");
+        map.sources = map.sources.map((source) => {
+          const path = (source ?? "").replaceAll("\\", "/");
+          const dependency = path.lastIndexOf("/node_modules/");
+          return dependency < 0 ? path : `../${path.slice(dependency + 1)}`;
+        });
         return prefix + Buffer.from(JSON.stringify(map)).toString("base64");
       },
     );

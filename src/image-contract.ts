@@ -33,6 +33,7 @@ const protectionMessages = {
   attached: "referenced by a Docker container",
   locked: "active or recovery-required preparation lock",
   unrelatedTags: "version also has tags outside Workbench's prepared-image namespace",
+  retained: "explicitly retained",
 } as const;
 export type ImageProtection = keyof typeof protectionMessages;
 export function imageProtection(reason?: ImageProtection) {
@@ -53,6 +54,9 @@ interface ImageEntry {
 export interface LocalImageEntry extends ImageEntry {
   catalog: string;
   verified?: string;
+  assembled?: string;
+  platform?: string;
+  inputs?: string;
 }
 export interface RegistryImageEntry extends ImageEntry {
   endpoint: string;

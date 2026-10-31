@@ -62,6 +62,25 @@ function isLink(path: string): boolean {
   }
 }
 
+function nodeVirtualStore(directory: string): string | undefined {
+  const metadata = join(directory, "node_modules/.modules.yaml");
+  if (!existsSync(metadata)) return;
+  const document = parse(readFileSync(metadata, "utf8")) as { virtualStoreDir?: unknown };
+  return typeof document.virtualStoreDir === "string"
+    ? resolve(directory, "node_modules", document.virtualStoreDir)
+    : undefined;
+}
+
+/** Checkout entry points still reference their installed generation until the next successful setup. */
+export function dependencyTargets(directory: string): string[] {
+  const linked = ["node_modules", ".venv"]
+    .map((name) => join(directory, name))
+    .filter((path) => isLink(path) && existsSync(path))
+    .map((path) => realpathSync(path));
+  const store = nodeVirtualStore(directory);
+  return store ? [...linked, store] : linked;
+}
+
 /** Only links to Workbench-owned installations may be replaced automatically. */
 function ownedEnvironment(path: string): boolean {
   const receipt = join(dirname(path), ".workbench-dependencies.json");
@@ -96,11 +115,7 @@ export function dependencySetup(command: string[]): void {
     throw new Error(`${local}: refusing to replace a virtual environment linked outside Workbench storage`);
   if (target && !ownedEnvironment(target)) throw new Error(`${target}: missing dependency ownership receipt`);
   const metadata = resolve("node_modules/.modules.yaml");
-  const virtualStore = () => {
-    if (!existsSync(metadata)) return undefined;
-    const document = parse(readFileSync(metadata, "utf8")) as { virtualStoreDir?: unknown };
-    return typeof document.virtualStoreDir === "string" ? resolve("node_modules", document.virtualStoreDir) : undefined;
-  };
+  const virtualStore = () => nodeVirtualStore(process.cwd());
   const previousStore = external ? virtualStore() : undefined;
   // uv environments embed absolute paths: create at their final location, never move a live environment.
   if (python && !external && oldLink !== undefined) rmSync(local);

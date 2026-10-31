@@ -71,10 +71,11 @@ node scripts/evaluate-skills.mjs claude review refactors --output /tmp/workbench
 ```
 
 The output directory must be new. Cases cover immediate changeset repair, advisory refactoring without edits, a targeted
-dependency upgrade, and audit continuation from a task. The runner checks observable behavior and preserved scope, then
-retains final replies, diffs, new files, and a result report for qualitative review. Passing mechanical checks alone
-does not establish useful advice or complete review. Reports identify the model, harness, and skill-content digest;
-compare repeated runs when assessing a workflow change. Use `--model NAME` to select a model explicitly.
+dependency upgrade, audit continuation from a task, existing-project adoption, local commit/push through installed
+hooks, failed-check recovery, and a human-policy handoff. The first four use the supplied skills; the remaining workflows
+do not enable a named skill. Deterministic positive and negative tests exercise outcome checks in the normal test gate
+without running an agent. Real-model runs are optional, explicitly selected evaluations. Use `--model NAME` to select a
+model explicitly.
 
 These optional evaluations use paid or subscription inference and, for dependencies, the public package registry. Codex
 uses `OPENAI_API_KEY` or a temporary copy of its authentication file; Claude requires `ANTHROPIC_API_KEY` or
@@ -83,6 +84,12 @@ skills, and conversation history are not copied. Each model invocation has a fiv
 and application state are removed on exit; intentional evaluation evidence stays in the selected output directory. Run
 on a trusted development host: disposable directories and disabled history are not a general security sandbox.
 
+Outcome checks verify concrete behavior and scope preservation. The advice-only scenario checks file preservation;
+the handoff scenario checks a nonempty deliverable and unchanged project policy. Neither establishes advice quality.
+Reports retain replies, diffs, new files, an optional `assessmentPrompt`, and model, harness and skill-content identities.
+They explicitly state that qualitative assessment was not performed. Passing these checks does not establish useful
+advice, complete review, or general adherence to a skill.
+
 ## Build and distribution
 
 Author CLI code in `src/*.ts`, tooling and reference helpers in `.mts`, and the CommonJS bundle loader in
@@ -90,21 +97,25 @@ Author CLI code in `src/*.ts`, tooling and reference helpers in `.mts`, and the 
 to regenerate JavaScript, browser assets, and copied reference assets. Runtime and consumer JavaScript stays tracked;
 parity checks reject stale tracked outputs. `scripts/tooling-artifacts.mts` owns the tracking and emission policy.
 Development-only JavaScript, including build, test, lint, packaging, and maintenance helpers, is ignored and regenerated
-by `pnpm run setup` or `pnpm run tooling:maintainers`. Configured dependency setup and the relevant package scripts prepare these outputs
-automatically without repairing tracked files during verification. The tooling builder runs from its TypeScript source
-on the declared development Node version. Setup also runs from TypeScript, using the committed runtime helpers to install
-locked dependencies before compiling development helpers. These outputs live beside their sources and are regenerated
-on each preparation; no checksum manifest is maintained. Packages omit generated development helpers and include the
-runnable bundles and compiled helpers used by consumers. Fresh Git installations launch the
+by `pnpm run setup` or `pnpm run tooling:maintainers`. Configured dependency setup and the relevant package scripts
+prepare these outputs automatically without repairing tracked files during verification. The tooling builder runs from
+its TypeScript source on the declared development Node version. Setup also runs from TypeScript, using the committed
+runtime helpers to install locked dependencies before compiling development helpers. These outputs live beside their
+sources and are regenerated on each preparation; no checksum manifest is maintained. Packages omit generated development
+helpers and include the runnable bundles and compiled helpers used by consumers. Fresh Git installations launch the
 handwritten `bin/workbench.mjs` and committed bundles without development setup.
 
 `tooling:build` also updates the generated development-output block in `.gitignore`. `build-tooling.mts --check`
 verifies tracked outputs and that block; `--maintainers-only` prepares ignored development outputs without repairing
-tracked files. These two flags cannot be combined, and unknown options are rejected. Artifact roles, emitted paths,
-and transform/bundle choices have one authority in `scripts/tooling-artifacts.mts`. Bundled helpers resolve to authored
+tracked files. These two flags cannot be combined, and unknown options are rejected. Artifact roles, emitted paths, and
+transform/bundle choices have one authority in `scripts/tooling-artifacts.mts`. Bundled helpers resolve to authored
 sources so stale generated dependencies cannot enter a fresh bundle. Bundle construction is shared by building and
 verification; publication closes staged candidates first and activates compressed payloads before their loaders.
 Verification also checks the emitted runtime dependency graph and literal `{workbench}` paths in language templates.
+External package imports must name Node builtins or declared runtime dependencies; development dependencies alone do not
+make a package available to consumers. Runtime helper bundles include their locked parser dependencies. Strict lint
+applies to their authored TypeScript; generated bundles also contain upstream code and are verified through parity and
+isolated execution.
 
 This repository configures pnpm, Prettier, type-aware ESLint, TypeScript 7 type checking, Vitest, bundle parity, and
 shell checks. Rust tools in the root development manifest support the Rust reference checks; the Workbench CLI itself
@@ -230,7 +241,26 @@ and fonts, without changing their channel pins. Their containers run Linux; nati
 ARM64 and Windows x64. Browser checks run in CI and remain explicitly selectable locally. PDF scenarios verify
 Workbench's links, response headers, exact bytes, ranges, and changed-content rejection, without inspecting a
 browser-specific PDF viewer. These checks complement HTTP/service tests and do not establish complete Section 508
-conformance.
+conformance. The accessibility scenario runs axe WCAG A/AA and best-practice rules across the dashboard, cache, search,
+record, editor, diff, review, and collection pages, plus keyboard, enlarged-text, reflow, and presentation checks. Its
+`accessibility.json` identifies the release digest, tool/browser versions, rule outcomes, and incomplete or unverified
+criteria. Treat this as automated evidence, not a conformance assertion. Real NVDA, VoiceOver, or Orca evaluation
+requires a supported headed assistive-technology environment and remains outside these headless browser checks.
+
+A separate required Windows CI job exercises the disposable demonstration with NVDA and a headed Chrome for Testing
+browser. Guidepup packages are exact development dependency pins; NVDA's archive version and SHA-256 come from the
+locked Guidepup manifest. Chrome shares the `.tool-versions` browser version with the headless shell and has a separate
+verified Windows archive recipe in `scripts/screen-reader-assets.json`. Browser updates must refresh both recipes.
+Chrome for Testing does not advertise separate artifact authentication; the recipe records that limitation. The NVDA archive's
+GitHub release digest agrees with the Guidepup manifest; no separate signature is advertised in that release.
+
+After locked dependency setup and `pnpm run tooling:maintainers`, run `node scripts/prepare-screen-reader.mjs` on an
+isolated Windows x64 desktop, then `node scripts/check-screen-reader.mjs --browser PATH --output NEW_DIRECTORY`.
+The serial workflow checks spoken headings and form labels during search, charter editing and exact-file review,
+while retaining transcripts, screenshots on failure, the tested release digest and software versions. It adds
+interoperability evidence; its report does not claim complete Section 508 conformance. `--browser-only` can rehearse
+the same browser actions with the existing headless shell on other platforms; its report explicitly contains no
+screen-reader verification. These tools are development dependencies and are not included in the installed CLI.
 
 Release verification extracts the archive and installs it through npm offline, then initializes and structurally
 validates every bundled language starter outside the source checkout. This exercises the installed template assets;
@@ -269,8 +299,8 @@ require no administrator access, external repository, published release, or chan
 The same integration phase prepares a source-only developer checkout. A private Git repository captures working source,
 including new files, without changing the caller's index or refs. Generated development helpers and volatile build
 results are absent initially. The rehearsal verifies bootstrap execution, validation before and after locked dependency
-setup, bundle parity, and unchanged tracked source. It runs in CI and explicit local integration, alongside the installed
-consumer scenarios.
+setup, bundle parity, and unchanged tracked source. It runs in CI and explicit local integration, alongside the
+installed consumer scenarios.
 
 Use the underlying runner to select languages, retain reports in a new directory, or test an existing release candidate:
 

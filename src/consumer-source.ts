@@ -41,6 +41,6 @@ export async function exerciseSourceCheckout(options: {
       if (!existsSync(join(root, file))) throw new Error(`Source setup did not generate ${file}`);
     await run("validate-after", [cli, "validate"]);
     await run("parity", [cli, "package-manager-exec", "--", "run", "bundle:check"]);
-    await options.commands.run("source-unchanged", ["git", "diff", "--exit-code"], root, env);
+    await options.commands.run("source-unchanged", ["git", "diff", "--exit-code", "HEAD"], root, env);
   });
 }

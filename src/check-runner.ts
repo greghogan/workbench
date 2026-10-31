@@ -34,7 +34,7 @@ import { cpuEnvironment } from "../scripts/cpu-budget.mjs";
 import type { CheckCancellation } from "./check-cancellation.js";
 import type { ProcessLock } from "./process-lock.js";
 import { CheckLines, CheckProgress, checkEventPrefix } from "./check-progress.js";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 import type { CheckSelection, planChecks } from "./check-plan.js";
 
 type Plan = ReturnType<typeof planChecks>;

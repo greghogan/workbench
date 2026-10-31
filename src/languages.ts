@@ -7,7 +7,9 @@ import { editToml } from "./toml-edit.js";
 import { ProjectEdits } from "./project-edits.js";
 import { readLanguageRoots, readProjects } from "./project-configuration.js";
 import { readText } from "./files.js";
-import { ownedPath } from "./paths.js";
+import { ownedPath, registeredRootPath } from "./paths.js";
+import { defaultId } from "./project-identity.js";
+import { quote } from "./toolchains.js";
 import { catalog } from "./language-config.js";
 export { catalog } from "./language-config.js";
 export type { Language } from "./language-config.js";
@@ -94,14 +96,7 @@ export function planLanguage(
   if (!language.starter && !options.adopt)
     throw new Error(`no starter for ${languageId}; use --adopt with project-owned checks`);
   const normalized = path.replace(/\/$/, "") || ".";
-  if (
-    normalized !== "." &&
-    (!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(normalized) ||
-      normalized
-        .split("/")
-        .some((part) => [".", "..", ".git", ".workbench", "workbench", "target", "libexec"].includes(part)))
-  )
-    throw new Error(`unsafe language root: ${path}`);
+  registeredRootPath(normalized, "unsafe language root");
   const directory = ownedPath(root, normalized);
   if (existsSync(directory) && !lstatSync(directory).isDirectory())
     throw new Error(`${normalized}: language root must be a real directory`);
@@ -158,16 +153,14 @@ export function planLanguage(
     if (file === "package.json") {
       const package_ = JSON.parse(body.toString()) as Record<string, unknown>;
       package_.name =
-        normalized === "."
-          ? (options.id ?? required(readProjects(root)[0], "root project").id)
-          : required(normalized.split("/").at(-1), "language directory");
+        normalized === "." ? (options.id ?? required(readProjects(root)[0], "root project").id) : defaultId(normalized);
       body = `${JSON.stringify(package_, null, 2)}\n`;
     }
     if (file === "README.md") {
       const examples = body.toString().match(/```console\n[\s\S]*?\n```/g) ?? [];
       body =
         `# ${options.id ?? language.name}\n\nProject-owned ${language.name} starter. Adapt the source, manifests, and checks to your application.\n\n` +
-        `Install declared tools with \`workbench tools install --path ${normalized}\`, then run \`workbench check --path ${normalized}\`.\n\n` +
+        `Install declared tools with \`workbench tools install --path ${quote(normalized)}\`, then run \`workbench check --path ${quote(normalized)}\`.\n\n` +
         (examples.length ? `## Executable examples\n\n${examples.join("\n\n")}\n` : "");
     }
     const target = `${prefix}${destination}`;
@@ -189,7 +182,7 @@ export function initLanguage(root: string, languageId: string, path = "."): void
   planLanguage(edits, languageId, path);
   edits.apply();
   console.log(`Initialized ${languageId} at ${path}. Copied files and checks are project-owned.`);
-  console.log(`Next: workbench tools install --path ${path}\nThen: workbench check --path ${path}`);
+  console.log(`Next: workbench tools install --path ${quote(path)}\nThen: workbench check --path ${quote(path)}`);
 }
 
 export function listLanguages(root: string): void {

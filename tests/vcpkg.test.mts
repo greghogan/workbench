@@ -88,6 +88,15 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
   prepareVcpkg(root, build);
   prepareVcpkg(root, build);
   expect(readFileSync(join(build, "workbench-compiler.cmake"), "utf8")).toContain("clang++");
+  vi.stubEnv("WORKBENCH_COMPILER", "clang");
+  const selectedCC = join(bin, process.platform === "win32" ? "clang.exe" : "clang");
+  const selectedCXX = join(bin, process.platform === "win32" ? "clang++.exe" : "clang++");
+  vi.stubEnv("WORKBENCH_CC", selectedCC);
+  vi.stubEnv("WORKBENCH_CXX", selectedCXX);
+  prepareVcpkg(root, build);
+  const chainload = readFileSync(join(build, "workbench-compiler.cmake"), "utf8");
+  expect(chainload).toContain(selectedCC.replaceAll("\\", "/"));
+  expect(chainload).toContain(selectedCXX.replaceAll("\\", "/"));
   if (process.platform === "win32") {
     expect(
       execute("git", ["config", "--local", "--get", "core.longpaths"], { cwd: installation, capture: true }).trim(),

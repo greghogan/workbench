@@ -418,3 +418,14 @@ test.skipIf(process.platform !== "win32")(
     expect(checkBaseEnvironment(typescript, typescript, source).PATH?.split(delimiter)).not.toContain(compiler);
   },
 );
+
+test("declared native Cargo target survives external storage and participates in the effective environment", () => {
+  const { root, base } = fixture(["rust"], ["CARGO_TARGET_DIR"]);
+  vi.stubEnv("WORKBENCH_STORAGE_EXTERNAL", "true");
+  const target = join(base, "direnv-selected target");
+  vi.stubEnv("CARGO_TARGET_DIR", target);
+  expect(nativeCheckEnvironment(root, root).CARGO_TARGET_DIR).toBe(target);
+  const other = join(base, "another target");
+  vi.stubEnv("CARGO_TARGET_DIR", other);
+  expect(nativeCheckEnvironment(root, root).CARGO_TARGET_DIR).toBe(other);
+});

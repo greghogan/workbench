@@ -12,9 +12,9 @@ import { matrixJobGroups, readHostedPlan } from "./ci-plan-contract.mjs";
 export function aggregateCI(needs: Record<string, JobResult>, matrix: unknown) {
   const expected: Record<string, boolean> = matrixJobGroups(matrix);
   const failures = [];
-  for (const name of ["plan", "validation", ...Object.keys(expected)]) {
+  for (const name of new Set(["plan", "validation", ...Object.keys(expected), ...Object.keys(needs)])) {
     const result = needs[name]?.result;
-    const wanted = name === "plan" || name === "validation" || expected[name];
+    const wanted = !Object.hasOwn(expected, name) || expected[name];
     if (wanted ? result !== "success" : result !== "skipped")
       failures.push(`${name}: ${result ?? "missing"} (expected ${wanted ? "success" : "skipped"})`);
   }

@@ -6,7 +6,6 @@ import { bundleArtifacts, bundleCompression, bundleFormats } from "./bundle-arti
 import { bundleLicenses, noticesPath } from "./bundle-licenses.mjs";
 import { stageFile, type StagedFile } from "./file-publication.mjs";
 import { combineFailures } from "./diagnostic-errors.mjs";
-import { authoredTooling } from "./authored-tooling.mts";
 
 export const compressedBundles = ["main", "skills", "package", "consumer", "bootstrap"] as const;
 export const bundleEntries = [...compressedBundles, "launcher"] as const;
@@ -28,7 +27,7 @@ export async function compileBundles(root: string): Promise<BundleSet> {
   const set: BundleSet = { outputs: [], obsolete: [], scripts: [], references: [] };
   const compression = bundleCompression(root);
   for (const name of bundleEntries) {
-    const result = await build({ ...bundleOptions(root, name), write: false, plugins: [authoredTooling()] });
+    const result = await build({ ...bundleOptions(root, name), write: false });
     const output = result.outputFiles[0];
     if (!output) throw new Error(`Missing bundle output: ${name}`);
     for (const input of Object.keys(result.metafile.inputs)) inputs.add(input);

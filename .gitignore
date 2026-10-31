@@ -18,6 +18,7 @@ target/
 *.tsbuildinfo
 .pnpm-store/
 node_modules
+.screen-reader-assets/
 
 # Python dependencies and caches; virtual environments may be links
 *.egg-info/
@@ -60,6 +61,7 @@ __pycache__/
 /scripts/check-consumers.mjs
 /scripts/check-harnesses.mjs
 /scripts/check-release.mjs
+/scripts/check-screen-reader.mjs
 /scripts/check-web-browser.mjs
 /scripts/check-workflows.mjs
 /scripts/coverage-processing.mjs
@@ -70,7 +72,9 @@ __pycache__/
 /scripts/link-dependencies.mjs
 /scripts/node-coverage-reports.mjs
 /scripts/package-workbench.mjs
+/scripts/prepare-screen-reader.mjs
 /scripts/runtime-dependencies.mjs
+/scripts/refresh-managed-inputs.mjs
 /scripts/setup-development.mjs
 /scripts/skill-evaluation-cases.mjs
 /scripts/source-checkout.mjs
@@ -78,6 +82,7 @@ __pycache__/
 /scripts/test-coverage.mjs
 /scripts/test-failures.mjs
 /scripts/tooling-artifacts.mjs
+/scripts/web-accessibility.mjs
 /scripts/web-browser-fixtures.mjs
 /scripts/web-browser-scenarios.mjs
 /scripts/work-admission.mjs

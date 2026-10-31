@@ -1,4 +1,4 @@
-import { maintainerOutputs } from "./scripts/tooling-artifacts.mts";
+import { maintainerOutputs, bundledOutputs } from "./scripts/tooling-artifacts.mts";
 import js from "@eslint/js";
 import { defineConfig } from "eslint/config";
 import eslintConfigPrettier from "eslint-config-prettier";
@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 import { jsxRenderingRules } from "./scripts/jsx-rendering-lint.mjs";
 
 export default defineConfig(
-  { ignores: maintainerOutputs },
+  { ignores: [...maintainerOutputs, ...bundledOutputs] },
   js.configs.recommended,
   {
     linterOptions: { reportUnusedDisableDirectives: "error", reportUnusedInlineConfigs: "error" },

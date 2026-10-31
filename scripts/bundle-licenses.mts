@@ -53,9 +53,15 @@ export function bundleLicenses(root: string, inputs: Iterable<string>) {
     if (packages.has(identity)) continue;
     if (!policy.allow.includes(metadata.license))
       throw new Error(`${identity}: license '${metadata.license}' needs policy review`);
-    const license = ["LICENSE", "LICENSE.md", "LICENSE.txt", "LICENSE-MIT.txt"].find((file) =>
-      existsSync(join(directory, file)),
-    );
+    const license = [
+      "LICENSE",
+      "LICENSE.md",
+      "LICENSE.txt",
+      "LICENSE-MIT.txt",
+      "license",
+      "license.md",
+      "license.txt",
+    ].find((file) => existsSync(join(directory, file)));
     const override = overrides[identity];
     if (!license && !override) throw new Error(`${identity}: identify its license notice before bundling`);
     const notice = readFileSync(

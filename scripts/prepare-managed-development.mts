@@ -1,6 +1,7 @@
 import { required, isStringArray } from "./values.mjs";
 import { guixImageDefinition } from "./pack-guix-image.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
+import { importManagedImage } from "./managed-image-import.mjs";
 import { builderVolumes, builderCacheKey, guixChannelFile } from "./managed-contract.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -84,12 +85,21 @@ await withManagedProcesses(async (scope) => {
     const cache = builderCacheKey(process.env.WORKBENCH_PREPARATION_OWNER ?? root, builder, process.arch, identity);
     const volumes = builderVolumes(builder, cache);
     for (const volume of volumes) await run(["volume", "create", volume.name]);
-    await run(
-      [join(distribution, "bin/workbench.mjs"), "managed-builder-record", builder, cache],
-      false,
-      false,
-      process.execPath,
+    const maintenance: unknown = JSON.parse(
+      await run(
+        [join(distribution, "bin/workbench.mjs"), "managed-builder-record", builder, cache],
+        true,
+        false,
+        process.execPath,
+      ),
     );
+    if (
+      !maintenance ||
+      typeof maintenance !== "object" ||
+      !("collect" in maintenance) ||
+      typeof maintenance.collect !== "boolean"
+    )
+      throw new Error("Invalid private builder maintenance selection");
     const mounts = volumes.flatMap(({ name, destination }) => [
       "--mount",
       `type=volume,src=${name},dst=${destination}`,
@@ -123,6 +133,13 @@ await withManagedProcesses(async (scope) => {
       "WORKBENCH_ROOTS_FILE=/output/roots.json",
       "--env",
       `WORKBENCH_IMAGE_INPUTS=${String(inputs)}`,
+      "--env",
+      `WORKBENCH_PRIVATE_BUILDER=${cache}`,
+      "--env",
+      `WORKBENCH_BUILDER_GC=${String(maintenance.collect)}`,
+      ...(process.env.WORKBENCH_BUILDER_RETAIN_INPUTS === undefined
+        ? []
+        : ["--env", `WORKBENCH_BUILDER_RETAIN_INPUTS=${process.env.WORKBENCH_BUILDER_RETAIN_INPUTS}`]),
       "--workdir",
       "/preparation",
       "--entrypoint",
@@ -138,24 +155,7 @@ await withManagedProcesses(async (scope) => {
     const archive = readFileSync(join(temporary, "image-path"), "utf8").trim();
     if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
       throw new Error("Builder returned an invalid image store path");
-    // Docker cp adds a tar wrapper. Stream its single archive entry to Docker, without a second disk copy.
-    const loaded = await run(
-      [
-        "-o",
-        "pipefail",
-        "-c",
-        'docker cp "$1:$2" - | tar -xO | docker load',
-        "workbench-image-import",
-        container,
-        archive,
-      ],
-      true,
-      false,
-      "bash",
-    );
-    const id = /Loaded image(?: ID)?: (.+)/.exec(loaded)?.[1];
-    if (!id) throw new Error("Docker did not report the imported image identity");
-    await run(["tag", id, image]);
+    await importManagedImage(scope, archive, image, container);
   }
   if (builder === "guix") {
     const { materialize } = guixImageDefinition(root);

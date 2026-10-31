@@ -68,8 +68,6 @@ export class WorkspaceMonitor extends EventEmitter {
         if (response.ok !== true) {
           throw decodeWorkerFailure(response);
         }
-        const snapshot = readSnapshot("snapshot" in response ? response.snapshot : undefined);
-        if (snapshot.root !== this.root) throw new Error("workspace worker returned another project");
         if (this.closed) {
           diagnostic(
             LogLevel.Debug,
@@ -82,6 +80,27 @@ export class WorkspaceMonitor extends EventEmitter {
           pending.resolve();
           return;
         }
+        if ("unchanged" in response) {
+          const current = response.unchanged;
+          if (
+            !current ||
+            typeof current !== "object" ||
+            !("revision" in current) ||
+            !("collectedAt" in current) ||
+            typeof current.collectedAt !== "string" ||
+            !Number.isFinite(Date.parse(current.collectedAt)) ||
+            !this.index ||
+            current.revision !== this.index.snapshot.revision
+          )
+            throw new Error("invalid unchanged workspace response");
+          this.index.snapshot.collectedAt = current.collectedAt;
+          this.problem = "";
+          if (performance.now() - this.workerStarted >= 60_000) this.restartAttempts = 0;
+          pending.resolve();
+          return;
+        }
+        const snapshot = readSnapshot("snapshot" in response ? response.snapshot : undefined);
+        if (snapshot.root !== this.root) throw new Error("workspace worker returned another project");
         const previous = this.revision;
         this.index = new WorkspaceIndex(snapshot, this.index);
         if (this.problem) diagnostic(LogLevel.Info, DiagnosticOperation.WorkspaceRefresh, DiagnosticOutcome.Recovered);
@@ -184,7 +203,8 @@ export class WorkspaceMonitor extends EventEmitter {
   }
   reconcile(fresh = false): Promise<void> {
     if (this.closed) return Promise.resolve();
-    if (this.pending) return fresh ? this.pending.catch(() => undefined).then(() => this.reconcile()) : this.pending;
+    if (this.pending)
+      return fresh ? this.pending.catch(() => undefined).then(() => this.reconcile(true)) : this.pending;
     const started = performance.now();
     this.metrics.count("refreshes");
     this.pending = new Promise<void>((resolve, reject) => {
@@ -193,7 +213,7 @@ export class WorkspaceMonitor extends EventEmitter {
         return;
       }
       this.settle = { resolve, reject };
-      this.worker?.postMessage(WorkspaceRequest.Refresh);
+      this.worker?.postMessage(fresh ? WorkspaceRequest.Fresh : WorkspaceRequest.Refresh);
     })
       .catch((error: unknown) => {
         this.metrics.count("refreshFailures");

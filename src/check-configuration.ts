@@ -1,14 +1,14 @@
-import { ownedPath } from "./paths.js";
+import { ownedPath, registeredRootPath } from "./paths.js";
 import { existsSync, lstatSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { rootOf } from "./project-context.js";
 import { readConfig, readLanguageRoots, readProjects } from "./project-configuration.js";
-import { readToml } from "./files.js";
 import { type Project, type CheckDefinition } from "./project-model.js";
 import { catalog } from "./language-config.js";
 import { readCheckOrder } from "./check-order.js";
 import { checkEnvironment, type CheckEnvironment } from "./environments.js";
 import { checkPolicy, commandArguments } from "./check-plan.js";
+import { withConfigurationSnapshot, readConfigurationToml as readToml } from "./configuration-snapshot.js";
 
 export interface ConfiguredCheck {
   name: string;
@@ -30,6 +30,10 @@ export interface ConfiguredCheck {
 const validRole = /^[a-z][a-z0-9-]*$/;
 
 export function readChecks(root: string): ConfiguredCheck[] {
+  return withConfigurationSnapshot(() => configuredChecks(root));
+}
+
+function configuredChecks(root: string): ConfiguredCheck[] {
   const config = readConfig(root);
   const projects = readProjects(root);
   if (config.checks?.allow_empty !== undefined && typeof config.checks.allow_empty !== "boolean")
@@ -92,23 +96,9 @@ export function readChecks(root: string): ConfiguredCheck[] {
     const policy = checkPolicy(entry);
     const project = projects.find((candidate) => candidate.id === (entry.project ?? projects[0]?.id));
     if (!project) throw new Error(`check '${entry.name}' names unknown project '${String(entry.project)}'`);
-    if (
-      entry.path !== undefined &&
-      (entry.project !== undefined ||
-        (entry.path !== "." &&
-          (isAbsolute(entry.path) ||
-            entry.path.includes("\\") ||
-            entry.path
-              .split(/[\\/]/)
-              .some(
-                (part) =>
-                  !part ||
-                  part === "." ||
-                  part === ".." ||
-                  [".git", ".workbench", "workbench", "target", "libexec"].includes(part),
-              ))))
-    )
+    if (entry.path !== undefined && entry.project !== undefined)
       throw new Error(`check '${entry.name}' has an unsafe or ambiguous path`);
+    if (entry.path !== undefined) registeredRootPath(entry.path, `check '${entry.name}' path`);
     if (entry.path) ownedPath(root, entry.path);
     if (entry.path && entry.path !== ".") {
       let directory = root;

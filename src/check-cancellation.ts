@@ -190,7 +190,7 @@ export class CheckCancellation {
       this.controller.signal.addEventListener("abort", interrupt, { once: true });
       if (this.cancelled) interrupt();
       try {
-        owner?.spawned(child.pid, !foreground);
+        owner?.spawned(child.pid, process.platform !== "win32" && !foreground);
       } catch (error) {
         failure ??= error instanceof Error ? error : new Error(String(error));
         this.cancel();

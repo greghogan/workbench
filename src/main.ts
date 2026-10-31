@@ -15,7 +15,7 @@ import {
   diagnostic,
   settleCleanup,
 } from "./diagnostics.js";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 import { startDiagnosticSession } from "./diagnostic-session.js";
 import { readLog } from "./log-storage.js";
 import { isMainThread, workerData } from "node:worker_threads";
@@ -105,9 +105,10 @@ import {
   offlineProfile,
   offlineImageReference,
 } from "./offline-profiles.js";
-import { listToolProfiles } from "./tool-profiles.js";
+import { listToolProfiles } from "./tool-profile-output.js";
 import { listReleaseProfiles, prepareReleases } from "./release-profiles.js";
 import { dependencySetup, pnpmStorageConfiguration } from "./dependencies.js";
+import { autoPrune } from "./auto-prune.js";
 import { executePhpCoverage } from "./php-coverage.js";
 import { executeComposer, composerBootstrap } from "./php-manager.js";
 import { executeBundler } from "./ruby-manager.js";
@@ -599,6 +600,11 @@ registerCommand(program, "dependency-setup", { hidden: true })
   .action((command: string[]) => {
     dependencySetup(command);
   });
+registerCommand(program, "cache-auto-prune", { hidden: true })
+  .argument("[root]")
+  .action(async (requested: string | undefined) => {
+    await autoPrune(requested ? resolve(requested) : root);
+  });
 registerCommand(program, "ci-image-exec", { hidden: true })
   .argument("<profile>")
   .argument("[command...]")
@@ -848,7 +854,7 @@ registerCommand(program, "managed-builder-record", { hidden: true })
   .argument("<builder>")
   .argument("<cache>")
   .action(async (builder: string, cache: string) => {
-    await recordBuilderVolumes(root, builder, cache);
+    console.log(JSON.stringify(await recordBuilderVolumes(root, builder, cache)));
   });
 registerCommand(program, "image-finalize", { hidden: true })
   .argument("<source>")

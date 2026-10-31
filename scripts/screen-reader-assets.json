@@ -1,0 +1,15 @@
+{
+  "156.0.8078.4": {
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.4/win64/chrome-win64.zip",
+    "sha256": "220021ecfdad08c116fc71a153e65e3861ba841c531afc4f7acc7bd5d44b41db",
+    "format": "zip",
+    "strip": 1,
+    "bin": ".",
+    "executable": "chrome.exe",
+    "authenticationUnavailable": {
+      "reason": "No detached checksum signature or artifact attestation is advertised in Chrome for Testing release metadata.",
+      "source": "https://github.com/GoogleChromeLabs/chrome-for-testing",
+      "checked": "2026-10-31"
+    }
+  }
+}

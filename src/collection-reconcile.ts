@@ -1,6 +1,12 @@
 import { combineFailures } from "../scripts/diagnostic-errors.mjs";
 import { readProjectReconciliation } from "./policy-state.js";
-import { authoritativeFiles, collectionWorkingFiles, mergeCollectionFiles } from "./collection-files.js";
+import {
+  authoritativeFiles,
+  collectionWorkingFiles,
+  mergeCollectionFiles,
+  bytesHash as hash,
+  collectionTreeHash as fingerprint,
+} from "./collection-files.js";
 export { collectionWorkingFiles } from "./collection-files.js";
 import {
   acquireGitCollection,
@@ -29,18 +35,8 @@ import { ownedPath } from "./paths.js";
 import { git } from "./update-git.js";
 import { withCacheLockSync } from "./cache-lock.js";
 
-const hash = (value: Buffer | undefined) =>
-  value === undefined ? null : createHash("sha256").update(value).digest("hex");
 const equal = (a: Buffer | undefined, b: Buffer | undefined) => hash(a) === hash(b);
 const originals = (collection: VerifiedCollection) => authoritativeFiles(collection.files);
-const fingerprint = (files: Map<string, Buffer>) =>
-  hash(
-    Buffer.from(
-      JSON.stringify(
-        [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([name, bytes]) => [name, hash(bytes)]),
-      ),
-    ),
-  );
 
 /** Publish each file completely; the transaction journal coordinates the multi-file replacement. */
 function publishBytes(path: string, bytes: Buffer | undefined, expected: Buffer | undefined): void {

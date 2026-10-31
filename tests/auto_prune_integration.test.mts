@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { invalidateCacheSize } from "../src/cache-size.ts";
+import { inspectToolReferences } from "../src/tool-references.ts";
 import { cacheProjectFixture } from "./fixtures/cache-project.mjs";
 import { autoPrune } from "../src/auto-prune.ts";
 import { keepCacheAsset, registeredProjects } from "../src/project-registry.ts";
@@ -13,6 +16,15 @@ function fixture() {
   fixtures.push(value);
   return value;
 }
+test("size invalidation metadata alone does not retain a removed build result or its tool references", () => {
+  const f = fixture(),
+    tool = f.install("4.0.1"),
+    root = f.project("empty");
+  const paths = f.result(root, tool);
+  rmSync(join(paths.directory, "output"));
+  invalidateCacheSize(paths.directory, true);
+  expect(inspectToolReferences().results).toEqual([]);
+});
 test("two consumers release a shared installation only after both have working replacements and their old results are retired", async () => {
   const f = fixture(),
     old = f.install("4.0.1"),

@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { distributionRoot } from "./project-context.js";
 import { readConfig } from "./project-configuration.js";
-import { readToml } from "./files.js";
+import { configurationValue, readConfigurationToml as readToml } from "./configuration-snapshot.js";
 import { type CheckDefinition, type LanguageRoot } from "./project-model.js";
 import { validateLanguageIndex, validateLanguageMetadata, validateLanguageAutomation } from "./config-schema.js";
 import { ownedPath, relativePath } from "./paths.js";
@@ -48,6 +48,10 @@ function identity(id: string, context: string): void {
 
 /** Select the complete source before opening it; ignored shared definitions are never parsed. */
 export function catalog(root: string): Language[] {
+  return configurationValue(`catalog:${root}:${distributionRoot(root)}`, () => loadCatalog(root));
+}
+
+function loadCatalog(root: string): Language[] {
   const distribution = distributionRoot(root);
   const indexPath = ownedPath(distribution, "languages/index.toml");
   const localPath = ownedPath(root, "workbench/languages");

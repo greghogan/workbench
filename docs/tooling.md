@@ -196,6 +196,44 @@ compatibility profiles, last working selections, active work, retained results, 
 Missing or unreadable registered projects prevent uncertain shared-tool cleanup. Automatic cleanup preserves records,
 experiment evidence, and retained logs; a maintenance failure reports separately from successful checks.
 
+Build fingerprints can also become obsolete without a toolchain update, for example after lockfile or build-option
+changes. Automatic retention normally keeps two generations for each root, environment, CI target and tool selection:
+the latest verified working generation and the most recent other attempt. It also ages off superseded generations
+unused for seven days. Set `cache.max_generations` or
+`cache.max_age_days` globally to change these limits; zero disables the corresponding limit. Both limits require a
+complete successful replacement gate. Current configured native variants, active work, explicit keeps, the latest
+verified replacement and latest attempt remain protected. Retention uses owned generation
+receipts and revalidates deletion under locks; it does not remove unmanaged Cargo targets or other legacy directories.
+Host platforms retain independent generations. Older receipts without platform provenance remain available for explicit
+reviewed pruning; new activity records that provenance for automatic retention.
+
+Successful container preparation and verification also retire superseded local prepared images. By default,
+`cache.max_image_generations` retains one verified image per checkout, profile and platform; zero disables image
+retention. Images required by accepted profiles, attached to containers, explicitly kept, or involved in active work
+remain protected. Registry publications are retained. Development maintenance requests cleanup after applying updates;
+changing pins or installing a replacement alone does not release the previous working toolchain before its checks pass.
+Verified profiles also retain their required Workbench-owned builder generations. After all current profiles have verified
+requirements, unused older builder volumes can be retired under ownership locks. Missing or stale profile evidence,
+attached containers and explicit keeps prevent deletion. Cleanup rechecks references without walking Docker payloads
+again; previewed sizes remain separate from deletion authority. Host package-manager stores are not claimed as private
+Workbench builder caches.
+After successful assembly inside an owned Docker Nix/Guix builder, Workbench publishes persistent GC roots for the
+builder runtime, selected profiles and prepared image archive, then invokes the manager's garbage collector. Accepted
+profiles and explicitly kept images retain their roots. Unknown profile evidence preserves older roots; only owned
+root generations can expire. Explicitly kept builder volumes and `cache.auto_prune=false` disable this collection.
+Package payloads are removed by the manager according to reachability, and collection failure preserves the prepared
+output. Collection can increase later downloads or rebuilding of unused build inputs. The host-store preparation path
+does not run automatic GC on the user's shared host store.
+
+Successful Docker builds also collect unused data through their dedicated BuildKit builder. `cache.max_age_days`
+controls age-off, and `cache.buildkit_max_bytes` defaults to 10 GiB per builder; zero disables the corresponding rule.
+Collection revalidates the daemon's ownership and preserves explicit builder keeps. These rules act on unused cache;
+active and referenced resources remain protected by BuildKit. No global Docker prune is run.
+Managed image imports share an engine lock and remove newly introduced transport tags after successful staging;
+preexisting source tags remain available. Cleanup failure preserves the staged image and reports separately.
+Failed checks can also retire older unused generations without recording replacement success; current and last-working
+generations remain protected. Cancellation leaves this maintenance to the next operation.
+
 Workbench only automatically removes verified archive installations and manager installations newly installed and
 verified by Workbench. Existing Rustup/uv installations are available for explicit reviewed cleanup but are not claimed
 for automatic deletion. Minor/major tool upgrades and package-manager download stores require manual cleanup.
@@ -415,6 +453,12 @@ previous local virtual store only after successful installation.
 | Java       | Maven compiles and packages in an isolated build directory; its shared repository stays under `<storage.root>/downloads/maven` and verifies the committed SHA-256 index.        |
 | Python     | `UV_PROJECT_ENVIRONMENT` selects an external environment; setup maintains a `.venv` link for editors. Bytecode, check caches, and package-build intermediates are external too. |
 
+Native Rust commands preserve an explicitly supplied `CARGO_TARGET_DIR`; native checks receive it only when the project
+includes it in `checks.pass_environment`. Otherwise external storage supplies Workbench's isolated default. Managed
+Nix/Guix commands keep their environment-specific target directory. Workbench does not load `.envrc` implicitly: activate
+the consuming project's environment explicitly, for example `direnv exec /path/to/project cargo build --locked`.
+A caller-selected target remains caller-owned and is outside Workbench's automatic build-cache pruning.
+
 In external storage mode, pnpm's shared package store lives at `<storage.root>/downloads/pnpm`; with the default Linux
 location, this is `~/.cache/workbench/downloads/pnpm`. `PNPM_CONFIG_STORE_DIR` selects it for Workbench commands and
 shells. Nix, Guix, and Dev Container execution expose the same cache where external storage is enabled. Project virtual
@@ -443,6 +487,7 @@ workbench cache --checkout tools        # Shared Tools only
 workbench cache --checkout images       # Locally prepared Docker images
 workbench cache --registry              # Published GHCR versions for this project
 workbench cache --json                  # Ownership, paths, versions, and protection reasons
+workbench cache --fresh                 # Remeasure selected filesystem caches
 workbench cache prune                   # Select projects and confirm; preview outside a terminal
 workbench cache prune --dependencies    # Also select installed project dependencies
 workbench cache prune --checkout tools  # Select and confirm shared-tool cleanup
@@ -455,6 +500,14 @@ The table treats shared installations as a virtual **Tools** project, with langu
 share a group; Node covers JavaScript and TypeScript, and common helpers appear under `build-tools`. Totals use the same
 layout as checkout caches. JSON includes individual versions, installation identities, paths, and protection reasons.
 Tools always use their manager's installation location, independently of project build-storage preferences.
+
+`workbench cache` reuses persisted filesystem measurements by default and prints their measurement time, or the oldest
+and newest times when they differ. Missing sizes are unavailable; invalidated sizes retain their previous estimate and
+are marked stale in JSON. Add `--fresh` to remeasure the selected filesystem caches and save the results.
+
+`workbench cache prune` always uses a fresh filesystem analysis before preview or confirmation. Measurement has no fixed
+elapsed timeout and can be cancelled; active build caches are retained. Measurement does not authorize deletion, and
+cleanup always rechecks current ownership and references.
 
 Workbench-owned prepared images appear as a separate **Images** group, initially unchecked in general cleanup.
 Assemblies whose verification failed are included for cleanup, and availability distinguishes them from verified images.
@@ -529,8 +582,8 @@ Pruning rechecks ownership, active commands, and retained-result references unde
 shells and installers hold active leases for their selected tools; proven-dead local leases are reclaimed during
 pruning. Rustup and uv remove their own installations. Nix/Guix stores, system packages, custom linked Rust toolchains,
 unowned paths, and shared package downloads remain under their owning tools' control. Direct tool commands and external
-shells do not hold Workbench leases; finish those before pruning. Versions are never deleted automatically when a
-replacement is installed.
+shells do not hold Workbench leases; finish those before pruning. Installing a replacement alone does not authorize
+automatic removal; its configured checks must establish a working replacement.
 
 Directory names retain checkout/root hashes; the table groups full checkout paths, relative roots, and local CI targets.
 Projects with the same base name remain distinct, and ownership receipts permit inspection after a checkout is removed.

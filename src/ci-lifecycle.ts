@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
+import { captureOwnedChild, runOwnedChild } from "../scripts/owned-child.mjs";
 import { processFailure } from "../scripts/process-outcome.mjs";
 import { setImmediate as yieldTurn } from "node:timers/promises";
-import { formatByteCount } from "./byte-size.js";
 
 const capturedOutputLimit = 16 * 1024 * 1024;
 
@@ -49,36 +48,21 @@ export async function executeCI(
   args: string[],
   options: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean } = {},
 ): Promise<string> {
-  const { capture, ...settings } = options;
-  const child = spawn(command, args, {
-    ...settings,
-    detached: true,
-    stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
-  });
-  const stdout: Buffer[] = [];
-  const stderr: Buffer[] = [];
-  let bytes = 0;
-  let failure: Error | undefined;
-  const collect = (buffers: Buffer[]) => (chunk: Buffer) => {
-    bytes += chunk.length;
-    if (bytes <= capturedOutputLimit) buffers.push(chunk);
-    else failure ??= new Error(`${command}: captured output exceeds ${formatByteCount(capturedOutputLimit)} bytes`);
+  const settings = {
+    cwd: options.cwd ?? process.cwd(),
+    env: options.env ?? process.env,
+    signal: new AbortController().signal,
+    shutdown: "drain" as const,
+    inheritInput: !options.capture,
   };
-  child.stdout?.on("data", collect(stdout));
-  child.stderr?.on("data", collect(stderr));
-  const status = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-    child.on("error", (error) => {
-      failure ??= error;
-    });
-    child.once("close", (code, signal) => {
-      resolve({ code, signal });
-    });
-  });
-  const problem = processFailure(
-    command,
-    { pid: child.pid ?? 0, status: status.code, signal: status.signal, ...(failure ? { error: failure } : {}) },
-    { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) },
-  );
+  if (options.capture) {
+    const outcome = await captureOwnedChild(command, args, settings, capturedOutputLimit);
+    const problem = processFailure(command, outcome, outcome);
+    if (problem) throw problem;
+    return outcome.stdout;
+  }
+  const outcome = await runOwnedChild(command, args, settings);
+  const problem = processFailure(command, outcome);
   if (problem) throw problem;
-  return capture ? Buffer.concat(stdout).toString() : "";
+  return "";
 }

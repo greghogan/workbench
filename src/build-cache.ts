@@ -158,6 +158,7 @@ export interface BuildPruneRequest {
   apply?: boolean;
   admissionHeld?: boolean;
   progress?: CachePruneObserver | undefined;
+  validate?: ((entries: readonly CacheEntry[]) => void) | undefined;
 }
 export function pruneBuildCache(request: BuildPruneRequest & { apply: true }): Promise<CacheEntry[]>;
 export function pruneBuildCache(request: BuildPruneRequest & { apply?: false }): CacheEntry[];
@@ -167,9 +168,11 @@ export function pruneBuildCache({
   apply = false,
   admissionHeld = false,
   progress,
+  validate,
 }: BuildPruneRequest): CacheEntry[] | Promise<CacheEntry[]> {
   const selected = report.entries.filter((entry) => dependencies || entry.kind !== "dependencies");
   if (!apply) return selected;
+  if (!selected.length) return Promise.resolve([]);
   const owners = [...new Map(selected.map((entry) => [buildOwnerKey(entry.identity), entry.identity])).entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([, identity]) => identity);
@@ -193,6 +196,7 @@ export function pruneBuildCache({
     );
   }
   async function remove(): Promise<void> {
+    validate?.(selected);
     const kept = keptCacheAssets();
     for (const entry of selected) {
       if (kept.has(entry.directory))

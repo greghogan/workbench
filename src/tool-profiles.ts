@@ -2,7 +2,6 @@ import { existsSync, realpathSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { readConfig, readLanguageRoots } from "./project-configuration.js";
 import type { ToolProfile } from "./profile-schema.js";
-import { terminalTable } from "./terminal-table.js";
 
 export function toolProfiles(root: string): ToolProfile[] {
   const profiles = existsSync(join(root, "workbench/config.toml")) ? (readConfig(root).toolchains?.profiles ?? []) : [];
@@ -44,26 +43,6 @@ export function selectedToolProfile(directory: string, explicit?: string | false
   if (profile.platforms && !profile.platforms.includes(platform))
     throw new Error(`tool profile '${name}' is not configured for ${platform}`);
   return profile;
-}
-
-export function listToolProfiles(root: string, json = false): void {
-  const profiles = toolProfiles(root);
-  if (json) console.log(JSON.stringify(profiles, null, 2));
-  else
-    console.log(
-      terminalTable(
-        ["PROFILE", "ROOTS", "COMPILER", "TOOLS", "PLATFORMS"],
-        profiles.map((profile) => [
-          profile.name,
-          profile.paths.join(", "),
-          profile.compiler ?? "pins",
-          Object.entries(profile.tools ?? {})
-            .map(([name, version]) => `${name} ${version}`)
-            .join(", ") || "pins",
-          profile.platforms?.join(", ") ?? "configured platforms",
-        ]),
-      ),
-    );
 }
 
 /** Bind recursive commands to this checkout without leaking selections into test fixtures or other projects. */

@@ -6,6 +6,7 @@ import { readChecks } from "./check-configuration.js";
 import { planChecks } from "./check-plan.js";
 import { terminalTable } from "./terminal-table.js";
 import { compatibilityArguments, compatibilityChecks } from "./compatibility-checks.js";
+import { withConfigurationSnapshot } from "./configuration-snapshot.js";
 
 export type CITarget = TargetSelection & {
   id: string;
@@ -19,6 +20,10 @@ export type CITarget = TargetSelection & {
 
 /** One configured target catalog serves hosted matrices and local selection. */
 export function ciTargets(root: string): CITarget[] {
+  return withConfigurationSnapshot(() => configuredTargets(root));
+}
+
+function configuredTargets(root: string): CITarget[] {
   const matrix = ciMatrix(root);
   const configured = readChecks(root);
   const targets: (TargetSelection & { path: string; os: string; architecture: string; environment: string })[] = [

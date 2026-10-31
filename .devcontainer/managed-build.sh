@@ -41,3 +41,8 @@ while :; do
 done
 setpriv --reuid=1000 --regid=1000 --clear-groups --bounding-set=-all --no-new-privs \
     /bin/sh ".devcontainer/$builder/prepare.sh"
+if [ "${WORKBENCH_BUILDER_GC:-false}" = true ]; then
+    if ! node "${WORKBENCH_PREPARATION_DISTRIBUTION:-/workbench}/scripts/builder-store-gc.mjs" "$builder"; then
+        echo 'workbench: private builder store cleanup did not complete; prepared output is preserved' >&2
+    fi
+fi

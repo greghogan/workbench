@@ -3,7 +3,7 @@ import { open } from "node:fs/promises";
 import { validateCheckControl } from "./check-control.js";
 import { checkDetailPrefix, type CheckDetail } from "../scripts/check-detail-data.mjs";
 import { coverageMetrics } from "../scripts/coverage-summary.mjs";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 import { redact } from "./diagnostics.js";
 export { checkLogDirectory } from "./builds.js";
 

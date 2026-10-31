@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { captureOwnedChild } from "../../scripts/owned-child.mjs";
 import { join } from "node:path";
 import { processFailure } from "../../scripts/process-outcome.mjs";
 import { distributionRoot } from "../project-context.js";
@@ -16,68 +16,33 @@ import type { CollectionRequest } from "./collection-service.js";
 import { decodeCollectionPreview, type CollectionPreview } from "./protocol.js";
 
 /** Acquisition and reconciliation run outside the listener so browsing remains responsive while shutdown drains admitted work. */
-export function runCollectionWorker(
+export async function runCollectionWorker(
   root: string,
   operation: CollectionOperation,
   request: CollectionRequest,
   expected: string | undefined,
 ): Promise<CollectionPreview | undefined> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [join(distributionRoot(root), "bundle/main.cjs"), "web-collection", operation],
-      {
-        env: { ...process.env, WORKBENCH_PROJECT_ROOT: root, WORKBENCH_LOG_PERSIST: "0", WORKBENCH_LOG_FORMAT: "json" },
-        stdio: ["pipe", "pipe", "pipe"],
-        detached: true,
-        windowsHide: true,
-      },
-    );
-    const output: Buffer[] = [];
-    const errors = new DiagnosticCapture();
-    let size = 0;
-    let failure: Error | undefined;
-    child.stdout.on("data", (bytes: Buffer) => {
-      size += bytes.length;
-      if (size > 16 * 1024 * 1024) {
-        failure ??= new Error("collection preview exceeds 16 MiB; use the collection CLI for this proposal");
-        child.kill();
-      } else output.push(bytes);
-    });
-    child.stderr.on("data", (bytes: Buffer) => {
-      errors.add(bytes);
-    });
-    child.on("error", (error) => {
-      failure ??= error;
-    });
-    child.stdin.on("error", (error) => {
-      failure ??= error;
-    });
-    child.on("close", (code, signal) => {
-      const problem = processFailure("collection operation", {
-        pid: child.pid ?? 0,
-        status: code,
-        signal,
-        ...(failure ? { error: failure } : {}),
-      });
-      if (problem) {
-        const text = errors.text().trim();
-        reject(new Error(`${problem.message}${text ? `\n${text}` : ""}`, { cause: problem }));
-        return;
-      }
-      try {
-        relayCollectionDiagnostics(errors, operation);
-        resolve(
-          operation === CollectionOperation.Preview
-            ? decodeCollectionPreview(JSON.parse(Buffer.concat(output).toString("utf8")))
-            : undefined,
-        );
-      } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
-    child.stdin.end(JSON.stringify({ request, expected }));
-  });
+  const outcome = await captureOwnedChild(
+    process.execPath,
+    [join(distributionRoot(root), "bundle/main.cjs"), "web-collection", operation],
+    {
+      cwd: root,
+      env: { ...process.env, WORKBENCH_PROJECT_ROOT: root, WORKBENCH_LOG_PERSIST: "0", WORKBENCH_LOG_FORMAT: "json" },
+      signal: new AbortController().signal,
+      shutdown: "drain",
+      input: JSON.stringify({ request, expected }),
+    },
+    16 * 1024 * 1024,
+  );
+  const errors = new DiagnosticCapture();
+  errors.add(Buffer.from(outcome.stderr));
+  const problem = processFailure("collection operation", outcome);
+  if (problem) {
+    const text = errors.text().trim();
+    throw new Error(`${problem.message}${text ? `\n${text}` : ""}`, { cause: problem });
+  }
+  relayCollectionDiagnostics(errors, operation);
+  return operation === CollectionOperation.Preview ? decodeCollectionPreview(JSON.parse(outcome.stdout)) : undefined;
 }
 
 /** Recognized child events retain severity; remaining stderr is an explicit warning. */

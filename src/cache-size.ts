@@ -73,6 +73,12 @@ export function discoverCacheSizes<T>(action: () => T): { value: T; sizes: Cache
   const value = discovery.run(sizes, action);
   return { value, sizes: [...sizes.values()] };
 }
+/** Retain the same metadata-only discovery boundary across asynchronous inventory work. */
+export async function discoverCacheSizesAsync<T>(action: () => Promise<T>): Promise<{ value: T; sizes: CacheSize[] }> {
+  const sizes = new Map<string, CacheSize>();
+  const value = await discovery.run(sizes, action);
+  return { value, sizes: [...sizes.values()] };
+}
 function savedSize(directory: string): CacheSize {
   let measurement: SizeRecord["measurement"];
   try {

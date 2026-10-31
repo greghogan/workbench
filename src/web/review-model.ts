@@ -1,22 +1,19 @@
 import { basename } from "node:path";
 import { splitFrontmatter } from "../record-document.js";
-import { ReviewSource, reviewSource } from "../review-service.js";
+import { ReviewSource } from "../review-service.js";
 import { WebError } from "./errors.js";
 import { differenceLayout, DifferenceLayout, type DocumentView } from "./navigation-state.js";
 import type { ViewContext } from "./view-context.js";
 import { reviewNavigation } from "./review-navigation.js";
 import { sourceURL } from "./sources.js";
 import { routeURL } from "./locations.js";
-import { Route } from "./routes.js";
+import { Route, type RouteQuery } from "./routes.js";
 
 /** Resolve the exact selected version before any presentation work. */
-export function reviewPageModel(context: ViewContext, parameters: URLSearchParams) {
-  const path = parameters.get("path");
+export function reviewPageModel(context: ViewContext, parameters: RouteQuery<typeof Route.Review>) {
+  const path = parameters.path;
   if (!path) throw new WebError(400, "select a protected file");
-  const change = context.index.reviewChange(
-    path,
-    parameters.has("review_source") ? reviewSource(parameters.get("review_source")) : undefined,
-  );
+  const change = context.index.reviewChange(path, parameters.review_source);
   if (!change) throw new WebError(404, "protected file version not found; refresh the queue");
   const layout = differenceLayout(parameters),
     document = context.reviewDocument(change.digest);
@@ -35,7 +32,7 @@ export function reviewPageModel(context: ViewContext, parameters: URLSearchParam
     ...(readable ? [{ value: "read" as const, label: "Read" }] : []),
     { value: "raw", label: "Raw" },
   ];
-  const requested = parameters.get("view") ?? (isADR ? "changes" : readable ? "read" : "raw");
+  const requested = parameters.view ?? (isADR ? "changes" : readable ? "read" : "raw");
   const view = choices.find((choice) => choice.value === requested)?.value;
   if (!view) throw new WebError(400, "unknown review view for this file");
   return {

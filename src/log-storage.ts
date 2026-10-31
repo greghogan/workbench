@@ -7,7 +7,7 @@ export { startLogRun, requireActiveLogRun } from "./log-run.js";
 export { pruneLogRuns } from "./log-retention.js";
 export type { LogRun } from "./log-run.js";
 import { StringDecoder } from "node:string_decoder";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 import {
   LogRunState,
   LogCompression,

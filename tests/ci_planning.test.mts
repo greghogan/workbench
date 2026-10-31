@@ -22,6 +22,12 @@ test("aggregate status accepts only configured empty groups as skipped", () => {
     devcontainer: { result: "skipped" },
   };
   expect(aggregateCI(needs, plan)).toEqual([]);
+  expect(aggregateCI({ ...needs, "screen-reader": { result: "failure" } }, plan)).toEqual([
+    "screen-reader: failure (expected success)",
+  ]);
+  expect(
+    aggregateCI({ ...needs, "screen-reader": { result: "success" }, "rust-portable": { result: "cancelled" } }, plan),
+  ).toEqual(["rust-portable: cancelled (expected success)"]);
   for (const result of ["failure", "cancelled", "skipped", undefined])
     expect(aggregateCI({ ...needs, native: result === undefined ? {} : { result } }, plan)).toHaveLength(1);
   plan.environments.include = [

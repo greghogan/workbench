@@ -11,17 +11,15 @@ import { citationLibrarySetting } from "./citations.js";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import { basename, isAbsolute, join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { distributionRoot } from "./project-context.js";
 import { readConfig, readProjects, workspaceSchemaVersion } from "./project-configuration.js";
 import { readText } from "./files.js";
 import { writeAtomic, writeNew } from "../scripts/file-publication.mjs";
 import { ensureLocalIgnore } from "./environments.js";
-import { ownedPath } from "./paths.js";
+import { ownedPath, registeredRootPath } from "./paths.js";
+import { defaultId, projectIdPattern as validId } from "./project-identity.js";
 import { detected, reportLanguages } from "./languages.js";
-
-const validId = /^[a-z][a-z0-9_-]*$/;
-const reserved = new Set([".git", ".workbench", "workbench", "target", "libexec"]);
 
 export async function prompt(label: string, suggested = ""): Promise<string> {
   if (!process.stdin.isTTY) {
@@ -40,19 +38,6 @@ export async function prompt(label: string, suggested = ""): Promise<string> {
   }
 }
 
-function safeProjectPath(value: string): boolean {
-  if (
-    value === "." ||
-    !value ||
-    isAbsolute(value) ||
-    value.includes("\\") ||
-    value.split("").some((character) => character.charCodeAt(0) < 32)
-  )
-    return false;
-  const parts = value.split("/");
-  return parts.every((part) => !!part && part !== "." && part !== ".." && !reserved.has(part));
-}
-
 function ensureDirectory(path: string): void {
   if (existsSync(path) && (!lstatSync(path).isDirectory() || lstatSync(path).isSymbolicLink())) {
     throw new Error(`${path}: expected a real directory`);
@@ -66,15 +51,6 @@ function makeSafeDirectories(root: string, relative: string): void {
     ensureDirectory(current);
     if (!existsSync(current)) mkdirSync(current);
   }
-}
-
-export function defaultId(root: string): string {
-  const candidate = basename(root)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  if (validId.test(candidate)) return candidate;
-  return candidate ? `project-${candidate}` : "project";
 }
 
 export function planProject(
@@ -174,7 +150,8 @@ export async function addProject(root: string, idInput?: string, pathInput?: str
   if (!!idInput !== !!pathInput) throw new Error("project ID and path must be supplied together");
   const id = idInput ?? (await prompt("Subproject ID"));
   const path = pathInput ?? (await prompt("Subproject path", id));
-  if (!validId.test(id) || !safeProjectPath(path)) throw new Error(`invalid subproject ID or path: ${id}, ${path}`);
+  if (!validId.test(id) || path === ".") throw new Error(`invalid subproject ID or path: ${id}, ${path}`);
+  registeredRootPath(path, `invalid subproject ID or path: ${id}`);
   const projects = readProjects(root);
   if (projects.some((project) => project.id === id || project.path === path)) {
     throw new Error(`project ID or path already registered: ${id}, ${path}`);

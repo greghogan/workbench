@@ -48,7 +48,7 @@ if(a[0]==='image'&&a[1]==='ls')console.log('fixture-image');
 else if(a[0]==='container'&&a[1]==='ls'&&fs.existsSync(state))console.log('fixture-container');
 else if(a[0]==='info')console.log('fixture-engine');
 else if(a[0]==='volume'&&a[1]==='inspect')console.log(JSON.stringify(a.slice(2).map(Name=>({Name,CreatedAt:'2026-10-19T00:00:00Z'}))));
-else if(a[0]==='image'&&a[1]==='inspect'){console.log(a.includes('{{json .Config}}')?JSON.stringify({Cmd:['original-command']}):'sha256:fixture');}
+else if(a[0]==='image'&&a[1]==='inspect'){console.log(a.includes('{{json .Config}}')?JSON.stringify({Cmd:['original-command']}):'sha256:'+ 'f'.repeat(64));}
 else if(a[0]==='create'&&a[a.indexOf('--name')+1].startsWith('workbench-finalize-')){console.log('finalize-container');}
 else if(a[0]==='create'){const mount=a.filter(x=>x.startsWith('type=bind,')).find(x=>x.includes('dst=/output'));fs.writeFileSync(state,JSON.stringify({output:mount.split('src=')[1].split(',')[0]}));}
 else if(a[0]==='start'){const {output}=JSON.parse(fs.readFileSync(state));fs.writeFileSync(p.join(output,'image-path'),'/'+(process.env.FIXTURE_BUILDER==='guix'?'gnu':'nix')+'/store/fixture-image.tar');}

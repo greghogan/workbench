@@ -1,11 +1,13 @@
 import { join } from "node:path";
 import type { BuildOptions } from "esbuild";
+import { authoredTooling } from "./authored-tooling.mts";
 
 export function bundleOptions(root: string, name: string, coverage = false): BuildOptions & { metafile: true } {
   return {
     absWorkingDir: root,
     entryPoints: [join(root, `src/${name}.ts`)],
     bundle: true,
+    plugins: [authoredTooling()],
     // Resolve each package's own dependencies through pnpm's isolated store.
     preserveSymlinks: false,
     platform: "node",

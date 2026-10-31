@@ -3,7 +3,7 @@ import { checkReportDestination, writeCheckReport, type CheckRunResult } from ".
 import { inspectChecks, listChecks, runChecks, type CheckInspectionOptions } from "./checks.js";
 import { validate } from "./validation.js";
 import { releaseAfterFailure } from "./cache-lock.js";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 
 export interface GateOptions extends CheckInspectionOptions {
   list?: boolean;

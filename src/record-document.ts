@@ -1,4 +1,5 @@
 import { parseDocument, stringify } from "yaml";
+import { isRecord } from "../scripts/values.mjs";
 import type { Kind } from "./record-identity.js";
 
 export type ProseKind = Exclude<Kind, "CIT" | "REL">;
@@ -35,9 +36,6 @@ export interface MetadataDraft {
   extensions?: Record<string, unknown>;
 }
 
-function mapping(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 function oneLine(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && !/[\r\n]/.test(value);
 }
@@ -99,7 +97,7 @@ export function parseProseRecord(contents: string, path: string): { metadata: Re
   if (document.errors.length)
     throw new Error(`${path}: invalid frontmatter: ${document.errors.map((error) => error.message).join("; ")}`);
   const metadata: unknown = document.toJS();
-  if (!mapping(metadata)) throw new Error(`${path}: frontmatter must be a YAML mapping`);
+  if (!isRecord(metadata)) throw new Error(`${path}: frontmatter must be a YAML mapping`);
   return { metadata, body: parts.body };
 }
 
@@ -111,7 +109,7 @@ export function recordDocument<K extends ProseKind>(
   const { metadata, body } = parseProseRecord(contents, path);
   const schema: Record<string, Field> = {
     ...fields[kind],
-    extensions: { valid: mapping, description: "a mapping of project-specific metadata" },
+    extensions: { valid: isRecord, description: "a mapping of project-specific metadata" },
   };
   for (const key of Object.keys(metadata)) {
     if (!Object.hasOwn(schema, key))

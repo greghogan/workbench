@@ -20,8 +20,8 @@ Resolve configured work, select tools and environments, and coordinate isolated 
 - `src/consumer-integration-scenarios.ts`: Record independent installation/compiler suites and block dependent cases
   after prerequisite failures.
 - `src/windows-batch.ts`: Encode literal arguments across the Windows command processor and batch-shim boundaries.
-- `scripts/check-consumers.mts`, `tests/consumer_integration.test.mts`: Provide the
-  independently invocable integration check and fast regressions for its execution and CI selection.
+- `scripts/check-consumers.mts`, `tests/consumer_integration.test.mts`: Provide the independently invocable integration
+  check and fast regressions for its execution and CI selection.
 
 | Paths                                                                                             | Responsibility                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -45,6 +45,8 @@ Resolve configured work, select tools and environments, and coordinate isolated 
 | `src/mvsc.ts`                                                                                     | selects installed Microsoft compiler and Windows SDK pins, constructs isolated SDK paths, and fingerprints serviced binaries.                                                                     |
 | `src/environments.ts`                                                                             | owns environment names, local execution preferences, and active-shell boundaries.                                                                                                                 |
 | `src/builds.ts`                                                                                   | owns build identities, generation validation, storage paths, native tool controls, locking, and scoped cleanup.                                                                                   |
+| `src/image-retention.ts` | retires superseded local prepared images only after verified activation and fresh reference checks. |
+| `src/build-retention.ts` | selects superseded owned build generations using verified replacements, activity and retention limits. |
 | `src/build-cache.ts`                                                                              | groups owned checkout caches and the virtual Tools project, then selects and confirms recursive cleanup.                                                                                          |
 | `src/cache-prune-selection.ts`                                                                    | derives the pure selection model used by the prune menu, returned deletion set, and confirmation totals.                                                                                          |
 | `src/prepared-images.ts`                                                                          | coordinates locked revalidation and explicit local or GHCR image deletion.                                                                                                                        |
@@ -95,8 +97,8 @@ Resolve configured work, select tools and environments, and coordinate isolated 
 - `src/managed-inputs.ts`, `src/managed-input-environment.ts`, `src/managed-registry.ts`: Validate realized dependency
   sources and provide local acquisition interfaces to language package managers.
 - `scripts/managed-check-inputs.mts`, `scripts/managed-check-inputs.mjs`, `scripts/managed-input-recipes.mts`,
-  `scripts/managed-input-recipes.mjs`, `scripts/refresh-managed-inputs.mts`, `scripts/refresh-managed-inputs.mjs`:
-  Derive standalone Nix/Guix source packages and refresh pinned proof metadata.
+  `scripts/managed-input-recipes.mjs`, `scripts/refresh-managed-inputs.mts`: Derive standalone Nix/Guix source packages
+  and refresh pinned proof metadata.
 - `src/managed-image.ts`, `scripts/prepare-managed-development.mts`, `scripts/prepare-managed-development.mjs`,
   `scripts/prepare-host-managed-development.mts`, `scripts/prepare-host-managed-development.mjs`,
   `scripts/prepare-nix-profiles.mts`, `scripts/prepare-nix-profiles.mjs`: Assemble managed images in an installed
@@ -113,8 +115,12 @@ Resolve configured work, select tools and environments, and coordinate isolated 
   persistent BuildKit state, private client configuration, and verified cleanup.
 - `src/builder-cache.ts`: Inventories Docker builder stores and revalidates ownership and active use before explicit
   grouped volume removal.
-- `scripts/check-workflows.mts`: Validates workflow files and project runner
-  configuration without requiring Git metadata.
+- `scripts/builder-store-gc.mts`, `tests/builder_store_gc.test.mts`: Retain owned private-store roots and collect
+  unreachable Nix/Guix packages after successful container assembly.
+- `scripts/prepare-screen-reader.mts`, `scripts/check-screen-reader.mts`, `scripts/screen-reader-assets.json`: Prepare
+  verified Windows browser/NVDA tools and retain real screen-reader workflow evidence from the disposable demonstration.
+- `scripts/check-workflows.mts`: Validates workflow files and project runner configuration without requiring Git
+  metadata.
 
 Local CI integration scenarios are independently scheduled in `tests/local_ci_execution.test.mts`,
 `tests/local_ci_failures.test.mts`, `tests/local_ci_reports.test.mts`, and `tests/local_ci_lifecycle.test.mts`.
@@ -132,8 +138,8 @@ their per-test state and register suite-local cleanup.
 - `src/check-order.ts`, `src/check-resources.ts`: Validate explicit ordering, derive selected session dependencies, and
   share dependency-aware group limits and optional worker caps across scheduling, inspection, and evidence fingerprints.
 - `src/check-control.ts`: Accepts only a session's private, ordered wrapper records as readiness and completion signals.
-- `scripts/managed-process.mts`, `scripts/managed-process.mjs`, `src/command-availability.ts`: Own preparation child
-  lifetimes, bounded capture, cancellation, exhaustive cleanup, and command discovery.
+- `scripts/managed-process.mts`, `scripts/managed-process.mjs`: Own preparation child lifetimes, bounded capture,
+  cancellation, exhaustive cleanup, and command discovery.
 - `scripts/managed-contract.mjs`, `scripts/managed-contract.mts`: Defines builder cache identities, volume layouts, and
   validated preparation plans.
 - `scripts/managed-source-contract.mjs`, `scripts/managed-source-contract.mts`, `scripts/managed-files.mts`,
@@ -184,7 +190,11 @@ their per-test state and register suite-local cleanup.
   execution, and visible post-check maintenance phases.
 - `src/tool-adapters.ts`: Associate built-in tool verification probes, installation strategies, dependencies, and native
   environment contributions.
-- `scripts/work-admission.mts`: Define admission leases that let processing queues join a
-  future jobserver without owning its transport.
-- `scripts/test-failures.mts`: Keep bounded failed-test assertions in retained gate
-  excerpts.
+- `scripts/work-admission.mts`: Define admission leases that let processing queues join a future jobserver without
+  owning its transport.
+- `scripts/test-failures.mts`: Keep bounded failed-test assertions in retained gate excerpts.
+
+- `scripts/runtime-parsers.mts`, `scripts/runtime-parsers.mjs`: Share one self-contained TOML/YAML parser runtime across
+  copied managed-input helpers.
+- `scripts/managed-image-import.mts`, `tests/managed_image_import.test.mts`: Serialize managed archive imports and
+  remove operation-owned source tags while preserving preexisting tags.

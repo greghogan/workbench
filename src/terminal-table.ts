@@ -1,5 +1,6 @@
 import { plainOutput } from "./presentation.js";
 import { stripVTControlCharacters } from "node:util";
+import { minimumTerminalWidth, terminalColumns, wrapTerminalText } from "./terminal-text.js";
 
 /** Plain text tables remain readable in terminals and redirected output. */
 export function terminalTable(
@@ -25,7 +26,7 @@ export function terminalTable(
     const quantities = values.slice(1).map((row) => /^(\d+(?:\.\d+)?) ([A-Za-z]+)$/.exec(row[column] ?? ""));
     const unitWidth = Math.max(1, ...quantities.map((match) => match?.[2]?.length ?? 0));
     const numberWidth = Math.max(
-      (header[column]?.length ?? 0) - unitWidth - 1,
+      terminalColumns(header[column] ?? "") - unitWidth - 1,
       ...quantities.map((match) => match?.[1]?.length ?? 0),
     );
     for (const [index, match] of quantities.entries()) {
@@ -34,8 +35,13 @@ export function terminalTable(
     }
   }
   const widths = header.map((_, column) => {
-    const natural = Math.max(...values.map((row) => row[column]?.length ?? 0));
-    return Math.max(values[0]?.[column]?.length ?? 0, Math.min(options.maxWidths?.[column] ?? Infinity, natural));
+    const natural = Math.max(...values.map((row) => terminalColumns(row[column] ?? "")));
+    const minimum = Math.max(...values.map((row) => minimumTerminalWidth(row[column] ?? "")));
+    return Math.max(
+      minimum,
+      terminalColumns(values[0]?.[column] ?? ""),
+      Math.min(options.maxWidths?.[column] ?? Infinity, natural),
+    );
   });
   const rule = (from = 0) =>
     `${widths.map((width, column) => `${column < from ? "|" : "+"}${(column < from ? " " : "-").repeat(width + 2)}`).join("")}+`;
@@ -44,13 +50,17 @@ export function terminalTable(
     const cells = header.map((_, column) => {
       const value = row[column] ?? "";
       const width = Math.max(1, widths[column] ?? 0);
-      return Array.from({ length: Math.max(1, Math.ceil(value.length / width)) }, (_, index) =>
-        value.slice(index * width, (index + 1) * width),
-      );
+      return wrapTerminalText(value, width);
     });
     return Array.from(
       { length: Math.max(...cells.map((cell) => cell.length)) },
-      (_, line) => `| ${cells.map((cell, column) => (cell[line] ?? "").padEnd(widths[column] ?? 0)).join(" | ")} |`,
+      (_, line) =>
+        `| ${cells
+          .map((cell, column) => {
+            const value = cell[line] ?? "";
+            return value + " ".repeat(Math.max(0, (widths[column] ?? 0) - terminalColumns(value)));
+          })
+          .join(" | ")} |`,
     ).join("\n");
   };
   const separators = new Map<number, number[]>();

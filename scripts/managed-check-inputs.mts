@@ -27,7 +27,7 @@ import type { BinaryLike } from "crypto";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { parse as parseToml } from "smol-toml";
+import { parseToml } from "./runtime-parsers.mjs";
 import { pnpmPackages, pnpmIdentity } from "./pnpm-lock.mjs";
 
 function packagePlatform(value: Record<string, unknown>): PackagePlatform {

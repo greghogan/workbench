@@ -22,6 +22,7 @@ export const maintainerSources: ReadonlySet<string> = new Set([
     "check-consumers",
     "check-harnesses",
     "check-release",
+    "check-screen-reader",
     "check-web-browser",
     "check-workflows",
     "coverage-processing",
@@ -32,7 +33,9 @@ export const maintainerSources: ReadonlySet<string> = new Set([
     "link-dependencies",
     "node-coverage-reports",
     "package-workbench",
+    "prepare-screen-reader",
     "runtime-dependencies",
+    "refresh-managed-inputs",
     "setup-development",
     "skill-evaluation-cases",
     "source-checkout",
@@ -40,6 +43,7 @@ export const maintainerSources: ReadonlySet<string> = new Set([
     "test-coverage",
     "test-failures",
     "tooling-artifacts",
+    "web-accessibility",
     "web-browser-fixtures",
     "web-browser-scenarios",
     "work-admission",
@@ -47,10 +51,14 @@ export const maintainerSources: ReadonlySet<string> = new Set([
 ]);
 const bundledSources = new Set<string>([
   "scripts/owned-scratch.mts",
+  "scripts/runtime-parsers.mts",
+  "scripts/managed-image-import.mts",
   "scripts/maintenance/edits.mts",
   "scripts/maintenance/operation.mts",
   "scripts/runtime-dependencies.mts",
   "scripts/source-snapshot.mts",
+  "scripts/prepare-screen-reader.mts",
+  "scripts/check-screen-reader.mts",
   ...toolingAdditionalSources.filter((path) => path.startsWith("tests/fixtures/")),
 ]);
 
@@ -79,6 +87,12 @@ export function toolingArtifact(source: string): ToolingArtifact {
   if (!output) throw new Error(`Not a tooling source: ${source}`);
   return { ...identity, emission: bundledSources.has(source) ? "bundle" : "transform", output };
 }
+
+/** Bundles contain third-party generated code; lint their authored sources and verify output parity. */
+export const bundledOutputs = [...bundledSources].flatMap((source) => {
+  const artifact = toolingArtifact(source);
+  return artifact.output === null ? [] : [artifact.output];
+});
 
 export const maintainerOutputs = [
   "scripts/maintenance/**/*.mjs",

@@ -73,6 +73,7 @@ vi.mock("../src/image-finalization.js", () => ({
   ),
 }));
 vi.mock("../src/buildkit.js", () => ({
+  currentBuildkitCacheKeys: () => [],
   withProjectBuilder: vi.fn<typeof import("../src/buildkit.js").withProjectBuilder>(async (_root, action) =>
     action({ name: "fixture", docker: "/fixture/docker", env: {} }),
   ),

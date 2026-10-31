@@ -1,7 +1,8 @@
 import { CheckEvent } from "../scripts/diagnostic-contract.mjs";
 import { StringDecoder } from "node:string_decoder";
 import { plainOutput } from "./presentation.js";
-import { safeOutput, fitTerminalText as fit } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
+import { fitTerminalText as fit } from "./terminal-text.js";
 
 export const checkEventPrefix = "WORKBENCH_CHECK_EVENT\t";
 

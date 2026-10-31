@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
+import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
+import { processFailure } from "./process-outcome.mjs";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { devNull, homedir, tmpdir } from "node:os";
+import { delimiter, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { cases, command, grade, prepare, snapshot } from "./skill-evaluation-cases.mjs";
-import { isRecord, record, required, string, errorFrom } from "./values.mjs";
+import { cases, evaluationName, command, verifyOutcome, prepare, snapshot } from "./skill-evaluation-cases.mjs";
+import { record, required, string } from "./values.mjs";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -19,19 +20,16 @@ if (
   !values.output
 ) {
   console.log(
-    "Usage: node scripts/evaluate-skills.mjs codex|claude [review|refactors|dependencies|audit ...] --output NEW_DIRECTORY [--model MODEL]",
+    "Usage: node scripts/evaluate-skills.mjs codex|claude [SCENARIO ...] --output NEW_DIRECTORY [--model MODEL]",
   );
+  console.log("Scenarios: " + Object.keys(cases).join(", "));
   console.log(
     "Runs real model inference; credentials are required. Output retains final replies, diffs, and grading results for review.",
   );
   process.exit(values.help ? 0 : 2);
 }
 
-const names = requestedNames.map((name) => {
-  if (name !== "review" && name !== "refactors" && name !== "dependencies" && name !== "audit")
-    throw new Error(`Unknown evaluation: ${name}`);
-  return name;
-});
+const names = requestedNames.map(evaluationName);
 const selectedHarness = harness;
 const requestedModel = values.model?.length ? values.model : undefined;
 const distribution = resolve(import.meta.dirname, "..");
@@ -50,69 +48,43 @@ if (harness === "claude" && !process.env.ANTHROPIC_API_KEY && !process.env.CLAUD
 mkdirSync(output, { recursive: true, mode: 0o700 });
 const interruption = { occurred: false };
 
-function run(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv, reply: string) {
-  return new Promise<string>((done, reject) => {
-    const child = spawn(selectedHarness, args, { cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    let reportedModel: string | undefined;
-    let timedOut = false;
-    const stop = () => {
-      if (!child.pid) return;
-      try {
-        process.kill(-child.pid, "SIGKILL");
-      } catch (error) {
-        if (!isRecord(error) || error.code !== "ESRCH") throw error;
-      }
-    };
-    const interrupt = () => {
-      interruption.occurred = true;
-      stop();
-    };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      stop();
-    }, 300000);
-    process.once("SIGINT", interrupt);
-    process.once("SIGTERM", interrupt);
-    child.stdout.on("data", (data: string) => {
-      stdout += data;
-    });
-    child.stderr.on("data", (data: string) => {
-      const next = stderr + data;
-      reportedModel ??= /^model: *([^\r\n]+)\r?\n/m.exec(next)?.[1];
-      stderr = next.slice(-6000);
-    });
-    child.on("error", reject);
-    child.on("close", (code, signal) => {
-      clearTimeout(timer);
-      process.removeListener("SIGINT", interrupt);
-      process.removeListener("SIGTERM", interrupt);
-      stop();
-      if (code !== 0) {
-        reject(
-          new Error(`${String(harness)}: ${String(timedOut ? "five-minute timeout" : (signal ?? code))}\n${stderr}`),
-        );
-        return;
-      }
-      try {
-        if (harness === "claude") {
-          const result = record(JSON.parse(stdout), "Invalid Claude evaluation result");
-          const replyText = result.result === undefined ? "" : string(result.result, "Invalid Claude result text");
-          if (result.is_error) throw new Error(replyText || "Claude evaluation failed");
-          writeFileSync(reply, replyText);
-          done(
-            Object.keys(result.modelUsage === undefined ? {} : record(result.modelUsage, "Invalid model usage")).join(
-              ", ",
-            ) ||
-              (requestedModel ?? "harness default (not reported)"),
-          );
-        } else done(reportedModel ?? requestedModel ?? "harness default (not reported)");
-      } catch (error) {
-        reject(errorFrom(error));
-      }
-    });
-  });
+async function run(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv, reply: string): Promise<string> {
+  const cancellation = processCancellation();
+  const timeout = AbortSignal.timeout(300000);
+  try {
+    const outcome = await captureOwnedChild(
+      selectedHarness,
+      [...args],
+      {
+        cwd,
+        env,
+        signal: AbortSignal.any([cancellation.signal, timeout]),
+      },
+      16 * 1024 * 1024,
+    );
+    interruption.occurred ||= cancellation.signal.aborted;
+    const failure = processFailure(
+      `${selectedHarness}${timeout.aborted ? " (five-minute timeout)" : ""}`,
+      outcome,
+      outcome,
+    );
+    if (failure) throw failure;
+    if (harness === "claude") {
+      const result = record(JSON.parse(outcome.stdout), "Invalid Claude evaluation result");
+      const replyText = result.result === undefined ? "" : string(result.result, "Invalid Claude result text");
+      if (result.is_error) throw new Error(replyText || "Claude evaluation failed");
+      writeFileSync(reply, replyText);
+      return (
+        Object.keys(result.modelUsage === undefined ? {} : record(result.modelUsage, "Invalid model usage")).join(
+          ", ",
+        ) ||
+        (requestedModel ?? "harness default (not reported)")
+      );
+    }
+    return /^model: *([^\r\n]+)\r?\n/m.exec(outcome.stderr)?.[1] ?? requestedModel ?? "harness default (not reported)";
+  } finally {
+    cancellation.close();
+  }
 }
 
 let failed = false;
@@ -126,7 +98,7 @@ for (const name of names) {
   mkdirSync(testHome);
   mkdirSync(resultDirectory);
   const env: NodeJS.ProcessEnv = {
-    PATH: `${join(distribution, "bin")}:${String(process.env.PATH)}`,
+    PATH: [join(distribution, "bin"), process.env.PATH ?? ""].join(delimiter),
     HOME: testHome,
     USERPROFILE: testHome,
     TMPDIR: temporary,
@@ -138,7 +110,7 @@ for (const name of names) {
     XDG_DATA_HOME: join(testHome, "data"),
     XDG_CACHE_HOME: join(testHome, "cache"),
     XDG_STATE_HOME: join(testHome, "state"),
-    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_GLOBAL: devNull,
     GIT_CONFIG_NOSYSTEM: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_TELEMETRY: "1",
@@ -162,7 +134,7 @@ for (const name of names) {
     requestedModel: string;
     started: string;
     skillsSha256: string;
-    manualReview: string;
+    assessmentPrompt: string;
     harnessVersion?: string;
     fixtureSha256?: string;
     prompt?: string;
@@ -176,7 +148,7 @@ for (const name of names) {
     requestedModel: requestedModel ?? "harness default",
     started: new Date().toISOString(),
     skillsSha256: snapshot(join(distribution, "skills")),
-    manualReview: cases[name].review,
+    assessmentPrompt: cases[name].review,
   };
   let before: ReturnType<typeof prepare> | undefined;
   try {
@@ -185,7 +157,8 @@ for (const name of names) {
     report.fixtureSha256 = before.snapshot;
     console.log(`${name}: prepared; running ${harness}`);
     const reply = join(resultDirectory, "reply.md");
-    const prompt = `Use ${harness === "codex" ? "$" : "/"}${cases[name].skill}. ${cases[name].request} Do not stage or commit. Work only in this disposable project.`;
+    const skill = cases[name].skill;
+    const prompt = `${skill ? `Use ${harness === "codex" ? "$" : "/"}${skill}. ` : ""}${cases[name].request} ${name === "commit-push" ? "Push only to the configured disposable local origin." : "Do not stage or commit."} Work only in this disposable project.`;
     report.prompt = prompt;
     const args =
       harness === "codex"
@@ -220,6 +193,7 @@ for (const name of names) {
             "--mcp-config",
             '{"mcpServers":{}}',
           ];
+    if (harness === "codex" && name === "commit-push") args.push("--add-dir", join(root, ".git"));
     if (requestedModel) args.push("--model", requestedModel);
     args.push("--", prompt);
     report.model = await run(args, root, env, reply);
@@ -231,8 +205,8 @@ for (const name of names) {
       }).filter((path) => /(^|\/)(history\.jsonl|sessions\/.*\.jsonl|projects\/.*\.jsonl)$/.test(path));
       if (history.length) throw new Error("harness retained conversation history in its disposable home");
     }
-    grade(root, env, name, before);
-    report.result = "objective checks passed; review reply and diff against manualReview";
+    verifyOutcome(root, env, name, before);
+    report.result = "workflow contract checks passed; qualitative assessment not performed";
     console.log(`${name}: ${report.result}`);
   } catch (error) {
     failed = true;

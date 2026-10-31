@@ -1,7 +1,6 @@
-import { recordTypes } from "../record-metadata.js";
 import type { WorkspaceView } from "../workspace-service.js";
-import { WebError } from "./errors.js";
 import { sourceURL } from "./sources.js";
+import type { RouteQuery, Route } from "./routes.js";
 import type { SearchType } from "./view-context.js";
 
 export const DifferenceLayout = { Inline: "unified", Split: "split" } as const;
@@ -14,15 +13,10 @@ export interface ViewState {
   baseline?: ComparisonBaseline;
 }
 /** A view transition changes named parameters while retaining its source and comparison context. */
-export function viewLocation(
-  context: WorkspaceView,
-  base: string,
-  parameters: URLSearchParams,
-  changes: ViewState,
-): string {
+export function viewLocation(context: WorkspaceView, base: string, parameters: ViewState, changes: ViewState): string {
   const url = new URL(base, "http://workbench.invalid");
   for (const key of ["layout", "baseline"] as const) {
-    const value = parameters.get(key);
+    const value = parameters[key];
     if (value) url.searchParams.set(key, value);
   }
   for (const key of ["view", "layout", "baseline"] as const) {
@@ -31,15 +25,13 @@ export function viewLocation(
   }
   return sourceURL(context, url.pathname + url.search);
 }
-export function differenceLayout(parameters: URLSearchParams): DifferenceLayout {
-  const value = parameters.get("layout") ?? DifferenceLayout.Inline;
-  if (value !== DifferenceLayout.Inline && value !== DifferenceLayout.Split)
-    throw new WebError(400, "unknown difference layout");
-  return value;
+export function differenceLayout(parameters: Pick<ViewState, "layout">): DifferenceLayout {
+  return parameters.layout ?? DifferenceLayout.Inline;
 }
-export function recordSearch(parameters: URLSearchParams): { query: string; type: SearchType; scope: string } {
-  const requested = parameters.get("type") ?? "";
-  const type = requested === "" ? "" : recordTypes.find((candidate) => candidate === requested);
-  if (type === undefined) throw new WebError(400, "unknown record type");
-  return { query: (parameters.get("q") ?? "").slice(0, 512), type, scope: parameters.get("scope") ?? "" };
+export function recordSearch(parameters: RouteQuery<typeof Route.Records>): {
+  query: string;
+  type: SearchType;
+  scope: string;
+} {
+  return { query: parameters.q ?? "", type: parameters.type ?? "", scope: parameters.scope ?? "" };
 }

@@ -1,6 +1,22 @@
 import { required } from "../src/invariants.ts";
 import { expect, test } from "vitest";
 import { terminalTable } from "../src/terminal-table.ts";
+import { fitTerminalText, terminalColumns } from "../src/terminal-text.ts";
+
+test("Unicode tables wrap whole graphemes and align by display cells", () => {
+  expect(terminalTable(["A"], [["雪e\u0301👩‍💻Z"]], { maxWidths: { 0: 3 } }).split("\n")).toEqual([
+    "+-----+",
+    "| A   |",
+    "+-----+",
+    "| 雪e\u0301 |",
+    "| 👩‍💻Z |",
+    "+-----+",
+  ]);
+  expect(terminalTable(["X"], [["雪"]], { maxWidths: { 0: 1 } })).toContain("| 雪 |");
+  expect(terminalColumns("e\u0301雪👩‍💻")).toBe(5);
+  expect(fitTerminalText("e\u0301雪👩‍💻", 3)).toBe("e\u0301雪");
+  expect(fitTerminalText("e\u0301雪👩‍💻", 5)).toBe("e\u0301雪👩‍💻");
+});
 
 test("tables sanitize control characters and render empty tables without duplicate closing rules", () => {
   expect(terminalTable(["LABEL"], [["a\nb\u001b"]])).toContain("a b ");

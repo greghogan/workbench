@@ -39,7 +39,10 @@ test("distribution notices follow the actual bundled dependency graph and reject
         JSON.stringify({ name, version: "1.0.0", license: "MIT", main: entry }),
       );
       writeFileSync(join(directory, entry), required(source, "Fixture value source"));
-      writeFileSync(join(directory, "LICENSE"), `Original ${name} permission notice.\n`);
+      writeFileSync(
+        join(directory, name === "direct" ? "license" : "LICENSE"),
+        `Original ${name} permission notice.\n`,
+      );
     }
     const result = await build({
       absWorkingDir: root,

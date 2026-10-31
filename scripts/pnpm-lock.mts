@@ -1,4 +1,4 @@
-import { parseAllDocuments } from "yaml";
+import { parseAllDocuments } from "./runtime-parsers.mjs";
 import { record, required } from "./values.mjs";
 
 /** pnpm locks can contain independent bootstrap and project YAML documents. */

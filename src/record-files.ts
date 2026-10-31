@@ -4,6 +4,7 @@ import { ownedPath } from "./paths.js";
 import { detail, kinds, normalizedNumber, relativeRecordPath, type Kind, type RecordFile } from "./record-identity.js";
 import { readProjects, selectProject } from "./project-configuration.js";
 import { rootOf } from "./project-context.js";
+import { publicationTarget } from "../scripts/file-publication.mjs";
 import type { Project } from "./project-model.js";
 export function scan(projectDirectory: string, kind: Kind): RecordFile[] {
   return scanRecordDirectory(ownedPath(projectDirectory, "workbench"), kind);
@@ -14,6 +15,9 @@ export function scanRecordDirectory(base: string, kind: Kind): RecordFile[] {
   const directory = join(base, detail(kind).directory);
   if (!existsSync(directory)) return [];
   const found: RecordFile[] = [];
+  const numbers = new Set<string>();
+  const attachmentName = new RegExp(`^${kind}-[0-9A-Za-z_]+$`);
+  const recordName = new RegExp(`^${kind}-([0-9A-Za-z_]+)\\.${detail(kind).extension}$`);
   function walk(current: string): void {
     if (lstatSync(current).isSymbolicLink()) throw new Error(`${current}: record directory must be real`);
     for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -22,7 +26,7 @@ export function scanRecordDirectory(base: string, kind: Kind): RecordFile[] {
         // A sibling record owns this directory's supporting files. They are
         // attachments, so record discovery must not interpret their contents.
         if (
-          new RegExp(`^${kind}-[0-9A-Za-z_]+$`).test(entry.name) &&
+          attachmentName.test(entry.name) &&
           lstatSync(`${path}.${detail(kind).extension}`, { throwIfNoEntry: false })?.isFile()
         )
           continue;
@@ -30,15 +34,18 @@ export function scanRecordDirectory(base: string, kind: Kind): RecordFile[] {
         continue;
       }
       if (!entry.isFile()) throw new Error(`${path}: unsupported record entry`);
+      const publishing = publicationTarget(entry.name);
+      if (publishing !== undefined && recordName.test(publishing)) continue;
       // An open human review may leave a Vim swap beside its authoritative record.
       const swap = /^\.(.+)\.sw[a-z]$/.exec(entry.name);
       if (swap?.[1] && lstatSync(join(current, swap[1]), { throwIfNoEntry: false })?.isFile()) continue;
-      const match = new RegExp(`^${kind}-([0-9A-Za-z_]+)\\.${detail(kind).extension}$`).exec(entry.name);
+      const match = recordName.exec(entry.name);
       if (!match?.[1]) throw new Error(`${path}: unexpected file in record directory`);
       const number = normalizedNumber(match[1]);
       const expected = join(base, relativeRecordPath(kind, number));
       if (path !== expected) throw new Error(`${path}: expected canonical path ${expected}`);
-      if (found.some((record) => record.number === number)) throw new Error(`${path}: duplicate normalized identity`);
+      if (numbers.has(number)) throw new Error(`${path}: duplicate normalized identity`);
+      numbers.add(number);
       found.push({ number, path });
     }
   }

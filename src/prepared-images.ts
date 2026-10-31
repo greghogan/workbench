@@ -11,7 +11,11 @@ export type { PreparedImageEntry, PreparedImageReport } from "./image-contract.j
 const execute = promisify(execFile);
 
 /** Revalidate every selected item under profile locks before deleting any item. */
-export async function prunePreparedImages(report: PreparedImageReport, progress?: CachePruneObserver): Promise<void> {
+export async function prunePreparedImages(
+  report: PreparedImageReport,
+  progress?: CachePruneObserver,
+  validate?: () => void,
+): Promise<void> {
   if (report.issues.length && (report.location === "local" || !report.entries.length))
     throw new Error(`Cannot revalidate prepared images: ${report.issues.join("; ")}`);
   if (!report.entries.length) return;
@@ -31,6 +35,7 @@ export async function prunePreparedImages(report: PreparedImageReport, progress?
         )
           throw new Error(`Prepared image ${entry.reference} changed or became active; inspect again`);
       }
+      validate?.();
       for (const entry of report.entries)
         await pruneItem(
           `Images / ${entry.profile} / ${entry.reference}`,

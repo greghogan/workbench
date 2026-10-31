@@ -15,9 +15,40 @@ import { join, resolve } from "node:path";
 import { test, vi } from "vitest";
 import { recordDocument } from "../src/record-document.ts";
 import { validateRelationships } from "../src/records.ts";
+import { scan } from "../src/record-files.ts";
+import { collectionWorkingFiles } from "../src/collection-files.ts";
+import { stageFile } from "../scripts/file-publication.mjs";
 
 const distribution = resolve(import.meta.dirname, "..");
 const executable = join(distribution, "bundle/main.cjs");
+
+test("record discovery and collection acquisition exclude unpublished atomic candidates", () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-record-publication-"));
+  const directory = join(root, "workbench/decisions");
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, "ADR-00.md");
+  writeFileSync(path, "published");
+  const replacement = stageFile(path, "replacement"),
+    added = stageFile(join(directory, "ADR-01.md"), "new record");
+  try {
+    assert.deepEqual(scan(root, "ADR"), [{ number: "0", path }]);
+    assert.deepEqual(
+      [...collectionWorkingFiles(join(root, "workbench"))],
+      [["workbench/decisions/ADR-00.md", Buffer.from("published")]],
+    );
+    added.publish();
+    assert.deepEqual(
+      scan(root, "ADR").map((record) => record.number),
+      ["0", "1"],
+    );
+    writeFileSync(join(directory, "unrelated.tmp"), "unrecognized");
+    assert.throws(() => scan(root, "ADR"), /unexpected file in record directory/);
+  } finally {
+    replacement.discard();
+    added.discard();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function run(root: string, expected: boolean, ...arguments_: string[]) {
   const result = spawnSync(process.execPath, [executable, ...arguments_], {

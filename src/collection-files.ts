@@ -5,6 +5,7 @@ import { readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ownedPath } from "./paths.js";
 import { InvalidInput } from "./input-errors.js";
+import { publicationTarget } from "../scripts/file-publication.mjs";
 
 export const collectionFileLimit = 1024 * 1024;
 export const collectionByteLimit = 64 * 1024 * 1024;
@@ -20,17 +21,18 @@ export const bytesHash = (bytes: Buffer | undefined): string | null =>
 const equal = (a: Buffer | undefined, b: Buffer | undefined) => bytesHash(a) === bytesHash(b);
 export const authoritativeFiles = (files: Map<string, Buffer>) =>
   new Map([...files].filter(([name]) => !["workbench/collection.toml", "workbench/decision-map.md"].includes(name)));
-/** Editable contents include contextual charters; generated inventories and maps are derived separately. */
-export const collectionFilesHash = (files: Map<string, Buffer>): string =>
+/** Canonical byte identities also cover complete working trees during concurrent-edit checks. */
+export const collectionTreeHash = (files: Map<string, Buffer>): string =>
   createHash("sha256")
     .update(
       JSON.stringify(
-        [...authoritativeFiles(files)]
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-          .map(([name, bytes]) => [name, bytesHash(bytes)]),
+        [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([name, bytes]) => [name, bytesHash(bytes)]),
       ),
     )
     .digest("hex");
+/** Editable contents include contextual charters; generated inventories and maps are derived separately. */
+export const collectionFilesHash = (files: Map<string, Buffer>): string =>
+  collectionTreeHash(authoritativeFiles(files));
 /** The publisher's charter is provenance after adoption, never an additional policy authority. */
 export const policyFilesHash = (files: Map<string, Buffer>): string =>
   collectionFilesHash(new Map([...files].filter(([name]) => name !== collectionCharterPath)));
@@ -52,6 +54,7 @@ export function collectionWorkingFiles(directory: string): Map<string, Buffer> {
     for (const entry of readdirSync(ownedPath(directory, prefix || "."), { withFileTypes: true })) {
       const name = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (/^\..+\.sw[a-z]$/.test(entry.name)) continue;
+      if (entry.isFile() && publicationTarget(entry.name) !== undefined) continue;
       const path = ownedPath(directory, name);
       if (entry.isDirectory()) walk(name);
       else {

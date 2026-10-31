@@ -75,7 +75,8 @@ export async function startDemonstrationService(distribution: string, signal?: A
     process.execPath,
     [join(distribution, "bundle/main.cjs"), "web-demo", distribution, directory],
     {
-      cwd: directory,
+      // The owner removes directory on shutdown; Windows cannot remove a child's current directory.
+      cwd: distribution,
       env,
       signal: controller.signal,
       output: (stdout, errors) => {

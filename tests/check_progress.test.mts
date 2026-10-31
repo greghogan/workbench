@@ -1,3 +1,4 @@
+import stringWidth from "string-width";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { CheckLines, CheckProgress } from "../src/check-progress.ts";
 import { routeDiagnostics, writeDiagnosticText } from "../scripts/diagnostics.mjs";
@@ -135,7 +136,7 @@ test("narrow terminals clip labels and sanitize external controls before redraw"
   const frames = chunks.filter((text) => text.includes("Elapsed"));
   expect(frames.length).toBeGreaterThan(0);
   for (const frame of frames)
-    for (const line of frame.trimEnd().split("\n")) expect(Buffer.byteLength(line)).toBeLessThan(24);
+    for (const line of frame.trimEnd().split("\n")) expect(stringWidth(line)).toBeLessThan(24);
   progress.event("a", "Python", 1, "test", "fail");
   progress.stop();
   progress.finishGroup("a", "Python", true);
@@ -226,7 +227,7 @@ test.each([1, 2, 3, 5])("the active pane stays within a %s-row viewport", (rows)
   advance(1000);
   for (const chunk of chunks.filter((value) => !value.startsWith("\u001b"))) {
     expect(chunk.trimEnd().split("\n").length).toBeLessThanOrEqual(Math.max(1, rows - 1));
-    for (const line of chunk.trimEnd().split("\n")) expect(Buffer.byteLength(line)).toBeLessThan(32);
+    for (const line of chunk.trimEnd().split("\n")) expect(stringWidth(line)).toBeLessThan(32);
   }
   progress.stop();
   progress.close(false);

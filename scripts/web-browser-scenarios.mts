@@ -1,4 +1,5 @@
 export const BrowserScenario = {
+  Accessibility: "Automated accessibility evidence",
   Projects: "Projects dashboard, cache inventory, and accessible reference previews",
   Search: "Search and ADR differences",
   Paragraphs: "Paragraph differences ignore soft wrapping",
@@ -12,6 +13,7 @@ export const BrowserScenario = {
   Sources: "Nested project names, source hierarchy, and global search",
   Demonstration: "Isolated demonstration and bundled collection preview",
 } as const;
+import { accessibilityEvidence } from "./web-accessibility.mjs";
 import type { Browser, Page } from "playwright-core";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, appendFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -33,6 +35,7 @@ interface BrowserScenarioContext {
 export function webBrowserScenarios(context: BrowserScenarioContext): { name: string; run: () => Promise<void> }[] {
   const { page, browser, root, provider, commit, adr, staged, directory, base, git } = context;
   return [
+    { name: BrowserScenario.Accessibility, run: async () => accessibilityEvidence(page, base, directory) },
     {
       name: BrowserScenario.Projects,
       run: async () => {

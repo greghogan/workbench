@@ -1,4 +1,4 @@
-import { knownRoute, routeContracts, decodeRouteQuery, routeOperation, Route } from "./routes.js";
+import { knownRoute, routeContracts, decodeRoute, routeOperation, Route } from "./routes.js";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer, type ServerResponse } from "node:http";
@@ -184,8 +184,8 @@ export async function startProjectHub(
           send(response, 405, "text/plain", "Method not allowed.");
           return;
         }
-        decodeRouteQuery(route, url.searchParams);
       }
+      const decoded = route === "unknown" ? undefined : decodeRoute(route, url.searchParams);
       if (url.pathname === Route.Style) {
         send(response, 200, "text/css", stylesheet);
         return;
@@ -240,12 +240,12 @@ export async function startProjectHub(
         void inventory();
         return;
       }
-      if (request.method === "GET" && url.pathname === Route.Inventory) {
+      if (request.method === "GET" && decoded?.route === Route.Inventory) {
+        const query = decoded.query;
         const data = await inventory();
         const projects = currentProjects(data);
-        const view = url.searchParams.get("view") === "caches" ? "caches" : "projects";
-        const owner =
-          projects.find((entry) => entry.id === url.searchParams.get("project"))?.path ?? url.searchParams.get("owner");
+        const view = query.view === "caches" ? "caches" : "projects";
+        const owner = projects.find((entry) => entry.id === query.project)?.path ?? query.owner;
         const body = JSON.stringify(inventoryPatch(inventoryPresentation(data, projects, csrf, view, owner)));
         if (Buffer.byteLength(body) > 16 * 1024 * 1024)
           throw new WebError(413, "Inventory response is too large; use the cache CLI");
@@ -370,33 +370,31 @@ export async function startProjectHub(
         send(response, 405, "text/plain", "Method not allowed");
         return;
       }
-      if (url.pathname === "/cleanup") {
-        const token = url.searchParams.get("token") ?? "",
+      if (decoded?.route === Route.Cleanup) {
+        const query = decoded.query;
+        const token = query.token ?? "",
           proposal = pending.get(token);
         if (!proposal || proposal.expires < Date.now())
           throw new WebError(409, "Cleanup plan expired; prepare a new preview");
         send(response, 200, "text/html", cleanupPage(proposal, csrf, token));
         return;
       }
+      const query = decoded?.route === Route.Caches || decoded?.route === Route.Projects ? decoded.query : {};
       const priority =
-        url.pathname === Route.Caches
-          ? (registeredProjects().find((project) => project.id === url.searchParams.get("project"))?.path ??
-            url.searchParams.get("owner") ??
+        decoded?.route === Route.Caches
+          ? (registeredProjects().find((project) => project.id === decoded.query.project)?.path ??
+            decoded.query.owner ??
             undefined)
           : undefined;
-      const data = await inventories.read(
-        url.searchParams.has("refresh"),
-        url.searchParams.has("refresh-sizes"),
-        priority,
-      );
+      const data = await inventories.read(query.refresh !== undefined, query["refresh-sizes"] !== undefined, priority);
       const projects = currentProjects(data);
       if (url.pathname === Route.Overview || url.pathname === Route.Projects) {
         send(response, 200, "text/html", projectDashboard(data, projects, csrf));
         return;
       }
-      if (url.pathname === Route.Caches) {
-        const owner =
-          projects.find((entry) => entry.id === url.searchParams.get("project"))?.path ?? url.searchParams.get("owner");
+      if (decoded?.route === Route.Caches) {
+        const query = decoded.query;
+        const owner = projects.find((entry) => entry.id === query.project)?.path ?? query.owner;
         send(
           response,
           200,

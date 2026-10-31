@@ -135,7 +135,14 @@ export async function exerciseConsumerProfile(
             application,
             ...(language === "rust" ? ["--exclude-tool", "miri"] : []),
           ]);
-          await check(`${language}-gate`, project, ["--stage", "commit"]);
+          // Ruby's language-server transport must accept the Unicode project path even on a C-locale host.
+          await check(
+            `${language}-gate`,
+            project,
+            ["--stage", "commit"],
+            false,
+            language === "ruby" ? { ...env, LANG: "C", LC_ALL: "C" } : env,
+          );
           await cli(`${language}-hooks`, project, ["init", "--adopt", "--hooks"]);
           await git(`${language}-stage`, project, ["add", "--all"]);
           await commands.run(

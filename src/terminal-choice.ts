@@ -1,6 +1,7 @@
 import { emitKeypressEvents, type Key } from "node:readline";
 import { plainOutput } from "./presentation.js";
 import { choosePlainItems } from "./plain-choice.js";
+import { fitTerminalText as fitLine } from "./terminal-text.js";
 import type { Readable, Writable } from "node:stream";
 import {
   choiceLeaves,
@@ -39,20 +40,6 @@ export function terminalAvailable(
   output: { isTTY?: boolean } = process.stdout,
 ): boolean {
   return (input.isTTY ?? false) && (output.isTTY ?? false);
-}
-
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-function fitLine(line: string, width: number): string {
-  let result = "",
-    used = 0;
-  // A UTF-8 byte budget conservatively bounds columns without splitting Unicode graphemes.
-  for (const { segment } of segmenter.segment(line.replace(/\p{Cc}/gu, " "))) {
-    const size = Buffer.byteLength(segment);
-    if (used + size > width) break;
-    result += segment;
-    used += size;
-  }
-  return result;
 }
 
 /** Terminal interaction stays separate from filesystem changes, so cancellation has no effects. */

@@ -142,6 +142,7 @@ test("record reference previews support focus, Escape, safe text, and live-node 
   link?.focus();
   const popup = web.document.querySelector<HTMLElement>('[role="tooltip"]');
   expect(popup?.hidden).toBe(false);
+  expect(popup?.closest("main")).not.toBeNull();
   expect(popup?.textContent).toContain("demo:TSK-0");
   expect(popup?.textContent).toContain("<b>Task</b>");
   expect(popup?.querySelector("b")).toBeNull();
@@ -154,6 +155,15 @@ test("record reference previews support focus, Escape, safe text, and live-node 
   link?.remove();
   await Promise.resolve();
   expect(popup?.hidden).toBe(true);
+  const main = web.document.querySelector("main");
+  if (!main) throw new Error("missing fixture main");
+  main.innerHTML =
+    '<a href="/record?id=demo:ADR-1" data-record-reference="demo:ADR-1" data-record-title="Next record">Next</a>';
+  await Promise.resolve();
+  main.querySelector<HTMLAnchorElement>("a")?.focus();
+  expect(popup?.isConnected).toBe(true);
+  expect(popup?.closest("main")).toBe(main);
+  expect(popup?.textContent).toContain("Next record");
   web.close();
   expect(web.document.querySelector('[role="tooltip"]')).toBeNull();
 });

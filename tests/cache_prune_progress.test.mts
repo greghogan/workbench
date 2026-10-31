@@ -1,3 +1,4 @@
+import stringWidth from "string-width";
 import { promised } from "./fixtures/promised.mjs";
 import { required } from "../src/invariants.ts";
 import { expect, test, vi, afterEach } from "vitest";
@@ -105,6 +106,6 @@ test("paths are sanitized and kept within one terminal row; unstarted cleanup em
   const row = required(output.frames.at(-1), "Fixture value output.frames.at(-1)").replace("\r\u001b[2K", "");
   expect(row).not.toContain("\u001b");
   expect(row).not.toMatch(/[\n\t]/);
-  expect(Buffer.byteLength(row)).toBeLessThan(60);
+  expect(stringWidth(row)).toBeLessThan(60);
   progress.close(true);
 });

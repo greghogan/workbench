@@ -16,6 +16,7 @@ const commands: Record<string, Admission> = {
   "buildkit-build": { internal: true, policy: true },
 
   cache: { explicitRoot: true },
+  "cache-auto-prune": { internal: true, explicitRoot: true },
 
   check: { project: true, registration: true, policy: true, explicitRoot: true },
 

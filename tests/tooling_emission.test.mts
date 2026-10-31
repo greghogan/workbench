@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -15,6 +15,7 @@ import {
   toolingIgnores,
 } from "../scripts/tooling-artifacts.mts";
 import { sourceMapErrors } from "../src/source-maps.ts";
+import { ESLint } from "eslint";
 
 test("a standalone's first emission uses newly authored dependencies, then passes parity without another build", async () => {
   const root = mkdtempSync(join(tmpdir(), "workbench-tooling-order-"));
@@ -150,6 +151,60 @@ test("Git ignores declared development outputs while preserving their sources an
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("runtime bundles remain executable after their authoring dependencies are removed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-runtime-emission-"));
+  try {
+    const dependency = join(root, "store/fixture-parser@1.0.0/node_modules/fixture-parser");
+    mkdirSync(dependency, { recursive: true });
+    mkdirSync(join(root, "node_modules"));
+    symlinkSync(dependency, join(root, "node_modules/fixture-parser"), "junction");
+    mkdirSync(join(root, "scripts"));
+    writeFileSync(join(dependency, "package.json"), JSON.stringify({ name: "fixture-parser", exports: "./index.cjs" }));
+    writeFileSync(
+      join(dependency, "index.cjs"),
+      'const process = require("node:process"); exports.value = process.platform ? 42 : 0;\n',
+    );
+    writeFileSync(
+      join(root, "scripts/owned-scratch.mts"),
+      'import { value } from "fixture-parser"; export const answer: number = value;\n',
+    );
+    await buildTooling({ root, operation: "build" });
+    const relocated = join(root, "relocated");
+    cpSync(join(root, "scripts"), join(relocated, "scripts"), { recursive: true });
+    cpSync(dependency, join(relocated, "node_modules/fixture-parser"), { recursive: true });
+    await buildTooling({ root: relocated, operation: "verify" });
+    const installed = join(root, "installed.mjs");
+    writeFileSync(installed, readFileSync(join(root, "scripts/owned-scratch.mjs")));
+    rmSync(join(root, "node_modules"), { recursive: true });
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import { answer } from ${JSON.stringify(pathToFileURL(installed).href)}; console.log(answer);`,
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(result.stdout.trim(), "42");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runtime bundle authoring retains strict lint while emitted third-party code is treated as generated", async () => {
+  const linter = new ESLint();
+  const findings = await linter.lintText("export const invalid: any = 1;\n", {
+    filePath: "scripts/runtime-parsers.mts",
+  });
+  assert.ok(
+    findings
+      .flatMap((result) => result.messages)
+      .some((message) => message.ruleId === "@typescript-eslint/no-explicit-any"),
+  );
+  assert.equal(await linter.isPathIgnored("scripts/runtime-parsers.mjs"), true);
 });
 
 test("tooling operations reject ambiguous and unknown flags before any build runs", () => {

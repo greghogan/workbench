@@ -1,5 +1,6 @@
 import { required } from "./values.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
+import { importManagedImage } from "./managed-image-import.mjs";
 import { validateManagedPlan } from "./managed-contract.mjs";
 import { prepareGuixProfiles } from "./prepare-guix-profiles.mjs";
 import { readFileSync, rmSync } from "node:fs";
@@ -28,12 +29,5 @@ await withManagedProcesses(async (scope) => {
   const archive = readFileSync(join(output, "image-path"), "utf8").trim();
   if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
     throw new Error("Invalid managed image archive");
-  const loaded = await run(
-    "bash",
-    ["-o", "pipefail", "-c", 'docker load < "$1"', "workbench-image-import", archive],
-    true,
-  );
-  const id = /Loaded image(?: ID)?: (.+)/.exec(loaded)?.[1];
-  if (!id) throw new Error("Docker did not report the imported image identity");
-  await run("docker", ["tag", id, image]);
+  await importManagedImage(scope, archive, image);
 });

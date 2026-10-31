@@ -1,6 +1,6 @@
 import { metadataJSON } from "../scripts/metadata-http.mjs";
 import { isRecord } from "../scripts/values.mjs";
-import { safeOutput } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
 
 export interface Advisory {
   id: string;

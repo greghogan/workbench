@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { gunzipSync } from "node:zlib";
@@ -23,6 +23,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { prepareWorkbenchPackage } from "../src/package.ts";
 import { readDistributionSource } from "../src/distribution-identity.ts";
 import type { PathOrFileDescriptor } from "fs";
+import { publicationTemporaryGlob, stageFile } from "../scripts/file-publication.mjs";
 
 const temporary: string[] = [];
 const repository = "https://example.invalid/workbench.git";
@@ -110,21 +111,30 @@ test("a clean source package excludes ignored development JavaScript and retains
   const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { files: string[] };
   metadata.files.push("scripts");
   writeFileSync(join(root, "package.json"), JSON.stringify(metadata));
-  writeFileSync(join(root, ".gitignore"), "scripts/test-coverage.mjs\nscripts/maintenance/*.mjs\n");
+  writeFileSync(
+    join(root, ".gitignore"),
+    `scripts/test-coverage.mjs\nscripts/maintenance/*.mjs\n${publicationTemporaryGlob}\n`,
+  );
   const revision = commit(root);
-  const prepared = await prepareWorkbenchPackage(root);
-  expect(readDistributionSource(prepared.directory)).toEqual({ repository, revision });
-  const archive = await unpack(prepared.archive);
-  for (const path of ["scripts/test-coverage.mjs", "scripts/maintenance/main.mjs"])
-    expect(archive.has(`workbench/${path}`)).toBe(false);
-  for (const path of [
-    "scripts/test-coverage.mts",
-    "scripts/maintenance/main.mts",
-    "scripts/clean.mts",
-    "scripts/clean.mjs",
-    "bin/workbench.mjs",
-  ])
-    expect(archive.get(`workbench/${path}`)?.bytes).toEqual(readFileSync(join(root, path)));
+  const unpublished = stageFile(join(root, "scripts/clean.mjs"), "unpublished replacement");
+  try {
+    const prepared = await prepareWorkbenchPackage(root);
+    expect(readDistributionSource(prepared.directory)).toEqual({ repository, revision });
+    const archive = await unpack(prepared.archive);
+    for (const path of ["scripts/test-coverage.mjs", "scripts/maintenance/main.mjs"])
+      expect(archive.has(`workbench/${path}`)).toBe(false);
+    for (const path of [
+      "scripts/test-coverage.mts",
+      "scripts/maintenance/main.mts",
+      "scripts/clean.mts",
+      "scripts/clean.mjs",
+      "bin/workbench.mjs",
+    ])
+      expect(archive.get(`workbench/${path}`)?.bytes).toEqual(readFileSync(join(root, path)));
+    expect(archive.has(`workbench/scripts/${basename(unpublished.temporary)}`)).toBe(false);
+  } finally {
+    unpublished.discard();
+  }
 });
 
 test("a committed package preserves references and modes with a reproducible archive and exact source identity", async () => {
@@ -168,6 +178,23 @@ test("a committed package preserves references and modes with a reproducible arc
   vi.stubEnv("WORKBENCH_RELEASE_OUTPUT", join(base, "again"));
   const second = await prepareWorkbenchPackage(root);
   expect(readFileSync(second.archive)).toEqual(bytes);
+});
+
+test("ignored maintainer emissions do not enter a package from an otherwise clean checkout", async () => {
+  const { root } = fixture();
+  const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { files: string[] };
+  metadata.files.push("scripts");
+  writeFileSync(join(root, "package.json"), JSON.stringify(metadata));
+  mkdirSync(join(root, "scripts/maintenance"), { recursive: true });
+  writeFileSync(join(root, "scripts/maintenance/adapters.mts"), "export const maintained = true;\n");
+  writeFileSync(join(root, ".gitignore"), "scripts/maintenance/*.mjs\n");
+  const revision = commit(root);
+  writeFileSync(join(root, "scripts/maintenance/adapters.mjs"), "export const generated = true;\n");
+  expect(git(root, "status", "--porcelain")).toBe("");
+  const result = await prepareWorkbenchPackage(root);
+  expect(readDistributionSource(result.directory)?.revision).toBe(revision);
+  expect(existsSync(join(result.directory, "scripts/maintenance/adapters.mjs"))).toBe(false);
+  expect(readFileSync(join(result.directory, "scripts/maintenance/adapters.mts"), "utf8")).toContain("maintained");
 });
 
 test.each(["uncommitted", "modified", "staged", "untracked"])(

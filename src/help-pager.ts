@@ -1,31 +1,15 @@
 import { emitKeypressEvents, type Key } from "node:readline";
 import { plainOutput } from "./presentation.js";
-import { safeOutput, fitTerminalText } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
+import { fitTerminalText, wrapTerminalText } from "./terminal-text.js";
 import { terminalAvailable, type TerminalInput, type TerminalOutput } from "./terminal-choice.js";
 
 /** Wrap conservatively without splitting graphemes or losing text between terminal pages. */
 export function helpLines(text: string, width: number): string[] {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   return safeOutput(text)
     .replaceAll("\t", "    ")
     .split("\n")
-    .flatMap((line) => {
-      const result: string[] = [];
-      let part = "",
-        size = 0;
-      for (const { segment } of segmenter.segment(line)) {
-        const bytes = Buffer.byteLength(segment);
-        if (part && size + bytes > width) {
-          result.push(part);
-          part = "";
-          size = 0;
-        }
-        part += segment;
-        size += bytes;
-      }
-      result.push(part);
-      return result;
-    });
+    .flatMap((line) => wrapTerminalText(line, width));
 }
 export async function pageHelp(
   text: string,

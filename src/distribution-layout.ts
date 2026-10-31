@@ -1,5 +1,6 @@
 import { maintainerOutput } from "../scripts/tooling-artifacts.mjs";
 import { relativePath } from "./paths.js";
+import { publicationTarget } from "../scripts/file-publication.mjs";
 const generated = new Set([
   ".git",
   "node_modules",
@@ -22,6 +23,7 @@ const generated = new Set([
 /** Release and rehearsal copies share payload exclusions, including personal state. */
 export function distributionPathIncluded(path: string): boolean {
   path = path.replaceAll("\\", "/");
+  if (publicationTarget(path) !== undefined) return false;
   return (
     !maintainerOutput(path) &&
     path

@@ -364,10 +364,44 @@ jobs:
           path: ${{ runner.temp }}/workbench-reports/
           retention-days: 30
 
+  screen-reader:
+    name: Windows NVDA workflows
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      GUIDEPUP_SCREEN_READERS_PATH: ${{ github.workspace }}/.screen-reader-assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Prepare locked screen-reader test tooling
+        run: |
+          node bin/workbench.mjs project add .
+          node bin/workbench.mjs package-manager-exec -- install --frozen-lockfile --ignore-scripts
+          node scripts/build-tooling.mts --maintainers-only
+      - name: Acquire verified browser and NVDA assets
+        id: reader
+        run: node scripts/prepare-screen-reader.mjs
+      - name: Exercise the demonstration through NVDA
+        env:
+          WORKBENCH_SCREEN_READER_BROWSER: ${{ steps.reader.outputs.browser }}
+        run: node scripts/check-screen-reader.mjs --browser "$WORKBENCH_SCREEN_READER_BROWSER" --output "$RUNNER_TEMP/screen-reader-evidence"
+      - name: Retain screen-reader transcripts and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screen-reader-windows-nvda
+          path: ${{ runner.temp }}/screen-reader-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
   # A stable required status accepts only explicitly empty groups as skipped.
   status:
     name: Checks passed
-    needs: [plan, validation, native, environments, devcontainer]
+    needs: [plan, validation, native, environments, devcontainer, rust-portable, screen-reader]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

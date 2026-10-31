@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import {
   cacheBytes,
   discoverCacheSizes,
+  discoverCacheSizesAsync,
   measureCacheSize,
   invalidateCacheSize,
   withCacheSizeChanges,
@@ -42,6 +43,18 @@ test("size estimates persist across discovery instances without walking unchange
   writeFileSync(join(root, "nested/value"), "longer value");
   expect(await measureCacheSize(saved.size)).toBe(saved.size);
   expect((await measureCacheSize(saved.size, true)).bytes).toBe(12);
+});
+test("asynchronous inventory reuses saved sizes across awaits without leaking its discovery context", async () => {
+  const root = fixture();
+  const measured = await measureCacheSize(discover(root).size);
+  writeFileSync(join(root, "nested/value"), "changed outside managed writers");
+  const saved = await discoverCacheSizesAsync(async () => {
+    await Promise.resolve();
+    return cacheBytes(root);
+  });
+  expect(saved.value).toBe(3);
+  expect(saved.sizes).toEqual([measured]);
+  expect(cacheBytes(root)).toBe(31);
 });
 test("a writer invalidates before and after changing nested files, retaining the last measured size", async () => {
   const root = fixture();

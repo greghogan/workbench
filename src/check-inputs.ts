@@ -24,6 +24,7 @@ import { localConfiguration } from "./environments.js";
 import type { CheckSelection, planChecks } from "./check-plan.js";
 import { checkSourcePolicy } from "./check-source-policy.js";
 import { ownedPath } from "./paths.js";
+import { withConfigurationSnapshot } from "./configuration-snapshot.js";
 
 type Plan = ReturnType<typeof planChecks>;
 export const inputDigest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -188,6 +189,10 @@ export function changedCheckInputs(before: CheckFingerprint, after: CheckFingerp
 
 /** Only identified native environments are reusable; mutable managed shells run fresh. */
 export function checkFingerprint(root: string, options: CheckSelection, plan: Plan): CheckFingerprint {
+  return withConfigurationSnapshot(() => configuredFingerprint(root, options, plan));
+}
+
+function configuredFingerprint(root: string, options: CheckSelection, plan: Plan): CheckFingerprint {
   if (plan.sessions.some((session) => session.environment !== "native"))
     throw new Error("managed environments require fresh checks");
   const owner = realpathSync(process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root));

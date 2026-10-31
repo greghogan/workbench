@@ -160,7 +160,7 @@ test("configuration shows complete nested values and uses the terminal width bef
   set("ci.cache", JSON.stringify(cache));
   const descriptor = Object.getOwnPropertyDescriptor(process.stdout, "columns");
   try {
-    for (const columns of [80, 240]) {
+    for (const columns of [80, storage.length + 100]) {
       Object.defineProperty(process.stdout, "columns", { configurable: true, value: columns });
       const output = get();
       expect(output).not.toMatch(/<\d+ (?:items?|fields?)>/);
@@ -178,7 +178,7 @@ test("configuration shows complete nested values and uses the terminal width bef
       expect(JSON.parse(values.get("skills.enabled") ?? "null")).toEqual(skills);
       expect(JSON.parse(values.get("ci.cache") ?? "null")).toEqual(cache);
       expect(values.get("storage.root")).toBe(storage);
-      if (columns === 240) {
+      if (columns > 80) {
         expect(output).toContain(storage);
         expect(output).toContain(JSON.stringify(cache));
       }

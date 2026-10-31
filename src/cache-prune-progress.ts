@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { plainOutput } from "./presentation.js";
-import { safeOutput, fitTerminalText } from "./terminal-text.js";
+import { safeOutput } from "./terminal-output.js";
+import { fitTerminalText } from "./terminal-text.js";
 
 export interface CachePruneObserver {
   begin(total: number): void;
@@ -74,7 +75,7 @@ export class CachePruneProgress implements CachePruneObserver {
   private draw(): void {
     if (!this.interactive) return;
     const text = `${["|", "/", "-", "\\"][this.frame++ % 4] ?? "|"} Deleting ${String(this.completed)}/${String(this.total)} cache items (${this.elapsed()} s): ${safeOutput(this.label).replaceAll("\n", " ").replaceAll("\t", " ")}`;
-    // Byte-based truncation is conservative for non-ASCII paths: never wrap into another terminal row.
+    // Display-cell fitting keeps complete Unicode graphemes within one terminal row.
     const columns = this.output.columns ?? 80;
     const width = Math.max(1, (columns > 0 ? columns : 80) - 1);
     const fitted = fitTerminalText(text, width);

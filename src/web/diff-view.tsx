@@ -127,9 +127,9 @@ export function sourceDiffView(difference: SourceDifference | null | undefined, 
       </section>
     );
   let section = "";
-  const changes = paragraphs.changes.map((change) => {
+  const changes = paragraphs.changes.map((change, index) => {
     const heading =
-      change.section && change.section !== section ? <h3 class="diff-section">{change.section}</h3> : null;
+      change.section && change.section !== section ? <h2 class="diff-section">{change.section}</h2> : null;
     section = change.section;
     const label = change.before === null ? "Added" : change.after === null ? "Removed" : "Changed";
     return (
@@ -137,7 +137,9 @@ export function sourceDiffView(difference: SourceDifference | null | undefined, 
         {heading}
         <section
           class={"diff-paragraph" + (change.kind === "literal" ? " literal" : "")}
-          aria-label={label + " " + (change.kind === "literal" ? "source block" : "paragraph")}
+          aria-label={
+            label + " " + (change.kind === "literal" ? "source block" : "paragraph") + " " + String(index + 1)
+          }
         >
           <div class="diff-content">
             {change.parts.map((part, index) => (

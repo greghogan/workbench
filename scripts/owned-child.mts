@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
-import type { Readable } from "node:stream";
+import type { Readable, Writable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ProcessLock } from "../src/process-lock.js";
 
@@ -14,6 +14,9 @@ export interface OwnedChildOptions {
   env: NodeJS.ProcessEnv;
   signal: AbortSignal;
   owner?: ProcessLock;
+  input?: string;
+  inheritInput?: boolean;
+  shutdown?: "cancel" | "drain";
   windowsVerbatimArguments?: boolean;
   output?: (stdout: Readable, stderr: Readable) => void;
 }
@@ -40,17 +43,23 @@ export async function runOwnedChild(
   options: OwnedChildOptions,
 ): Promise<ChildOutcome> {
   options.signal.throwIfAborted();
+  if (options.input !== undefined && options.inheritInput)
+    throw new Error("Child input must be supplied or inherited, not both");
   options.owner?.beforeSpawn();
-  let child: ChildProcessByStdio<null, Readable, Readable>;
+  const cancelling = options.shutdown !== "drain";
+  let child: ChildProcessByStdio<Writable | null, Readable, Readable>;
   try {
-    child = spawn(command, args, {
+    const settings = {
       cwd: options.cwd,
       env: options.env,
       detached: process.platform !== "win32",
       windowsHide: true,
       windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    };
+    child =
+      options.input !== undefined
+        ? spawn(command, args, { ...settings, stdio: ["pipe", "pipe", "pipe"] })
+        : spawn(command, args, { ...settings, stdio: [options.inheritInput ? "inherit" : "ignore", "pipe", "pipe"] });
   } catch (error) {
     options.owner?.spawned(undefined, false);
     throw error;
@@ -96,6 +105,9 @@ export async function runOwnedChild(
   child.on("error", (error) => {
     failure ??= error;
   });
+  child.stdin?.on("error", (error) => {
+    failure ??= error;
+  });
   const closed = new Promise<ChildOutcome>((resolve) => {
     child.once("close", (status, signal) => {
       resolve({ pid: child.pid ?? 0, status, signal });
@@ -121,10 +133,13 @@ export async function runOwnedChild(
       child.stderr.resume();
       stop("SIGKILL");
     }
-    options.signal.addEventListener("abort", abort, { once: true });
-    if (options.signal.aborted) abort();
+    if (cancelling) {
+      options.signal.addEventListener("abort", abort, { once: true });
+      if (options.signal.aborted) abort();
+    }
+    if (options.input !== undefined) child.stdin?.end(options.input);
     const outcome = await closed;
-    if (options.signal.aborted) stop("SIGKILL");
+    if (cancelling && options.signal.aborted) stop("SIGKILL");
     await Promise.all(killing);
     if (process.platform !== "win32" && child.pid !== undefined) {
       const deadline = Date.now() + 5000;

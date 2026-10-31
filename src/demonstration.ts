@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { synchronize } from "./sync.js";
 import { registerConsumingProject } from "./project-registration.js";
 import { citationPdf } from "../scripts/web-browser-fixtures.mjs";
+import { settleCleanup } from "./diagnostics.js";
 
 /** One server owns the disposable consumer, its Git state, and isolated personal storage until shutdown. */
 export async function createDemonstration(distribution: string, ownedDirectory?: string) {
@@ -132,7 +133,7 @@ export async function createDemonstration(distribution: string, ownedDirectory?:
     git("add", "workbench/experiments/EXP-00/observation.txt");
     return { root, directory, collectionDefaults, close };
   } catch (error) {
-    await close();
+    await settleCleanup([close], error);
     throw error;
   }
 }

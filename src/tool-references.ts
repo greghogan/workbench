@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { writeAtomic } from "../scripts/file-publication.mjs";
+import { cacheSizeMarker, cacheGenerationMarker } from "../scripts/cache-generation.mjs";
 import { readLanguageRoots } from "./project-configuration.js";
 import { readBuildGeneration, type BuildIdentity } from "./builds.js";
 import { nativeInstallationPlan } from "./native-tools.js";
@@ -15,6 +16,9 @@ export interface ResultToolReference {
   identity: BuildIdentity;
   kind: "builds" | "dependencies" | "checks";
   tools: ToolRequirement[];
+  lastUsed?: string;
+  verifiedAt?: string;
+  platform?: string;
 }
 export interface ToolReferences {
   results: ResultToolReference[];
@@ -49,7 +53,11 @@ function readIndex(): ReferenceIndex {
         ["builds", "dependencies", "checks"].includes(String(r.kind)) &&
         object(r.identity) &&
         Array.isArray(r.tools) &&
-        r.tools.every((tool: unknown) => isToolRequirement(tool)),
+        r.tools.every((tool: unknown) => isToolRequirement(tool)) &&
+        (r.platform === undefined || (typeof r.platform === "string" && /^[a-z0-9]+-[a-z0-9]+$/.test(r.platform))) &&
+        [r.lastUsed, r.verifiedAt].every(
+          (date) => date === undefined || (typeof date === "string" && Number.isFinite(Date.parse(date))),
+        ),
     )
   )
     throw new Error(`${path}: invalid cache reference index`);
@@ -77,7 +85,14 @@ function retained(reference: ResultToolReference): boolean {
   if (reference.kind === "checks") return existsSync(ownedPath(reference.directory, "result.json"));
   // Preparing an empty workspace and writing logs does not create a build result.
   return readdirSync(reference.directory).some(
-    (name) => ![".workbench-build.json", ".workbench-dependencies.json", "check-logs"].includes(name),
+    (name) =>
+      ![
+        ".workbench-build.json",
+        ".workbench-dependencies.json",
+        "check-logs",
+        cacheSizeMarker,
+        cacheGenerationMarker,
+      ].includes(name),
   );
 }
 
@@ -95,11 +110,30 @@ export function recordResultTools(reference: ResultToolReference, admissionHeld 
         ],
       };
     state.results = state.results.filter((r) => r.directory !== reference.directory);
-    state.results.push(reference);
+    state.results.push({
+      ...reference,
+      lastUsed: new Date().toISOString(),
+      platform: `${process.platform}-${process.arch}`,
+    });
     writeAtomic(location(), JSON.stringify(state, null, 2) + "\n", 0o600);
   };
   if (admissionHeld) record();
   else withToolCacheAdmission(record);
+}
+
+/** Only a complete successful root gate establishes a replacement for older build generations. */
+export function verifyBuildResults(directories: string[]): void {
+  withToolCacheAdmission(() => {
+    const state = readIndex();
+    const now = new Date().toISOString();
+    for (const reference of state.results) {
+      if (directories.includes(reference.directory) && retained(reference)) {
+        reference.lastUsed = now;
+        reference.verifiedAt = now;
+      }
+    }
+    writeAtomic(location(), JSON.stringify(state, null, 2) + "\n", 0o600);
+  });
 }
 
 /** Inspection refreshes from actual retained results, independently of present-day project pins. */

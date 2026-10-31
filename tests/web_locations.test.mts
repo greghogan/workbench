@@ -61,3 +61,17 @@ test("route contracts share method, scope, and bounded decoded query choices", a
   expect(() => decodeRouteQuery(Route.Record, new URLSearchParams("id=first&id=second"))).toThrow("Repeated route");
   expect(() => decodeRouteQuery(Route.Records, new URLSearchParams({ q: "x".repeat(513) }))).toThrow("Invalid route");
 });
+
+test("route decoding rejects undeclared fields and retains declared inventory selectors", async () => {
+  const { decodeRoute } = await import("../src/web/routes.ts");
+  expect(decodeRoute(Route.Inventory, new URLSearchParams("view=caches&project=abc&owner=%2Ftmp%2Fa"))).toEqual({
+    route: Route.Inventory,
+    query: { view: "caches", project: "abc", owner: "/tmp/a" },
+  });
+  expect(() => decodeRoute(Route.Record, new URLSearchParams("id=demo:ADR-0&unexpected=1"))).toThrow(
+    "Unknown route parameter: unexpected",
+  );
+  expect(() => decodeRoute(Route.Inventory, new URLSearchParams("view=caches&view=projects"))).toThrow(
+    "Repeated route parameter: view",
+  );
+});

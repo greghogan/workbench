@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, expect, test as baseTest, vi } from "vitest";
 import { withProjectBuilder, inspectBuildkitCache, buildProjectImage } from "../src/buildkit.ts";
 import { pruneBuilderCache } from "../src/builder-cache.ts";
+import { keepCacheAsset } from "../src/project-registry.ts";
 
 const test = baseTest.skipIf(process.platform === "win32");
 const state = vi.hoisted(() => ({
@@ -133,6 +134,8 @@ function fixture() {
   writeFileSync(join(root, "docker"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   vi.stubEnv("PATH", root);
   vi.stubEnv("WORKBENCH_CACHE_HOME", join(root, "cache"));
+  vi.stubEnv("WORKBENCH_CONFIG_HOME", join(root, "config"));
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", process.cwd());
   vi.stubEnv("WORKBENCH_CONTAINER_CHECKOUT", root);
   return root;
@@ -172,6 +175,35 @@ test("project builds reuse an owned volume and leave the default builder unchang
   expect(state.containers).toEqual([]);
   expect(state.volumes).toEqual([]);
   expect((await inspectBuildkitCache(root)).entries).toEqual([]);
+});
+
+test("successful builds collect only their owned builder; explicit keeps and disabled auto-pruning preserve its cache", async () => {
+  const root = fixture();
+  await withProjectBuilder(root, () => Promise.resolve());
+  const collection = state.calls.filter(({ args }) => args[0] === "buildx" && args[1] === "prune");
+  expect(collection).toHaveLength(2);
+  expect(collection.every(({ args }) => args.includes("--builder") && args.includes(state.name.slice(0, -1)))).toBe(
+    true,
+  );
+  const entry = required((await inspectBuildkitCache(root)).entries[0], "owned builder");
+  keepCacheAsset(required(entry.receipt, "builder receipt"), true);
+  state.calls = [];
+  await withProjectBuilder(root, () => Promise.resolve());
+  expect(state.calls.some(({ args }) => args[1] === "prune")).toBe(false);
+  keepCacheAsset(required(entry.receipt, "builder receipt"), false);
+  mkdirSync(join(root, "config"), { recursive: true });
+  writeFileSync(join(root, "config/config.toml"), "[cache]\nauto_prune=false\n");
+  state.calls = [];
+  await withProjectBuilder(root, () => Promise.resolve());
+  expect(state.calls.some(({ args }) => args[1] === "prune")).toBe(false);
+});
+
+test("failed builds never collect the builder cache needed for diagnosis and retry", async () => {
+  const root = fixture();
+  await expect(withProjectBuilder(root, () => Promise.reject(new Error("compilation failed")))).rejects.toThrow(
+    /compilation failed/,
+  );
+  expect(state.calls.some(({ args }) => args[1] === "prune")).toBe(false);
 });
 
 test.each(["volume", "container", "engine"])("replaced %s identity blocks use and cleanup", async (kind) => {

@@ -312,7 +312,8 @@ recipes likewise finish generation first; each file replacement is atomic.
 metadata for already-pinned bootstrap, build-backend, and Go proxy inputs, together with compressed pnpm registry
 publication and trust-history snapshots. Managed pnpm checks read those snapshots through an operation-owned loopback
 registry; tarball extraction and supply-chain policy checks remain pnpm's responsibility. The refresh does not resolve
-newer dependency versions.
+newer dependency versions. This supplemental refresh is a Workbench source-checkout maintenance command; complete
+development setup first to generate the helper.
 
 The verification command runs from the project root inside the fresh source snapshot. `{workbench}` expands to that
 snapshot's Workbench distribution when the command needs its CLI or a shipped helper.

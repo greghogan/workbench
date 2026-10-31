@@ -37,6 +37,7 @@ import {
   prepareCheckLogs,
 } from "../src/builds.ts";
 import { withCacheLockSync } from "../src/cache-lock.ts";
+import { invalidateCacheSize } from "../src/cache-size.ts";
 
 const distribution = resolve(import.meta.dirname, "..");
 vi.mock("node:fs", async (original) => {
@@ -111,6 +112,29 @@ function fixture() {
   };
   return { base, cache, projects, populate, run, json };
 }
+
+test("automatic retention revalidates references under ownership before deleting any payload", async () => {
+  const { projects } = fixture();
+  const { root, paths } = required(projects[0], "cache project");
+  prepareBuild(paths);
+  const payload = join(paths.directory, "result");
+  writeFileSync(payload, "preserved working result");
+  const report = inspectBuildCache(root);
+  await expect(
+    pruneBuildCache({
+      report,
+      apply: true,
+      validate: () => {
+        expect(existsSync(buildLockDirectory(paths.identity))).toBe(true);
+        throw new Error("replacement references changed");
+      },
+    }),
+  ).rejects.toThrow(/replacement references changed/);
+  expect(readFileSync(payload, "utf8")).toBe("preserved working result");
+  expect(existsSync(buildLockDirectory(paths.identity))).toBe(false);
+  await pruneBuildCache({ report: inspectBuildCache(root), apply: true });
+  expect(existsSync(payload)).toBe(false);
+});
 
 test("owned check logs include earlier runs, group with their checkout, and prune while preserving active work", async () => {
   const { cache, projects, populate } = fixture();
@@ -748,6 +772,50 @@ test("cache CLI defaults to this checkout inside a project and all outside, supp
   for (const { paths } of projects) expect(existsSync(paths.directory)).toBe(false);
   expect(json(base, "cache").entries).toEqual([]);
   expect(existsSync(join(cache, "downloads/pnpm"))).toBe(true);
+});
+
+test("cache CLI reuses saved estimates and refreshes only the selected checkout when explicitly requested", () => {
+  const { projects, populate, run, json } = fixture();
+  populate();
+  const first = required(projects[0], "First checkout"),
+    second = required(projects[1], "Second checkout");
+  const current = (report: ReturnType<typeof inspectBuildCache>) =>
+    required(
+      report.entries.find((entry) => entry.directory === first.paths.directory),
+      "Selected build cache",
+    );
+  expect(current(json(first.root, "cache")).measurement?.state).toBe("pending");
+  const measured = current(json(first.root, "cache", "--fresh"));
+  expect(measured.measurement).toMatchObject({ state: "ready", bytes: measured.bytes });
+  const bytes = required(measured.bytes, "Measured bytes");
+  writeFileSync(join(first.paths.directory, "extra"), "additional bytes");
+  expect(current(json(first.root, "cache")).bytes).toBe(bytes);
+  const refreshed = current(json(first.root, "cache", "--fresh"));
+  expect(refreshed.bytes).toBe(bytes + 16);
+  expect(json(second.root, "cache").entries.every((entry) => entry.measurement?.state === "pending")).toBe(true);
+  invalidateCacheSize(first.paths.directory);
+  const stale = current(json(first.root, "cache"));
+  expect(stale.measurement).toMatchObject({ state: "stale", bytes: refreshed.bytes });
+  const printed = run(first.root, "cache").stdout;
+  expect(printed).toContain("use --fresh");
+  expect(printed).toContain(required(stale.measurement?.measuredAt, "Saved measurement timestamp"));
+  writeFileSync(join(first.paths.directory, "prune-input"), "fresh prune input");
+  const preview = current(json(first.root, "cache", "prune"));
+  expect(preview.measurement?.state).toBe("ready");
+  expect(preview.bytes).toBe(bytes + 33);
+  expect(existsSync(first.paths.directory)).toBe(true);
+});
+
+test("fresh cache measurements preserve estimates while an active build owns the selected cache", () => {
+  const { projects, populate, json } = fixture();
+  populate();
+  const { root, paths } = required(projects[0], "First checkout");
+  json(root, "cache", "--fresh");
+  withBuildLock(paths, () => {
+    const report = json(root, "cache", "--fresh");
+    expect(report.entries.every((entry) => entry.measurement?.state === "blocked")).toBe(true);
+    expect(report.entries.every((entry) => entry.bytes !== undefined)).toBe(true);
+  });
 });
 
 test("checkout storage overrides select one cache root without migrating or deleting previous storage", () => {

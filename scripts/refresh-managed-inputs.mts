@@ -29,6 +29,7 @@ import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { brotliCompressSync, constants } from "node:zlib";
+import { parseToml } from "./runtime-parsers.mjs";
 import { pnpmPackages, pnpmIdentity } from "./pnpm-lock.mjs";
 import type { PathOrFileDescriptor } from "fs";
 
@@ -387,7 +388,7 @@ export async function collectManagedRefresh(
     composer?: (directory: string, distribution: string) => unknown;
   } = {},
 ) {
-  const projects = (await import("smol-toml")).parse(readFileSync(join(root, "workbench/projects.toml"), "utf8"));
+  const projects = parseToml(readFileSync(join(root, "workbench/projects.toml"), "utf8"));
   const files: [string, string | Uint8Array][] = [];
   const outputJSON = (path: string, value: unknown) => files.push([path, `${JSON.stringify(value, null, 2)}\n`]);
   let bootstrap;

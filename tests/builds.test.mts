@@ -285,3 +285,15 @@ test("vcpkg rejects output outside owned storage and cleanup preserves linked so
   expect(existsSync(join(paths.directory, "cargo/product"))).toBe(false);
   expect(existsSync(root)).toBe(true);
 });
+
+test("native build storage preserves an explicit Cargo target while managed environments remain isolated", () => {
+  const { root, paths } = fixture(["rust"]);
+  const configured = join(root, "caller target with spaces");
+  expect(buildEnvironment(paths, { CARGO_TARGET_DIR: configured }).CARGO_TARGET_DIR).toBe(configured);
+  expect(buildEnvironment(paths, {}).CARGO_TARGET_DIR).toBe(join(paths.directory, "cargo"));
+  expect(buildEnvironment(paths, { CARGO_TARGET_DIR: "" }).CARGO_TARGET_DIR).toBe(join(paths.directory, "cargo"));
+  const managed = buildPaths(root, root, "guix");
+  expect(buildEnvironment(managed, { CARGO_TARGET_DIR: configured }).CARGO_TARGET_DIR).toBe(
+    join(managed.directory, "cargo"),
+  );
+});

@@ -72,7 +72,12 @@ test("inline rendering escapes active content and conveys additions and removals
   expect(dom.window.document.querySelector("script")).toBeNull();
   expect(dom.window.document.querySelector(".diff-content del")?.textContent).toBe("old");
   expect(dom.window.document.querySelector(".diff-content ins")?.textContent).toBe("new");
-  expect(dom.window.document.querySelector(".diff-paragraph")?.getAttribute("aria-label")).toBe("Changed paragraph");
+  expect(dom.window.document.querySelector(".diff-paragraph")?.getAttribute("aria-label")).toBe("Changed paragraph 1");
+  const labels = [...dom.window.document.querySelectorAll(".diff-paragraph")].map((item) =>
+    item.getAttribute("aria-label"),
+  );
+  expect(new Set(labels).size).toBe(labels.length);
+  expect(dom.window.document.querySelector("h3.diff-section")).toBeNull();
   expect(dom.window.document.querySelectorAll(".diff-content")).toHaveLength(1);
   expect(dom.window.document.querySelectorAll(".diff-legend,.diff-change-label")).toHaveLength(0);
   expect(projection(dom.window.document.querySelector(".diff-content"), "before")).toBe("Keep old <script>.");

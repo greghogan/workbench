@@ -47,6 +47,8 @@ export interface SourceQuery {
 }
 export interface RouteQueries {
   [Route.Overview]: SourceQuery;
+  [Route.Projects]: { refresh?: "1"; "refresh-sizes"?: "1" };
+  [Route.Inventory]: { view?: "projects" | "caches"; project?: string; owner?: string };
   [Route.Record]: SourceQuery &
     Omit<ViewState, "view"> & { id: string; saved?: "1"; view?: Exclude<DocumentView, "raw"> };
   [Route.Records]: SourceQuery & {
@@ -119,13 +121,21 @@ type RouteContracts = {
   };
 };
 export const routeContracts: RouteContracts = {
-  [Route.Projects]: { scope: "global", methods: ["GET"], query: {} },
+  [Route.Projects]: {
+    scope: "global",
+    methods: ["GET"],
+    query: { refresh: oneOf(["1"]), "refresh-sizes": oneOf(["1"]) },
+  },
   [Route.Caches]: {
     scope: "global",
     methods: ["GET"],
     query: { project: bounded(1024), owner: bounded(1024), refresh: oneOf(["1"]), "refresh-sizes": oneOf(["1"]) },
   },
-  [Route.Inventory]: { scope: "global", methods: ["GET"], query: {} },
+  [Route.Inventory]: {
+    scope: "global",
+    methods: ["GET"],
+    query: { view: oneOf(["projects", "caches"]), project: bounded(1024), owner: bounded(1024) },
+  },
   [Route.ProjectAdd]: { operation: "project.add", scope: "global", methods: ["POST"], query: {} },
   [Route.ProjectRemove]: { operation: "project.remove.preview", scope: "global", methods: ["POST"], query: {} },
   [Route.CachePrepare]: { operation: "cache.clear.preview", scope: "global", methods: ["POST"], query: {} },
@@ -261,6 +271,25 @@ export function actionDefinition(path: string) {
   const route = knownRoute(path);
   return route === "unknown" ? undefined : routeContracts[route].action;
 }
+export type RouteQuery<R extends Route> = R extends keyof RouteQueries
+  ? Partial<RouteQueries[R]>
+  : Record<string, never>;
+export type DecodedRoute = { [R in Route]: { route: R; query: RouteQuery<R> } }[Route];
+export function decodeRoute(route: Route, parameters: URLSearchParams): DecodedRoute {
+  // The contract validates each field; this assertion connects that runtime boundary to its mapped route type.
+  return { route, query: decodeRouteQuery(route, parameters) } as DecodedRoute;
+}
+export function sourceSelection(query: DecodedRoute["query"]): {
+  id?: string;
+  path?: string;
+  collection?: string;
+  scope?: string;
+  all?: string;
+} {
+  return Object.fromEntries(
+    Object.entries(query).filter(([key]) => ["id", "path", "collection", "scope", "all"].includes(key)),
+  );
+}
 export function decodeRouteQuery<R extends keyof RouteQueries>(
   route: R,
   parameters: URLSearchParams,
@@ -268,6 +297,9 @@ export function decodeRouteQuery<R extends keyof RouteQueries>(
 export function decodeRouteQuery(route: Route, parameters: URLSearchParams): Record<string, string>;
 export function decodeRouteQuery(route: Route, parameters: URLSearchParams): Record<string, string> {
   const result: Record<string, string> = {};
+  const fields = routeContracts[route].query;
+  for (const name of parameters.keys())
+    if (!Object.hasOwn(fields, name)) throw new InvalidInput(`Unknown route parameter: ${name}`);
   for (const [name, decode] of Object.entries(routeContracts[route].query)) {
     const values = parameters.getAll(name);
     if (values.length > 1) throw new InvalidInput(`Repeated route parameter: ${name}`);

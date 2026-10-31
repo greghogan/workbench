@@ -2,9 +2,11 @@ import ts from "typescript";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { extname, isAbsolute, join, posix, relative, win32 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isBuiltin } from "node:module";
 import { parse } from "smol-toml";
 import { distributionPathIncluded } from "../src/distribution-layout.ts";
 import { type ToolingArtifact } from "./tooling-artifacts.mts";
+import { isRecord } from "./values.mjs";
 
 interface Script {
   path: string;
@@ -35,6 +37,12 @@ export function verifyRuntimeDependencies(request: RuntimeDependencyRequest): vo
   )
     throw new Error("Missing runtime package file declarations");
   const roots = [...metadata.files, "package.json"];
+  const packages = new Set(
+    ["dependencies", "optionalDependencies", "peerDependencies"].flatMap((group) => {
+      const values: unknown = Reflect.get(metadata, group);
+      return isRecord(values) ? Object.keys(values) : [];
+    }),
+  );
   const candidates = new Map(request.outputs.map((output) => [output.path.replaceAll("\\", "/"), output.contents]));
   const included = (path: string) =>
     !isAbsolute(path) &&
@@ -105,7 +113,15 @@ export function verifyRuntimeDependencies(request: RuntimeDependencyRequest): vo
         if (url.protocol !== "file:") return;
         path = relative(root, fileURLToPath(url)).replaceAll("\\", "/");
       } else {
-        if (!value.text.startsWith(".")) return;
+        if (!value.text.startsWith(".")) {
+          const name = value.text
+            .split("/")
+            .slice(0, value.text.startsWith("@") ? 2 : 1)
+            .join("/");
+          if (!isBuiltin(value.text) && !packages.has(name))
+            errors.add(`${script.path}: runtime package is not declared: ${value.text}`);
+          return;
+        }
         path = posix.normalize(posix.join(posix.dirname(script.path), value.text));
       }
       const paths =

@@ -3,7 +3,7 @@ import type { BrowserSession } from "./browser-session.js";
 /** One noninteractive, hoverable preview preserves ordinary links and keyboard navigation. */
 export function startReferencePreviews(session: BrowserSession): () => void {
   const { document, browser } = session;
-  const popup = document.createElement("aside");
+  const popup = document.createElement("div");
   popup.id = "record-reference-preview";
   popup.className = "reference-preview";
   popup.setAttribute("role", "tooltip");
@@ -12,7 +12,10 @@ export function startReferencePreviews(session: BrowserSession): () => void {
     title = document.createElement("strong"),
     summary = document.createElement("p");
   popup.append(id, title, summary);
-  document.body.append(popup);
+  const attach = () => {
+    (document.querySelector("main") ?? document.body).append(popup);
+  };
+  attach();
   let active: HTMLAnchorElement | undefined, timer: number | undefined;
   const cancel = () => {
     if (timer !== undefined) browser.clearTimeout(timer);
@@ -42,6 +45,7 @@ export function startReferencePreviews(session: BrowserSession): () => void {
   };
   const show = (link: HTMLAnchorElement) => {
     hide();
+    if (!popup.isConnected) attach();
     active = link;
     id.textContent = link.dataset.recordReference ?? "";
     title.textContent = link.dataset.recordTitle ?? "";

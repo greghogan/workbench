@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { buildCheckout } from "./builds.js";
+import { buildCheckout, interruptedBuildLock } from "./builds.js";
 import { userDirectory } from "./storage.js";
 import { withToolCacheAdmissionAsync } from "./tool-cache-lock.js";
-import { acquireProcessLock, type ProcessLock } from "./process-lock.js";
+import { acquireProcessLock, inspectProcessLock, type ProcessLock } from "./process-lock.js";
 import { releaseAfterFailure } from "./cache-lock.js";
 import type { CheckCancellation } from "./check-cancellation.js";
 import { projectRegistration, Registration } from "./project-registry.js";
@@ -29,10 +29,14 @@ export async function withCheckCoordination<T>(
   const started = Date.now();
   let attempts = 0;
   let waiting = false;
+  let recovering: string | undefined;
   for (;;) {
     attempts++;
     cancellation.checkpoint();
-    const owner = await withToolCacheAdmissionAsync(() => acquireProcessLock(directory, true), cancellation.signal);
+    const owner = await withToolCacheAdmissionAsync(() => {
+      recovering = inspectProcessLock(directory).abandoned ? interruptedBuildLock(checkout) : undefined;
+      return recovering ? undefined : acquireProcessLock(directory, true);
+    }, cancellation.signal);
     if (owner) {
       let result: T;
       try {
@@ -63,7 +67,7 @@ export async function withCheckCoordination<T>(
     }
     if (Date.now() >= deadline)
       throw new Error(
-        `Check gate is still busy or needs recovery: ${directory}; waited ${String(Date.now() - started)} ms (${String(attempts)} attempts)`,
+        `Check gate is still busy or needs recovery: ${directory}; waited ${String(Date.now() - started)} ms (${String(attempts)} attempts)${recovering ? `; waiting for interrupted build ownership: ${recovering}` : ""}`,
       );
     await delay(100, undefined, { signal: cancellation.signal });
   }

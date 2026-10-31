@@ -15,6 +15,7 @@ import { record, records } from "../values.mjs";
 import { applyMaintenance, readMaintenancePlan } from "./apply.mjs";
 import { captureOwnedChild, processCancellation, runOwnedChild } from "../owned-child.mjs";
 import { processFailure } from "../process-outcome.mjs";
+import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "../diagnostics.mjs";
 
 export async function maintenanceMain(
   args: string[],
@@ -190,6 +191,26 @@ export async function maintenanceMain(
           },
           signal,
         );
+        try {
+          await run({
+            command: process.execPath,
+            arguments: [resolve(import.meta.dirname, "../../bin/workbench.mjs"), "cache-auto-prune", root],
+            cwd: root,
+          });
+        } catch (error) {
+          try {
+            diagnostic(
+              LogLevel.Warn,
+              DiagnosticOperation.Command,
+              DiagnosticOutcome.Failed,
+              { command: "automatic cache maintenance" },
+              error,
+              "updates completed; cache cleanup did not run",
+            );
+          } catch {
+            /* Maintenance reporting cannot invalidate completed updates. */
+          }
+        }
       },
     );
   program.command("ruby-lock", { hidden: true }).action(async () => {

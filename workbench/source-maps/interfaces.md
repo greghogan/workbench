@@ -91,9 +91,9 @@ Route commands, validate configuration, and maintain project integration.
 - `tests/fixtures/dom.mts`, `tests/web_render_lint.test.mts`, `tests/web_components.test.mts`: Own and close
   presentation DOMs, verify configured rendering/accessibility lint enforcement, and compare initial and live cache
   rows.
-- `scripts/jsx-rendering-lint.mts`, `tests/types/web_forms.mts`,
-  `tests/web_cache_view_model.test.mts`: Share static JSX enforcement, verify rejected form/route declarations during
-  typechecking, and compare inventory indexes against independent scans.
+- `scripts/jsx-rendering-lint.mts`, `tests/types/web_forms.mts`, `tests/web_cache_view_model.test.mts`: Share static JSX
+  enforcement, verify rejected form/route declarations during typechecking, and compare inventory indexes against
+  independent scans.
 - `src/web/navigation-state.ts`, `src/web/error-response.ts`, `src/web/workspace-codec.ts`, `src/web/size-protocol.ts`,
   `src/web/inventory-protocol.ts`: Validate route choices, preserve navigation context, and decode typed service data.
 - `src/web/cache-view-model.ts`, `src/web/cache-quantity.ts`, `src/web/cache-measurements.ts`: Prepare cache ownership
@@ -115,9 +115,8 @@ Route commands, validate configuration, and maintain project integration.
 - `docs/web.md`: Documents local browser access, record views, live refresh, editing, review, and collection workflows.
 - `tests/web_reviews.test.mts`, `tests/web_server.test.mts`, `tests/web_collections.test.mts`, `tests/fixtures/web.mts`:
   Verify independent approvals, stale edits, browser boundaries, live updates, owned files, and exact collection plans.
-- `scripts/check-web-browser.mts`: Exercise the shipped UI in the managed Headless
-  Shell using disposable projects, retaining screenshots and failure diagnostics; explicit browser overrides aid
-  debugging.
+- `scripts/check-web-browser.mts`: Exercise the shipped UI in the managed Headless Shell using disposable projects,
+  retaining screenshots and failure diagnostics; explicit browser overrides aid debugging.
 
 - `src/record-metadata.ts`: Derives readable citation summaries and metadata labels without weakening record validation.
 - `src/web/sources.ts`, `src/web/record-listing.ts`: Separate selected record sources and provide stable incremental
@@ -157,9 +156,8 @@ Route commands, validate configuration, and maintain project integration.
   contracts, transport, redaction, bounded capture, HTTP correlation, mutation outcomes, and capacity observations.
 - `src/web/citation-documents.ts`: Serve bounded, digest-verified PDF views and downloads from the owned citation
   library, using the citation service's source-specific local presence.
-- `tests/web_citations.test.mts`, `scripts/web-browser-fixtures.mts`: Verify
-  citation availability, streamed byte ranges, document integrity, and native PDF viewing with an offline document
-  fixture.
+- `tests/web_citations.test.mts`, `scripts/web-browser-fixtures.mts`: Verify citation availability, streamed byte
+  ranges, document integrity, and native PDF viewing with an offline document fixture.
 - `scripts/web-browser-scenarios.mts`: Define named shipped-browser workflows.
 - `tests/web_client.test.mts`, `tests/web_protocol.test.mts`: Verify asynchronous draft protection, focus-preserving
   window bounds, and cleanup.
@@ -183,3 +181,15 @@ Route commands, validate configuration, and maintain project integration.
   and kind-specific record contracts.
 
 - `src/policy-state.ts`: Decode bounded local-policy provenance and project/local reconciliation receipts before use.
+
+- `src/configuration-snapshot.ts`: Own immutable configuration acquisition for one operation, with fresh boundaries for
+  later and proposed-tree operations.
+- `src/project-identity.ts`: Separate portable scope identifiers from registered directory paths and display names.
+- `scripts/web-accessibility.mts`: Collect automated browser accessibility evidence and retain unverified assessment
+  boundaries.
+
+- `src/terminal-output.ts`: Sanitize terminal output independently of display-width libraries, preserving the Node 18
+  bootstrap boundary.
+
+- `src/tool-profile-output.ts`: Render tool-profile listings without coupling verified bootstrap acquisition to terminal
+  rendering.

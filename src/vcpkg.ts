@@ -1,7 +1,7 @@
 import { required } from "./invariants.js";
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { readText } from "./files.js";
 import { assertBuildOutput } from "./builds.js";
 import { execute } from "./tool-execution.js";
@@ -100,16 +100,18 @@ export function prepareVcpkg(
   const sanitizeDependencies = sanitizers && system === "windows";
   mkdirSync(build, { recursive: true });
   const compiler = (name: string) =>
-    required(
-      execute(
-        process.platform === "win32" ? "where.exe" : "sh",
-        process.platform === "win32" ? [name] : ["-c", 'command -v "$1"', "compiler", name],
-        { capture: true },
-      )
-        .trim()
-        .split(/\r?\n/)[0],
-      'expected execute(\n      process.platform === "win32" ? "where.exe" : "sh",\n      process.platform === "win32" ? [name] : ["-c", \'command -v "$1"\', "compiler", name],\n      { capture: true },\n    )\n      .trim()\n      .split(/\\r?\\n/)[0]',
-    );
+    isAbsolute(name)
+      ? realpathSync(name)
+      : required(
+          execute(
+            process.platform === "win32" ? "where.exe" : "sh",
+            process.platform === "win32" ? [name] : ["-c", 'command -v "$1"', "compiler", name],
+            { capture: true },
+          )
+            .trim()
+            .split(/\r?\n/)[0],
+          `Compiler not found: ${name}`,
+        );
   const chainload = join(build, "workbench-compiler.cmake");
   const gccSdk =
     family === "clang" && process.env.WORKBENCH_COMPILER === "gcc" && process.env.WORKBENCH_CXX

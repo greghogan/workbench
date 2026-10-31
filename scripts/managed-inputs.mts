@@ -3,8 +3,7 @@ import { required, isRecord, record, string } from "./values.mjs";
 import { replaceManagedFiles } from "./managed-files.mjs";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { parse as parseToml } from "smol-toml";
-import { parseAllDocuments } from "yaml";
+import { parseToml, parseAllDocuments } from "./runtime-parsers.mjs";
 import { managedCheckInputs } from "./managed-check-inputs.mjs";
 import { guixCheckInputs, nixCheckInputs } from "./managed-input-recipes.mjs";
 

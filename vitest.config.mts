@@ -44,6 +44,8 @@ export default defineConfig((): ViteUserConfig => ({
       provider: "v8",
       // Emitted helpers carry inline maps back to their authored TypeScript.
       include: ["src/**/*.{ts,tsx}", "scripts/**/*.{mts,mjs}", "bin/*.{js,mjs,cts}"],
+      // Bundled dependency maps must obey the same declared project-source scope.
+      excludeAfterRemap: true,
       reportsDirectory: "coverage/unit",
       reporter: ["json"],
       // The final gate merges direct imports with instrumented CLI subprocesses.

@@ -3,8 +3,12 @@ import { required } from "../src/invariants.ts";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
+import { autoPrunePreparedImages } from "../src/image-retention.ts";
+import { imageProfileLock } from "../src/image-contract.ts";
+import { keepCacheAsset } from "../src/project-registry.ts";
+import { recordBuilderVolumes, inspectBuilderCache } from "../src/builder-cache.ts";
 import {
   recordPreparedImage,
   inspectPreparedImages,
@@ -21,6 +25,7 @@ const state = vi.hoisted(() => ({
   versions: [] as { id: number; name: string; created_at: string; metadata: { container: { tags: string[] } } }[],
   fail: "",
   removed: [] as (string | undefined)[],
+  volumes: new Map<string, { Name: string; CreatedAt: string }>(),
 }));
 vi.mock("../src/docker-query.js", () => ({
   dockerQuery: (args: string[]) => {
@@ -51,7 +56,17 @@ vi.mock("node:child_process", async (original) => ({
     if (state.fail && args.some((arg: string | string[]) => arg.includes(state.fail)))
       return completedProcess({ status: 1, stderr: "permission denied (HTTP 403)" });
     if (command === "docker") {
-      if (args[0] === "manifest") {
+      if (args[0] === "info") output = "fixture-engine";
+      else if (args[0] === "volume") {
+        if (args[1] === "ls") output = [...state.volumes.keys()].join("\n");
+        else if (args[1] === "inspect") output = args.slice(2).map((name) => state.volumes.get(name));
+        else if (args[1] === "rm") {
+          for (const name of args.slice(2)) {
+            state.removed.push(name);
+            state.volumes.delete(name);
+          }
+        } else throw new Error(`Unexpected volume operation: ${args.join(" ")}`);
+      } else if (args[0] === "manifest") {
         if (state.manifest) return completedProcess({ status: 1, stderr: state.manifest });
         output = { schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json" };
       } else if (args[1] === "ls") output = [...state.images.keys()].join("\n");
@@ -87,6 +102,7 @@ function fixture() {
   state.manifest = "";
   state.fail = "";
   state.removed = [];
+  state.volumes.clear();
   const inputs = "a".repeat(64),
     image = `sha256:${"b".repeat(64)}`;
   const tag = `linux-x64-${inputs}`,
@@ -125,6 +141,79 @@ test("verified image history provides local ownership, sizes, and survives expli
   expect(events).toHaveLength(2);
   expect(inspectPreparedImages(root).entries).toEqual([]);
   expect(readFileSync(required(entry, "Expected fixture value: entry").catalog)).toEqual(catalog);
+});
+
+test("automatic image maintenance retires superseded local images after activation and respects explicit keeps", async () => {
+  const { root, reference, receipt } = fixture();
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
+  const inputs = "c".repeat(64),
+    image = `sha256:${"d".repeat(64)}`;
+  const replacement = `ghcr.io/owner/project/development-guix:linux-x64-${inputs}`;
+  state.images.set(replacement, { Id: image, Size: 1234, Config: { Labels: { "org.workbench.inputs": inputs } } });
+  const verified = { ...receipt, image, inputs, verified: "2026-10-21T00:00:00Z" };
+  recordPreparedImage(root, "guix", replacement, verified);
+  const current = imageProfileLock(root, "guix");
+  mkdirSync(dirname(current), { recursive: true });
+  writeFileSync(current, JSON.stringify({ version: 1, profile: "guix", ...verified }));
+  const retained = required(
+    inspectPreparedImages(root).entries.find((entry) => entry.reference === reference),
+    "old image",
+  );
+  keepCacheAsset(retained.catalog, true);
+  await autoPrunePreparedImages(root);
+  expect(state.removed).toEqual([]);
+  keepCacheAsset(retained.catalog, false);
+  await autoPrunePreparedImages(root);
+  expect(state.removed).toEqual([reference]);
+  expect(state.images.has(replacement)).toBe(true);
+});
+
+test("accepted image cache requirements retire obsolete builder volumes while preserving current and explicitly kept generations", async () => {
+  const { root, reference, receipt } = fixture();
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
+  const oldKey = "a".repeat(24),
+    currentKey = "b".repeat(24);
+  for (const key of [oldKey, currentKey]) {
+    for (const role of ["store", "state"]) {
+      const Name = `workbench-guix-${key}-${role}`;
+      state.volumes.set(Name, { Name, CreatedAt: "2026-10-20T00:00:00Z" });
+    }
+    vi.stubEnv("WORKBENCH_IMAGE_INPUTS", key === currentKey ? receipt.inputs : "c".repeat(64));
+    await recordBuilderVolumes(root, "guix", key);
+  }
+  const definitions = () => new Map([["guix", receipt.inputs]]);
+  const path = imageProfileLock(root, "guix");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ version: 1, profile: "guix", ...receipt }));
+  await autoPrunePreparedImages(root, definitions);
+  expect(state.removed).toEqual([]);
+  writeFileSync(
+    path,
+    JSON.stringify({ version: 1, profile: "guix", ...receipt, builderCaches: [`guix-${currentKey}`] }),
+  );
+  await autoPrunePreparedImages(root, () => new Map([["guix", "d".repeat(64)]]));
+  expect(state.removed).toEqual([]);
+  await autoPrunePreparedImages(
+    root,
+    () =>
+      new Map([
+        ["guix", receipt.inputs],
+        ["nix", "d".repeat(64)],
+      ]),
+  );
+  expect(state.removed).toEqual([]);
+  const old = required(
+    (await inspectBuilderCache(root, undefined, false)).entries.find((entry) => entry.key === `guix-${oldKey}`),
+    "old builder",
+  );
+  keepCacheAsset(required(old.receipt, "builder receipt"), true);
+  await autoPrunePreparedImages(root, definitions);
+  expect(state.removed).toEqual([]);
+  keepCacheAsset(required(old.receipt, "builder receipt"), false);
+  await autoPrunePreparedImages(root, definitions);
+  expect(state.removed.sort()).toEqual([`workbench-guix-${oldKey}-state`, `workbench-guix-${oldKey}-store`]);
+  expect(state.volumes.size).toBe(2);
+  expect(state.images.has(reference)).toBe(true);
 });
 
 test("local pruning never claims unrecorded images or another checkout's verified image", () => {
@@ -215,7 +304,9 @@ test("attached images and mismatched ownership stay visible but unavailable for 
   required(state.images.get(reference), "Expected fixture value").Config.Labels["org.workbench.inputs"] = "f".repeat(
     64,
   );
+  keepCacheAsset(required(report.entries[0], "owned image").catalog, true);
   report = inspectPreparedImages(root);
+  expect(required(report.entries[0], "changed image").blockedReason).toBe("changed");
   expect(required(report.entries[0], "Expected fixture value: report.entries[0]").blockedBy).toMatch(/receipt/);
 });
 

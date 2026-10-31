@@ -52,8 +52,10 @@ import {existsSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 const [directory,example]=process.argv.slice(1);
 const names=${JSON.stringify(generated)};
+const publication=join(example,'.helper.mjs.12345678-1234-4234-8234-123456789abc.tmp');
 writeFileSync(join(directory,'ready'),'ready');
 while(!existsSync(join(directory,'stop'))) {
+ writeFileSync(publication,'unpublished helper');rmSync(publication);
  for(const name of names) {
   const path=join(example,name);mkdirSync(path,{recursive:true});
   writeFileSync(join(path,'generated'),'changing output');

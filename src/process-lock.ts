@@ -21,7 +21,7 @@ export interface ProcessLock {
 }
 
 const validPid = (pid: unknown): pid is number => Number.isSafeInteger(pid) && Number(pid) > 0;
-function gone(pid: number): boolean {
+export function processGone(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return false;
@@ -64,9 +64,9 @@ export function inspectProcessLock(directory: string): { pid?: number; abandoned
       pid: owner.pid,
       abandoned:
         !owner.launching &&
-        gone(owner.pid) &&
+        processGone(owner.pid) &&
         owner.children.every((child) =>
-          child.group ? process.platform !== "win32" && gone(-child.pid) : gone(child.pid),
+          child.group ? process.platform !== "win32" && processGone(-child.pid) : processGone(child.pid),
         ),
     };
   } catch {
@@ -128,7 +128,7 @@ export function acquireProcessLock(directory: string, tracking = false): Process
     verify();
     if (
       (tracking && owner.launching) ||
-      owner.children.some((child) => !gone(child.group && process.platform !== "win32" ? -child.pid : child.pid))
+      owner.children.some((child) => !processGone(child.group && process.platform !== "win32" ? -child.pid : child.pid))
     )
       throw new Error(`Owned processes may still be active; preserving ${directory}`);
   };

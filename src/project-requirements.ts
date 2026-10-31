@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { nativeInstallationPlan } from "./native-tools.js";
 import { toolRequirement, matchesToolRequirement } from "./tool-requirements.js";
+import { withConfigurationSnapshot } from "./configuration-snapshot.js";
 import {
   registeredProjects,
   updateProjectRequirements,
@@ -17,6 +18,10 @@ export interface SuccessfulGateEvidence {
 }
 
 export function projectRequirements(root: string): ProjectRequirement[] {
+  return withConfigurationSnapshot(() => configuredRequirements(root));
+}
+
+function configuredRequirements(root: string): ProjectRequirement[] {
   if (!existsSync(join(root, "workbench/projects.toml"))) throw new Error(`Registered project is unavailable: ${root}`);
   if (!readLanguageRoots(root).length) return [];
   const platform = `${process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform}-${process.arch}`;

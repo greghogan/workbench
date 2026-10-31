@@ -12,10 +12,28 @@ import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, test } from "vitest";
+import { dependencyTargets } from "../src/dependencies.ts";
 
 const temporary: string[] = [];
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
+});
+
+test("retention discovers existing Node stores and Python environment links without changing them", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-dependency-targets-")));
+  temporary.push(root);
+  const project = join(root, "project"),
+    node = join(root, "old-node/pnpm"),
+    python = join(root, "old-python/venv");
+  mkdirSync(join(project, "node_modules"), { recursive: true });
+  mkdirSync(node, { recursive: true });
+  mkdirSync(python, { recursive: true });
+  const metadata = `virtualStoreDir: ${JSON.stringify(node)}\n`;
+  writeFileSync(join(project, "node_modules/.modules.yaml"), metadata);
+  symlinkSync(python, join(project, ".venv"), "junction");
+  expect(new Set(dependencyTargets(project))).toEqual(new Set([node, python]));
+  expect(readFileSync(join(project, "node_modules/.modules.yaml"), "utf8")).toBe(metadata);
+  expect(realpathSync(join(project, ".venv"))).toBe(python);
 });
 
 test("pnpm setup preserves the old installation on failure and removes its local store only after replacement", () => {

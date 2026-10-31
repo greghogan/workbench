@@ -5,6 +5,7 @@ import { ownedPath } from "./paths.js";
 import { userDirectory } from "./storage.js";
 import { imageReference } from "./container-references.js";
 import { imageQuery as run } from "./image-process.js";
+import { keptCacheAssets } from "./project-registry.js";
 import {
   imageHash as hash,
   imageDigest,
@@ -119,6 +120,7 @@ function records(issues: string[], checkout?: string): { path: string; record: I
 /** Inspect recorded ownership. Docker protects all container references, including stopped containers. */
 export function inspectPreparedImages(checkout?: string, references?: ReadonlySet<string>): LocalImageReport {
   const report: LocalImageReport = { location: "local", entries: [], issues: [] };
+  const kept = keptCacheAssets();
   const owned = records(report.issues, checkout).filter(
     ({ record }) => !references || references.has(record.reference),
   );
@@ -149,6 +151,7 @@ export function inspectPreparedImages(checkout?: string, references?: ReadonlySe
       let reason: ImageProtection | undefined;
       if (image.Id !== record.image || image.Config.Labels?.["org.workbench.inputs"] !== record.inputs)
         reason = "changed";
+      else if (kept.has(path)) reason = "retained";
       else {
         if (!attached.has(record.image))
           attached.set(
@@ -167,6 +170,9 @@ export function inspectPreparedImages(checkout?: string, references?: ReadonlySe
         lock,
         identity: hash(JSON.stringify(record)),
         catalog: path,
+        platform: record.platform,
+        inputs: record.inputs,
+        ...(record.assembled ? { assembled: record.assembled } : {}),
         ...(record.verified ? { verified: record.verified } : {}),
         ...imageProtection(reason),
       });

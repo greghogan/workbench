@@ -1,4 +1,5 @@
 import { CheckMessage, type CheckWorkerMessage } from "./check-protocol.js";
+import { withConfigurationSnapshot } from "./configuration-snapshot.js";
 import {
   writeDiagnosticText,
   LogLevel,
@@ -19,9 +20,10 @@ import { CheckCancellation } from "./check-cancellation.js";
 import { withCheckCoordination } from "./check-coordination.js";
 import type { ProcessLock } from "./process-lock.js";
 import { withCachedChecks } from "./check-cache.js";
-import { selectedToolRequirements } from "./tool-references.js";
+import { selectedToolRequirements, verifyBuildResults } from "./tool-references.js";
 import { registrationRoot } from "./project-registration.js";
 import { finalizeChecks } from "./check-finalization.js";
+import { autoPrune } from "./auto-prune.js";
 import { withToolCacheUseAsync } from "./tool-cache-lock.js";
 import { required } from "./invariants.js";
 import { ownedPath } from "./paths.js";
@@ -181,6 +183,8 @@ export async function runChecks(
 ): Promise<void> {
   root = realpathSync(root);
   const cancellation = new CheckCancellation();
+  let passed = false;
+  const execution = { started: false };
   try {
     await withCheckCoordination(root, cancellation, async (owner) => {
       await validate?.();
@@ -191,14 +195,16 @@ export async function runChecks(
         options.profile,
         async () => {
           const plan = configuredCheckPlan(root, options);
-          const run = () =>
-            withCachedChecks(
+          const run = () => {
+            execution.started = true;
+            return withCachedChecks(
               root,
               options,
               plan,
               (selected) => runCheckGroups(root, options, selected, cancellation, owner, recordReport),
               cancellation.signal,
             );
+          };
           if (!plan.cleanup && plan.sessions.some((session) => session.environment === "native"))
             await withToolCacheUseAsync(
               run,
@@ -233,11 +239,16 @@ export async function runChecks(
         options.workspace,
       );
     });
+    passed = true;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") cancellation.checkpoint();
     throw error;
   } finally {
-    cancellation.close();
+    try {
+      if (execution.started && !passed && !cancellation.cancelled) await autoPrune(registrationRoot(root));
+    } finally {
+      cancellation.close();
+    }
   }
 }
 
@@ -278,6 +289,10 @@ export async function runCheckSession(
 }
 
 function configuredCheckPlan(root: string, options: CheckSelection, directory?: string) {
+  return withConfigurationSnapshot(() => configurationPlan(root, options, directory));
+}
+
+function configurationPlan(root: string, options: CheckSelection, directory?: string) {
   root = realpathSync(root);
   if (
     (options.compiler !== undefined || options.compilerVersion !== undefined) &&
@@ -321,6 +336,7 @@ async function runConfiguredChecks(
   const plan = configuredCheckPlan(root, options, directory);
   plan.sessions = plan.sessions.filter((session) => session.environment === environment);
   if (plan.sessions.length !== 1) throw new Error("check workers require exactly one root/environment group");
+  const completeSelection = !options.checkNames || options.checkNames.length === plan.sessions[0]?.checks.length;
   if (options.checkNames) {
     const names = new Set(options.checkNames);
     for (const session of plan.sessions) {
@@ -428,6 +444,26 @@ async function runConfiguredChecks(
             const use = async () => {
               prepared.prepare();
               await cancellation.execute(prepared.invocation, directory, prepared.env, false, owner);
+              if (
+                prepared.builds?.external &&
+                environment === "native" &&
+                completeSelection &&
+                (plan.stage === "commit" || plan.stage === "ci") &&
+                !options.role?.length &&
+                !options.excludeRole?.length
+              )
+                try {
+                  verifyBuildResults([prepared.builds.directory, prepared.builds.dependencies]);
+                } catch (error) {
+                  diagnostic(
+                    LogLevel.Warn,
+                    DiagnosticOperation.CheckCache,
+                    DiagnosticOutcome.Unavailable,
+                    {},
+                    error,
+                    "checks passed; build retention evidence could not be saved",
+                  );
+                }
             };
             if (prepared.builds && prepared.profile && !inSelectedShell(directory, environment))
               await withCacheLock(prepared.builds.dependencies, use, 0);

@@ -14,6 +14,28 @@ export const userOptions = {
     local: false,
     description: "Prune superseded owned assets after successful replacement checks (default: true)",
   },
+  "cache.max_generations": {
+    type: "integer",
+    local: false,
+    description:
+      "Retained build generations per root/environment/tool selection; zero disables count pruning (default: 2)",
+  },
+  "cache.max_image_generations": {
+    type: "integer",
+    local: false,
+    description:
+      "Retained verified prepared images per checkout/profile/platform; zero disables image pruning (default: 1)",
+  },
+  "cache.max_age_days": {
+    type: "integer",
+    local: false,
+    description: "Superseded build generation age in days; zero disables age-off (default: 7)",
+  },
+  "cache.buildkit_max_bytes": {
+    type: "integer",
+    local: false,
+    description: "Unused cache budget per owned BuildKit builder; zero disables size pruning (default: 10737418240)",
+  },
   "diagnostics.level": { type: "level", local: false, description: "Diagnostic severity: debug, info, warn, or error" },
   "diagnostics.format": { type: "format", local: false, description: "Diagnostic rendering: text or json" },
   "diagnostics.persist": {
@@ -99,7 +121,14 @@ export function validateUserOption(key: string, value: unknown): asserts key is 
       throw new Error(`${key} requires a positive integer`);
     return;
   }
-  if (key === "logs.max_age_days" || key === "logs.max_bytes") {
+  if (
+    key === "logs.max_age_days" ||
+    key === "logs.max_bytes" ||
+    key === "cache.max_generations" ||
+    key === "cache.max_age_days" ||
+    key === "cache.max_image_generations" ||
+    key === "cache.buildkit_max_bytes"
+  ) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
       throw new Error(`${key} requires a nonnegative integer`);
     return;
@@ -150,6 +179,10 @@ export function readUserConfig(): Values {
 export function userConfigValues(): Record<UserOption, UserValue | undefined> {
   return {
     "cache.auto_prune": true,
+    "cache.max_generations": 2,
+    "cache.max_image_generations": 1,
+    "cache.max_age_days": 7,
+    "cache.buildkit_max_bytes": 10 * 1024 ** 3,
     "diagnostics.level": LogLevel.Info,
     "diagnostics.format": LogFormat.Text,
     "diagnostics.persist": false,

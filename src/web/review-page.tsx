@@ -6,15 +6,15 @@ import { diffLayout, linkButton, tabs as viewTabs } from "./render-links.js";
 import { comparisonView } from "./diff-view.js";
 import { mutationForm } from "./action-forms.js";
 import { routeURL, withView } from "./locations.js";
-import { Route } from "./routes.js";
+import { Route, type RouteQuery } from "./routes.js";
 import { markdown } from "./markdown-view.js";
 import { shell } from "./page-frame.js";
 import { type ViewContext } from "./view-context.js";
 import { reviewPageModel } from "./review-model.js";
 import { reviewLocation } from "./review-navigation.js";
 import { sourceURL } from "./sources.js";
-export function reviewPage(context: ViewContext, parameters: URLSearchParams): string {
-  const path = parameters.get("path");
+export function reviewPage(context: ViewContext, parameters: RouteQuery<typeof Route.Review>): string {
+  const path = parameters.path;
   if (!path)
     return shell(
       context,

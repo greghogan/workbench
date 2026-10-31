@@ -16,6 +16,13 @@ export function relativePath(value: string, context: string, allowRoot = false):
     throw new InvalidInput(`${context}: unsafe relative path '${value}'`);
 }
 
+/** Registered project, language and check roots share one policy beyond ordinary relative paths. */
+export function registeredRootPath(value: string, context: string): void {
+  relativePath(value, context, true);
+  if (value.split("/").some((part) => [".git", ".workbench", "workbench", "target", "libexec"].includes(part)))
+    throw new InvalidInput(`${context}: unsafe registered root '${value}'`);
+}
+
 /** Reject symlinks at every existing component, including dangling links and record parents. */
 export function ownedPath(root: string, value: string): string {
   relativePath(value, root, true);

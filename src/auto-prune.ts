@@ -2,7 +2,7 @@ import { discoverCacheSizes } from "./cache-size.js";
 import { totalBytes, addBytes } from "./byte-size.js";
 import { inspectBuildCache, cachePruneCandidates, pruneBuildCache, type CacheReport } from "./build-cache.js";
 import { inspectToolCache, prunableTools, pruneToolCache, type ToolCacheReport } from "./tool-cache.js";
-import { inspectToolReferences } from "./tool-references.js";
+import { inspectToolReferences, refreshToolReferences } from "./tool-references.js";
 import { projectRegistrySnapshot } from "./project-registry.js";
 import { matchesToolRequirement, type ToolRequirement } from "./tool-requirements.js";
 import {
@@ -10,8 +10,16 @@ import {
   refreshProjectRequirements,
   type SuccessfulGateEvidence,
 } from "./project-requirements.js";
-import { readUserConfig } from "./user-config.js";
+import { userConfigValues } from "./user-config.js";
 import { managerOwnershipSnapshot } from "./managed-installations.js";
+import { buildPaths } from "./builds.js";
+import { readConfig, readLanguageRoots } from "./project-configuration.js";
+import { join, relative, sep } from "node:path";
+import { readChecks } from "./check-configuration.js";
+import { dependencyTargets } from "./dependencies.js";
+import { supersededBuilds } from "./build-retention.js";
+import { autoPrunePreparedImages } from "./image-retention.js";
+import { withConfigurationSnapshot } from "./configuration-snapshot.js";
 import { LogLevel, DiagnosticOperation, DiagnosticOutcome, diagnostic } from "./diagnostics.js";
 
 function newerPatch(newer: string, older: string): boolean {
@@ -26,9 +34,10 @@ function newerPatch(newer: string, older: string): boolean {
     newer.localeCompare(older, undefined, { numeric: true }) > 0
   );
 }
-/** Pure selection: working replacement evidence releases only old patch generations. */
+/** Pure selection: working replacements permit patch upgrades and bounded build retention. */
 export function planAutoPrune(evidence: {
   root: string;
+  platform: string;
   requirements: ToolRequirement[];
   working: ToolRequirement[];
   allWorking: ToolRequirement[];
@@ -37,16 +46,24 @@ export function planAutoPrune(evidence: {
   reports: CacheReport[];
   tools: ToolCacheReport;
   managerOwned: Set<string>;
+  current?: Set<string>;
+  retention?: { maxGenerations: number; maxAgeDays: number; now: number };
 }) {
   const { root, requirements, working, allWorking, kept, references, tools } = evidence;
   if (references.issues.length || tools.issues.length) return { reports: [], tools: { ...tools, entries: [] } };
   const byDirectory = new Map(
     references.results.filter((entry) => entry.identity.checkout === root).map((entry) => [entry.directory, entry]),
   );
+  const superseded = evidence.retention
+    ? supersededBuilds(references, evidence.current ?? new Set(), evidence.retention, evidence.retention.now)
+    : new Set<string>();
   const reports = evidence.reports.map((report) => ({
     ...report,
     entries: report.entries.filter((entry) => {
+      if (byDirectory.get(entry.directory)?.platform !== evidence.platform) return false;
       if (kept.has(entry.directory)) return false;
+      if (evidence.current?.has(entry.directory)) return false;
+      if (superseded.has(entry.directory)) return true;
       const obsolete =
         byDirectory
           .get(entry.directory)
@@ -94,7 +111,7 @@ function maintenanceFailure(error: unknown): void {
       DiagnosticOutcome.Failed,
       { command: "automatic cache maintenance" },
       error,
-      "checks passed; automatic cleanup did not complete",
+      "automatic cache cleanup did not complete",
     );
   } catch {
     /* Diagnostic storage failures cannot change a completed quality gate's outcome. */
@@ -135,21 +152,63 @@ export async function maintainAfterSuccessfulChecks(
     maintenanceFailure(error);
   }
 }
+function retentionProtection(root: string, references: ReturnType<typeof inspectToolReferences>): Set<string> {
+  return withConfigurationSnapshot(() => {
+    const current = new Set<string>();
+    const platform = `${process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform}-${process.arch}`;
+    const paths = new Set([
+      ...readLanguageRoots(root).map((entry) => entry.path),
+      ...readChecks(root).map((entry) => relative(root, entry.directory).replaceAll("\\", "/") || "."),
+    ]);
+    for (const path of paths) {
+      const targets = dependencyTargets(join(root, path));
+      for (const reference of references.results)
+        if (
+          reference.identity.checkout === root &&
+          reference.kind === "dependencies" &&
+          targets.some((target) => target === reference.directory || target.startsWith(reference.directory + sep))
+        )
+          current.add(reference.directory);
+      const profiles =
+        readConfig(root).toolchains?.profiles?.filter(
+          (profile) => profile.paths.includes(path) && (!profile.platforms || profile.platforms.includes(platform)),
+        ) ?? [];
+      for (const toolchain of [false, ...profiles.map((profile) => profile.name)] as const) {
+        const paths = buildPaths(root, join(root, path), "native", { toolchain });
+        if (paths.external) {
+          current.add(paths.directory);
+          current.add(paths.dependencies);
+        }
+      }
+    }
+    return current;
+  });
+}
+
 /** Maintenance is independent of the successful gate, including configuration and registry failures. */
 export async function autoPrune(root: string): Promise<"skipped" | "finished" | "failed"> {
   try {
-    if (readUserConfig()["cache.auto_prune"] === false) return "skipped";
+    const config = userConfigValues();
+    if (config["cache.auto_prune"] === false) return "skipped";
+    await autoPrunePreparedImages(root);
     const registry = projectRegistrySnapshot(),
       project = registry.byPath.get(root);
-    if (!project?.working?.length) return "skipped";
+    if (!project?.working?.length || project.requirementError) return "skipped";
     const references = inspectToolReferences();
     if (references.issues.length) return "skipped";
     const working = project.working;
+    const current = retentionProtection(root, references);
+    const retention = {
+      maxGenerations: config["cache.max_generations"] as number,
+      maxAgeDays: config["cache.max_age_days"] as number,
+    };
+    const superseded = supersededBuilds(references, current, retention, Date.now());
     const { value: plan } = discoverCacheSizes(() => {
       const tools = inspectToolCache(root);
       const ownsManagerInstallation = managerOwnershipSnapshot();
       return planAutoPrune({
         root,
+        platform: `${process.platform}-${process.arch}`,
         requirements: [...projectRequirements(root), ...working],
         working,
         allWorking: registry.projects.flatMap((entry) => entry.working ?? []),
@@ -166,6 +225,11 @@ export async function autoPrune(root: string): Promise<"skipped" | "finished" | 
             .filter((entry) => entry.provider !== "workbench" && ownsManagerInstallation(entry))
             .map((entry) => entry.directory),
         ),
+        current,
+        retention: {
+          ...retention,
+          now: Date.now(),
+        },
       });
     });
     let generations = 0,
@@ -176,6 +240,28 @@ export async function autoPrune(root: string): Promise<"skipped" | "finished" | 
         report: cachePruneCandidates(report, true),
         dependencies: true,
         apply: true,
+        validate: (entries) => {
+          const fresh = inspectToolReferences();
+          const preferences = userConfigValues();
+          if (fresh.issues.length || preferences["cache.auto_prune"] === false)
+            throw new Error("Cache references or preferences changed; automatic retention deferred");
+          const protectedNow = retentionProtection(root, fresh);
+          const eligible = supersededBuilds(
+            fresh,
+            protectedNow,
+            {
+              maxGenerations: preferences["cache.max_generations"] as number,
+              maxAgeDays: preferences["cache.max_age_days"] as number,
+            },
+            Date.now(),
+          );
+          for (const entry of entries)
+            if (
+              protectedNow.has(entry.directory) ||
+              (superseded.has(entry.directory) && !eligible.has(entry.directory))
+            )
+              throw new Error("Build retention selection changed; automatic cleanup deferred");
+        },
       });
       generations += removed.length;
       bytes = addBytes(bytes, totalBytes(removed.map((entry) => entry.bytes)));
@@ -185,6 +271,7 @@ export async function autoPrune(root: string): Promise<"skipped" | "finished" | 
       installations += removed.length;
       bytes = addBytes(bytes, totalBytes(removed.map((entry) => entry.bytes)));
     }
+    if (generations) refreshToolReferences();
     if (generations || installations)
       diagnostic(LogLevel.Info, DiagnosticOperation.Command, DiagnosticOutcome.Pruned, {
         command: "automatic cache pruning",

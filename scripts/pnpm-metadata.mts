@@ -2,7 +2,7 @@ import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { stringify } from "yaml";
+import { stringify } from "./runtime-parsers.mjs";
 import { record, required } from "./values.mjs";
 import { pnpmPackages, pnpmIdentity } from "./pnpm-lock.mjs";
 

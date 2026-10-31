@@ -53,6 +53,10 @@ function fixture() {
   const root = join(base, "project");
   mkdirSync(join(root, "workbench"), { recursive: true });
   writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="demo"\npath="."\n');
+  writeFileSync(
+    join(root, "workbench/config.toml"),
+    "schema_version=1\n[markdown]\nwrap_width=120\n[compatibility]\nrequired=false\n",
+  );
   registerProject(root, "demo");
   const entry = (version: string, protectedBy: string[] = []) => ({
     provider: "workbench",

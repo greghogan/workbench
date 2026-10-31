@@ -131,14 +131,18 @@ The service detects external edits, Git staging, and collection changes. A backg
 snapshots, including document text, metadata, review state, and source differences. Browsing uses the last complete
 snapshot while refresh runs. Routine reconciliation is silent; a refresh failure shows a notice while retaining the
 previous snapshot. Recovery clears that notice without removing draft or review warnings. Snapshot content is limited to
-64 MiB; each open workspace can also retain up to 8 MiB of disposable normalized search text. Saves and review
-confirmations independently check authoritative files and staged versions before applying changes. Opening an editor or
-the review queue waits for a fresh snapshot so an explicit reload can inspect the latest version.
+64 MiB including record metadata, supporting-file lists, and error details; each open workspace can also retain up to 8
+MiB of disposable normalized search text. Saves and review confirmations independently check authoritative files and
+staged versions before applying changes. Opening an editor or the review queue waits for a fresh snapshot so an explicit
+reload can inspect the latest version.
 
 Ordinary reading views update while preserving scroll position and keyboard focus where possible. An open editor,
 review, or collection proposal instead shows a change notice and preserves its displayed contents. Refresh explicitly to
 inspect the latest version. A disconnected live connection reports its state and reconnects automatically; periodic
-filesystem reconciliation recovers missed watch events.
+filesystem reconciliation recovers missed watch events. Unchanged polls reuse acquired contents and Git state after
+checking observed file and directory metadata; full reconciliation runs at least once per minute. Explicit fresh reads
+before edits and review bypass that reuse. Unchanged worker replies retain the existing index instead of transferring
+and indexing all documents again.
 
 ## Edit charters and decisions
 

@@ -65,11 +65,20 @@ export async function executeBundler(directory: string, distribution: string, ar
   });
   const env = {
     ...process.env,
+    // Ruby encodes filenames and load paths from the locale, independently of -E.
+    ...(process.platform === "win32"
+      ? {}
+      : {
+          LANG: process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8",
+          LC_ALL: process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8",
+        }),
     ...(process.env.WORKBENCH_CHECK_INPUTS
       ? { BUNDLE_CACHE_PATH: join(process.env.WORKBENCH_CHECK_INPUTS, "gems") }
       : {}),
     GEM_HOME: destination,
     GEM_PATH: destination,
+    // Bundler and its Ruby workers exchange UTF-8 paths even when the host uses the C locale.
+    RUBYOPT: "-EUTF-8:UTF-8",
     // Both downloaded extension caches and installed gems depend on this runtime's SDK ABI.
     BUNDLE_PATH: join(
       process.env.BUNDLE_PATH ??

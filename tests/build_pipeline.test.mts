@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   compileBundles,
   publishBundles,
@@ -13,6 +13,9 @@ import {
 } from "../scripts/bundle-build.mts";
 import { verifyRuntimeDependencies } from "../scripts/runtime-dependencies.mts";
 import { toolingArtifact } from "../scripts/tooling-artifacts.mts";
+import { build } from "esbuild";
+import { bundleOptions } from "../scripts/bundle-options.mts";
+import { coverageWorkspace } from "../scripts/test-coverage.mts";
 
 const temporary: string[] = [];
 afterEach(() => {
@@ -133,4 +136,61 @@ test("shipped language templates cannot name omitted runtime assets", () => {
   expect(() => {
     verifyRuntimeDependencies(request);
   }).not.toThrow();
+});
+
+test("runtime imports require builtins or declared runtime packages, including scoped package subpaths", () => {
+  const root = fixture();
+  const manifest = join(root, "package.json");
+  const metadata = JSON.parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
+  metadata.devDependencies = { "build-only": "1.0.0" };
+  metadata.dependencies = { "@runtime/library": "1.0.0" };
+  writeFileSync(manifest, JSON.stringify(metadata));
+  const request = {
+    root,
+    artifacts: [],
+    outputs: [{ path: "bundle/main.cjs", contents: Buffer.from('require("build-only");') }],
+    scripts: [],
+    references: [],
+  };
+  expect(() => {
+    verifyRuntimeDependencies(request);
+  }).toThrow(/runtime package is not declared: build-only/);
+  request.outputs[0] = {
+    path: "bundle/main.cjs",
+    contents: Buffer.from('require("fs"); require("node:fs"); require("@runtime/library/feature");'),
+  };
+  expect(() => {
+    verifyRuntimeDependencies(request);
+  }).not.toThrow();
+});
+
+test("coverage builds use authored helpers even when emitted ESM would be invalid in CommonJS", async () => {
+  const root = fixture();
+  mkdirSync(join(root, "node_modules"));
+  writeFileSync(join(root, "scripts/value.mts"), "export const value: number = 42;\n");
+  writeFileSync(
+    join(root, "scripts/value.mjs"),
+    'import { createRequire } from "node:module"; createRequire(import.meta.url); export const value = 0;\n',
+  );
+  writeFileSync(join(root, "src/main.ts"), 'export { value } from "../scripts/value.mjs";\n');
+  const capture = join(root, "capture");
+  mkdirSync(capture);
+  const workspace = await coverageWorkspace(root, capture);
+  const result = spawnSync(process.execPath, ["-e", 'console.log(require("./bundle/main.cjs").value)'], {
+    cwd: workspace,
+    encoding: "utf8",
+  });
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout.trim()).toBe("42");
+});
+
+test("the Node 18 bootstrap artifact excludes the modern terminal rendering dependencies", async () => {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const result = await build({ ...bundleOptions(root, "bootstrap"), write: false });
+  const emitted = Object.values(result.metafile.outputs).flatMap((output) =>
+    Object.entries(output.inputs)
+      .filter(([, input]) => input.bytesInOutput > 0)
+      .map(([path]) => path),
+  );
+  expect(emitted.filter((path) => /node_modules[\\/](?:string-width|wrap-ansi)[\\/]/.test(path))).toEqual([]);
 });

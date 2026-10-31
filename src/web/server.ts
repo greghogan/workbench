@@ -1,4 +1,12 @@
-import { knownRoute, routeContracts, decodeRouteQuery, Route, actionDefinition } from "./routes.js";
+import {
+  knownRoute,
+  routeContracts,
+  decodeRoute,
+  sourceSelection,
+  type DecodedRoute,
+  Route,
+  actionDefinition,
+} from "./routes.js";
 import {
   ActionEffect,
   DiagnosticOperation,
@@ -8,7 +16,6 @@ import {
   diagnostic,
   settleCleanup,
 } from "../diagnostics.js";
-import { reviewSource } from "../review-service.js";
 import { WorkspaceView } from "../workspace-service.js";
 import { reviewLocation, reviewNavigation } from "./review-navigation.js";
 import { randomBytes } from "node:crypto";
@@ -75,9 +82,9 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
   const requireRunning = () => {
     if (closing) throw new WebError(503, "Service is stopping; no changes were applied.");
   };
-  const context = (parameters = new URLSearchParams(), requestLocation?: string): ViewContext => {
+  const context = (parameters: DecodedRoute["query"] = {}, requestLocation?: string): ViewContext => {
     if (!monitor.index) throw new WebError(503, "Workspace snapshot is not available.");
-    return Object.assign(monitor.index.select(Object.fromEntries(parameters)), {
+    return Object.assign(monitor.index.select(sourceSelection(parameters)), {
       csrf,
       requestLocation: requestLocation ?? Route.Overview,
       refreshing: monitor.refreshing,
@@ -103,35 +110,28 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       const origin = requestOrigin(request);
       url = new URL(request.url ?? Route.Overview, origin);
       if (url.origin !== origin) throw new WebError(400, "request URL is outside this service");
-      const route = knownRoute(url.pathname);
-      if (route !== "unknown") {
-        const contract = routeContracts[route];
+      const known = knownRoute(url.pathname);
+      if (known === "unknown") {
+        send(response, 404, "text/plain", "View not found.");
+        return;
+      }
+      {
+        const contract = routeContracts[known];
         if (!contract.methods.includes(request.method ?? "")) {
           response.setHeader("allow", contract.methods.join(", "));
           send(response, 405, "text/plain", "Method not allowed.");
           return;
         }
-        decodeRouteQuery(route, url.searchParams);
       }
-      if (url.pathname === Route.CitationDocument) {
-        if (request.method !== "GET" && request.method !== "HEAD") {
-          response.setHeader("allow", "GET, HEAD");
-          send(response, 405, "text/plain", "Method not allowed.");
-          return;
-        }
-        const id = url.searchParams.get("id") ?? "";
+      const { route, query } = decodeRoute(known, url.searchParams);
+      if (route === Route.CitationDocument) {
+        const id = query.id ?? "";
         if (monitor.index?.byId.get(id)?.type !== "CIT") throw new WebError(404, "citation record not found");
-        await citationDocuments.serve(
-          request,
-          response,
-          id,
-          url.searchParams.get("source") ?? "",
-          url.searchParams.get("download") === "1",
-        );
+        await citationDocuments.serve(request, response, id, query.source ?? "", query.download === "1");
         return;
       }
       if (request.method === "GET") {
-        if (url.pathname === Route.Metrics) {
+        if (route === Route.Metrics) {
           send(
             response,
             200,
@@ -147,7 +147,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           );
           return;
         }
-        if (url.pathname === Route.Events) {
+        if (route === Route.Events) {
           if (clients.size >= 32) {
             metrics.count("rejectedConnections");
             diagnostic(
@@ -173,30 +173,26 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           });
           return;
         }
-        if (url.pathname === Route.Style) {
+        if (route === Route.Style) {
           send(response, 200, "text/css; charset=utf-8", stylesheet);
           return;
         }
-        if (url.pathname === Route.Client) {
+        if (route === Route.Client) {
           send(response, 200, "text/javascript; charset=utf-8", browserScript);
           return;
         }
-        if (url.pathname === Route.Favicon) {
+        if (route === Route.Favicon) {
           response.writeHead(204);
           response.end();
           return;
         }
-        if (url.pathname === Route.ReviewFile) {
+        if (route === Route.ReviewFile) {
           await monitor.reconcile(true);
-          const selected = context(url.searchParams, url.pathname + url.search);
-          const change = selected.index.reviewChange(
-            url.searchParams.get("path") ?? "",
-            url.searchParams.has("review_source") ? reviewSource(url.searchParams.get("review_source")) : undefined,
-          );
+          const selected = context(query, url.pathname + url.search);
+          const change = selected.index.reviewChange(query.path ?? "", query.review_source);
           if (!change) throw new WebError(404, "protected file version not found");
-          if (change.digest !== url.searchParams.get("digest"))
-            throw new WebError(409, "file version changed; refresh the review");
-          const side = url.searchParams.get("side");
+          if (change.digest !== query.digest) throw new WebError(409, "file version changed; refresh the review");
+          const side = query.side;
           if (side !== "before" && side !== "after") throw new WebError(400, "select the previous or reviewed file");
           const encoded = selected.reviewDocument(change.digest)[side];
           if (encoded === null) throw new WebError(404, "file is absent in the selected version");
@@ -208,13 +204,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           send(response, 200, "application/octet-stream", bytes);
           return;
         }
-        if (url.pathname === Route.File) {
-          const record = monitor.index?.byId.get(url.searchParams.get("id") ?? ""),
-            path = url.searchParams.get("path") ?? "";
+        if (route === Route.File) {
+          const record = monitor.index?.byId.get(query.id ?? ""),
+            path = query.path ?? "";
           if (!record) throw new WebError(404, "record not found");
           if (!supportingFiles(record).some((file) => file.path === path))
             throw new WebError(404, "supporting file not found");
-          if (url.searchParams.get("download") === "1") {
+          if (query.download === "1") {
             sendDownload(response, record.directory, path);
             return;
           }
@@ -225,7 +221,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             200,
             "text/html; charset=utf-8",
             supportingFilePage(
-              context(url.searchParams, url.pathname + url.search),
+              context(query, url.pathname + url.search),
               record,
               path,
               bytes && !bytes.includes(0) ? bytes.toString("utf8") : undefined,
@@ -233,51 +229,63 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           );
           return;
         }
-        const scope = url.searchParams.get("scope"),
-          collection = url.searchParams.get("collection"),
-          id = url.searchParams.get("id");
+        const { scope, collection, id, all } = sourceSelection(query);
         const missingSource =
-          (url.searchParams.get("all") !== "1" &&
-            !!scope &&
-            !monitor.index?.snapshot.projects.some((project) => project.id === scope)) ||
+          (all !== "1" && !!scope && !monitor.index?.snapshot.projects.some((project) => project.id === scope)) ||
           (!!collection && !monitor.index?.sources.includes(collection));
-        const missingRecord = url.pathname === Route.Record && !!id && !monitor.index?.byId.has(id);
+        const missingRecord = route === Route.Record && !!id && !monitor.index?.byId.has(id);
         if (
           missingSource ||
           missingRecord ||
-          url.pathname === Route.NewCharter ||
-          url.pathname === Route.Review ||
-          (url.pathname === Route.Record && url.searchParams.get("view") === "edit")
+          route === Route.NewCharter ||
+          route === Route.Review ||
+          (route === Route.Record && query.view === "edit")
         )
           await monitor.reconcile(true);
-        const selected = context(url.searchParams, url.pathname + url.search);
+        const selected = context(query, url.pathname + url.search);
         let page: string;
-        switch (url.pathname) {
+        switch (route) {
           case Route.NewCharter:
-            page = newCharterPage(selected, url.searchParams.get("project") ?? "");
+            page = newCharterPage(selected, query.project ?? "");
             break;
           case Route.Overview:
             page = overview(selected);
             break;
           case Route.Records:
-            page = recordsPage(selected, url.searchParams);
+            page = recordsPage(selected, query);
             break;
           case Route.Record:
-            page = recordPage(selected, url.searchParams);
+            page = recordPage(selected, query);
             break;
           case Route.Review:
-            page = reviewPage(selected, url.searchParams);
+            page = reviewPage(selected, query);
             break;
           case Route.Collections:
             page = collectionsPage(selected);
             break;
           case Route.Proposal: {
-            const token = url.searchParams.get("token") ?? "",
+            const token = query.token ?? "",
               saved = actions.proposal(token);
             page = collectionProposalPage(selected, token, saved.request, saved.plan);
             break;
           }
-          default:
+          case Route.Approve:
+          case Route.CreateCharter:
+          case Route.Apply:
+          case Route.Preview:
+          case Route.Save:
+          case Route.WorkspaceRetry:
+          case Route.Caches:
+          case Route.CacheKeep:
+          case Route.CachePrepare:
+          case Route.CacheUnused:
+          case Route.Cleanup:
+          case Route.CleanupApply:
+          case Route.Demonstration:
+          case Route.Inventory:
+          case Route.Projects:
+          case Route.ProjectAdd:
+          case Route.ProjectRemove:
             send(response, 404, "text/plain; charset=utf-8", "View not found.");
             return;
         }
@@ -292,7 +300,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       form = await readForm(request);
       requireRunning();
       if (form.get("csrf") !== csrf) throw new WebError(403, "invalid browser review session; reload this page");
-      if (url.pathname === Route.WorkspaceRetry) {
+      if (route === Route.WorkspaceRetry) {
         await monitor.retry();
         const redirect = projectPath(Route.Overview);
         if (request.headers.accept?.includes("application/json"))
@@ -437,8 +445,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             status,
             "text/html; charset=utf-8",
             recordPage(
-              context(new URLSearchParams({ id: form.get("id") ?? "" })),
-              new URLSearchParams({ id: form.get("id") ?? "", view: "edit" }),
+              context({ id: form.get("id") ?? "" }),
+              { id: form.get("id") ?? "", view: "edit" },
               {
                 contents: form.get("contents") ?? "",
                 expected: form.get("expected") ?? "",

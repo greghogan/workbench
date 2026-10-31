@@ -10,7 +10,6 @@ import { CheckCancellation } from "../src/check-cancellation.ts";
 import { inspectBuildCache, pruneBuildCache } from "../src/build-cache.ts";
 import { releaseGuixEnvironmentRoot, guixProfileRegistrations } from "../src/managed-profiles.ts";
 
-vi.mock("../src/command-availability.js", () => ({ available: () => false }));
 const temporary: string[] = [];
 afterEach(() => {
   vi.restoreAllMocks();

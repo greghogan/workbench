@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -125,7 +126,15 @@ if(role==='test') {
         child.once("error", reject);
         child.once("close", resolve);
       });
-      const run = { child, closed, output: () => output };
+      const ownership = () => {
+        const locks = join(base, "cache/locks");
+        if (!existsSync(locks)) return "No build locks remain.";
+        return readdirSync(locks, { recursive: true, encoding: "utf8" })
+          .filter((path) => path.endsWith("owner.json"))
+          .map((path) => `${path}: ${readFileSync(join(locks, path), "utf8")}`)
+          .join("\n");
+      };
+      const run = { child, closed, output: () => output, ownership };
       runs.push(run);
       return run;
     };
@@ -148,13 +157,23 @@ if(role==='test') {
   }
   type Run = ReturnType<Awaited<ReturnType<typeof fixture>>["start"]>;
   async function until(run: Run, predicate: () => boolean, label: string) {
-    await waitForCondition(
-      predicate,
-      run.closed.then(() => {
-        throw new Error(run.output());
-      }),
-      label,
-    );
+    try {
+      await waitForCondition(
+        predicate,
+        run.closed.then(() => {
+          throw new Error(run.output());
+        }),
+        label,
+      );
+    } catch (error) {
+      let ownership: string;
+      try {
+        ownership = run.ownership();
+      } catch (inspection) {
+        ownership = `Build ownership inspection failed: ${String(inspection)}`;
+      }
+      throw new Error(`${String(error)}\nBuild ownership at ${label}:\n${ownership}`, { cause: error });
+    }
   }
   async function waiting(run: Run) {
     await until(run, () => run.output().includes("Waiting for another check gate"), "gate waiting acknowledgment");

@@ -78,6 +78,30 @@ test("setup ignore additions compose with a root starter and a second independen
     initializeProject(root, { language: "typescript" });
   }).toThrow(/already registered/);
 });
+
+test.each(["worker application", "worker 雪"])(
+  "language roots accept %s while package identifiers remain valid",
+  (path) => {
+    const root = join(base, "consumer");
+    initializeProject(root, { language: "typescript", root: path });
+    expect(readLanguageRoots(root)[0]?.path).toBe(path);
+    const metadata = JSON.parse(readFileSync(join(root, path, "package.json"), "utf8")) as { name: string };
+    expect(metadata.name).toMatch(/^[a-z][a-z0-9_-]*$/);
+    expect(readFileSync(join(root, path, "README.md"), "utf8")).toContain(`--path '${path}'`);
+  },
+);
+test.each(["typescript", "javascript", "java", "rust", "python", "c", "cpp", "go", "ruby", "php"])(
+  "%s starters and check roots support a directory containing spaces and Unicode",
+  (language) => {
+    const root = join(base, "consumer"),
+      path = "worker 雪";
+    initializeProject(root, { language, root: path });
+    expect(readLanguageRoots(root)[0]?.path).toBe(path);
+    const definition = catalog(root).find((entry) => entry.id === language);
+    for (const file of definition?.starter ?? []) expect(existsSync(join(root, path, file)), file).toBe(true);
+    expect(readFileSync(join(root, path, "README.md"), "utf8")).toContain(`--path '${path}'`);
+  },
+);
 test("a conflict is diagnosed before Git, scaffold or other starter files are published", () => {
   const root = join(base, "existing");
   mkdirSync(root);

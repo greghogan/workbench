@@ -10,7 +10,17 @@ import { refreshToolReferences } from "./tool-references.js";
 import { inspectToolCacheActivity, withToolCacheAdmission } from "./tool-cache-lock.js";
 import { CachePruneProgress, type CachePruneObserver } from "./cache-prune-progress.js";
 import { CheckCancellation } from "./check-cancellation.js";
+import { discoverCacheSizesAsync, measureCacheSize } from "./cache-size.js";
 import { inspectCache, groupCacheReport, cachePruneCandidates, pruneCache, type CacheReport } from "./build-cache.js";
+
+interface CacheSelectionOptions {
+  all?: boolean;
+  checkout?: string;
+  json?: boolean;
+  registry?: boolean;
+  path?: string;
+  fresh?: boolean;
+}
 
 export function printCacheReport(report: CacheReport): void {
   if (report.images?.location === "registry") {
@@ -111,7 +121,21 @@ export function printCacheReport(report: CacheReport): void {
       ),
     );
   } else if (report.checkout === "builders") console.log("No owned Docker builder stores found.");
+  printCacheSizeNotices(report);
   printCacheNotices(report);
+}
+
+function printCacheSizeNotices(report: CacheReport): void {
+  const measurements = [...report.entries, ...(report.tools?.entries ?? [])].map((entry) => entry.measurement);
+  const measuredAt = measurements
+    .flatMap((size) => (size?.measuredAt ? [new Date(size.measuredAt).toISOString()] : []))
+    .sort();
+  const first = measuredAt[0],
+    last = measuredAt.at(-1);
+  if (first) console.log(`Sizes measured: ${first}${last !== first ? ` to ${last ?? first}` : ""}`);
+  if (measurements.some((size) => size && size.state !== "ready"))
+    console.log("Some cache sizes are stale or unavailable; use --fresh to measure the selected filesystem caches.");
+  for (const size of measurements) if (size?.problem) console.error(`Cache size ${size.directory}: ${size.problem}`);
 }
 
 function printCacheNotices(report: CacheReport): void {
@@ -179,6 +203,44 @@ export function registerCacheCommands(program: Command, root: string): void {
       entries: report.entries.filter((entry) => entry.identity.root === selected),
     };
   };
+  const inspect = async (options: CacheSelectionOptions): Promise<CacheReport> => {
+    const { value } = await discoverCacheSizesAsync(() =>
+      inspectCache(project(), options.all, options.checkout, options.registry),
+    );
+    const report = selectRoot(value, options.path);
+    if (!options.fresh) return report;
+    const cancellation = new CheckCancellation("Cache size refresh");
+    try {
+      const blocked = new Map(
+        report.entries.flatMap((entry) =>
+          entry.blockedBy && !["explicitly retained", "Retention state unavailable"].includes(entry.blockedBy)
+            ? [[entry.directory, entry.blockedBy] as const]
+            : [],
+        ),
+      );
+      for (const entry of [...report.entries, ...(report.tools?.entries ?? [])]) {
+        cancellation.checkpoint();
+        const previous = entry.measurement ?? { directory: entry.directory, state: "pending" as const };
+        const lock = blocked.get(entry.directory);
+        const measured = lock
+          ? {
+              ...previous,
+              state: "blocked" as const,
+              problem: `Size measurement skipped while cache lock exists: ${lock}`,
+            }
+          : await measureCacheSize(previous, true, cancellation.signal);
+        entry.measurement = measured;
+        entry.bytes = measured.bytes;
+      }
+      cancellation.checkpoint();
+      return report;
+    } catch (error) {
+      cancellation.checkpoint();
+      throw error;
+    } finally {
+      cancellation.close();
+    }
+  };
   const cache = registerCommand(program, "cache")
     .description(
       "Show project caches, prepared images, Tools, and Builders; defaults to this checkout, or all outside a project",
@@ -187,17 +249,13 @@ export function registerCacheCommands(program: Command, root: string): void {
     .option("--checkout <path|tools|builders|images>", "Select a checkout or the Tools, Builders, or Images group")
     .option("--registry", "Inspect GHCR prepared images for the current project instead of local caches")
     .option("--json", "Print ownership, locations, installed versions, and file sizes as JSON")
+    .option("--fresh", "Remeasure selected filesystem caches instead of reusing saved sizes")
     .option("--path <path>", "Select one build root; shared workspace roots are cleared together")
-    .action(
-      async (options: { all?: boolean; checkout?: string; json?: boolean; registry?: boolean; path?: string }) => {
-        const report = selectRoot(
-          await inspectCache(project(), options.all, options.checkout, options.registry),
-          options.path,
-        );
-        if (options.json) console.log(JSON.stringify({ schema_version: 2, ...report }, null, 2));
-        else printCacheReport(report);
-      },
-    );
+    .action(async (options: CacheSelectionOptions) => {
+      const report = await inspect(options);
+      if (options.json) console.log(JSON.stringify({ schema_version: 2, ...report }, null, 2));
+      else printCacheReport(report);
+    });
   cache
     .command("prune")
     .description("Select and confirm cache cleanup in a terminal; otherwise preview until --apply")
@@ -213,25 +271,19 @@ export function registerCacheCommands(program: Command, root: string): void {
       "\nSelecting a project includes all its roots. Tools groups shared installations by language. Retained results and active commands protect their tools. Selecting results for deletion releases their tool references in the same cleanup. Shared downloads are preserved.\n\nLocal image cleanup removes owned image tags; shared layers and build cache may remain. Selecting a dedicated BuildKit builder also removes its owned daemon and cache volume. Other containers (including stopped containers) protect their referenced images and volumes; inspect with docker ps -a and remove unneeded containers before retrying. --registry deletes GHCR versions instead; it does not force local cleanup.",
     )
     .action(
-      async (options: {
-        all?: boolean;
-        checkout?: string;
-        dependencies?: boolean;
-        apply?: boolean;
-        json?: boolean;
-        registry?: boolean;
-        path?: string;
-      }) => {
+      async (
+        options: CacheSelectionOptions & {
+          dependencies?: boolean;
+          apply?: boolean;
+        },
+      ) => {
         if (!options.registry) {
           withToolCacheAdmission(() => {
             inspectToolCacheActivity(true);
           });
           refreshToolReferences();
         }
-        let report = selectRoot(
-          await inspectCache(project(), options.all, options.checkout, options.registry),
-          options.path,
-        );
+        let report = await inspect({ ...options, fresh: true });
         if (report.images?.location === "registry" && report.images.issues.length && !report.images.entries.length)
           throw new Error(`Cannot inspect registry images: ${report.images.issues.join("; ")}`);
         const interactive = !options.apply && !options.json && terminalAvailable();
@@ -267,16 +319,16 @@ export function registerCacheCommands(program: Command, root: string): void {
           : undefined;
         let result: CacheReport & { applied: boolean };
         try {
-          result = {
-            ...(await pruneCache({
+          const { value } = await discoverCacheSizesAsync(() =>
+            pruneCache({
               report: report,
               root: project(),
               dependencies: options.dependencies,
               apply: applied,
               progress: observer,
-            })),
-            applied,
-          };
+            }),
+          );
+          result = { ...value, applied };
           cancellation?.checkpoint();
         } catch (error) {
           progress?.close(false);

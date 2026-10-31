@@ -11,6 +11,9 @@ a {
   color: var(--accent);
   text-decoration: none;
 }
+/* Prose and notice links remain recognizable without color. */
+.document a,
+.notice a,
 a:hover {
   text-decoration: underline;
 }

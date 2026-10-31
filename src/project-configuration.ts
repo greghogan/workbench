@@ -1,13 +1,18 @@
 import { existsSync, lstatSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { InvalidInput } from "./input-errors.js";
-import { ownedPath } from "./paths.js";
-import { readToml } from "./files.js";
+import { ownedPath, registeredRootPath } from "./paths.js";
+import { configurationValue, readConfigurationToml as readToml } from "./configuration-snapshot.js";
 import { validateConfig, validateRegistry, automationKeys } from "./config-schema.js";
 import type { Project, LanguageRoot, Config } from "./project-model.js";
+import { projectIdPattern as validName } from "./project-identity.js";
 export const workspaceSchemaVersion = 1;
 
 export function readConfig(root: string): Config {
+  return configurationValue(`project-config:${root}`, () => loadConfig(root));
+}
+
+function loadConfig(root: string): Config {
   const path = ownedPath(root, "workbench/config.toml");
   const automationPath = ownedPath(root, "workbench/automation.toml");
   return configFromData(readToml(path), existsSync(automationPath) ? readToml(automationPath) : undefined, path);
@@ -42,8 +47,11 @@ export function configFromData(value: unknown, automation: unknown, path: string
   return config;
 }
 
-const validName = /^[a-z][a-z0-9_-]*$/;
 export function readProjects(root: string): Project[] {
+  return configurationValue(`projects:${root}`, () => loadProjects(root));
+}
+
+function loadProjects(root: string): Project[] {
   const path = ownedPath(root, "workbench/projects.toml");
   const projects = projectsFromData(readToml(path), path);
   for (const project of projects) {
@@ -74,22 +82,7 @@ export function projectsFromData(value: unknown, path: string): Project[] {
     if ("languages" in project) throw new Error(`${path}: use [[language_root]] instead of project.languages`);
     if (!validName.test(project.id) || typeof project.path !== "string") throw new Error(`${path}: invalid project`);
     if ((index === 0) !== (project.path === ".")) throw new Error(`${path}: first project must be the sole root`);
-    if (
-      project.path !== "." &&
-      (isAbsolute(project.path) ||
-        project.path.includes("\\") ||
-        project.path
-          .split(/[\\/]/)
-          .some(
-            (part) =>
-              !part ||
-              part === "." ||
-              part === ".." ||
-              [".git", ".workbench", "workbench", "target", "libexec"].includes(part),
-          ))
-    ) {
-      throw new Error(`${path}: unsafe project path '${project.path}'`);
-    }
+    registeredRootPath(project.path, `${path}: project path`);
     if (ids.has(project.id) || paths.has(project.path)) throw new Error(`${path}: duplicate project ID or path`);
     ids.add(project.id);
     paths.add(project.path);
@@ -98,6 +91,10 @@ export function projectsFromData(value: unknown, path: string): Project[] {
 }
 
 export function readLanguageRoots(root: string): LanguageRoot[] {
+  return configurationValue(`language-roots:${root}`, () => loadLanguageRoots(root));
+}
+
+function loadLanguageRoots(root: string): LanguageRoot[] {
   const path = ownedPath(root, "workbench/projects.toml");
   const roots = languageRootsFromData(readToml(path), path);
   for (const entry of roots) {
@@ -119,23 +116,9 @@ export function languageRootsFromData(value: unknown, path: string): LanguageRoo
     throw new InvalidInput(`${path}: 'language_root' must be an array of tables`);
   const seen = new Set<string>();
   return (registry.language_root ?? []).map((entry) => {
-    if (
-      !validName.test(entry.language) ||
-      typeof entry.path !== "string" ||
-      (entry.path !== "." &&
-        (isAbsolute(entry.path) ||
-          entry.path.includes("\\") ||
-          entry.path
-            .split(/[\\/]/)
-            .some(
-              (part) =>
-                !part ||
-                part === "." ||
-                part === ".." ||
-                [".git", ".workbench", "workbench", "target", "libexec"].includes(part),
-            )))
-    )
+    if (!validName.test(entry.language) || typeof entry.path !== "string")
       throw new InvalidInput(`${path}: invalid language root`);
+    registeredRootPath(entry.path, `${path}: language root`);
     const key = `${entry.language}:${entry.path}`;
     if (seen.has(key)) throw new InvalidInput(`${path}: duplicate language root '${key}'`);
     seen.add(key);

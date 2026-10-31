@@ -9,12 +9,13 @@ export function serveWorkspaceWorker(root: string): void {
   const port = parentPort;
   if (!port) throw new Error("workspace acquisition requires a worker port");
   const collector = new WorkspaceCollector(root);
+  let previous: ReturnType<WorkspaceCollector["collect"]> | undefined;
   port.on("message", (request: unknown) => {
     if (request === WorkspaceRequest.Close) {
       port.close();
       return;
     }
-    if (request !== WorkspaceRequest.Refresh) {
+    if (request !== WorkspaceRequest.Refresh && request !== WorkspaceRequest.Fresh) {
       port.postMessage({
         ok: false,
         status: 500,
@@ -23,7 +24,13 @@ export function serveWorkspaceWorker(root: string): void {
       return;
     }
     try {
-      port.postMessage({ ok: true, snapshot: collector.collect() } satisfies WorkspaceResponse);
+      const snapshot = collector.collect(request === WorkspaceRequest.Fresh);
+      const response: WorkspaceResponse =
+        snapshot === previous
+          ? { ok: true, unchanged: { revision: snapshot.revision, collectedAt: new Date().toISOString() } }
+          : { ok: true, snapshot };
+      port.postMessage(response);
+      previous = snapshot;
     } catch (error) {
       port.postMessage({ ok: false, ...workerFailure(error) } satisfies WorkspaceResponse);
     }

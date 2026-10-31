@@ -54,3 +54,8 @@ test("paging reuses wrapped help until terminal width changes", async () => {
   await paging;
   segment.mockRestore();
 });
+
+test("help wraps by display cells while preserving decomposed text and whole emoji", () => {
+  expect(helpLines("雪e\u0301👩‍💻", 3)).toEqual(["雪e\u0301", "👩‍💻"]);
+  expect(helpLines("prefix\tvalue", 8).join("")).toBe("prefix    value");
+});

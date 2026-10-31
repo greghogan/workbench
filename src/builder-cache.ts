@@ -1,7 +1,9 @@
 import { totalBytes, parseDockerBytes } from "./byte-size.js";
 import { describeError } from "../scripts/diagnostic-errors.mjs";
 import { dockerQuery } from "./docker-query.js";
-import { inspectBuildkitCache, removeBuildkitCache } from "./buildkit.js";
+import { inspectBuildkitCache, removeBuildkitCache, currentBuildkitCacheKeys } from "./buildkit.js";
+import { keptCacheAssets } from "./project-registry.js";
+import { userConfigValues } from "./user-config.js";
 import { builderOwner, builderVolumes } from "../scripts/managed-contract.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -29,6 +31,7 @@ interface Ownership {
   cache: string;
   engine: string;
   volumes: DockerVolume[];
+  imageInputs?: string;
 }
 export interface BuilderCacheEntry {
   key: string;
@@ -59,9 +62,15 @@ function names(builder: string, cache: string): string[] {
 }
 
 /** Register volume identities before attachment; the preparation command already holds this builder's owner lock. */
-export async function recordBuilderVolumes(root: string, builder: string, cache: string): Promise<void> {
+export async function recordBuilderVolumes(
+  root: string,
+  builder: string,
+  cache: string,
+): Promise<{ collect: boolean }> {
   if ((builder !== "guix" && builder !== "nix") || !/^[a-f0-9]{24}$/.test(cache))
     throw new Error("Invalid managed builder cache identity");
+  if (process.env.WORKBENCH_IMAGE_INPUTS !== undefined && !/^[a-f0-9]{64}$/.test(process.env.WORKBENCH_IMAGE_INPUTS))
+    throw new Error("Invalid managed image input identity");
   const checkout = buildCheckout(root);
   const value: Ownership = {
     checkout,
@@ -69,6 +78,7 @@ export async function recordBuilderVolumes(root: string, builder: string, cache:
     cache,
     engine: await dockerQuery(["info", "--format", "{{.ID}}"]),
     volumes: JSON.parse(await dockerQuery(["volume", "inspect", ...names(builder, cache)])) as DockerVolume[],
+    ...(process.env.WORKBENCH_IMAGE_INPUTS ? { imageInputs: process.env.WORKBENCH_IMAGE_INPUTS } : {}),
   };
   withToolCacheAdmission(() => {
     writeAtomic(
@@ -77,6 +87,7 @@ export async function recordBuilderVolumes(root: string, builder: string, cache:
       0o600,
     );
   });
+  return { collect: userConfigValues()["cache.auto_prune"] !== false && !keptCacheAssets().has(receiptPath(value)) };
 }
 function records(): Map<string, { value: Ownership; path: string }> {
   const result = new Map<string, { value: Ownership; path: string }>();
@@ -96,6 +107,7 @@ function records(): Map<string, { value: Ownership; path: string }> {
           value.builder !== builder ||
           value.cache !== file.slice(0, -5) ||
           typeof value.engine !== "string" ||
+          (value.imageInputs !== undefined && !/^[a-f0-9]{64}$/.test(value.imageInputs)) ||
           !Array.isArray(value.volumes) ||
           value.volumes.length !== names(builder, value.cache).length ||
           value.volumes.some(
@@ -109,11 +121,27 @@ function records(): Map<string, { value: Ownership; path: string }> {
     }
   return result;
 }
+/** Accepted images record the reusable builder generations that produced their dependency closures. */
+export function currentBuilderCacheKeys(root: string, builder: string, inputs: string): string[] {
+  return [
+    ...currentBuildkitCacheKeys(root),
+    ...[...records()]
+      .filter(
+        ([, { value }]) =>
+          value.checkout === buildCheckout(root) && value.builder === builder && value.imageInputs === inputs,
+      )
+      .map(([key]) => key),
+  ];
+}
 /** Docker owns volume storage; only matching receipts permit deletion through Workbench. */
-export async function inspectBuilderCache(checkout?: string, signal?: AbortSignal): Promise<BuilderCacheReport> {
+export async function inspectBuilderCache(
+  checkout?: string,
+  signal?: AbortSignal,
+  measure = true,
+): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
   const query = (args: string[]) => dockerQuery(args, signal);
-  const report = await inspectBuildkitCache(checkout, signal);
+  const report = await inspectBuildkitCache(checkout, signal, measure);
   const owned = records();
   if (checkout && ![...owned.values()].some(({ value }) => value.checkout === checkout)) return report;
   try {
@@ -122,11 +150,13 @@ export async function inspectBuilderCache(checkout?: string, signal?: AbortSigna
       .filter((name) => volumeName.test(name));
     if (!listed.length) return report;
     const engine = await query(["info", "--format", "{{.ID}}"]);
-    const usage = JSON.parse(await query(["system", "df", "-v", "--format", "{{json .Volumes}}"])) as {
-      Name: string;
-      Size: string;
-      Links: string | number;
-    }[];
+    const usage = measure
+      ? (JSON.parse(await query(["system", "df", "-v", "--format", "{{json .Volumes}}"])) as {
+          Name: string;
+          Size: string;
+          Links: string | number;
+        }[])
+      : undefined;
     const volumes = JSON.parse(await query(["volume", "inspect", ...listed])) as DockerVolume[];
     for (const name of listed) {
       const match = volumeName.exec(name);
@@ -136,7 +166,7 @@ export async function inspectBuilderCache(checkout?: string, signal?: AbortSigna
       const record = owned.get(key);
       if (checkout && record?.value.checkout !== checkout) continue;
       const members = listed.filter((volume) => volume.startsWith(`workbench-${key}-`));
-      if (members.some((volume) => !usage.some((item) => item.Name === volume)))
+      if (usage && members.some((volume) => !usage.some((item) => item.Name === volume)))
         throw new Error(`Docker volume usage is unavailable: ${members.join(", ")}`);
       const identityMatches =
         record?.value.engine === engine &&
@@ -145,7 +175,12 @@ export async function inspectBuilderCache(checkout?: string, signal?: AbortSigna
           volumes.some((actual) => actual.Name === volume.Name && actual.CreatedAt === volume.CreatedAt),
         );
       const lock = record ? namespace(record.value.checkout, record.value.builder) : undefined;
-      const referenced = members.some((volume) => Number(usage.find((item) => item.Name === volume)?.Links ?? 0) > 0);
+      let referenced = usage
+        ? members.some((volume) => Number(usage.find((item) => item.Name === volume)?.Links ?? 0) > 0)
+        : false;
+      if (!measure)
+        for (const volume of members)
+          if (await query(["ps", "--all", "--quiet", "--filter", `volume=${volume}`])) referenced = true;
       const blockedBy = !identityMatches
         ? "no matching Workbench ownership receipt"
         : referenced
@@ -157,9 +192,11 @@ export async function inspectBuilderCache(checkout?: string, signal?: AbortSigna
         key,
         builder: match[1] ?? "",
         volumes: members,
-        bytes: totalBytes(
-          members.map((volume) => parseDockerBytes(usage.find((item) => item.Name === volume)?.Size ?? "")),
-        ),
+        bytes: usage
+          ? totalBytes(
+              members.map((volume) => parseDockerBytes(usage.find((item) => item.Name === volume)?.Size ?? "")),
+            )
+          : undefined,
         ...(record
           ? {
               checkout: record.value.checkout,
@@ -178,7 +215,11 @@ export async function inspectBuilderCache(checkout?: string, signal?: AbortSigna
   }
   return report;
 }
-export async function pruneBuilderCache(report: BuilderCacheReport, progress?: CachePruneObserver): Promise<void> {
+export async function pruneBuilderCache(
+  report: BuilderCacheReport,
+  progress?: CachePruneObserver,
+  validate?: () => void,
+): Promise<void> {
   if (!report.entries.length) return;
   await withToolCacheAdmission(() =>
     withCacheLocksSync(
@@ -191,10 +232,12 @@ export async function pruneBuilderCache(report: BuilderCacheReport, progress?: C
         .filter((lock, index, all) => all.indexOf(lock) === index)
         .sort(),
       async () => {
-        const current = await inspectBuilderCache();
+        const current = await inspectBuilderCache(undefined, undefined, false);
         if (current.issues.length)
           throw new Error(`Cannot revalidate Docker builder caches: ${current.issues.join("; ")}`);
         for (const entry of report.entries) {
+          if (entry.receipt && keptCacheAssets().has(entry.receipt))
+            throw new Error(`Builder ${entry.key} is explicitly retained`);
           const actual = current.entries.find((candidate) => candidate.key === entry.key);
           // The lock above is ours; attached containers and changed ownership still forbid deletion.
           if (
@@ -206,6 +249,7 @@ export async function pruneBuilderCache(report: BuilderCacheReport, progress?: C
           )
             throw new Error(`Builder ${entry.key} changed or became active; inspect the cache again`);
         }
+        validate?.();
         for (const entry of report.entries) {
           await pruneItem(
             `Builders / ${entry.key}`,

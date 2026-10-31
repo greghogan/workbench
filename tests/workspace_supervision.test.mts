@@ -72,3 +72,33 @@ test("ordinary invalid documents are reported without restarting the read worker
     await monitor.close();
   }
 });
+
+test("unchanged publications preserve the index and explicit reconciliation requests fresh inputs", async () => {
+  const root = fixtures.project(),
+    snapshot = new WorkspaceCollector(root).collect(),
+    worker = new ControlledWorker();
+  const monitor = new WorkspaceMonitor(root, 100000, undefined, () => worker as unknown as Worker);
+  try {
+    const ready = monitor.ready();
+    worker.emit("message", { ok: true, snapshot });
+    await ready;
+    const index = monitor.index;
+    const pending = monitor.reconcile();
+    worker.emit("message", {
+      ok: true,
+      unchanged: { revision: snapshot.revision, collectedAt: "2030-01-01T00:00:00.000Z" },
+    });
+    await pending;
+    expect(monitor.index).toBe(index);
+    expect(monitor.index?.snapshot.collectedAt).toBe("2030-01-01T00:00:00.000Z");
+    const fresh = monitor.reconcile(true);
+    expect(worker.postMessage).toHaveBeenLastCalledWith(WorkspaceRequest.Fresh);
+    worker.emit("message", { ok: true, snapshot });
+    await fresh;
+    const invalid = monitor.reconcile();
+    worker.emit("message", { ok: true, unchanged: { revision: "other", collectedAt: "invalid" } });
+    await expect(invalid).rejects.toThrow("invalid unchanged");
+  } finally {
+    await monitor.close();
+  }
+});

@@ -23,7 +23,7 @@ import { acquisitionIdentity } from "./artifact-policy.js";
 import { withToolCacheAdmission } from "./tool-cache-lock.js";
 import { guixProfileRegistrations, releaseGuixProfiles } from "./managed-profiles.js";
 import { withCacheLocksSync, releaseAfterFailure } from "./cache-lock.js";
-import { acquireProcessLock, type ProcessLock } from "./process-lock.js";
+import { acquireProcessLock, inspectProcessLock, processGone, type ProcessLock } from "./process-lock.js";
 import { declaredCheckEnvironment } from "./language-config.js";
 import { invalidateCacheSize } from "./cache-size.js";
 
@@ -449,7 +449,14 @@ export function buildEnvironment(paths: BuildPaths, source: NodeJS.ProcessEnv = 
                 PNPM_CONFIG_VIRTUAL_STORE_TYPE: "project",
               }
             : {}),
-          ...(paths.languages.includes("rust") ? { CARGO_TARGET_DIR: join(paths.directory, "cargo") } : {}),
+          ...(paths.languages.includes("rust")
+            ? {
+                CARGO_TARGET_DIR:
+                  paths.identity.environment === "native" && source.CARGO_TARGET_DIR
+                    ? source.CARGO_TARGET_DIR
+                    : join(paths.directory, "cargo"),
+              }
+            : {}),
           ...(paths.languages.includes("python")
             ? {
                 UV_PROJECT_ENVIRONMENT: join(paths.dependencies, "venv"),
@@ -465,6 +472,24 @@ export function buildEnvironment(paths: BuildPaths, source: NodeJS.ProcessEnv = 
         }
       : {}),
   };
+}
+
+/** During abandoned gate recovery, wait for a dead worker's surviving or uncertain build descendants. */
+export function interruptedBuildLock(checkout: string): string | undefined {
+  const directory = join(userDirectory("cache"), "locks", digest(checkout));
+  let entries: string[];
+  try {
+    entries = readdirSync(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  for (const entry of entries) {
+    const path = join(directory, entry),
+      owner = inspectProcessLock(path);
+    if (!owner.abandoned && (owner.pid === undefined || processGone(owner.pid))) return path;
+  }
+  return undefined;
 }
 
 /** Refuse overlapping Workbench builds/cleanup; never guess that an unfamiliar lock is stale. */

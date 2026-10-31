@@ -1,4 +1,7 @@
 import { finalizeImage } from "./image-finalization.js";
+import { autoPrunePreparedImages, retainedBuilderInputs } from "./image-retention.js";
+import { currentBuilderCacheKeys } from "./builder-cache.js";
+import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "./diagnostics.js";
 import {
   verificationProof,
   sameVerification,
@@ -61,6 +64,38 @@ interface Receipt {
   verified: string;
   published?: string;
   verification?: VerificationProof;
+  builderCaches?: string[] | undefined;
+}
+
+function workingBuilderCaches(root: string, builder: string, inputs: string): string[] | undefined {
+  try {
+    return currentBuilderCacheKeys(root, builder, inputs);
+  } catch (error) {
+    try {
+      diagnostic(
+        LogLevel.Warn,
+        DiagnosticOperation.Command,
+        DiagnosticOutcome.Unavailable,
+        { command: "record builder cache requirements" },
+        error,
+      );
+    } catch {
+      /* Optional retention evidence preserves caches on failure. */
+    }
+    return undefined;
+  }
+}
+
+function maintainPreparedImages(root: string): Promise<void> {
+  return autoPrunePreparedImages(
+    root,
+    () =>
+      new Map(
+        (readConfig(root).development?.profiles ?? [])
+          .filter((profile) => profile.offline)
+          .map((profile) => [profile.name, offlineInputs(root, profile)]),
+      ),
+  );
 }
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const lifecycleCommands = [
@@ -415,6 +450,7 @@ export async function prepareOfflineProfile(
 ): Promise<void> {
   if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch))
     throw new Error("Offline preparation currently requires native Linux x64 or ARM64; use WSL on Windows");
+  await maintainPreparedImages(root);
   const profile = offlineProfile(root, name);
   const hosted = [process.env.CI, process.env.GITHUB_ACTIONS, process.env.GITLAB_CI].some(
     (value) => value && value !== "false" && value !== "0",
@@ -499,6 +535,15 @@ export async function prepareOfflineProfile(
               WORKBENCH_LOCAL_CONFIG_ROOT: root,
               WORKBENCH_EPHEMERAL_CHECKOUT: "1",
               WORKBENCH_IMAGE_INPUTS: inputs,
+              WORKBENCH_BUILDER_RETAIN_INPUTS: (() => {
+                const retained = retainedBuilderInputs(
+                  root,
+                  (readConfig(root).development?.profiles ?? [])
+                    .filter((entry) => entry.offline && entry.builder === profile.builder)
+                    .map((entry) => entry.name),
+                );
+                return retained === undefined ? undefined : JSON.stringify(retained);
+              })(),
               WORKBENCH_MANAGED_CORES: String(allocation.cores),
               WORKBENCH_MANAGED_JOBS: String(allocation.maxJobs),
               WORKBENCH_MANAGED_ROOTS: profile.offline.paths ? JSON.stringify(profile.offline.paths) : undefined,
@@ -572,6 +617,10 @@ export async function prepareOfflineProfile(
         image,
         platform: `linux-${process.arch}`,
         verified: reuse && previous ? previous.verified : new Date().toISOString(),
+        builderCaches:
+          reuse && previous?.builderCaches
+            ? previous.builderCaches
+            : workingBuilderCaches(root, profile.builder, inputs),
         ...(verification ? { verification } : {}),
         ...(previous?.image === image &&
         typeof previous.published === "string" &&
@@ -594,10 +643,12 @@ export async function prepareOfflineProfile(
       }
     }
   });
+  await maintainPreparedImages(root);
 }
 
 export async function verifyOfflineProfile(root: string, name: string, image?: string): Promise<void> {
   await withCacheLock(offlineReceiptPath(root, name), () => verifyAcceptedProfile(root, name, image));
+  await maintainPreparedImages(root);
 }
 
 async function verifyAcceptedProfile(root: string, name: string, image?: string): Promise<Receipt> {
@@ -617,6 +668,7 @@ async function verifyAcceptedProfile(root: string, name: string, image?: string)
     const updated: Receipt = {
       ...receipt,
       verified: new Date().toISOString(),
+      builderCaches: receipt.builderCaches ?? workingBuilderCaches(root, profile.builder, receipt.inputs),
       ...(verification ? { verification } : {}),
     };
     if (!verification) delete updated.verification;
