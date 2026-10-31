@@ -1,3 +1,4 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +17,7 @@ for (const name of [
   Reflect.deleteProperty(process.env, name);
 
 // Fixture Git behavior must not inherit a developer's hooks, signing, or global ignore rules.
-process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+process.env.GIT_CONFIG_GLOBAL = gitNullConfiguration;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
 // Worker environments are case-sensitive, including on Windows; native child processes require a canonical PATH.

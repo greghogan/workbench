@@ -1,3 +1,4 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { required } from "../src/invariants.ts";
 import { quote } from "../src/toolchains.ts";
 import { approveReview } from "../src/review.ts";
@@ -19,7 +20,7 @@ test("consumer hooks use the installed command and validate retained collection 
   const environment = {
     ...process.env,
     PATH: [join(distribution, "bin"), process.env.PATH ?? ""].join(delimiter),
-    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_GLOBAL: gitNullConfiguration,
     GIT_CONFIG_COUNT: "4",
     GIT_CONFIG_KEY_0: "core.autocrlf",
     GIT_CONFIG_VALUE_0: "false",
@@ -126,7 +127,7 @@ test("push hooks check distinct outgoing trees, independent of HEAD, index, and 
     WORKBENCH_STATE_HOME: join(temporary, "state"),
     WORKBENCH_PROJECT_ROOT: undefined,
     WORKBENCH_LOCAL_CONFIG_ROOT: undefined,
-    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_GLOBAL: gitNullConfiguration,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_AUTHOR_NAME: "Workbench test",
     GIT_AUTHOR_EMAIL: "test@example.invalid",

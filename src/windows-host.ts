@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { win32 } from "node:path";
 
+/** Git's file-opening API accepts NUL on Windows, unlike Node's \\.\nul device path. */
+export const gitNullConfiguration = process.platform === "win32" ? "NUL" : "/dev/null";
+
 interface GitProbe {
   probe: (executable: string, env: NodeJS.ProcessEnv) => { status: number | null; stdout: string };
   exists: (path: string) => boolean;
@@ -60,6 +63,7 @@ export function normalizeWindowsGitConfiguration(
     if (
       path &&
       (/^nul$/i.test(path) ||
+        path.toUpperCase() === String.raw`\\.\NUL` ||
         path === "/dev/null" ||
         (/^[A-Za-z]:[\\/].*[\\/]dev[\\/]null$/i.test(path) && !exists(path)))
     )

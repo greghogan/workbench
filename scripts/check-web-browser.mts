@@ -1,10 +1,11 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { BrowserScenario, webBrowserScenarios } from "./web-browser-scenarios.mjs";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { spawn, spawnSync } from "node:child_process";
 import { readdirSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { delimiter, join, resolve } from "node:path";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import assert from "node:assert/strict";
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
     WORKBENCH_STORAGE_EXTERNAL: "true",
     WORKBENCH_LOCAL_CONFIG_ROOT: root,
     WORKBENCH_EPHEMERAL_CHECKOUT: "0",
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: gitNullConfiguration,
     GIT_CONFIG_NOSYSTEM: "1",
     XDG_DATA_DIRS: join(directory, "system"),
     RUSTUP_HOME: join(directory, "rustup"),

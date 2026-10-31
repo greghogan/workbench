@@ -1,5 +1,6 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { execFileSync, spawn } from "node:child_process";
@@ -95,7 +96,7 @@ test("Git checkout keeps canonical project text while preserving exact citation 
   mkdirSync(output);
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith("GIT_")) Reflect.deleteProperty(env, key);
-  env.GIT_CONFIG_GLOBAL = devNull;
+  env.GIT_CONFIG_GLOBAL = gitNullConfiguration;
   env.GIT_CONFIG_NOSYSTEM = "1";
   const git = (...args: string[]) =>
     execFileSync("git", ["-c", "core.autocrlf=true", "-c", "core.eol=crlf", ...args], {

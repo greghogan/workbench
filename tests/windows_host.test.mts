@@ -86,7 +86,14 @@ test("Windows path normalization changes only existing absolute platform paths",
 
 test("Git null configuration has one identity before and after MSYS environment conversion", async () => {
   const { normalizeWindowsGitConfiguration } = await import("../src/windows-host.ts");
-  for (const value of ["/dev/null", "C:/Program Files/Git/dev/null", "C:\\Git\\dev\\null", "nul", "NUL"]) {
+  for (const value of [
+    "/dev/null",
+    "C:/Program Files/Git/dev/null",
+    "C:\\Git\\dev\\null",
+    String.raw`\\.\nul`,
+    "nul",
+    "NUL",
+  ]) {
     const env = { GIT_CONFIG_GLOBAL: value, GIT_CONFIG_SYSTEM: value };
     normalizeWindowsGitConfiguration(env, () => false);
     expect(env).toEqual({ GIT_CONFIG_GLOBAL: "NUL", GIT_CONFIG_SYSTEM: "NUL" });

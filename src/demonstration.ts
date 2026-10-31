@@ -1,7 +1,8 @@
+import { gitNullConfiguration } from "./windows-host.js";
 import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { synchronize } from "./sync.js";
@@ -38,7 +39,7 @@ export async function createDemonstration(distribution: string, ownedDirectory?:
     set("WORKBENCH_STORAGE_EXTERNAL", "true");
     set("XDG_DATA_DIRS", join(directory, "system"));
     set("WORKBENCH_EPHEMERAL_CHECKOUT", "0");
-    set("GIT_CONFIG_GLOBAL", devNull);
+    set("GIT_CONFIG_GLOBAL", gitNullConfiguration);
     set("GIT_CONFIG_NOSYSTEM", "1");
     for (const key of [
       "GIT_DIR",

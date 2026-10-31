@@ -1,3 +1,4 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { required } from "../src/invariants.ts";
 import { approveReview } from "../src/review.ts";
 import { installSelectedCollections } from "../src/collection-install.ts";
@@ -33,7 +34,7 @@ test("standalone staged gates retain review receipts and verified local collecti
         CI: undefined,
         GITHUB_ACTIONS: undefined,
         GITLAB_CI: undefined,
-        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_GLOBAL: gitNullConfiguration,
         GIT_CONFIG_NOSYSTEM: "1",
         GIT_CONFIG_COUNT: "2",
         GIT_CONFIG_KEY_0: "core.autocrlf",

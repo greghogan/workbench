@@ -1,6 +1,7 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "vitest";
 import { command, verifyOutcome, prepare, workbench, write } from "../scripts/skill-evaluation-cases.mjs";
@@ -12,7 +13,7 @@ test("evaluation rejects unchanged defects and advisory edits, then accepts corr
   const env = {
     ...process.env,
     WORKBENCH_CONFIG_HOME: join(temporary, "user"),
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: gitNullConfiguration,
     GIT_CONFIG_NOSYSTEM: "1",
   };
   try {
@@ -49,7 +50,7 @@ test.each(["adoption", "recovery", "policy-handoff", "commit-push"] as const)(
       WORKBENCH_CACHE_HOME: join(temporary, "cache"),
       WORKBENCH_DATA_HOME: join(temporary, "data"),
       WORKBENCH_STATE_HOME: join(temporary, "state"),
-      GIT_CONFIG_GLOBAL: devNull,
+      GIT_CONFIG_GLOBAL: gitNullConfiguration,
       GIT_CONFIG_NOSYSTEM: "1",
     };
     try {

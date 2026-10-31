@@ -1,7 +1,8 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
 import { processFailure } from "./process-outcome.mjs";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { devNull, homedir, tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { cases, evaluationName, command, verifyOutcome, prepare, snapshot } from "./skill-evaluation-cases.mjs";
@@ -110,7 +111,7 @@ for (const name of names) {
     XDG_DATA_HOME: join(testHome, "data"),
     XDG_CACHE_HOME: join(testHome, "cache"),
     XDG_STATE_HOME: join(testHome, "state"),
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: gitNullConfiguration,
     GIT_CONFIG_NOSYSTEM: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_TELEMETRY: "1",

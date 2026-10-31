@@ -1,3 +1,4 @@
+import { gitNullConfiguration } from "../src/windows-host.ts";
 import { required } from "../src/invariants.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -78,7 +79,7 @@ test("coverage presents the selected committed baseline in console output and th
       encoding: "utf8",
       env: {
         ...process.env,
-        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_GLOBAL: gitNullConfiguration,
         GIT_CONFIG_NOSYSTEM: "1",
         GIT_AUTHOR_NAME: "Coverage fixture",
         GIT_AUTHOR_EMAIL: "fixture@example.invalid",
