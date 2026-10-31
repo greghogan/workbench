@@ -8,6 +8,50 @@ import { planCI } from "../scripts/ci-plan.mjs";
 
 const repository = resolve(import.meta.dirname, "..");
 
+test.skipIf(process.platform !== "linux").each([true, false])(
+  "CI registration state stays separate from guest reports (container: %s)",
+  (container) => {
+    const root = mkdtempSync(join(tmpdir(), "workbench-ci-state-"));
+    try {
+      const reports = join(root, "reports"),
+        temporary = join(root, "temporary");
+      mkdirSync(reports);
+      mkdirSync(temporary);
+      mkdirSync(join(root, "bin"));
+      writeFileSync(
+        join(root, "bin/workbench.mjs"),
+        `
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+mkdirSync(process.env.WORKBENCH_STATE_HOME, {recursive:true,mode:0o700});
+writeFileSync(join(process.env.WORKBENCH_STATE_HOME,'registration'), 'private registration');
+`,
+      );
+      const result = spawnSync(process.execPath, [join(repository, "scripts/ci-run.mjs"), "native-install"], {
+        cwd: root,
+        env: {
+          ...process.env,
+          CHECK_ROOTS: '["."]',
+          WORKBENCH_DISTRIBUTION_ROOT: root,
+          WORKBENCH_CI_TARGET: "fixture",
+          WORKBENCH_DEVCONTAINER: container ? "1" : "",
+          RUNNER_TEMP: reports,
+          GITHUB_OUTPUT: join(root, "output"),
+          TMPDIR: temporary,
+        },
+        encoding: "utf8",
+      });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(readFileSync(join(container ? temporary : reports, "workbench-state/registration"), "utf8")).toBe(
+        "private registration",
+      );
+      if (container) expect(existsSync(join(reports, "workbench-state"))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
 test
   .skipIf(process.platform !== "linux")
   .each(["nix", "guix"].flatMap((builder) => [true, false].map((available) => [builder, available])))(

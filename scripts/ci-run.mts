@@ -3,6 +3,7 @@ import { errorMessage } from "./ci-results.mjs";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { compilerCompatibilityRoles } from "./ci-contract.mjs";
 import { collectReports, reportState } from "./ci-reports.mjs";
 
@@ -10,9 +11,13 @@ const roots: unknown = JSON.parse(process.env.CHECK_ROOTS ?? "[]");
 if (!isStringArray(roots) || !roots.length || roots.some((root) => typeof root !== "string" || !root))
   throw new Error("CHECK_ROOTS must list configured roots");
 const workspace = process.cwd();
-// Disposable local CI workers keep their registration beside their retained run evidence.
+// Registration stays private. Container state belongs to its disposable filesystem,
+// so a terminated guest cannot leave unreadable private directories in uploaded reports.
 if (process.env.WORKBENCH_CI_TARGET && process.env.RUNNER_TEMP)
-  process.env.WORKBENCH_STATE_HOME = join(process.env.RUNNER_TEMP, "workbench-state");
+  process.env.WORKBENCH_STATE_HOME = join(
+    process.env.WORKBENCH_DEVCONTAINER === "1" ? tmpdir() : process.env.RUNNER_TEMP,
+    "workbench-state",
+  );
 const distribution = process.env.WORKBENCH_DISTRIBUTION_ROOT ?? workspace;
 const mode = required(process.argv[2], "Missing CI mode");
 function run(command: string, args: string[], cwd = workspace, env = process.env, capture = false) {
