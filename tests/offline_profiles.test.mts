@@ -368,6 +368,34 @@ linuxTest("preparation accepts only a fresh offline execution and records immuta
   expect(() => preparedOfflineProfile(root, profile)).toThrow(/stale/);
 });
 
+linuxTest.each(["absent", "inherited", "overridden"] as const)(
+  "verification forwards %s credentials without exposing them in process arguments",
+  async (mode) => {
+    vi.stubEnv("GH_TOKEN", mode === "absent" ? undefined : "credential-inherited");
+    await prepareOfflineProfile(root, "offline");
+    await executePreparedProfile(
+      root,
+      "offline",
+      ["node", "/workbench/verify.mjs"],
+      mode === "overridden" ? { env: { GH_TOKEN: "credential-override" } } : {},
+    );
+    const { executeCI } = await import("../src/ci-lifecycle.js");
+    const invocation = required(
+      [...vi.mocked(executeCI).mock.calls]
+        .reverse()
+        .find(([command, args]) => command === "docker" && args.includes("/workbench/verify.mjs")),
+      "Expected offline verification",
+    );
+    expect(invocation[1].join(" ")).not.toContain("credential-");
+    if (mode === "absent") expect(invocation[1]).not.toContain("GH_TOKEN");
+    else expect(invocation[1]).toContain("GH_TOKEN");
+    expect(invocation[2]?.env?.GH_TOKEN).toBe(
+      mode === "absent" ? undefined : mode === "overridden" ? "credential-override" : "credential-inherited",
+    );
+    expect(process.env.GH_TOKEN).toBe(mode === "absent" ? undefined : "credential-inherited");
+  },
+);
+
 linuxTest("failed verification preserves the previous receipt and removes the owned preparation image", async () => {
   await prepareOfflineProfile(root, "offline");
   const path = offlineReceiptPath(root, "offline");

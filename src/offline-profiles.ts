@@ -326,26 +326,35 @@ async function runImage(
       ]);
       ownershipChanged = true;
     }
-    await executeCI("docker", [
-      "exec",
-      ...(config.remoteUser ? ["--user", config.remoteUser] : []),
-      "--workdir",
-      workspace,
-      ...Object.entries({
-        ...config.remoteEnv,
-        ...executionEnvironment(root),
-        WORKBENCH_DEVCONTAINER: "1",
-        WORKBENCH_PREPARED: "1",
-        ...((options.network ?? "none") === "none" ? { WORKBENCH_OFFLINE: "1" } : {}),
-        WORKBENCH_PROJECT_ROOT: workspace,
-        WORKBENCH_DISTRIBUTION_ROOT: guestDistribution,
-        ...(process.env.CI ? { CI: process.env.CI } : {}),
-        ...(process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
-        ...options.env,
-      }).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
-      container,
-      ...command,
-    ]);
+    const environment = {
+      ...config.remoteEnv,
+      ...executionEnvironment(root),
+      WORKBENCH_DEVCONTAINER: "1",
+      WORKBENCH_PREPARED: "1",
+      ...((options.network ?? "none") === "none" ? { WORKBENCH_OFFLINE: "1" } : {}),
+      WORKBENCH_PROJECT_ROOT: workspace,
+      WORKBENCH_DISTRIBUTION_ROOT: guestDistribution,
+      ...(process.env.CI ? { CI: process.env.CI } : {}),
+      ...(process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
+      ...options.env,
+    };
+    await executeCI(
+      "docker",
+      [
+        "exec",
+        ...(config.remoteUser ? ["--user", config.remoteUser] : []),
+        "--workdir",
+        workspace,
+        // Inherit the GitHub token from Docker's process environment to keep its value out of argv.
+        ...Object.entries(environment).flatMap(([key, value]) => [
+          "--env",
+          key === "GH_TOKEN" ? key : `${key}=${value}`,
+        ]),
+        container,
+        ...command,
+      ],
+      { env: { ...process.env, ...(environment.GH_TOKEN === undefined ? {} : { GH_TOKEN: environment.GH_TOKEN }) } },
+    );
   } finally {
     try {
       if (ownershipChanged) {
