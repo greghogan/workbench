@@ -182,6 +182,8 @@ their per-test state and register suite-local cleanup.
   C/C++ check orchestration and standalone compiler policy across both references.
 - `scripts/windows-utf8-console.mts`, `scripts/windows-utf8-console.mjs`: Isolate Microsoft compiler output encoding so
   Ninja can retain Unicode dependency paths without changing the user's console or concurrent builds.
+- `scripts/windows-arguments.mts`, `scripts/windows-arguments.mjs`: Share executable argument
+  quoting while keeping command-shell escaping at the batch-file boundary.
 - `scripts/native-cpu.h`, `scripts/native-cpu-test.c`: Supply copied, independently tested CPU capability predicates.
 - `scripts/owned-child.mts`, `scripts/owned-child.mjs`, `scripts/owned-scratch.mts`, `scripts/owned-scratch.mjs`: Own
   child process shutdown, bounded query capture, scratch lifetime, and conservative abandoned-run reclamation.

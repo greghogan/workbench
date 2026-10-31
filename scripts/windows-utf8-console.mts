@@ -4,11 +4,13 @@ import { processFailure } from "./process-outcome.mjs";
 import { settleCleanup } from "./diagnostic-errors.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { windowsExecutableArgument } from "./windows-arguments.mjs";
 
 // MSVC redirects /showIncludes using the console code page. Give the build its own console:
 // changing a caller's console would race other builds and alter the user's terminal settings.
 const launch = String.raw`
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 $request = $env:WORKBENCH_NATIVE_CONSOLE_REQUEST | ConvertFrom-Json
 function Record-Stage($stage) { [System.IO.File]::WriteAllText($request.stage, $stage) }
 Record-Stage 'console setup'
@@ -40,16 +42,23 @@ try {
   if (-not [WorkbenchConsole]::SetConsoleCP(65001) -or -not [WorkbenchConsole]::SetConsoleOutputCP(65001)) {
     throw 'Cannot select UTF-8 compiler output'
   }
-  Record-Stage 'console encoding'
-  $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
   Remove-Item Env:WORKBENCH_NATIVE_CONSOLE_REQUEST
-  $arguments = @($request.arguments)
   Record-Stage 'native command'
-  $ErrorActionPreference = 'Continue'
-  & $request.node @arguments
-  $result = $LASTEXITCODE
-  if ($null -eq $result) { $result = 1 }
-  [System.IO.File]::WriteAllText($request.result, (ConvertTo-Json @{status = $result}))
+  # PowerShell's native-command processor queries its old console handles after detachment.
+  # Start directly through .NET, retaining the private console and original output pipes.
+  $child = [System.Diagnostics.Process]::new()
+  try {
+    $child.StartInfo.FileName = $request.node
+    $child.StartInfo.Arguments = $request.commandLine
+    $child.StartInfo.UseShellExecute = $false
+    $child.StartInfo.CreateNoWindow = $false
+    if (-not $child.Start()) { throw 'Cannot start the native build' }
+    $child.WaitForExit()
+    $result = $child.ExitCode
+    [System.IO.File]::WriteAllText($request.result, (ConvertTo-Json @{status = $result}))
+  } finally {
+    $child.Dispose()
+  }
 } finally {
   [void][WorkbenchConsole]::FreeConsole()
 }
@@ -83,7 +92,7 @@ export async function runWindowsUtf8Console(args: string[], builds: string): Pro
           WORKBENCH_NATIVE_UTF8_CONSOLE: "1",
           WORKBENCH_NATIVE_CONSOLE_REQUEST: JSON.stringify({
             node: process.execPath,
-            arguments: args,
+            commandLine: args.map(windowsExecutableArgument).join(" "),
             result: receipt,
             stage,
           }),
@@ -92,6 +101,7 @@ export async function runWindowsUtf8Console(args: string[], builds: string): Pro
         owner: scratch.owner,
       },
     );
+    cancellation.signal.throwIfAborted();
     failure = processFailure("UTF-8 native build", outcome);
     if (!failure) {
       if (!existsSync(receipt))
@@ -102,7 +112,7 @@ export async function runWindowsUtf8Console(args: string[], builds: string): Pro
       if (
         typeof result.status !== "number" ||
         !Number.isInteger(result.status) ||
-        result.status < 0 ||
+        result.status < -0x80000000 ||
         result.status > 0xffffffff
       )
         throw new Error("Invalid native build exit status");
