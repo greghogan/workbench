@@ -1,11 +1,15 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { parse } from "smol-toml";
 import { executeConsumerProfiles, planConsumerProfiles } from "../src/consumer-integration-plan.ts";
 import { configureConsumerCompiler, enableAdoptedApplicationChecks } from "../src/consumer-integration-fixtures.ts";
-import { ConsumerReportRecorder, readConsumerIntegrationReport } from "../src/consumer-integration-report.ts";
+import {
+  ConsumerReportRecorder,
+  readConsumerIntegrationReport,
+  retainConsumerDiagnostics,
+} from "../src/consumer-integration-report.ts";
 import { resolveNativeTool } from "../src/native-installation.ts";
 import { runConsumerSuite } from "../src/consumer-integration-scenarios.ts";
 import { CheckCancellation } from "../src/check-cancellation.ts";
@@ -22,6 +26,46 @@ function fixture() {
   mkdirSync(join(path, "workbench"));
   return path;
 }
+test("consumer cleanup retains complete failed-check and native logs without copying build payloads", () => {
+  const root = fixture(),
+    storage = join(root, "storage"),
+    output = join(root, "reports");
+  const retained = [
+    "check-logs/project/run/session/step-failed.log",
+    "check-logs/project/run/results.json",
+    "builds/checkout/root/generation/a/bt/fmt/config-out.log",
+    "builds/checkout/root/generation/debug/Testing/Temporary/LastTest.log",
+    "builds/checkout/root/generation/debug/CMakeFiles/CMakeConfigureLog.yaml",
+  ];
+  const full = "first diagnostic\n" + "retained data\n".repeat(4000) + "last diagnostic\n";
+  for (const name of [...retained, "builds/checkout/root/generation/large-object.o"]) {
+    const path = join(storage, name);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, full);
+  }
+  retainConsumerDiagnostics(storage, output);
+  rmSync(storage, { recursive: true });
+  for (const name of retained)
+    expect(readFileSync(join(output, name.replace(/^builds\//, "native-diagnostics/")), "utf8")).toBe(full);
+  expect(existsSync(join(output, "native-diagnostics/checkout/root/generation/large-object.o"))).toBe(false);
+});
+test("consumer diagnostic retention skips linked data and rejects linked storage roots", () => {
+  const root = fixture(),
+    storage = join(root, "storage"),
+    output = join(root, "reports"),
+    foreign = join(root, "foreign");
+  mkdirSync(foreign);
+  writeFileSync(join(foreign, "private.log"), "preserve");
+  mkdirSync(join(storage, "builds"), { recursive: true });
+  symlinkSync(foreign, join(storage, "builds", "linked"), process.platform === "win32" ? "junction" : "dir");
+  retainConsumerDiagnostics(storage, output);
+  expect(existsSync(output)).toBe(false);
+  symlinkSync(foreign, join(storage, "check-logs"), process.platform === "win32" ? "junction" : "dir");
+  expect(() => {
+    retainConsumerDiagnostics(storage, output);
+  }).toThrow(/must be a directory/);
+  expect(readFileSync(join(foreign, "private.log"), "utf8")).toBe("preserve");
+});
 test("profiles preserve language selection and route explicit compilers only to supported hosts", () => {
   expect(planConsumerProfiles(["c", "typescript", "cpp"], undefined, "win32", "x64")).toEqual([
     { id: "pins", languages: ["c", "typescript", "cpp"] },

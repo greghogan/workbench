@@ -98,30 +98,34 @@ static int check_failures(FILE *output, FILE *read_only) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
+    if (argc != 3) {
         return 2;
     }
     FILE *output = NULL;
 #ifdef _WIN32
-    if (tmpfile_s(&output) != 0) {
+    if (fopen_s(&output, argv[1], "w+b") != 0) {
+        perror("create JSON test output");
         return 1;
     }
 #else
-    output = tmpfile();
+    output = fopen(argv[1], "w+b");
 #endif
     if (output == NULL) {
+        perror("create JSON test output");
         return 1;
     }
     FILE *read_only = NULL;
 #ifdef _WIN32
-    if (fopen_s(&read_only, argv[1], "r") != 0) {
+    if (fopen_s(&read_only, argv[2], "rb") != 0) {
+        perror("open read-only JSON test fixture");
         (void)fclose(output);
         return 1;
     }
 #else
-    read_only = fopen(argv[1], "r");
+    read_only = fopen(argv[2], "rb");
 #endif
     if (read_only == NULL) {
+        perror("open read-only JSON test fixture");
         (void)fclose(output);
         return 1;
     }
