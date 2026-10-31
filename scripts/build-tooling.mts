@@ -5,7 +5,7 @@ import {
   toolingIgnores,
   type ToolingArtifact,
 } from "./tooling-artifacts.mts";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build, transform } from "esbuild";
@@ -68,7 +68,14 @@ export function collectToolingArtifacts(root: string, scope: "all" | "developmen
 }
 
 /** Keep copied reference helpers and installed packages executable with ordinary Node. */
-export async function buildTooling({ root, operation }: { root: string; operation: ToolingOperation }): Promise<void> {
+export async function buildTooling({
+  root: suppliedRoot,
+  operation,
+}: {
+  root: string;
+  operation: ToolingOperation;
+}): Promise<void> {
+  const root = realpathSync(suppliedRoot);
   const check = operation === "verify";
   const maintainersOnly = operation === "prepare-development";
   const ignorePath = join(root, ".gitignore");
