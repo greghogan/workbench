@@ -9,15 +9,19 @@ test.skipIf(process.platform !== "win32")("private build consoles preserve Unico
   const root = mkdtempSync(join(tmpdir(), "workbench-console-"));
   try {
     const builds = join(root, "builds"),
+      working = join(root, "work space 文"),
       child = join(root, "compiler space 文.mjs"),
       launcher = join(root, "launch.mjs");
     const args = ["", 'quote " character', "C:\\trailing space\\", "%!^&()<>|;", "文"];
     mkdirSync(builds);
+    mkdirSync(working);
     writeFileSync(
       child,
       `import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';
+import {realpathSync} from 'node:fs';
 assert.deepEqual(process.argv.slice(2),${JSON.stringify(args)});
+assert.equal(realpathSync.native(process.cwd()),realpathSync.native(${JSON.stringify(working)}));
 const page=spawnSync('cmd.exe',['/d','/c','chcp'],{encoding:'utf8'});
 if(page.status!==0 || !page.stdout.includes('65001')) throw new Error('Build console is not UTF-8');
 console.log('dependency 文'); console.error('diagnostic 文'); process.exitCode=23;
@@ -26,7 +30,7 @@ console.log('dependency 文'); console.error('diagnostic 文'); process.exitCode
     writeFileSync(
       launcher,
       `import {runWindowsUtf8Console} from ${JSON.stringify(pathToFileURL(resolve(import.meta.dirname, "../scripts/windows-utf8-console.mjs")).href)};
-await runWindowsUtf8Console(${JSON.stringify([child, ...args])},${JSON.stringify(builds)});
+await runWindowsUtf8Console(${JSON.stringify([child, ...args])},${JSON.stringify(builds)},${JSON.stringify(working)});
 `,
     );
     const result = spawnSync(process.execPath, [launcher], { encoding: "utf8", windowsHide: true });

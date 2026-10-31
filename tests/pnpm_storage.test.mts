@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -13,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
 import { buildEnvironment, buildPaths, prepareBuild } from "../src/builds.ts";
+import { pnpmStorageConfiguration } from "../src/dependencies.ts";
 
 const require = createRequire(import.meta.url);
 const temporary: string[] = [];
@@ -106,6 +108,29 @@ test("managed sessions preserve exported stores across manifest changes", () => 
     virtualStoreDir: join(paths.dependencies, "pnpm"),
     virtualStoreType: "project",
   });
+});
+
+test("pnpm storage accepts physical directory aliases while rejecting a different language root", () => {
+  const { root, directory } = fixture();
+  vi.stubEnv("WORKBENCH_STORAGE_EXTERNAL", "true");
+  const paths = buildPaths(root, root, "native", {}, false);
+  for (const [key, value] of Object.entries(buildEnvironment(paths))) vi.stubEnv(key, value);
+  const alias = join(directory, "project-alias");
+  symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+  const expected = {
+    storeDir: paths.pnpmStore,
+    virtualStoreDir: join(paths.dependencies, "pnpm"),
+    virtualStoreType: "project",
+  };
+  expect(pnpmStorageConfiguration(root, alias)).toEqual(expected);
+  if (process.platform === "win32" && /^[A-Za-z]:/.test(root)) {
+    const drive = root.slice(0, 1);
+    const driveAlias = drive === drive.toLowerCase() ? drive.toUpperCase() : drive.toLowerCase();
+    expect(pnpmStorageConfiguration(root, `${driveAlias}${root.slice(1)}`)).toEqual(expected);
+  }
+  const sibling = join(directory, "different-project");
+  mkdirSync(sibling);
+  expect(() => pnpmStorageConfiguration(root, sibling)).toThrow(/another language root/);
 });
 
 test.each(["native", "nix", "guix", "nix-docker"] as const)(

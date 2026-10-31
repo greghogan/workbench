@@ -17,6 +17,16 @@ export function bundlerVersion(directory: string): string {
 
 /** RubyGems installs the verified local bootstrap gem; Bundler owns application resolution and extraction. */
 export async function executeBundler(directory: string, distribution: string, args: string[]): Promise<void> {
+  if (process.platform === "win32" && process.env.WORKBENCH_NATIVE_UTF8_CONSOLE !== "1") {
+    // Ruby's locale encoding also governs paths passed to workers such as Rake's test subprocess.
+    const { runWindowsUtf8Console } = await import("../scripts/windows-utf8-console.mjs");
+    await runWindowsUtf8Console(
+      [join(distribution, "bin/workbench.mjs"), "ruby-package-manager-exec", "--", ...args],
+      process.env.WORKBENCH_BUILD_DIR ?? join(userDirectory("cache"), "console"),
+      directory,
+    );
+    return;
+  }
   const authority = process.env.BUNDLE_GEMFILE ? dirname(resolve(process.env.BUNDLE_GEMFILE)) : directory;
   const version = bundlerVersion(authority);
   if (process.env.BUNDLE_FROZEN !== "false" && !/^CHECKSUMS\n/m.test(readText(join(authority, "Gemfile.lock"))))

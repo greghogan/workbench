@@ -4,7 +4,9 @@ import { processFailure } from "../process-outcome.mjs";
 
 // Disposable diagnostic: retain the real configured integration runner and environment boundary.
 const selected =
-  process.platform === "win32" ? ["--language", "c", "--language", "cpp", "--compiler", "mvsc"] : ["--language", "php"];
+  process.platform === "win32"
+    ? ["--language", "typescript", "--language", "javascript", "--language", "ruby"]
+    : ["--language", "php"];
 const outcome = spawnSync(
   process.execPath,
   ["scripts/check-consumers.mts", ...selected, "--output", join(process.cwd(), "coverage", "probe-consumers")],

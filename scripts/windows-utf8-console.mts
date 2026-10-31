@@ -66,7 +66,7 @@ exit $result
 `;
 
 /** Stream a native build through a private UTF-8 Windows console, including hidden CI processes. */
-export async function runWindowsUtf8Console(args: string[], builds: string): Promise<void> {
+export async function runWindowsUtf8Console(args: string[], builds: string, cwd = process.cwd()): Promise<void> {
   if (process.platform !== "win32") throw new Error("A private Windows console requires Windows");
   const scratch = createOwnedScratch(builds, "utf8"),
     cancellation = processCancellation(),
@@ -84,7 +84,7 @@ export async function runWindowsUtf8Console(args: string[], builds: string): Pro
         Buffer.from(launch, "utf16le").toString("base64"),
       ],
       {
-        cwd: process.cwd(),
+        cwd,
         env: {
           ...process.env,
           TEMP: scratch.directory,

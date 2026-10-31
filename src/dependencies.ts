@@ -29,8 +29,13 @@ export function pnpmStorageConfiguration(root: string, directory: string): Recor
   if (inherited) {
     // A check may target a staged checkout or sibling root while retaining its caller's shell context.
     const storageProject = process.env.WORKBENCH_STORAGE_PROJECT ?? process.env.WORKBENCH_SHELL_ROOT;
-    if (storageProject !== undefined && realpathSync(storageProject) !== realpathSync(directory))
-      throw new Error("inherited pnpm storage belongs to another language root; reopen the matching Workbench shell");
+    if (
+      storageProject !== undefined &&
+      relative(realpathSync.native(storageProject), realpathSync.native(directory)) !== ""
+    )
+      throw new Error(
+        `inherited pnpm storage belongs to another language root; reopen the matching Workbench shell (selected ${JSON.stringify(storageProject)}, requested ${JSON.stringify(directory)})`,
+      );
     storeDir = required(process.env.PNPM_CONFIG_STORE_DIR, "inherited pnpm storage needs a package store");
     virtualStoreDir = required(
       process.env.PNPM_CONFIG_VIRTUAL_STORE_DIR,
