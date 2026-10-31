@@ -7,7 +7,7 @@ import * as zlib from "node:zlib";
 import { test } from "vitest";
 import { Module, createRequire } from "node:module";
 import loadBundle from "../bin/bundle-runtime.cjs";
-import { bundleArtifacts, bundleCompression, bundleFormats } from "../scripts/bundle-artifacts.mjs";
+import { bundleArtifacts, bundleCompression, bundleFormats, decodeBundle } from "../scripts/bundle-artifacts.mjs";
 
 test("compressed bundles execute offline with ordinary CommonJS exports, resolution, and caching", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-bundle-compression-")));
@@ -33,6 +33,9 @@ test("compressed bundles execute offline with ordinary CommonJS exports, resolut
       }
       const artifacts = bundleArtifacts("main", source, compression);
       assert.deepEqual(artifacts, bundleArtifacts("main", source, compression));
+      const payload = artifacts.get(`main.cjs.${bundleFormats[compression]}`);
+      assert.ok(payload);
+      assert.deepEqual(decodeBundle(payload, compression), source);
       for (const [path, contents] of artifacts) writeFileSync(join(root, "bundle", path), contents);
       const result = spawnSync(
         process.execPath,

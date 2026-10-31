@@ -1,5 +1,15 @@
 import { afterEach, expect, test } from "vitest";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -16,6 +26,8 @@ import { toolingArtifact } from "../scripts/tooling-artifacts.mts";
 import { build } from "esbuild";
 import { bundleOptions } from "../scripts/bundle-options.mts";
 import { coverageWorkspace } from "../scripts/test-coverage.mts";
+import { brotliCompressSync, brotliDecompressSync, constants } from "node:zlib";
+import { diagnosticError } from "../scripts/diagnostic-errors.mjs";
 
 const temporary: string[] = [];
 afterEach(() => {
@@ -57,6 +69,75 @@ test("bundle candidates are read-only, ordered for publication, executable, and 
   expect(() => {
     verifyBundles(root, candidates);
   }).toThrow(/bundle\/main.cjs.br is stale/);
+});
+
+test("bundle verification accepts alternate compression of identical JavaScript and rejects changed code", async () => {
+  const root = fixture();
+  const candidates = await compileBundles(root);
+  publishBundles(root, candidates);
+  const path = join(root, "bundle/main.cjs.br");
+  const original = readFileSync(path);
+  const code = brotliDecompressSync(original);
+  const alternate = brotliCompressSync(code, { params: { [constants.BROTLI_PARAM_QUALITY]: 0 } });
+  expect(alternate.equals(original)).toBe(false);
+  writeFileSync(path, alternate);
+  expect(() => {
+    verifyBundles(root, candidates);
+  }).not.toThrow();
+  const executed = spawnSync(process.execPath, ["-e", 'console.log(require("./bundle/main.cjs").value)'], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  expect(executed.status, executed.stderr).toBe(0);
+  expect(executed.stdout.trim()).toBe("42");
+  const changed = Buffer.from(code.toString().replace("42", "43"));
+  expect(changed.equals(code)).toBe(false);
+  writeFileSync(path, brotliCompressSync(changed));
+  expect(() => {
+    verifyBundles(root, candidates);
+  }).toThrow(/main.cjs.br is stale/);
+  expect(readFileSync(join(root, "coverage/bundle-parity/main.cjs.br.expected.cjs"))).toEqual(code);
+  expect(readFileSync(join(root, "coverage/bundle-parity/main.cjs.br.committed.cjs"))).toEqual(changed);
+});
+
+test("bundle parity retains exact loader and license-notice verification", async () => {
+  const root = fixture();
+  const candidates = await compileBundles(root);
+  publishBundles(root, candidates);
+  for (const relative of ["bundle/main.cjs", "bundle/THIRD_PARTY_NOTICES.txt"]) {
+    const path = join(root, relative);
+    const contents = readFileSync(path);
+    writeFileSync(path, Buffer.concat([contents, Buffer.from("\n")]));
+    expect(() => {
+      verifyBundles(root, candidates);
+    }).toThrow(`${relative} is stale`);
+    writeFileSync(path, contents);
+  }
+});
+
+test("bundle mismatch diagnostics preserve the code error and do not follow output-directory links", async () => {
+  const root = fixture();
+  const candidates = await compileBundles(root);
+  publishBundles(root, candidates);
+  const path = join(root, "bundle/main.cjs.br");
+  const code = brotliDecompressSync(readFileSync(path)).toString();
+  writeFileSync(path, brotliCompressSync(code.replace("42", "43")));
+  const kept = join(root, "kept");
+  mkdirSync(kept);
+  writeFileSync(join(kept, "unrelated"), "preserve");
+  symlinkSync(kept, join(root, "coverage"), "junction");
+  let failure: unknown;
+  try {
+    verifyBundles(root, candidates);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  const diagnostic = JSON.stringify(diagnosticError(failure));
+  expect(diagnostic).toContain("JavaScript differs");
+  expect(diagnostic).toContain("must be a real directory");
+  expect(readdirSync(kept)).toEqual(["unrelated"]);
+  expect(readFileSync(join(kept, "unrelated"), "utf8")).toBe("preserve");
 });
 
 test("a staging failure leaves active bundles untouched and removes already staged candidates", () => {

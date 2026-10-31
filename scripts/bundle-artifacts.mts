@@ -9,6 +9,19 @@ export type BundleCompression = keyof typeof bundleFormats;
 const isCompression = (value: unknown): value is BundleCompression =>
   typeof value === "string" && Object.hasOwn(bundleFormats, value);
 
+export function decodeBundle(contents: Uint8Array, compression: BundleCompression): Buffer {
+  switch (compression) {
+    case "brotli":
+      return zlib.brotliDecompressSync(contents);
+    case "zlib":
+      return zlib.gunzipSync(contents);
+    case "zstd":
+      if (!("zstdDecompressSync" in zlib))
+        throw new Error("Zstandard verification requires Node.js with built-in Zstandard support");
+      return zlib.zstdDecompressSync(contents);
+  }
+}
+
 export function bundleCompression(root: string) {
   const bundle = parse(readFileSync(join(root, "workbench/config.toml"), "utf8")).bundle;
   const selected = (isRecord(bundle) ? bundle.compression : undefined) ?? "brotli";

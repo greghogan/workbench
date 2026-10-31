@@ -1,10 +1,17 @@
 import { build } from "esbuild";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, mkdirSync, lstatSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { bundleOptions } from "./bundle-options.mjs";
-import { bundleArtifacts, bundleCompression, bundleFormats } from "./bundle-artifacts.mjs";
+import {
+  bundleArtifacts,
+  bundleCompression,
+  bundleFormats,
+  decodeBundle,
+  type BundleCompression,
+} from "./bundle-artifacts.mjs";
 import { bundleLicenses, noticesPath } from "./bundle-licenses.mjs";
-import { stageFile, type StagedFile } from "./file-publication.mjs";
+import { stageFile, writeAtomic, type StagedFile } from "./file-publication.mjs";
 import { combineFailures } from "./diagnostic-errors.mjs";
 
 export const compressedBundles = ["main", "skills", "package", "consumer", "bootstrap"] as const;
@@ -80,12 +87,46 @@ export function publishBundles(root: string, set: BundleSet): void {
 }
 
 export function verifyBundles(root: string, set: BundleSet): void {
-  for (const output of set.outputs)
-    if (
-      !existsSync(join(root, output.path)) ||
-      !readFileSync(join(root, output.path)).equals(Buffer.from(output.contents))
-    )
-      throw new Error(`${output.path} is stale; run pnpm run bundle:build`);
+  for (const output of set.outputs) {
+    const path = join(root, output.path);
+    if (!existsSync(path)) throw new Error(`${output.path} is stale; run pnpm run bundle:build`);
+    const actual = readFileSync(path);
+    if (actual.equals(Buffer.from(output.contents))) continue;
+    let cause: unknown;
+    if (output.kind === "payload") {
+      const format = (Object.entries(bundleFormats) as [BundleCompression, string][]).find(([, suffix]) =>
+        output.path.endsWith(`.cjs.${suffix}`),
+      )?.[0];
+      if (!format) throw new Error(`Unknown bundle payload format: ${output.path}`);
+      try {
+        const expected = decodeBundle(output.contents, format);
+        const decoded = decodeBundle(actual, format);
+        // Compression streams can differ across hosts; executed JavaScript must remain byte-identical.
+        if (decoded.equals(expected)) continue;
+        const directory = join(root, "coverage", "bundle-parity");
+        const hash = (contents: Buffer) => createHash("sha256").update(contents).digest("hex");
+        const mismatch = new Error(
+          `JavaScript differs (expected ${hash(expected)}, committed ${hash(decoded)}); diagnostic directory: ${directory}`,
+        );
+        cause = mismatch;
+        try {
+          for (const path of [join(root, "coverage"), directory]) {
+            if (!existsSync(path)) mkdirSync(path);
+            if (!lstatSync(path).isDirectory())
+              throw new Error(`Bundle diagnostic path must be a real directory: ${path}`);
+          }
+          const name = output.path.split("/").at(-1) ?? "payload";
+          writeAtomic(join(directory, name + ".expected.cjs"), expected);
+          writeAtomic(join(directory, name + ".committed.cjs"), decoded);
+        } catch (error) {
+          cause = combineFailures(mismatch, error, "Bundle JavaScript differs and diagnostics could not be retained");
+        }
+      } catch (error) {
+        cause = error;
+      }
+    }
+    throw new Error(`${output.path} is stale; run pnpm run bundle:build`, cause === undefined ? undefined : { cause });
+  }
   for (const path of set.obsolete)
     if (existsSync(join(root, path))) throw new Error(`${path} is obsolete; run pnpm run bundle:build`);
 }
