@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { coordinationFixtures } from "./fixtures/check-coordination.mjs";
+import { coordinationFixtures, processInstance } from "./fixtures/check-coordination.mjs";
 
 const { fixture, until, waiting } = coordinationFixtures();
 
@@ -59,6 +59,8 @@ test.each(["SIGTERM", "SIGKILL"] as const)(
       await until(first, () => existsSync(join(f.control, "running")), "owner command readiness");
       const pid = Number(readFileSync(join(f.control, "running"), "utf8"));
       expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
+      const original = processInstance(pid);
+      expect(original).toBeDefined();
       const second = f.start();
       await waiting(second);
       first.child.kill(signal);
@@ -66,7 +68,7 @@ test.each(["SIGTERM", "SIGKILL"] as const)(
         signal === "SIGKILL" || process.platform === "win32" ? null : 130,
       );
       await until(second, () => f.count("test") === 2, "waiting gate admission after cleanup");
-      expect(() => process.kill(pid, 0)).toThrow();
+      expect(processInstance(pid)).not.toBe(original);
       f.release();
       expect(await second.closed, second.output()).toBe(0);
       expect(f.count("secret")).toBe(1);

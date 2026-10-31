@@ -286,26 +286,60 @@ test.skipIf(process.platform !== "win32")("consumer PATH retains the Go race det
   expect(checkHostPath(source, ["typescript"]).split(delimiter)).not.toContain(compiler);
 });
 
-test.skipIf(process.platform !== "darwin")("consumer SDK installation retains its declared Homebrew manager", () => {
-  const { base } = fixture(["php"]),
-    manager = join(base, "manager");
-  mkdirSync(manager);
-  writeFileSync(join(manager, "brew"), "#!/bin/sh\nprintf 'fixture Homebrew\\n'\n", { mode: 0o755 });
-  const env = consumerEnvironment(
-    {
-      temporary: base,
-      directory: distribution,
-      launcher: "unused",
-      prefix: join(base, "npm"),
-      languages: ["php"],
-      environment: { ...process.env, PATH: manager },
-    },
-    { tools: join(base, "cache"), builds: join(base, "build") },
+test.skipIf(process.platform !== "win32")("outer checks retain the declared Go host SDK for nested consumers", () => {
+  const { base, root } = fixture(["typescript"]),
+    compiler = join(base, "compiler");
+  mkdirSync(compiler);
+  writeFileSync(join(compiler, "gcc.exe"), "fixture");
+  mkdirSync(join(root, "go"));
+  writeFileSync(
+    join(root, "workbench/projects.toml"),
+    stringify({
+      project: [{ id: "fixture", path: "." }],
+      language_root: [
+        { language: "typescript", path: "." },
+        { language: "go", path: "go" },
+      ],
+    }),
   );
-  const result = spawnSync("brew", ["--version"], { env, encoding: "utf8" });
-  expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toBe("fixture Homebrew\n");
+  const env = checkBaseEnvironment(root, root, { ...process.env, PATH: compiler });
+  expect(checkHostPath(env, ["go"]).split(delimiter)).toContain(compiler);
 });
+
+test.skipIf(process.platform !== "darwin")(
+  "nested SDK installation retains the project's declared Homebrew manager",
+  () => {
+    const { base, root } = fixture(["typescript"]),
+      manager = join(base, "manager");
+    mkdirSync(join(root, "php"));
+    writeFileSync(
+      join(root, "workbench/projects.toml"),
+      stringify({
+        project: [{ id: "fixture", path: "." }],
+        language_root: [
+          { language: "typescript", path: "." },
+          { language: "php", path: "php" },
+        ],
+      }),
+    );
+    mkdirSync(manager);
+    writeFileSync(join(manager, "brew"), "#!/bin/sh\nprintf 'fixture Homebrew\\n'\n", { mode: 0o755 });
+    const env = consumerEnvironment(
+      {
+        temporary: base,
+        directory: distribution,
+        launcher: "unused",
+        prefix: join(base, "npm"),
+        languages: ["php"],
+        environment: checkBaseEnvironment(root, root, { ...process.env, PATH: manager }),
+      },
+      { tools: join(base, "cache"), builds: join(base, "build") },
+    );
+    const result = spawnSync("brew", ["--version"], { env, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe("fixture Homebrew\n");
+  },
+);
 
 test.skipIf(process.platform !== "win32")(
   "Git hooks and callers select the same Windows Git and temporary paths",

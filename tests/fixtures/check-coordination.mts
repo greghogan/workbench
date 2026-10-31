@@ -20,11 +20,42 @@ import { waitForCondition } from "./coordination.mjs";
 
 const distribution = resolve(import.meta.dirname, "../..");
 
+/** Identify the original Windows process, even if its numeric PID is subsequently reused. */
+export function processInstance(pid: number): string | undefined {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error("Invalid process identity");
+  if (process.platform !== "win32") {
+    try {
+      process.kill(pid, 0);
+      return String(pid);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+      throw error;
+    }
+  }
+  const result = spawnSync(
+    "powershell.exe",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `$observed = Get-Process -Id ${String(pid)} -ErrorAction SilentlyContinue; if ($null -ne $observed) { try { $observed.StartTime.ToUniversalTime().Ticks.ToString() } catch { if (-not $observed.HasExited) { throw } } }`,
+    ],
+    { encoding: "utf8", windowsHide: true },
+  );
+  if (result.error || result.status !== 0)
+    throw new Error("Could not inspect process identity", { cause: result.error ?? result.stderr });
+  const identity = result.stdout.trim();
+  if (identity && !/^\d+$/.test(identity)) throw new Error("Invalid process start time");
+  return identity || undefined;
+}
+
 export function coordinationFixtures() {
   const temporary: string[] = [];
   afterEach(() => {
     vi.unstubAllEnvs();
-    for (const base of temporary.splice(0)) rmSync(base, { recursive: true, force: true });
+    for (const base of temporary.splice(0))
+      rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
   async function fixture(options: { cpus?: number } = {}) {
     const base = realpathSync(mkdtempSync(join(tmpdir(), "workbench-gate-coordination-")));

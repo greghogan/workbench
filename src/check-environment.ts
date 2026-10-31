@@ -225,6 +225,8 @@ export function checkBaseEnvironment(
   source: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const languages = checkLanguages(root, directory);
+  // Integration checks can install SDKs for other roots declared by this project.
+  const hostLanguages = readLanguageRoots(root).map((entry) => entry.language);
   const requested = readConfig(root).checks?.pass_environment ?? [];
   const names = new Set([...platformNames, ...contextNames, ...declaredCheckEnvironment(root, languages)]);
   const count = value(source, "GIT_CONFIG_COUNT");
@@ -252,7 +254,7 @@ export function checkBaseEnvironment(
     env,
     requested.includes("PATH")
       ? { PATH: value(source, "PATH") ?? "" }
-      : hostEnvironment(source, nativeHostRequirements(languages).commands),
+      : hostEnvironment(source, nativeHostRequirements(hostLanguages).commands),
   );
   return env;
 }
