@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { copySourceCheckout } from "../scripts/source-checkout.mjs";
 import { waitForCondition } from "./fixtures/coordination.mjs";
 
@@ -83,6 +83,43 @@ while(!existsSync(join(directory,'stop'))) {
   } finally {
     writeFileSync(join(directory, "stop"), "stop");
     await closed;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Git checkout keeps canonical project text while preserving exact citation and binary bytes", () => {
+  const directory = mkdtempSync(join(tmpdir(), "workbench-checkout-bytes-"));
+  const root = join(directory, "source"),
+    output = join(directory, "checkout");
+  mkdirSync(root);
+  mkdirSync(output);
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith("GIT_")) Reflect.deleteProperty(env, key);
+  env.GIT_CONFIG_GLOBAL = devNull;
+  env.GIT_CONFIG_NOSYSTEM = "1";
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "core.autocrlf=true", "-c", "core.eol=crlf", ...args], {
+      cwd: root,
+      env,
+      stdio: "pipe",
+    });
+  const citations = ["workbench/citations/CIT-00/source.txt", "library/citations/CIT-00/source.txt"],
+    binary = Buffer.from([0, 10, 13, 255]);
+  try {
+    writeFileSync(join(root, ".gitattributes"), readFileSync(join(import.meta.dirname, "../.gitattributes")));
+    for (const citation of citations) mkdirSync(join(root, citation, ".."), { recursive: true });
+    mkdirSync(join(root, "bundle"));
+    writeFileSync(join(root, ".gitignore"), "# generated tooling\n/scripts/example.mjs\n");
+    for (const citation of citations) writeFileSync(join(root, citation), "exact\r\npublisher bytes\r\n");
+    writeFileSync(join(root, "bundle/example.br"), binary);
+    git("init", "--quiet");
+    git("add", ".");
+    git("checkout-index", "--all", `--prefix=${output.replaceAll("\\", "/")}/`);
+    expect(readFileSync(join(output, ".gitignore"), "utf8")).toBe("# generated tooling\n/scripts/example.mjs\n");
+    for (const citation of citations)
+      expect(readFileSync(join(output, citation), "utf8")).toBe("exact\r\npublisher bytes\r\n");
+    expect(readFileSync(join(output, "bundle/example.br"))).toEqual(binary);
+  } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
