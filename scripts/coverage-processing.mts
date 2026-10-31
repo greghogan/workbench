@@ -4,8 +4,8 @@ import convert from "ast-v8-to-istanbul";
 import { mergeProcessCovs } from "@bcoe/v8-coverage";
 import coverage from "istanbul-lib-coverage";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Profiler } from "node:inspector";
 import type { FileCoverageData } from "istanbul-lib-coverage";
 import { readNodeCoverageReports, type CoverageSourceMap, type NodeCoverageReport } from "./node-coverage-reports.mjs";
@@ -31,16 +31,24 @@ export function recordExecution(measured: ExecutionAccumulator, script: NodeCove
   if (measured.executions.length === 32) measured.executions = [mergeProcessCovs(measured.executions)];
 }
 
+function coverageSourcePaths(map: CoverageSourceMap, url: string): string[] {
+  const directory = dirname(fileURLToPath(url));
+  const base = map.sourceRoot?.startsWith("file:")
+    ? fileURLToPath(map.sourceRoot)
+    : resolve(directory, map.sourceRoot ?? "");
+  return map.sources.map((source) =>
+    source?.startsWith("file:") ? fileURLToPath(source) : resolve(base, source ?? ""),
+  );
+}
+
 export const mapIdentity = (map: CoverageSourceMap, url: string) =>
   JSON.stringify(
     map.file ??
-      map.sources.map((source) => {
-        const directory = dirname(fileURLToPath(url));
-        const path = source?.startsWith("file:")
-          ? fileURLToPath(source)
-          : resolve(directory, map.sourceRoot ?? "", source ?? "");
-        return relative(directory, path).split(sep).join("/");
-      }),
+      coverageSourcePaths(map, url).map((path) =>
+        relative(dirname(fileURLToPath(url)), path)
+          .split(sep)
+          .join("/"),
+      ),
   );
 export interface ScannedCoverage {
   bundles: { url: string; executions: MeasuredScript["executions"] }[];
@@ -131,16 +139,25 @@ export async function convertCoverageScript(bundle: MeasuredScript): Promise<Rec
   const merged = mergeProcessCovs(bundle.executions);
   if (!merged.result.length) return {};
   const sourceMap = bundle.map ? { ...bundle.map } : undefined;
-  if (sourceMap?.sourcesContent)
-    sourceMap.sourcesContent = sourceMap.sourcesContent.map((contents, index) => {
-      const source = sourceMap.sources[index] ?? "";
-      const path = source.startsWith("file:")
-        ? fileURLToPath(source)
-        : resolve(dirname(fileURLToPath(bundle.url)), sourceMap.sourceRoot ?? "", source);
-      // Dependencies are already outside `included`. Their maps still route positions, but their text
-      // must not enter project source filtering (upstream maps can contain reversed vendor ranges).
-      return bundle.included.has(path) ? contents : null;
+  if (sourceMap) {
+    const paths = coverageSourcePaths(sourceMap, bundle.url);
+    // Keep project sources relative so source-text filters can find them. Cross-drive sources need
+    // file URLs: a bare Windows drive is otherwise interpreted as a URI scheme by the mapper.
+    sourceMap.sources = sourceMap.sources.map((source, index) => {
+      if (!source) return source;
+      const path = required(paths[index], "Missing coverage source path");
+      const local = relative(dirname(fileURLToPath(bundle.url)), path);
+      return isAbsolute(local) ? pathToFileURL(path).href : "./" + local.split(sep).join("/");
     });
+    sourceMap.sourceRoot = "";
+    if (sourceMap.sourcesContent)
+      sourceMap.sourcesContent = sourceMap.sourcesContent.map((contents, index) => {
+        const path = paths[index];
+        // Dependencies are already outside `included`. Their maps still route positions, but their text
+        // must not enter project source filtering (upstream maps can contain reversed vendor ranges).
+        return path && bundle.included.has(path) ? contents : null;
+      });
+  }
   const converted = await convert({
     code: bundle.code,
     ast: parse(bundle.code, { ecmaVersion: "latest", locations: true, sourceType: bundle.sourceType }),

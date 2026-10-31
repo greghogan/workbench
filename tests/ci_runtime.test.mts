@@ -16,7 +16,7 @@ const repository = resolve(import.meta.dirname, "..");
 const lockOwner = {
   assertIdle: () => undefined,
   beforeSpawn: () => undefined,
-  spawned: () => undefined,
+  spawned: () => () => undefined,
   release: () => undefined,
 };
 beforeEach(() => {

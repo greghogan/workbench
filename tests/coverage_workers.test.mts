@@ -14,9 +14,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, expect, test, vi } from "vitest";
 import { subprocessCoverage } from "../scripts/test-coverage.mjs";
 import { coverageJobs } from "../scripts/coverage-workers.mjs";
+import { convertCoverageScript, CoverageSources, type MeasuredScript } from "../scripts/coverage-processing.mjs";
 import { InvalidNodeCoverageReport } from "../scripts/node-coverage-reports.mjs";
 const temporary: string[] = [];
 afterEach(() => {
@@ -154,6 +156,63 @@ test.each([
     await Promise.all(workers.map((worker) => worker.terminate()));
     await Promise.all(exits);
   }
+});
+
+test.each([
+  { source: "D:/source.ts", rooted: false },
+  { source: "D:/space dir/source.ts", rooted: false },
+  { source: "../src/source.ts", rooted: false },
+  { source: "file:///D:/source.ts", rooted: false },
+  { source: "source.ts", rooted: true },
+])("coverage preserves source identity for $source (file URL source root: $rooted)", async ({ source, rooted }) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-coverage-source-")));
+  temporary.push(root);
+  const code = "const answer = 42;\n";
+  const url = pathToFileURL(join(root, "bundle.cjs")).href;
+  const sourceRoot = rooted ? pathToFileURL(join(root, "src")).href + "/" : undefined;
+  const path = source.startsWith("file:")
+    ? fileURLToPath(source)
+    : resolve(sourceRoot ? fileURLToPath(sourceRoot) : root, source);
+  const bundle: MeasuredScript = {
+    code,
+    url,
+    sourceType: "script",
+    included: new Set([path]),
+    map: {
+      version: 3,
+      sources: [source],
+      sourcesContent: [code],
+      names: [],
+      mappings: "AAAA",
+      ...(sourceRoot ? { sourceRoot } : {}),
+    },
+    executions: [
+      {
+        result: [
+          {
+            scriptId: "1",
+            url,
+            functions: [
+              {
+                functionName: "",
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const map = bundle.map;
+  assert.ok(map);
+  const candidate = { url, map };
+  expect(
+    new CoverageSources([candidate]).match(url, { ...map, sourceRoot: "", sources: [pathToFileURL(path).href] }),
+  ).toBe(candidate);
+  const result = await convertCoverageScript(bundle);
+  expect(Object.keys(result)).toEqual([path]);
+  expect(Object.values(result[path]?.s ?? {})).toContain(1);
 });
 
 test("bundled rendering dependencies cannot prevent measuring executed and unused project TSX", async () => {

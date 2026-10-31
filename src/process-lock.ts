@@ -15,7 +15,8 @@ interface ProcessOwner {
 export interface ProcessLock {
   /** Persist uncertainty before spawning: a crash in the registration gap must not release active work. */
   beforeSpawn(): void;
-  spawned(pid: number | undefined, group: boolean): void;
+  /** Return a completion receipt to call after this child closes and its owned group drains. */
+  spawned(pid: number | undefined, group: boolean): () => void;
   assertIdle(): void;
   release(): void;
 }
@@ -140,12 +141,23 @@ export function acquireProcessLock(directory: string, tracking = false): Process
       save();
     },
     spawned(pid, group) {
+      let registered: ProcessOwner["children"][number] | undefined;
       if (pid !== undefined) {
         if (!validPid(pid)) throw new Error("Invalid child process identity");
-        owner.children.push({ pid, group });
+        registered = { pid, group };
+        owner.children.push(registered);
       }
       owner.launching = false;
       save();
+      let completed = false;
+      return () => {
+        if (completed || !registered) return;
+        if (registered.group && (process.platform === "win32" || !processGone(-registered.pid))) return;
+        // Object identity distinguishes this closed handle from another child reusing its PID.
+        owner.children = owner.children.filter((child) => child !== registered);
+        save();
+        completed = true;
+      };
     },
     release() {
       assertIdle();

@@ -54,18 +54,30 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
   function collectCMakeFailureLogs(directory: string) {
     const detection = join(directory, "vcpkg_buildtrees", "detect_compiler");
     try {
-      if (!existsSync(detection)) return;
       const output = join(root, "coverage", "cmake", relative(builds, directory).replaceAll(sep, "-"));
-      for (const path of files(detection).filter((path: string) => path.endsWith(".log"))) {
+      const compilerLogs = existsSync(detection)
+        ? files(detection).filter((path) => path.endsWith(".log") && lstatSync(path).isFile())
+        : [];
+      for (const path of compilerLogs) {
         const destination = join(output, relative(detection, path));
         mkdirSync(join(destination, ".."), { recursive: true });
         copyFileSync(path, destination);
         if (/-(out|err)\.log$/.test(path))
           console.error(`${path}\n${readFileSync(path, "utf8").slice(-8192).split(/\r?\n/).slice(-40).join("\n")}`);
       }
-      console.error(`Compiler detection logs: ${output}`);
+      // Compiler detection can succeed before a dependency fails. Preserve the manifest's actual error,
+      // and print it last so bounded terminal excerpts retain the cause rather than compiler warnings.
+      const manifest = join(directory, "vcpkg-manifest-install.log");
+      if (existsSync(manifest) && lstatSync(manifest).isFile()) {
+        mkdirSync(output, { recursive: true });
+        copyFileSync(manifest, join(output, "vcpkg-manifest-install.log"));
+        console.error(
+          `${manifest}\n${readFileSync(manifest, "utf8").slice(-8192).split(/\r?\n/).slice(-40).join("\n")}`,
+        );
+      }
+      if (compilerLogs.length || existsSync(manifest)) console.error(`CMake failure logs: ${output}`);
     } catch (error) {
-      console.error(`Could not retain compiler detection logs: ${String(error)}`);
+      console.error(`Could not retain CMake failure logs: ${String(error)}`);
     }
   }
   function files(directory: string): string[] {

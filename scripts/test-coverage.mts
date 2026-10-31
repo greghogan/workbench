@@ -131,7 +131,7 @@ export async function subprocessCoverage(
             throw new Error(`${sourcePath}: emitted source differs from the checkout`);
           included.add(sourcePath);
         }
-        // Relative URLs avoid treating Windows drive letters as URI schemes.
+        // Same-drive paths remain relative; conversion uses file URLs only across Windows drives.
         return relative(dirname(path), sourcePath).split(sep).join("/");
       }),
     };

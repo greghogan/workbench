@@ -92,6 +92,7 @@ export class CheckCancellation {
         stdio: foreground ? "inherit" : [inheritInput ? "inherit" : "ignore", "pipe", "pipe"],
       });
       let failure: Error | undefined;
+      let completed: (() => void) | undefined;
       const timers: ReturnType<typeof setTimeout>[] = [];
       const foregroundPids = new Set<number>();
       const stop = (signal: NodeJS.Signals) => {
@@ -175,6 +176,7 @@ export class CheckCancellation {
               }
             }
           }
+          completed?.();
           if (failure) throw failure;
           if (this.cancelled) throw new ChecksCancelled(this.subject);
           const problem = processFailure(command, { pid: child.pid ?? 0, status: code, signal });
@@ -190,7 +192,7 @@ export class CheckCancellation {
       this.controller.signal.addEventListener("abort", interrupt, { once: true });
       if (this.cancelled) interrupt();
       try {
-        owner?.spawned(child.pid, process.platform !== "win32" && !foreground);
+        completed = owner?.spawned(child.pid, process.platform !== "win32" && !foreground);
       } catch (error) {
         failure ??= error instanceof Error ? error : new Error(String(error));
         this.cancel();

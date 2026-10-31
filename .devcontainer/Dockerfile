@@ -11,6 +11,7 @@ RUN sed -i -E 's|^URIs:.*|URIs: https://snapshot.ubuntu.com/ubuntu/20261029T0000
        libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 libexpat1 libxcb1 libxkbcommon0 libudev1 libasound2t64 libatspi2.0-0t64 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 ENV WORKBENCH_DEVCONTAINER=1 WORKBENCH_PREPARED=1
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV XDG_CACHE_HOME=/opt/workbench/cache/xdg XDG_STATE_HOME=/opt/workbench/state
 ENV WORKBENCH_CACHE_HOME=/opt/workbench/cache WORKBENCH_DATA_HOME=/opt/workbench/data WORKBENCH_STORAGE_ROOT=/opt/workbench/cache WORKBENCH_STORAGE_EXTERNAL=true \
     UV_CACHE_DIR=/opt/workbench/cache/uv UV_PYTHON_INSTALL_DIR=/opt/workbench/cache/uv-python/python \

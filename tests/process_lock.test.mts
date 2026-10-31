@@ -141,3 +141,47 @@ test("release preserves an owned command that has not exited", () => {
   }).toThrow("Owned processes may still be active");
   expect(existsSync(f.lock)).toBe(true);
 });
+
+test("completion receipts distinguish closed children from a reused process identity", () => {
+  const f = fixture();
+  const owner = required(acquireProcessLock(f.lock, true), "owner");
+  owner.beforeSpawn();
+  const first = owner.spawned(process.pid, false);
+  owner.beforeSpawn();
+  const second = owner.spawned(process.pid, false);
+  first();
+  first();
+  expect(() => {
+    owner.release();
+  }).toThrow("Owned processes may still be active");
+  second();
+  owner.release();
+  expect(existsSync(f.lock)).toBe(false);
+});
+
+test.skipIf(process.platform === "win32")("a completion receipt preserves a surviving command group", async () => {
+  const f = fixture();
+  const owner = required(acquireProcessLock(f.lock, true), "owner");
+  owner.beforeSpawn();
+  const child = spawn(process.execPath, ["-e", "process.send('ready');setInterval(()=>{},1000)"], {
+    detached: true,
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+  });
+  const closed = once(child, "close");
+  const complete = owner.spawned(child.pid, true);
+  try {
+    await once(child, "message");
+    complete();
+    expect(() => {
+      owner.release();
+    }).toThrow("Owned processes may still be active");
+    child.kill("SIGKILL");
+    await closed;
+    complete();
+    owner.release();
+    expect(existsSync(f.lock)).toBe(false);
+  } finally {
+    child.kill("SIGKILL");
+    await closed;
+  }
+});

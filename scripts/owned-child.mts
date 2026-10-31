@@ -113,8 +113,9 @@ export async function runOwnedChild(
       resolve({ pid: child.pid ?? 0, status, signal });
     });
   });
+  let completed: (() => void) | undefined;
   try {
-    options.owner?.spawned(child.pid, process.platform !== "win32");
+    completed = options.owner?.spawned(child.pid, process.platform !== "win32");
   } catch (error) {
     stop("SIGKILL");
     await closed;
@@ -156,6 +157,14 @@ export async function runOwnedChild(
         }
         await delay(10);
       }
+    }
+    try {
+      completed?.();
+    } catch (cause) {
+      const ownership = cause instanceof Error ? cause : new Error("Child ownership update failed", { cause });
+      failure = failure
+        ? new AggregateError([failure, ownership], "Child execution and ownership update failed", { cause: failure })
+        : ownership;
     }
     return { ...outcome, ...(failure ? { error: failure } : {}) };
   } finally {

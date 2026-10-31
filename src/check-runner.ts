@@ -212,6 +212,7 @@ export async function runCheckGroups(
       delete selection.profile;
       const cpus = allocation.cpuLimit;
       await new Promise<void>((resolve) => {
+        let completed: (() => void) | undefined;
         owner.beforeSpawn();
         child = spawn(
           process.execPath,
@@ -316,10 +317,18 @@ export async function runCheckGroups(
             });
           else if (!control.complete && !cancellation.cancelled)
             error ??= new Error(`${label} exited without completing its check control sequence`);
+          try {
+            completed?.();
+          } catch (failure) {
+            const ownership = failure instanceof Error ? failure : new Error(String(failure));
+            error = error
+              ? new AggregateError([error, ownership], "Check execution and ownership update failed", { cause: error })
+              : ownership;
+          }
           resolve();
         });
         try {
-          owner.spawned(child.pid, false);
+          completed = owner.spawned(child.pid, false);
         } catch (failure) {
           error ??= failure instanceof Error ? failure : new Error(String(failure));
           cancellation.cancel();
