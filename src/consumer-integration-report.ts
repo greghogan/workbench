@@ -1,7 +1,35 @@
 import { record, records, string, strings } from "../scripts/values.mjs";
 import { isCompilerFamily, type CompilerFamily } from "../scripts/compiler-catalog.mjs";
 import { writeAtomic } from "../scripts/file-publication.mjs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { ConsumerCommandResult, IntegrationState } from "./consumer-integration-runner.js";
+
+/** Capture owned diagnostics before scratch cleanup, including unexpected failed checks. */
+export function retainConsumerDiagnostics(storage: string, output: string): void {
+  const copy = (source: string, destination: string, accept: (name: string) => boolean) => {
+    if (!existsSync(source)) return;
+    if (!lstatSync(source).isDirectory()) throw new Error(`Consumer diagnostic source must be a directory: ${source}`);
+    const visit = (directory: string, target: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name),
+          retained = join(target, entry.name);
+        if (entry.isDirectory()) visit(path, retained);
+        else if (entry.isFile() && accept(entry.name)) {
+          mkdirSync(dirname(retained), { recursive: true });
+          copyFileSync(path, retained);
+        }
+      }
+    };
+    visit(source, destination);
+  };
+  copy(join(storage, "check-logs"), join(output, "check-logs"), () => true);
+  copy(
+    join(storage, "builds"),
+    join(output, "native-diagnostics"),
+    (name) => name.endsWith(".log") || name === "CMakeConfigureLog.yaml",
+  );
+}
 
 export interface ConsumerCase {
   name: string;

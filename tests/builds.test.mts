@@ -11,6 +11,7 @@ import {
 import { dirname, join, relative, resolve, sep, win32 } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
+import { vcpkgTripletName } from "../src/vcpkg.ts";
 import {
   assertBuildOutput,
   buildEnvironment,
@@ -30,24 +31,28 @@ test("default Windows storage leaves room for MSVC compiler-generated object pat
     ["yyjson", "testCCompiler.c.obj"],
     ["fmt", "testCXXCompiler.cxx.obj"],
   ] as const)
-    for (const variant of ["debug", "asan"]) {
-      const path = win32.join(
-        "C:\\Users\\Developer\\AppData\\Local\\workbench\\cache",
-        ...namespace,
-        `native-${"a".repeat(24)}`,
-        variant,
-        "bt",
-        port,
-        `x64-mvsc${variant === "asan" ? "-asan" : ""}-rel`,
-        "CMakeFiles",
-        "CMakeScratch",
-        "TryCompile-abcdef",
-        "CMakeFiles",
-        "cmTC_abcd.dir",
-        object,
-      );
-      expect(path.length, path).toBeLessThan(260);
-    }
+    for (const storage of [
+      "C:\\Users\\runneradmin\\AppData\\Local\\workbench\\cache",
+      "C:\\Users\\runneradmin\\AppData\\Local\\workbench\\cache\\ci-abcdef",
+    ])
+      for (const variant of ["debug", "release", "lto-off", "lto-full", "a", "p"]) {
+        const path = win32.join(
+          storage,
+          ...namespace,
+          `native-${"a".repeat(24)}`,
+          variant,
+          "bt",
+          port,
+          `${vcpkgTripletName({ architecture: "x64", family: "mvsc", system: "windows", sanitized: variant === "a" || variant === "p" })}-rel`,
+          "CMakeFiles",
+          "CMakeScratch",
+          "TryCompile-abcdef",
+          "CMakeFiles",
+          "cmTC_abcde.dir",
+          object,
+        );
+        expect(path.length, path).toBeLessThan(260);
+      }
 });
 afterEach(() => {
   vi.unstubAllEnvs();

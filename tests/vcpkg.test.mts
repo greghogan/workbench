@@ -130,7 +130,7 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
     const sanitized = join(paths.directory, "sanitized");
     prepareVcpkg(root, sanitized, "clang", true);
     expect(readFileSync(join(sanitized, "workbench-compiler.cmake"), "utf8")).toContain("-fsanitize=address");
-    expect(readFileSync(join(sanitized, "workbench-vcpkg.cmake"), "utf8")).toContain("x64-clang-asan");
+    expect(readFileSync(join(sanitized, "workbench-vcpkg.cmake"), "utf8")).toContain("x64-clang-a");
   }
   const gccBuild = join(paths.directory, "gcc");
   prepareVcpkg(root, gccBuild, "gcc");

@@ -90,8 +90,6 @@ export async function exerciseConsumerProfile(
             checks.length > 0 && checks.every((entry) => entry.status === "passed"),
             `${name}: incomplete check gate`,
           );
-        for (const [index, run] of result.runs.entries())
-          if (run.logs) cpSync(run.logs, join(output, `${name}-logs-${String(index)}`), { recursive: true });
       };
       for (const language of languages) {
         const project = join(installed.temporary, `journey-${language} space 雪`),

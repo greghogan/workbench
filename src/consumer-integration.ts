@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { prepareWorkbenchPackage } from "./package.js";
 import { verifyWorkbenchPackage } from "./package-verify.js";
@@ -8,7 +8,7 @@ import { userDirectory } from "./storage.js";
 import { describeError } from "./diagnostics.js";
 import { consumerFaults } from "./consumer-integration-fixtures.js";
 import { exerciseConsumerProfile } from "./consumer-integration-profile.js";
-import { ConsumerReportRecorder } from "./consumer-integration-report.js";
+import { ConsumerReportRecorder, retainConsumerDiagnostics } from "./consumer-integration-report.js";
 import { runConsumerSuite } from "./consumer-integration-scenarios.js";
 import { exerciseConsumerInstallations } from "./consumer-integration-installation.js";
 import { exerciseSourceCheckout } from "./consumer-source.js";
@@ -157,6 +157,14 @@ export async function runConsumerIntegration(options: ConsumerIntegrationOptions
   } finally {
     report.phase = "cleanup";
     try {
+      if (scratch) {
+        scratch.owner.assertIdle();
+        retainConsumerDiagnostics(scratch.directory, output);
+      }
+    } catch (error) {
+      report.cleanupErrors.push(describeError(error));
+    }
+    try {
       scratch?.release();
     } catch (error) {
       report.cleanupErrors.push(describeError(error));
@@ -173,6 +181,8 @@ export async function runConsumerIntegration(options: ConsumerIntegrationOptions
     } catch (error) {
       report.cleanupErrors.push(describeError(error));
     }
+    if (!report.success && existsSync(join(output, "check-logs")))
+      console.error(`Retained consumer check logs: ${join(output, "check-logs")}`);
     console.log(`Consumer integration results: ${join(output, "results.json")}`);
   }
   if (primary || report.cleanupErrors.length)

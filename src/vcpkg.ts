@@ -14,6 +14,23 @@ function cmake(value: string): string {
   return `[=[${value.replaceAll("\\", "/")}]=]`;
 }
 
+/** Keep generated Windows compiler paths below the Win32 path limit. */
+export function vcpkgTripletName({
+  architecture,
+  family,
+  system,
+  sanitized,
+}: {
+  architecture: string;
+  family: CompilerFamily;
+  system: string;
+  sanitized: boolean;
+}): string {
+  return system === "windows"
+    ? `${architecture}-${family === "mvsc" ? "vc" : family}${sanitized ? "-a" : ""}`
+    : `${architecture}-workbench-${family}${sanitized ? "-asan" : ""}-${system}`;
+}
+
 /** The checkout pins the bootstrap and recipes; manifests independently pin registry resolution. */
 export function prepareVcpkg(
   directory: string,
@@ -156,10 +173,7 @@ export function prepareVcpkg(
       "",
     ].join("\n"),
   );
-  const triplet =
-    system === "windows"
-      ? `${architecture}-${family}${sanitizeDependencies ? "-asan" : ""}`
-      : `${architecture}-workbench-${family}${sanitizeDependencies ? "-asan" : ""}-${system}`;
+  const triplet = vcpkgTripletName({ architecture, family, system, sanitized: sanitizeDependencies });
   const systemName = ({ linux: "Linux", osx: "Darwin", windows: "" } as Record<string, string>)[system];
   writeFileSync(
     join(build, `${triplet}.cmake`),

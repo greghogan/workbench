@@ -33,6 +33,7 @@ starter = [
   "tests/cli.cmake",
   "tests/count_test.c",
   "tests/count_json_test.c",
+  "tests/json_failures.cmake",
   "scripts/check.mjs",
   "scripts/release-verify.mjs",
   "workbench/quality.json",
