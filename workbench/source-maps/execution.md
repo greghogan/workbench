@@ -2,6 +2,8 @@
 
 Resolve configured work, select tools and environments, and coordinate isolated CI.
 
+- `.github/workflows/msvc-probe.yml`: Rehearse the configured C/C++ MSVC targets on a disposable diagnostic branch.
+
 - `src/consumer-integration.ts`, `src/consumer-integration-fixtures.ts`, `src/consumer-integration-runner.ts`: Exercise
   installed consuming projects, behavioral faults, adoption, hooks, concurrency and offline recovery with isolated
   state, verified shared caches and retained command evidence.

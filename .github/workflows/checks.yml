@@ -4,7 +4,7 @@ name: Checks
 on:
   push:
     # Publication branches select a separate operation on a revision whose Checks already passed.
-    branches-ignore: ["ci/publication-verification-**"]
+    branches-ignore: ["ci/publication-verification-**", "ci/msvc-probe-20261031"]
   pull_request:
 
   workflow_dispatch:
