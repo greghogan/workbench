@@ -1,3 +1,5 @@
+import { emitCheckDetail } from "./check-detail-data.mjs";
+import { clipped } from "./diagnostic-text.mjs";
 import { required, record, records } from "./values.mjs";
 import {
   type Summary,
@@ -131,23 +133,32 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const root = process.cwd();
   const repository = process.env.WORKBENCH_PROJECT_ROOT ?? root;
   const failed = Number(process.argv[2] ?? 0) !== 0;
-  const summary = readCoverageSummary(root, repository, process.argv[3] ? Number(process.argv[3]) : undefined);
-  if (summary) {
-    mkdirSync(join(root, "coverage"), { recursive: true });
-    reportSummaryChange(summary, root, join(root, "coverage/coverage-summary.json"), {
-      repository,
-      ...(process.argv.includes("--no-job-summary") ? { jobSummary: "" } : {}),
-      writeSummary: !failed,
-      notice: failed ? "Coverage checks failed; these results may be partial." : undefined,
-    });
-  } else {
-    const { emitCheckDetail } = await import("./check-detail-data.mjs");
+  try {
+    const summary = readCoverageSummary(root, repository, process.argv[3] ? Number(process.argv[3]) : undefined);
+    if (summary) {
+      mkdirSync(join(root, "coverage"), { recursive: true });
+      reportSummaryChange(summary, root, join(root, "coverage/coverage-summary.json"), {
+        repository,
+        ...(process.argv.includes("--no-job-summary") ? { jobSummary: "" } : {}),
+        writeSummary: !failed,
+        notice: failed ? "Coverage checks failed; these results may be partial." : undefined,
+      });
+    } else {
+      emitCheckDetail({
+        version: 1,
+        kind: "coverage-unavailable",
+        root,
+        reason: "the configured command produced no fresh supported coverage report.",
+      });
+      console.log("Coverage change unavailable: the configured command produced no fresh supported coverage report.");
+    }
+  } catch (error) {
     emitCheckDetail({
       version: 1,
       kind: "coverage-unavailable",
       root,
-      reason: "the configured command produced no fresh supported coverage report.",
+      reason: `coverage summary failed: ${clipped(error instanceof Error ? error.message : "invalid coverage report", 2048).text}`,
     });
-    console.log("Coverage change unavailable: the configured command produced no fresh supported coverage report.");
+    throw error;
   }
 }

@@ -1,10 +1,12 @@
 import { required } from "../src/invariants.ts";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { test } from "vitest";
 import { readCoverageSummary } from "../scripts/check-coverage-summary.mjs";
+import { checkDetailPrefix } from "../scripts/check-detail-data.mjs";
 
 test("coverage boundaries resolve directory aliases, retain deleted sources, and reject symlink escapes", () => {
   const base = mkdtempSync(join(tmpdir(), "workbench-summary-alias-"));
@@ -47,6 +49,22 @@ test("coverage boundaries resolve directory aliases, retain deleted sources, and
     assert.throws(() => readCoverageSummary(alias), /coverage source outside root/);
     report("../outside/external.c");
     assert.throws(() => readCoverageSummary(root), /coverage source outside root/);
+    const result = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, "../scripts/check-coverage-summary.mjs")],
+      {
+        cwd: root,
+        env: { ...process.env, WORKBENCH_CHECK_DETAILS: "1", WORKBENCH_PROJECT_ROOT: root },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    const detail = result.stdout.split(/\r?\n/).find((line) => line.startsWith(checkDetailPrefix));
+    assert.ok(detail, "Summary failure must reach the active check's details");
+    const fields = JSON.parse(detail.slice(checkDetailPrefix.length)) as { kind: string; reason: string };
+    assert.equal(fields.kind, "coverage-unavailable");
+    assert.match(fields.reason, /coverage summary failed: coverage source outside root/);
+    assert.match(result.stderr, /coverage source outside root/);
   } finally {
     rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
