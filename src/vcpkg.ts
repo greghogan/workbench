@@ -156,7 +156,10 @@ export function prepareVcpkg(
       "",
     ].join("\n"),
   );
-  const triplet = `${architecture}-workbench-${family}${sanitizeDependencies ? "-asan" : ""}-${system}`;
+  const triplet =
+    system === "windows"
+      ? `${architecture}-${family}${sanitizeDependencies ? "-asan" : ""}`
+      : `${architecture}-workbench-${family}${sanitizeDependencies ? "-asan" : ""}-${system}`;
   const systemName = ({ linux: "Linux", osx: "Darwin", windows: "" } as Record<string, string>)[system];
   writeFileSync(
     join(build, `${triplet}.cmake`),
@@ -189,7 +192,7 @@ export function prepareVcpkg(
             "unset(_workbench_keep_env)",
           ]
         : []),
-      `set(VCPKG_INSTALL_OPTIONS ${cmake(`--x-buildtrees-root=${join(build, "vcpkg_buildtrees")}`)} ${cmake(`--x-packages-root=${join(build, "vcpkg_packages")}`)})`,
+      `set(VCPKG_INSTALL_OPTIONS ${cmake(`--x-buildtrees-root=${join(build, "bt")}`)} ${cmake(`--x-packages-root=${join(build, "vcpkg_packages")}`)})`,
       `include(${cmake(join(installation, "scripts/buildsystems/vcpkg.cmake"))})`,
       "",
     ].join("\n"),

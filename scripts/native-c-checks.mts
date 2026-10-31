@@ -52,7 +52,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     return result.stdout ?? "";
   }
   function collectCMakeFailureLogs(directory: string) {
-    const buildtrees = join(directory, "vcpkg_buildtrees");
+    const buildtrees = join(directory, "bt");
     try {
       const output = join(root, "coverage", "cmake", relative(builds, directory).replaceAll(sep, "-"));
       const portLogs = existsSync(buildtrees)
@@ -289,8 +289,8 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
       rmSync(temporary, { recursive: true, force: true });
     }
   } else if (role === "sanitizers") {
-    configure(join(builds, "sanitizers"), ["-DWORKBENCH_SANITIZERS=ON"]);
-    test(join(builds, "sanitizers"));
+    configure(join(builds, "asan"), ["-DWORKBENCH_SANITIZERS=ON"]);
+    test(join(builds, "asan"));
     configure(join(builds, "portable"), ["-DWORKBENCH_SANITIZERS=ON", "-DWORKBENCH_PORTABLE_ONLY=ON"]);
     test(join(builds, "portable"));
   } else {

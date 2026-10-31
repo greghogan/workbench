@@ -17,6 +17,7 @@ import { runCommand } from "../src/check-command.ts";
 import { checkFingerprint } from "../src/check-inputs.ts";
 import { withDevelopmentSelection } from "../src/environments.ts";
 import { configFromData } from "../src/project-configuration.ts";
+import { consumerEnvironment } from "../src/consumer-environment.ts";
 
 vi.mock("node:child_process", async (original) => {
   const actual = await original<typeof import("node:child_process")>();
@@ -283,6 +284,27 @@ test.skipIf(process.platform !== "win32")("consumer PATH retains the Go race det
   const source = { PATH: compiler };
   expect(checkHostPath(source, ["go"]).split(delimiter)).toContain(compiler);
   expect(checkHostPath(source, ["typescript"]).split(delimiter)).not.toContain(compiler);
+});
+
+test.skipIf(process.platform !== "darwin")("consumer SDK installation retains its declared Homebrew manager", () => {
+  const { base } = fixture(["php"]),
+    manager = join(base, "manager");
+  mkdirSync(manager);
+  writeFileSync(join(manager, "brew"), "#!/bin/sh\nprintf 'fixture Homebrew\\n'\n", { mode: 0o755 });
+  const env = consumerEnvironment(
+    {
+      temporary: base,
+      directory: distribution,
+      launcher: "unused",
+      prefix: join(base, "npm"),
+      languages: ["php"],
+      environment: { ...process.env, PATH: manager },
+    },
+    { tools: join(base, "cache"), builds: join(base, "build") },
+  );
+  const result = spawnSync("brew", ["--version"], { env, encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toBe("fixture Homebrew\n");
 });
 
 test.skipIf(process.platform !== "win32")(

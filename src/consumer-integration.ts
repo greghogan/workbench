@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { prepareWorkbenchPackage } from "./package.js";
 import { verifyWorkbenchPackage } from "./package-verify.js";
@@ -44,9 +43,13 @@ export async function runConsumerIntegration(options: ConsumerIntegrationOptions
   let scratch: OwnedScratch | undefined;
   let primary: unknown;
   try {
-    scratch = createOwnedScratch(tmpdir(), "workbench-consumer");
+    // Keep owned build storage shallow enough for Windows compiler-generated paths.
+    scratch = createOwnedScratch(userDirectory("cache"), "ci");
     const scope = scratch;
-    const cache = options.coldCache ? join(scope.directory, "cold-cache") : userDirectory("cache");
+    const cache = {
+      tools: options.coldCache ? join(scope.directory, "cold-cache") : userDirectory("cache"),
+      builds: scope.directory,
+    };
     let artifacts = options.artifacts;
     if (!artifacts) {
       await prepareWorkbenchPackage(source, { output: scratch.directory });

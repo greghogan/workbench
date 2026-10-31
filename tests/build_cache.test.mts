@@ -113,6 +113,32 @@ function fixture() {
   return { base, cache, projects, populate, run, json };
 }
 
+test("historic owned cache locations remain inspectable and prunable without relocating their contents", async () => {
+  const { cache } = fixture();
+  // Recorded by the pre-compact layout for this neutral fixture identity.
+  const directory = join(
+    cache,
+    "builds",
+    "0a56f683cb58a63fe1940d6f",
+    "b718f1354f7247312eca086d",
+    `native-${"a".repeat(24)}`,
+  );
+  const identity = {
+    checkout: "/historic/workbench",
+    root: "library",
+    environment: "native",
+    fingerprint: "a".repeat(24),
+  };
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, ".workbench-build.json"), JSON.stringify(identity));
+  writeFileSync(join(directory, "output"), "retained build");
+  const report = inspectBuildCache(undefined, true, undefined, cache);
+  expect(report.entries.map((entry) => entry.directory)).toContain(directory);
+  expect(readFileSync(join(directory, "output"), "utf8")).toBe("retained build");
+  await pruneBuildCache({ report, apply: true });
+  expect(existsSync(directory)).toBe(false);
+});
+
 test("automatic retention revalidates references under ownership before deleting any payload", async () => {
   const { projects } = fixture();
   const { root, paths } = required(projects[0], "cache project");
