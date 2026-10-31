@@ -43,6 +43,7 @@ jobs:
           node scripts/setup-development.mts
           node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts
       - name: Run the declared MSVC targets
+        if: ${{ !cancelled() }}
         run: |
           node --input-type=module <<'JS'
           import { execFileSync, spawnSync } from 'node:child_process';
@@ -70,6 +71,7 @@ jobs:
           if (failed) process.exitCode = 1;
           JS
       - name: Exercise packaged MSVC projects and adoption
+        if: ${{ !cancelled() }}
         run: node scripts/check-consumers.mts --language c --language cpp --compiler mvsc --output "$RUNNER_TEMP/msvc-consumers"
       - name: Retain MSVC port diagnostics
         if: always()
@@ -105,6 +107,7 @@ jobs:
           node scripts/setup-development.mts
           node node_modules/vitest/vitest.mjs run tests/build_pipeline.test.mts tests/check_environment_contract.test.mts
       - name: Exercise packaged PHP installation and project adoption
+        if: ${{ !cancelled() }}
         run: node scripts/check-consumers.mts --language php --output "$RUNNER_TEMP/php-consumers"
       - name: Retain PHP consumer diagnostics
         if: always()

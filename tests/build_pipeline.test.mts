@@ -110,7 +110,7 @@ test("bundle parity retains exact loader and license-notice verification", async
     writeFileSync(path, Buffer.concat([contents, Buffer.from("\n")]));
     expect(() => {
       verifyBundles(root, candidates);
-    }).toThrow(`${join(...relative.split("/"))} is stale`);
+    }).toThrow(`${relative} is stale`);
     writeFileSync(path, contents);
   }
 });

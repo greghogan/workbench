@@ -2,7 +2,7 @@ import { isRecord, isStringArray, required, record, string } from "./values.mjs"
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { parse } from "smol-toml";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 /** Retain the notices shipped with every package actually included by esbuild. */
 export function bundleLicenses(root: string, inputs: Iterable<string>) {
@@ -81,4 +81,4 @@ export function bundleLicenses(root: string, inputs: Iterable<string>) {
     .join("\n");
 }
 
-export const noticesPath = ["bundle", "THIRD_PARTY_NOTICES.txt"].join(sep);
+export const noticesPath = "bundle/THIRD_PARTY_NOTICES.txt";
