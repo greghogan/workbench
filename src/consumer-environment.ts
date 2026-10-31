@@ -1,8 +1,12 @@
 import { join, delimiter } from "node:path";
 import { checkHostPath } from "./check-environment.js";
 import type { VerifiedWorkbenchPackage } from "./package-verify.js";
+export interface ConsumerCache {
+  tools: string;
+  builds: string;
+}
 /** Use a clean consumer context while reusing only the explicitly selected, verified tool/download cache. */
-export function consumerEnvironment(installed: VerifiedWorkbenchPackage, cache: string): NodeJS.ProcessEnv {
+export function consumerEnvironment(installed: VerifiedWorkbenchPackage, cache: ConsumerCache): NodeJS.ProcessEnv {
   const env = { ...installed.environment };
   const budgets = Object.fromEntries(
     Object.entries(env).filter(([name]) =>
@@ -18,13 +22,13 @@ export function consumerEnvironment(installed: VerifiedWorkbenchPackage, cache: 
       Reflect.deleteProperty(env, name);
   for (const kind of ["config", "data", "state"])
     env[`WORKBENCH_${kind.toUpperCase()}_HOME`] = join(installed.temporary, kind);
-  env.WORKBENCH_CACHE_HOME = cache;
+  env.WORKBENCH_CACHE_HOME = cache.tools;
   Object.assign(env, budgets);
-  env.RUSTUP_HOME = join(cache, "consumer-toolchains", "rustup");
-  env.CARGO_HOME = join(cache, "consumer-toolchains", "cargo");
-  env.UV_PYTHON_INSTALL_DIR = join(cache, "consumer-toolchains", "python");
+  env.RUSTUP_HOME = join(cache.tools, "consumer-toolchains", "rustup");
+  env.CARGO_HOME = join(cache.tools, "consumer-toolchains", "cargo");
+  env.UV_PYTHON_INSTALL_DIR = join(cache.tools, "consumer-toolchains", "python");
   env.WORKBENCH_STORAGE_EXTERNAL = "true";
-  env.WORKBENCH_STORAGE_ROOT = join(installed.temporary, "build-cache");
+  env.WORKBENCH_STORAGE_ROOT = cache.builds;
   const hostPath = checkHostPath(env, installed.languages);
   for (const name of Object.keys(env)) if (name.toUpperCase() === "PATH") Reflect.deleteProperty(env, name);
   env.PATH = [process.platform === "win32" ? installed.prefix : join(installed.prefix, "bin"), hostPath].join(

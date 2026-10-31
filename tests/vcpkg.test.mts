@@ -101,7 +101,7 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
     expect(
       execute("git", ["config", "--local", "--get", "core.longpaths"], { cwd: installation, capture: true }).trim(),
     ).toBe("true");
-    const port = join(build, "vcpkg_buildtrees", "versioning_", "versions", "a".repeat(80), "b".repeat(80));
+    const port = join(build, "bt", "versioning_", "versions", "a".repeat(80), "b".repeat(80));
     const globalConfig = join(temporary, "empty-gitconfig");
     writeFileSync(globalConfig, "");
     mkdirSync(port, { recursive: true });
@@ -130,7 +130,7 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
     const sanitized = join(paths.directory, "sanitized");
     prepareVcpkg(root, sanitized, "clang", true);
     expect(readFileSync(join(sanitized, "workbench-compiler.cmake"), "utf8")).toContain("-fsanitize=address");
-    expect(readFileSync(join(sanitized, "workbench-vcpkg.cmake"), "utf8")).toContain("clang-asan-windows");
+    expect(readFileSync(join(sanitized, "workbench-vcpkg.cmake"), "utf8")).toContain("x64-clang-asan");
   }
   const gccBuild = join(paths.directory, "gcc");
   prepareVcpkg(root, gccBuild, "gcc");

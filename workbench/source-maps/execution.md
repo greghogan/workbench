@@ -2,7 +2,8 @@
 
 Resolve configured work, select tools and environments, and coordinate isolated CI.
 
-- `.github/workflows/msvc-probe.yml`: Rehearse the configured C/C++ MSVC targets on a disposable diagnostic branch.
+- `.github/workflows/msvc-probe.yml`: Rehearse configured MSVC targets, consumer journeys, and macOS PHP adoption on a
+  disposable diagnostic branch.
 
 - `src/consumer-integration.ts`, `src/consumer-integration-fixtures.ts`, `src/consumer-integration-runner.ts`: Exercise
   installed consuming projects, behavioral faults, adoption, hooks, concurrency and offline recovery with isolated
@@ -47,8 +48,8 @@ Resolve configured work, select tools and environments, and coordinate isolated 
 | `src/mvsc.ts`                                                                                     | selects installed Microsoft compiler and Windows SDK pins, constructs isolated SDK paths, and fingerprints serviced binaries.                                                                     |
 | `src/environments.ts`                                                                             | owns environment names, local execution preferences, and active-shell boundaries.                                                                                                                 |
 | `src/builds.ts`                                                                                   | owns build identities, generation validation, storage paths, native tool controls, locking, and scoped cleanup.                                                                                   |
-| `src/image-retention.ts` | retires superseded local prepared images only after verified activation and fresh reference checks. |
-| `src/build-retention.ts` | selects superseded owned build generations using verified replacements, activity and retention limits. |
+| `src/image-retention.ts`                                                                          | retires superseded local prepared images only after verified activation and fresh reference checks.                                                                                               |
+| `src/build-retention.ts`                                                                          | selects superseded owned build generations using verified replacements, activity and retention limits.                                                                                            |
 | `src/build-cache.ts`                                                                              | groups owned checkout caches and the virtual Tools project, then selects and confirms recursive cleanup.                                                                                          |
 | `src/cache-prune-selection.ts`                                                                    | derives the pure selection model used by the prune menu, returned deletion set, and confirmation totals.                                                                                          |
 | `src/prepared-images.ts`                                                                          | coordinates locked revalidation and explicit local or GHCR image deletion.                                                                                                                        |

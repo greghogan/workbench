@@ -65,7 +65,7 @@ export function nativeHostRequirements(languages: readonly string[], platform: N
   const goCompiler = platform === "win32" && languages.includes("go");
   const buildTools = languages.some((language) => language === "ruby" || language === "php") || goCompiler;
   return {
-    commands: goCompiler ? ["gcc"] : [],
+    commands: goCompiler ? ["gcc"] : platform === "darwin" && buildTools ? ["brew"] : [],
     packages: [
       ...new Set([
         ...(buildTools && (platform === "linux" || platform === "darwin" || platform === "win32")

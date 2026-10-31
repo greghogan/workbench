@@ -8,7 +8,7 @@ import {
   buildCheckout,
   buildOwnerKey,
   buildStorageSettings,
-  buildStorageRoots,
+  buildStorageLocations,
   readBuildGeneration,
   withBuildLock,
   buildLockDirectory,
@@ -82,20 +82,14 @@ export function inspectBuildCache(
   }
   const storageRoot = storage ?? buildStorageSettings(root).root;
   const entries: CacheEntry[] = [];
-  const selectedRoots = selected ? buildStorageRoots(storageRoot, { checkout: selected, root: "." }) : undefined;
+  const selectedRoots = selected ? buildStorageLocations(storageRoot, { checkout: selected, root: "." }) : undefined;
   for (const kind of ["builds", "dependencies", "checks"] as const) {
     const base = ownedPath(storageRoot, kind === "checks" ? "check-results" : kind);
     const checkouts = selectedRoots
-      ? [
-          dirname(
-            kind === "builds"
-              ? selectedRoots.roots
-              : kind === "checks"
-                ? selectedRoots.checkRoots
-                : selectedRoots.dependencyRoots,
-          ),
-        ]
-      : directories(base, /^[a-f0-9]{24}$/);
+      ? selectedRoots.map((roots) =>
+          dirname(kind === "builds" ? roots.roots : kind === "checks" ? roots.checkRoots : roots.dependencyRoots),
+        )
+      : directories(base, /^(?:[0-9a-z]{19}|[a-f0-9]{24})$/);
     for (const namespace of checkouts) {
       for (const languageRoot of directories(namespace)) {
         for (const directory of directories(
@@ -131,8 +125,8 @@ export function inspectBuildCache(
 
 function cacheEntry(storageRoot: string, kind: BuildCacheKind, directory: string, identity: BuildIdentity): CacheEntry {
   const lock = buildLockDirectory(identity);
-  const dependencies = managedDependencyDirectory(storageRoot, identity);
-  const blockedBy = [lock, `${directory}.lock`, ...(dependencies ? [`${dependencies}.lock`] : [])].find(existsSync);
+  const dependencies = managedDependencyDirectories(storageRoot, identity);
+  const blockedBy = [lock, `${directory}.lock`, ...dependencies.map((path) => `${path}.lock`)].find(existsSync);
   return {
     kind,
     directory,
@@ -143,11 +137,10 @@ function cacheEntry(storageRoot: string, kind: BuildCacheKind, directory: string
   };
 }
 
-function managedDependencyDirectory(storageRoot: string, identity: BuildIdentity): string | undefined {
-  if (identity.environment !== "nix" && identity.environment !== "guix") return;
-  return join(
-    buildStorageRoots(storageRoot, identity).dependencyRoots,
-    `${identity.environment}-${identity.fingerprint}`,
+function managedDependencyDirectories(storageRoot: string, identity: BuildIdentity): string[] {
+  if (identity.environment !== "nix" && identity.environment !== "guix") return [];
+  return buildStorageLocations(storageRoot, identity).map((roots) =>
+    join(roots.dependencyRoots, `${identity.environment}-${identity.fingerprint}`),
   );
 }
 
@@ -187,7 +180,7 @@ export function pruneBuildCache({
         ...new Set(
           selected.flatMap((entry) => [
             ...(entry.kind !== "builds" ? [entry.directory] : []),
-            ...[managedDependencyDirectory(report.storageRoot, entry.identity)].filter((path) => path !== undefined),
+            ...managedDependencyDirectories(report.storageRoot, entry.identity),
           ]),
         ),
       ].sort(),

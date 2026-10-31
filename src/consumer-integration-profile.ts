@@ -22,14 +22,14 @@ import type { CheckRunResult } from "./check-report.js";
 import type { ProcessLock } from "./process-lock.js";
 import type { CompilerFamily } from "../scripts/compiler-catalog.mjs";
 import type { ConsumerProfileReport, ConsumerReportRecorder } from "./consumer-integration-report.js";
-import { consumerEnvironment } from "./consumer-environment.js";
+import { consumerEnvironment, type ConsumerCache } from "./consumer-environment.js";
 import { runConsumerSuite } from "./consumer-integration-scenarios.js";
 
 export async function exerciseConsumerProfile(
   installed: VerifiedWorkbenchPackage,
   templates: string,
   options: { languages: string[]; compiler?: CompilerFamily },
-  sharedCache: string,
+  sharedCache: ConsumerCache,
   output: string,
   cancellation: CheckCancellation,
   owner: ProcessLock,

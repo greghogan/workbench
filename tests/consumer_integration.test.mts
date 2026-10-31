@@ -66,7 +66,7 @@ test("consumer context isolates user and outer-gate settings, preserves authenti
         UV_PYTHON_INSTALL_DIR: "/user/python",
       },
     },
-    join(root, "cache"),
+    { tools: join(root, "cache"), builds: join(root, "build-cache") },
   );
   expect(env.WORKBENCH_PROJECT_ROOT).toBeUndefined();
   expect(env.WORKBENCH_TOOLCHAIN).toBeUndefined();
@@ -100,7 +100,7 @@ test("consumer build outputs use isolated storage outside Unicode application pa
       languages: ["rust"],
       environment: process.env,
     },
-    join(root, "cache"),
+    { tools: join(root, "cache"), builds: join(root, "build-cache") },
   );
   for (const [name, value] of Object.entries(env)) if (name.startsWith("WORKBENCH_")) vi.stubEnv(name, value);
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", repository);

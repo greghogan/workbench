@@ -29,6 +29,11 @@ import { invalidateCacheSize } from "./cache-size.js";
 
 const marker = ".workbench-build.json";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 24);
+// Preserve all 96 digest bits with filesystem-case-independent, shorter components.
+const compactDigest = (value: string) =>
+  BigInt(`0x${digest(value)}`)
+    .toString(36)
+    .padStart(19, "0");
 const nodeInputs = [".node-version", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"];
 const compilerInputs = [
   ".llvm-version",
@@ -133,12 +138,25 @@ export function buildCheckout(root: string): string {
 }
 
 export function buildStorageRoots(storageRoot: string, identity: Pick<BuildIdentity, "checkout" | "root">) {
-  const suffix = `${digest(identity.checkout)}/${digest(identity.root)}`;
+  const suffix = `${compactDigest(identity.checkout)}/${compactDigest(identity.root)}`;
   return {
     roots: ownedPath(join(storageRoot, "builds"), suffix),
     dependencyRoots: ownedPath(join(storageRoot, "dependencies"), suffix),
     checkRoots: ownedPath(join(storageRoot, "check-results"), suffix),
   };
+}
+
+/** Historic locations are inspected only for ownership, retention and cleanup; writers use the compact layout. */
+export function buildStorageLocations(storageRoot: string, identity: Pick<BuildIdentity, "checkout" | "root">) {
+  const suffix = `${digest(identity.checkout)}/${digest(identity.root)}`;
+  return [
+    buildStorageRoots(storageRoot, identity),
+    {
+      roots: ownedPath(join(storageRoot, "builds"), suffix),
+      dependencyRoots: ownedPath(join(storageRoot, "dependencies"), suffix),
+      checkRoots: ownedPath(join(storageRoot, "check-results"), suffix),
+    },
+  ];
 }
 
 export function checkLogDirectory(storageRoot: string, checkout: string, root: string, run: string): string {
@@ -211,15 +229,16 @@ export function readBuildGeneration(
       : readBuildIdentity(directory, markers[kind]);
   if (expected && !isDeepStrictEqual(identity, expected))
     throw new Error(`${directory}: cache ownership changed; inspect again`);
-  const roots = buildStorageRoots(storageRoot, identity);
-  const expectedPath =
+  const expectedPaths =
     kind === "logs"
-      ? checkLogDirectory(storageRoot, identity.checkout, identity.root, run)
-      : join(
-          kind === "builds" ? roots.roots : kind === "checks" ? roots.checkRoots : roots.dependencyRoots,
-          `${identity.environment}-${identity.fingerprint}`,
+      ? [checkLogDirectory(storageRoot, identity.checkout, identity.root, run)]
+      : buildStorageLocations(storageRoot, identity).map((roots) =>
+          join(
+            kind === "builds" ? roots.roots : kind === "checks" ? roots.checkRoots : roots.dependencyRoots,
+            `${identity.environment}-${identity.fingerprint}`,
+          ),
         );
-  if (directory !== expectedPath || (kind === "logs" && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(run)))
+  if (!expectedPaths.includes(directory) || (kind === "logs" && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(run)))
     throw new Error(`${directory}: build ownership does not match its cache location`);
   return identity;
 }

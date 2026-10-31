@@ -8,19 +8,47 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve, sep, win32 } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   assertBuildOutput,
   buildEnvironment,
   buildPaths,
+  buildStorageRoots,
   cleanBuilds,
   prepareBuild,
   withBuildLock,
 } from "../src/builds.ts";
 
 const temporary: string[] = [];
+test("default Windows storage leaves room for MSVC compiler-generated object paths", () => {
+  const base = resolve(import.meta.dirname, "cache-budget"),
+    paths = buildStorageRoots(base, { checkout: "C:\\projects\\application", root: "library" }),
+    namespace = relative(base, paths.roots).split(sep);
+  for (const [port, object] of [
+    ["yyjson", "testCCompiler.c.obj"],
+    ["fmt", "testCXXCompiler.cxx.obj"],
+  ] as const)
+    for (const variant of ["debug", "asan"]) {
+      const path = win32.join(
+        "C:\\Users\\Developer\\AppData\\Local\\workbench\\cache",
+        ...namespace,
+        `native-${"a".repeat(24)}`,
+        variant,
+        "bt",
+        port,
+        `x64-mvsc${variant === "asan" ? "-asan" : ""}-rel`,
+        "CMakeFiles",
+        "CMakeScratch",
+        "TryCompile-abcdef",
+        "CMakeFiles",
+        "cmTC_abcd.dir",
+        object,
+      );
+      expect(path.length, path).toBeLessThan(260);
+    }
+});
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
