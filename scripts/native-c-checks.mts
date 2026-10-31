@@ -6,6 +6,7 @@ import {
   lstatSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -18,7 +19,7 @@ import { pathToFileURL } from "node:url";
 import { compilerCatalog, isCompilerFamily, type CompilerFamily } from "./compiler-catalog.mjs";
 
 export async function runNativeChecks(language: "c" | "cpp", distribution: string, role: string): Promise<void> {
-  const root = process.cwd();
+  const root = realpathSync.native(process.cwd());
   const { cpuBudget } = (await import(
     pathToFileURL(join(distribution, "scripts/cpu-budget.mjs")).href
   )) as typeof import("./cpu-budget.mjs");
@@ -56,6 +57,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     const result: import("node:child_process").SpawnSyncReturns<string | null> = spawnSync(command, args, {
       encoding: "utf8",
       stdio: "inherit",
+      cwd: root,
       ...options,
     });
     if (result.error || result.status !== 0)
@@ -123,7 +125,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     try {
       run("cmake", [
         "-S",
-        ".",
+        root,
         "-B",
         directory,
         "-G",
@@ -255,6 +257,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     configure(debug);
     test(debug);
   } else if (role === "coverage") {
+    const { nativeCoverageSources, assertNativeCoverageScope } = await import("./native-coverage.mjs");
     if (existsSync("coverage") && lstatSync("coverage").isSymbolicLink())
       throw new Error("coverage must be a real directory");
     mkdirSync("coverage", { recursive: true });
@@ -273,7 +276,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
       if (!profiles.length) throw new Error("coverage produced no execution profiles");
       const merged = join(temporary, "merged.profdata");
       run("llvm-profdata", ["merge", "-sparse", ...profiles, "-o", merged]);
-      const sourceFiles = sources.filter((file) => !file.startsWith(`tests${sep}`));
+      const sourceFiles = nativeCoverageSources(sources.filter((file) => !file.startsWith(`tests${sep}`)));
       const coverageArgs = [
         join(instrumented, `count_test${suffix}`),
         "-object",
@@ -285,10 +288,14 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
       ];
       run("llvm-cov", ["report", ...coverageArgs]);
       const report = JSON.parse(run("llvm-cov", ["export", ...coverageArgs], { stdio: "pipe" })) as {
-        data: { totals: Record<string, { count: number; percent: number }> }[];
+        data: { files: { filename: string }[]; totals: Record<string, { count: number; percent: number }> }[];
       };
       writeFileSync("coverage/report.json", JSON.stringify(report));
       assert.ok(report.data[0], "LLVM coverage did not report totals");
+      assertNativeCoverageScope(
+        report.data[0].files.map((file) => file.filename),
+        sourceFiles,
+      );
       const total = report.data[0].totals;
       for (const [metric, minimum] of Object.entries(policy.coverage)) {
         if (!total[metric] || total[metric].count === 0 || total[metric].percent < minimum)

@@ -177,6 +177,8 @@ their per-test state and register suite-local cleanup.
   capabilities and explicit artifact, runtime-manager, installed-SDK, and unavailable installation providers.
 - `scripts/native-c-checks.mts`, `scripts/native-c-checks.mjs`, `scripts/cmake/WorkbenchCompiler.cmake`: Share native
   C/C++ check orchestration and standalone compiler policy across both references.
+- `scripts/native-coverage.mts`, `scripts/native-coverage.mjs`: Canonicalize LLVM source selections and reject reports
+  that silently fall back to instrumented files outside the requested scope.
 - `scripts/windows-utf8-console.mts`, `scripts/windows-utf8-console.mjs`: Isolate Microsoft compiler output encoding
   so Ninja can retain Unicode dependency paths without changing the user's console or concurrent builds.
 - `scripts/windows-arguments.mts`, `scripts/windows-arguments.mjs`: Share executable argument
