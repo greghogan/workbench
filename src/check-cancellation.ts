@@ -97,6 +97,7 @@ export class CheckCancellation {
       const foregroundPids = new Set<number>();
       const stop = (signal: NodeJS.Signals) => {
         if (child.pid === undefined) return;
+        if (process.platform === "win32" && (child.exitCode !== null || child.signalCode !== null)) return;
         try {
           if (process.platform === "win32") {
             const result = spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {

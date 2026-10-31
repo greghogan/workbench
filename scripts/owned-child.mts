@@ -68,6 +68,8 @@ export async function runOwnedChild(
   const killing: Promise<void>[] = [];
   const stop = (signal: NodeJS.Signals) => {
     if (child.pid === undefined) return;
+    // A closed Windows parent no longer owns its numeric PID; its initial tree kill is awaited below.
+    if (process.platform === "win32" && (child.exitCode !== null || child.signalCode !== null)) return;
     try {
       if (process.platform !== "win32") process.kill(-child.pid, signal);
       else
