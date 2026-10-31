@@ -137,7 +137,9 @@ test("vcpkg refuses mutable recipes and unsafe build paths without altering the 
   const gcc = readFileSync(join(gccBuild, "workbench-compiler.cmake"), "utf8");
   expect(gcc).toContain("g++");
   expect(gcc).not.toContain("clang");
-  expect(readFileSync(join(gccBuild, "workbench-vcpkg.cmake"), "utf8")).toContain("workbench-gcc");
+  expect(readFileSync(join(gccBuild, "workbench-vcpkg.cmake"), "utf8")).toMatch(
+    /^set\(VCPKG_TARGET_TRIPLET [\w-]+-gcc(?:-[\w-]+)? CACHE STRING/m,
+  );
   vi.stubEnv("WORKBENCH_COMPILER", "gcc");
   vi.stubEnv("WORKBENCH_CXX", join(bin, "g++"));
   vi.stubEnv("WORKBENCH_CXX_STANDARD", "23");

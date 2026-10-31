@@ -38,6 +38,17 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
   const requestedCompiler = process.env.WORKBENCH_COMPILER ?? "clang";
   if (!isCompilerFamily(requestedCompiler)) throw new Error("Select a declared native compiler");
   const selectedCompiler: CompilerFamily = requestedCompiler;
+  if (
+    process.platform === "win32" &&
+    selectedCompiler === "mvsc" &&
+    role !== "format" &&
+    role !== "format-write" &&
+    process.env.WORKBENCH_NATIVE_UTF8_CONSOLE !== "1"
+  ) {
+    const { runWindowsUtf8Console } = await import("./windows-utf8-console.mjs");
+    await runWindowsUtf8Console(process.argv.slice(1), builds);
+    return;
+  }
   const managed = process.env.WORKBENCH_MANAGED_COMPILER === "1";
   const parallelism = String(cpuBudget());
   process.env.CTEST_PARALLEL_LEVEL = parallelism;

@@ -177,6 +177,8 @@ their per-test state and register suite-local cleanup.
   capabilities and explicit artifact, runtime-manager, installed-SDK, and unavailable installation providers.
 - `scripts/native-c-checks.mts`, `scripts/native-c-checks.mjs`, `scripts/cmake/WorkbenchCompiler.cmake`: Share native
   C/C++ check orchestration and standalone compiler policy across both references.
+- `scripts/windows-utf8-console.mts`, `scripts/windows-utf8-console.mjs`: Isolate Microsoft compiler output encoding
+  so Ninja can retain Unicode dependency paths without changing the user's console or concurrent builds.
 - `scripts/native-cpu.h`, `scripts/native-cpu-test.c`: Supply copied, independently tested CPU capability predicates.
 - `scripts/owned-child.mts`, `scripts/owned-child.mjs`, `scripts/owned-scratch.mts`, `scripts/owned-scratch.mjs`: Own
   child process shutdown, bounded query capture, scratch lifetime, and conservative abandoned-run reclamation.
