@@ -8,8 +8,13 @@ const distribution = resolve(import.meta.dirname, "..");
 const failures = [
   {
     file: "vcpkg_buildtrees/detect_compiler/config-out.log",
-    retained: "config-out.log",
+    retained: "vcpkg_buildtrees/detect_compiler/config-out.log",
     message: "linker cannot find the selected Windows SDK",
+  },
+  {
+    file: "vcpkg_buildtrees/yyjson/config-x64-workbench-mvsc-windows-out.log",
+    retained: "vcpkg_buildtrees/yyjson/config-x64-workbench-mvsc-windows-out.log",
+    message: "dependency configure cannot execute its selected compiler",
   },
   {
     file: "vcpkg-manifest-install.log",

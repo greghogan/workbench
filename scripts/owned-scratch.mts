@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -82,7 +83,8 @@ export interface OwnedScratch {
 }
 export function createOwnedScratch(parent: string, kind: string): OwnedScratch {
   recoverScratch(parent, kind);
-  const directory = mkdtempSync(join(parent, `${kind}-`)),
+  // Expand Windows short names as well as symlinks before tools derive source identities.
+  const directory = mkdtempSync(join(realpathSync.native(parent), `${kind}-`)),
     token = randomUUID();
   writeFileSync(join(directory, marker), JSON.stringify({ version: 1, kind, token }), { flag: "wx", mode: 0o600 });
   const owner = acquireProcessLock(join(directory, "owner"), true);

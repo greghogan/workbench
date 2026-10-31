@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parse } from "smol-toml";
@@ -8,6 +8,7 @@ import { consumerFault, consumerFaults, consumerSnapshot } from "../src/consumer
 import { ConsumerCommands, consumerCommandDiagnostics } from "../src/consumer-integration-runner.ts";
 import { ciTargets } from "../src/ci-targets.ts";
 import { readCITargets, targetPhases } from "../scripts/ci-contract.mjs";
+import { buildPaths } from "../src/builds.ts";
 
 const repository = resolve(import.meta.dirname, "..");
 const temporary: string[] = [];
@@ -76,6 +77,36 @@ test("consumer context isolates user and outer-gate settings, preserves authenti
   for (const kind of ["CONFIG", "DATA", "STATE"]) expect(env[`WORKBENCH_${kind}_HOME`]).toContain(root);
   for (const name of ["RUSTUP_HOME", "CARGO_HOME", "UV_PYTHON_INSTALL_DIR"])
     expect(env[name]).toContain(join(root, "cache"));
+});
+
+test("consumer build outputs use isolated storage outside Unicode application paths", () => {
+  const root = realpathSync.native(fixture()),
+    project = join(root, "application space 雪");
+  mkdirSync(join(project, "workbench"), { recursive: true });
+  writeFileSync(
+    join(project, "workbench/config.toml"),
+    "schema_version=1\n[markdown]\nwrap_width=120\n[compatibility]\nrequired=false\n",
+  );
+  writeFileSync(
+    join(project, "workbench/projects.toml"),
+    '[[project]]\nid="app"\npath="."\n[[language_root]]\nlanguage="rust"\npath="."\n',
+  );
+  const env = consumerEnvironment(
+    {
+      temporary: root,
+      directory: repository,
+      launcher: "unused",
+      prefix: join(root, "npm"),
+      languages: ["rust"],
+      environment: process.env,
+    },
+    join(root, "cache"),
+  );
+  for (const [name, value] of Object.entries(env)) if (name.startsWith("WORKBENCH_")) vi.stubEnv(name, value);
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", repository);
+  const paths = buildPaths(project, project, "native");
+  expect(paths.directory.startsWith(join(root, "build-cache"))).toBe(true);
+  expect(paths.directory).not.toContain("application space 雪");
 });
 
 test("every shipped starter has a distinct behavioral fault and adoption snapshots cover exact bytes", () => {

@@ -275,6 +275,16 @@ test.skipIf(process.platform !== "win32")("Windows checks retain SDK tools throu
   expect(paths).toContain(linker);
 });
 
+test.skipIf(process.platform !== "win32")("consumer PATH retains the Go race detector's host C compiler", () => {
+  const { base } = fixture(["go"]),
+    compiler = join(base, "compiler");
+  mkdirSync(compiler);
+  writeFileSync(join(compiler, "gcc.exe"), "fixture");
+  const source = { PATH: compiler };
+  expect(checkHostPath(source, ["go"]).split(delimiter)).toContain(compiler);
+  expect(checkHostPath(source, ["typescript"]).split(delimiter)).not.toContain(compiler);
+});
+
 test.skipIf(process.platform !== "win32")(
   "Git hooks and callers select the same Windows Git and temporary paths",
   () => {

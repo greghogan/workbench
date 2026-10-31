@@ -208,8 +208,8 @@ function hostEnvironment(env: NodeJS.ProcessEnv, extraCommands: string[] = []): 
   return { PATH: [...paths].join(delimiter), ...(msystem ? { MSYSTEM: msystem } : {}) };
 }
 
-export function checkHostPath(env: NodeJS.ProcessEnv): string {
-  return hostEnvironment(env).PATH;
+export function checkHostPath(env: NodeJS.ProcessEnv, languages: readonly string[] = []): string {
+  return hostEnvironment(env, nativeHostRequirements(languages).commands).PATH;
 }
 
 export function checkLanguages(root: string, directory: string): string[] {

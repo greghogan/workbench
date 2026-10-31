@@ -23,9 +23,9 @@ export function consumerEnvironment(installed: VerifiedWorkbenchPackage, cache: 
   env.RUSTUP_HOME = join(cache, "consumer-toolchains", "rustup");
   env.CARGO_HOME = join(cache, "consumer-toolchains", "cargo");
   env.UV_PYTHON_INSTALL_DIR = join(cache, "consumer-toolchains", "python");
-  env.WORKBENCH_STORAGE_EXTERNAL = "false";
+  env.WORKBENCH_STORAGE_EXTERNAL = "true";
   env.WORKBENCH_STORAGE_ROOT = join(installed.temporary, "build-cache");
-  const hostPath = checkHostPath(env);
+  const hostPath = checkHostPath(env, installed.languages);
   for (const name of Object.keys(env)) if (name.toUpperCase() === "PATH") Reflect.deleteProperty(env, name);
   env.PATH = [process.platform === "win32" ? installed.prefix : join(installed.prefix, "bin"), hostPath].join(
     delimiter,

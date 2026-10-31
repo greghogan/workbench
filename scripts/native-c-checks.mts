@@ -52,14 +52,14 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     return result.stdout ?? "";
   }
   function collectCMakeFailureLogs(directory: string) {
-    const detection = join(directory, "vcpkg_buildtrees", "detect_compiler");
+    const buildtrees = join(directory, "vcpkg_buildtrees");
     try {
       const output = join(root, "coverage", "cmake", relative(builds, directory).replaceAll(sep, "-"));
-      const compilerLogs = existsSync(detection)
-        ? files(detection).filter((path) => path.endsWith(".log") && lstatSync(path).isFile())
+      const portLogs = existsSync(buildtrees)
+        ? files(buildtrees).filter((path) => path.endsWith(".log") && lstatSync(path).isFile())
         : [];
-      for (const path of compilerLogs) {
-        const destination = join(output, relative(detection, path));
+      for (const path of portLogs) {
+        const destination = join(output, "vcpkg_buildtrees", relative(buildtrees, path));
         mkdirSync(join(destination, ".."), { recursive: true });
         copyFileSync(path, destination);
         if (/-(out|err)\.log$/.test(path))
@@ -75,7 +75,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
           `${manifest}\n${readFileSync(manifest, "utf8").slice(-8192).split(/\r?\n/).slice(-40).join("\n")}`,
         );
       }
-      if (compilerLogs.length || existsSync(manifest)) console.error(`CMake failure logs: ${output}`);
+      if (portLogs.length || existsSync(manifest)) console.error(`CMake failure logs: ${output}`);
     } catch (error) {
       console.error(`Could not retain CMake failure logs: ${String(error)}`);
     }

@@ -77,10 +77,6 @@ export function configureConsumerCompiler(
       Object.assign(raw, template);
     }
     raw.compiler = compiler;
-    if (compiler === "mvsc") {
-      raw.ci_platforms = ["windows-x64"];
-      raw.ci_environments = [];
-    }
   }
   writeFileSync(file, editToml(contents, registry));
 }

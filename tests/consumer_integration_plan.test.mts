@@ -9,6 +9,8 @@ import { ConsumerReportRecorder, readConsumerIntegrationReport } from "../src/co
 import { resolveNativeTool } from "../src/native-installation.ts";
 import { runConsumerSuite } from "../src/consumer-integration-scenarios.ts";
 import { CheckCancellation } from "../src/check-cancellation.ts";
+import { readLanguageRoots } from "../src/project-configuration.ts";
+import { ciCoverage } from "../src/ci.ts";
 import { createOwnedScratch } from "../scripts/owned-scratch.mjs";
 const roots: string[] = [];
 afterEach(() => {
@@ -53,6 +55,17 @@ test("compiler fixture setup handles records-only and adopted roots without rewr
   expect(automation.check).toEqual([{ name: "Existing", role: "test", command: ["node", "existing.cjs"] }]);
   expect(readFileSync(join(root, "application.c"), "utf8")).toBe("existing application");
 });
+test("local MSVC consumer fixtures remain valid without configuring CI", () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, "workbench/projects.toml"),
+    '[[project]]\nid="app"\npath="."\n[[language_root]]\nlanguage="c"\npath="."\n',
+  );
+  configureConsumerCompiler(root, resolve(import.meta.dirname, ".."), "mvsc");
+  expect(readLanguageRoots(root)).toMatchObject([{ language: "c", path: ".", compiler: "mvsc" }]);
+  expect(ciCoverage(root, {})).toBeUndefined();
+});
+
 test("report snapshots expose running work and keep primary and cleanup failures independently", () => {
   const root = fixture(),
     file = join(root, "results.json"),

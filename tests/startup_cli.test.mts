@@ -31,7 +31,9 @@ afterEach(() => {
 function nodeAt(destination: string) {
   mkdirSync(join(destination, ".."), { recursive: true });
   try {
-    linkSync(process.execPath, destination);
+    // Windows keeps the running executable's file object locked, including its hard links.
+    if (process.platform === "win32") copyFileSync(process.execPath, destination, constants.COPYFILE_FICLONE);
+    else linkSync(process.execPath, destination);
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || !["EXDEV", "EPERM", "EACCES"].includes(String(error.code)))
       throw error;

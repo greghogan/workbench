@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, expect, test } from "vitest";
 import { createOwnedScratch, recoverScratch } from "../scripts/owned-scratch.mjs";
@@ -13,10 +22,26 @@ afterEach(() => {
   for (const path of roots.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 function parent() {
-  const path = mkdtempSync(join(tmpdir(), "workbench-owned-scratch-"));
+  const path = realpathSync.native(mkdtempSync(join(tmpdir(), "workbench-owned-scratch-")));
   roots.push(path);
   return path;
 }
+test("scratch paths use the physical parent so tools share one source identity", () => {
+  const root = parent(),
+    physical = join(root, "physical"),
+    alias = join(root, "alias");
+  mkdirSync(physical);
+  symlinkSync(physical, alias, process.platform === "win32" ? "junction" : "dir");
+  const scratch = createOwnedScratch(alias, "coverage");
+  try {
+    expect(scratch.directory.startsWith(physical + sep)).toBe(true);
+    writeFileSync(join(scratch.directory, "payload"), "owned");
+    expect(recoverScratch(physical, "coverage")).toEqual([]);
+  } finally {
+    scratch.release();
+  }
+  expect(existsSync(scratch.directory)).toBe(false);
+});
 test("active and unmarked directories survive recovery; a dead marked owner is reclaimed", () => {
   const root = parent(),
     active = createOwnedScratch(root, "coverage");
