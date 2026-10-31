@@ -111,7 +111,15 @@ test("a completed edit remains applied when the following refresh fails", async 
     root = servers.project(),
     web = await servers.start(root);
   const editor = await readWebPage(web, "/record?id=demo:ADR-0&view=edit");
-  vi.spyOn(web.monitor, "reconcile").mockRejectedValueOnce(new Error("refresh unavailable"));
+  const file = join(root, "workbench/decisions/ADR-00.md"),
+    reconcile = web.monitor.reconcile.bind(web.monitor);
+  // Watcher reconciliation can race the action. Fail every refresh after the edit reaches disk,
+  // rather than allowing an unrelated background refresh to consume a one-shot rejection.
+  vi.spyOn(web.monitor, "reconcile").mockImplementation((fresh) =>
+    readFileSync(file, "utf8").includes("Saved exact text.")
+      ? Promise.reject(new Error("refresh unavailable"))
+      : reconcile(fresh),
+  );
   const response = await postWebForm(web, "/actions/save", {
     csrf: hiddenValue(editor.html, "csrf"),
     id: "demo:ADR-0",
@@ -119,7 +127,7 @@ test("a completed edit remains applied when the following refresh fails", async 
     contents: "# Human edit\n\nSaved exact text.\n",
   });
   expect(response.status).toBe(200);
-  expect(readFileSync(join(root, "workbench/decisions/ADR-00.md"), "utf8")).toContain("Saved exact text.");
+  expect(readFileSync(file, "utf8")).toContain("Saved exact text.");
   expect(events.find((event) => event.operation === "web.action.refresh")?.fields).toMatchObject({
     outcome: "applied",
     observed: "previous snapshot retained",

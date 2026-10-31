@@ -28,8 +28,8 @@ await runWindowsUtf8Console(${JSON.stringify([child])},${JSON.stringify(builds)}
     );
     const result = spawnSync(process.execPath, [launcher], { encoding: "utf8", windowsHide: true });
     expect(result.error).toBeUndefined();
-    expect(result.status).toBe(1);
-    expect(result.stdout).toContain("dependency 文");
+    expect(result.status, result.stdout + result.stderr).toBe(1);
+    expect(result.stdout, result.stderr).toContain("dependency 文");
     expect(result.stderr).toContain("diagnostic 文");
     expect(result.stderr).toContain("status=23");
   } finally {

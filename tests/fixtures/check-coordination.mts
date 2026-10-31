@@ -17,6 +17,7 @@ import { stringify } from "smol-toml";
 import { setupProject } from "../../src/projects.ts";
 import { synchronize } from "../../src/sync.ts";
 import { waitForCondition } from "./coordination.mjs";
+import { processFailure } from "../../scripts/process-outcome.mjs";
 
 const distribution = resolve(import.meta.dirname, "../..");
 
@@ -39,12 +40,12 @@ export function processInstance(pid: number): string | undefined {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `$observed = Get-Process -Id ${String(pid)} -ErrorAction SilentlyContinue; if ($null -ne $observed) { try { $observed.StartTime.ToUniversalTime().Ticks.ToString() } catch { if (-not $observed.HasExited) { throw } } }`,
+      `$ErrorActionPreference = 'Stop'; $observed = Get-Process -Id ${String(pid)} -ErrorAction SilentlyContinue; if ($null -ne $observed) { try { $observed.StartTime.ToUniversalTime().Ticks.ToString() } catch { if (-not $observed.HasExited) { throw } } }; exit 0`,
     ],
     { encoding: "utf8", windowsHide: true },
   );
-  if (result.error || result.status !== 0)
-    throw new Error("Could not inspect process identity", { cause: result.error ?? result.stderr });
+  const failure = processFailure("process identity lookup", result, result);
+  if (failure) throw failure;
   const identity = result.stdout.trim();
   if (identity && !/^\d+$/.test(identity)) throw new Error("Invalid process start time");
   return identity || undefined;
