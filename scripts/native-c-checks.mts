@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { withEngineeringRun, type EngineeringCommandOptions } from "./engineering-run.mjs";
+import { withEngineeringRun, type EngineeringCommandOptions } from "../app/src/core/artifacts/engineering-run.mjs";
 
 import {
   existsSync,
@@ -16,17 +16,21 @@ import {
 import { join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { compilerCatalog, isCompilerFamily, type CompilerFamily } from "./compiler-catalog.mjs";
+import {
+  compilerCatalog,
+  isCompilerFamily,
+  type CompilerFamily,
+} from "../app/src/core/toolchains/compiler-catalog.mjs";
 
 export async function runNativeChecks(language: "c" | "cpp", distribution: string, role: string): Promise<void> {
   const root = realpathSync.native(process.cwd());
   const { cpuBudget } = (await import(
-    pathToFileURL(join(distribution, "scripts/cpu-budget.mjs")).href
-  )) as typeof import("./cpu-budget.mjs");
+    pathToFileURL(join(distribution, "app/src/core/execution/checks/cpu-budget.mjs")).href
+  )) as typeof import("../app/src/core/execution/checks/cpu-budget.mjs");
 
   const { emitCheckDetail } = (await import(
-    pathToFileURL(join(distribution, "scripts/check-detail-data.mjs")).href
-  )) as typeof import("./check-detail-data.mjs");
+    pathToFileURL(join(distribution, "app/src/core/execution/checks/check-detail-data.mjs")).href
+  )) as typeof import("../app/src/core/execution/checks/check-detail-data.mjs");
   const configuredBuilds = process.env.WORKBENCH_BUILD_DIR;
   if (!configuredBuilds) throw new Error("use Workbench checks or a configured Workbench shell for native builds");
   const builds = configuredBuilds;
@@ -46,7 +50,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
     role !== "format-write" &&
     process.env.WORKBENCH_NATIVE_UTF8_CONSOLE !== "1"
   ) {
-    const { runWindowsUtf8Console } = await import("./windows-utf8-console.mjs");
+    const { runWindowsUtf8Console } = await import("../app/src/core/runtime/windows-utf8-console.mjs");
     await runWindowsUtf8Console(process.argv.slice(1), builds);
     return;
   }

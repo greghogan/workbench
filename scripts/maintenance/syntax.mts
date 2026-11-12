@@ -1,6 +1,6 @@
 import { parseDocument, isScalar, isMap, isSeq } from "yaml";
 import { SaxesParser } from "saxes";
-import { required } from "../values.mjs";
+import { required } from "../../app/src/core/runtime/values.mjs";
 
 export interface TokenEdit {
   start: number;

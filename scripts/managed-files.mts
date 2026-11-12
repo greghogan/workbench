@@ -1,4 +1,4 @@
-import { stageFile, type StagedFile } from "./file-publication.mjs";
+import { stageFile, type StagedFile } from "../app/src/core/runtime/file-publication.mjs";
 
 /** All candidates are complete before the first atomic publication. */
 export function replaceManagedFiles(

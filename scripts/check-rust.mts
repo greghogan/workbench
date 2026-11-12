@@ -1,4 +1,4 @@
-import { record } from "./values.mjs";
+import { record } from "../app/src/core/runtime/values.mjs";
 import { spawnSync } from "node:child_process";
 import { readFileSync, mkdirSync } from "node:fs";
 

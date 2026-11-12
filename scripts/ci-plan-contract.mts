@@ -1,6 +1,6 @@
-import { compilerFamilies, isCompilerFamily } from "./compiler-catalog.mjs";
-import { isRecord as object, isStringArray as strings } from "./values.mjs";
-import type { CompatibilityRuntime } from "./ci-contract.mjs";
+import { compilerFamilies, isCompilerFamily } from "../app/src/core/toolchains/compiler-catalog.mjs";
+import { isRecord as object, isStringArray as strings } from "../app/src/core/runtime/values.mjs";
+import type { CompatibilityRuntime } from "../app/src/core/execution/ci/support/ci-contract.mjs";
 interface HostedTarget extends Record<string, unknown> {
   path: string;
   paths: string[];

@@ -1,0 +1,101 @@
+.hub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.hub-header .brand {
+  margin-bottom: 0;
+}
+.hub-header nav {
+  display: flex;
+  gap: var(--space-6);
+}
+.table-scroll {
+  overflow-x: auto;
+  margin-block: var(--space-5);
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--paper);
+}
+.table-scroll th,
+.table-scroll td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.inline {
+  display: inline-block;
+  margin-inline-end: var(--space-2);
+}
+.project-name {
+  margin-top: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.worktree-list {
+  margin-block: var(--space-2);
+  padding-inline-start: var(--space-6);
+}
+.worktree-list li {
+  margin-block: var(--space-2);
+}
+.cache-summary {
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.cache-summary:hover {
+  color: var(--accent);
+  background: var(--soft);
+}
+.cache-breakdown {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: var(--space-4);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+.cache-breakdown dl {
+  margin: 0 0 var(--space-3);
+}
+.cache-breakdown dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-block: var(--space-2);
+}
+.cache-breakdown dd {
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hub-header nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+@media (max-width: 680px) {
+  .hub-header {
+    flex-wrap: wrap;
+    padding: var(--space-4);
+  }
+}

@@ -4,11 +4,11 @@ import { existsSync, readFileSync, mkdtempSync, rmSync, lstatSync } from "node:f
 import { tmpdir } from "node:os";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 import { createHash } from "node:crypto";
-import { parseAllDocuments } from "./runtime-parsers.mjs";
-import { runOwnedChild, processCancellation } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
+import { parseAllDocuments } from "../app/src/core/configuration/runtime-parsers.mjs";
+import { runOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { isMainScript } from "./script-entry.mjs";
-import { record, string } from "./values.mjs";
+import { record, string } from "../app/src/core/runtime/values.mjs";
 
 function pnpmDocument(path: string): Record<string, unknown> {
   const documents = parseAllDocuments(readFileSync(path, "utf8"));
@@ -58,7 +58,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
   const pin = readFileSync(join(root, ".node-version"), "utf8").trim();
   if (!process.features.typescript)
     throw new Error(`Source setup requires native TypeScript support; use the development Node.js ${pin}`);
-  const { minimumCliNode } = await import("./node-runtimes.mts");
+  const { minimumCliNode } = await import("../app/src/core/distribution/node-runtimes.mts");
   const running = process.versions.node.split(".").map(Number),
     minimum = minimumCliNode.split(".").map(Number);
   for (let index = 0; index < 3; index++) {
@@ -73,7 +73,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
   }
   const provider = values.dependencies ? resolve(values.dependencies) : undefined;
   const cancellation = processCancellation();
-  const { npmCommand, npmRuntimeEnvironment } = await import("../src/npm-command.ts");
+  const { npmCommand, npmRuntimeEnvironment } = await import("../app/src/core/toolchains/npm-command.ts");
   const environment: NodeJS.ProcessEnv = {
     ...npmRuntimeEnvironment(),
     WORKBENCH_SOURCE_SETUP: "1",

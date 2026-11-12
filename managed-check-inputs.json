@@ -4,9 +4,9 @@
     ".npmrc": "b962362ebe7560b534e834c2ede51186c2e3fceb94e12cc434a11180f22391f2",
     ".pnpmfile.cjs": "aeccd0787ff3f6640b5c208a5147e77a3e2413a56faffa5e802e1a516b469d79",
     "managed-bootstrap.json": "4940ca898dc3fa0de0f328262957da14ad14afb408dc07be37e287302ea02354",
-    "managed-registry.json.br": "2ada03be9dbaa791d87c410731c5f56d527f01371609eaafb3cd0718e7a8f3a0",
-    "package.json": "f9b38af01965a0345cb39e8bfe461b5dd573b2fbd93993143e9118746d3a344f",
-    "pnpm-lock.yaml": "3d7b6744711a57832b752dcdbc038e24f442900c175549ef1bda372b98a447ac",
+    "managed-registry.json.br": "5b3bd7b738b724b74bfbbf85119c18a5a6bcd0dfadd0e306fce2606d84b71222",
+    "package.json": "a97cedc156a2bbffdbae926bbe8c4d2616608e2bdf818b1b158a445380507d6c",
+    "pnpm-lock.yaml": "6171ba70d0f39e95585b829a29c9f397121ae80da48c1a25f68904588fc0f84e",
     "pnpm-workspace.yaml": "71bea1c5c303f1bc17832efd16edaa9e7f65512336b7d7f20dbe8086a7e3a4a6"
   },
   "bootstrap": true,
@@ -408,6 +408,15 @@
       "url": "https://registry.npmjs.org/@keyv/serialize/-/serialize-1.1.1.tgz",
       "hash": "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==",
       "destination": "npm/@keyv-serialize-1.1.1.tgz",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://registry.npmjs.org/@mermaid-js/tiny/-/tiny-12.3.0.tgz",
+      "hash": "sha512-90BO2kQvmQWj9YjBX2IsLHCw61rN69dPTn5wFfDu+b9aT7qtzfzTA3wpKWeaRAKK85refSo9How5EOeY39DWfA==",
+      "destination": "npm/@mermaid-js-tiny-12.3.0.tgz",
       "platforms": [
         "linux-x64",
         "linux-arm64"

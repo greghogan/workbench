@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Plugin } from "esbuild";
-import { generatedSource } from "../src/generated-file.ts";
+import { generatedSource } from "../app/src/core/runtime/generated-file.ts";
 
 /** Bundles read authored helpers, so an old emitted dependency cannot contaminate a new build. */
 export function authoredTooling(): Plugin {

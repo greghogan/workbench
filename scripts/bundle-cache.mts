@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join, posix } from "node:path";
-import { writeAtomic } from "./file-publication.mjs";
-import { isRecord } from "./values.mjs";
-import { bundleEntries, bundles } from "./bundle-layout.mts";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
+import { bundleEntries, bundles } from "../app/src/core/distribution/bundle-layout.mts";
 
 export const bundleCacheFile = "bundle/.workbench-build.json";
-const roots = ["src", "tests", "scripts", "bin"];
+const roots = ["app/src", "app/test", "scripts", "bin"];
 const configuration = [
   "package.json",
   "pnpm-lock.yaml",

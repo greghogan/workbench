@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { validationReport } from "../src/validation.ts";
-import { inspectChecks } from "../src/checks.ts";
-import { startWebServer } from "../src/web/server.ts";
+import { validationReport } from "../app/src/core/records/validation.ts";
+import { inspectChecks } from "../app/src/core/execution/checks/checks.ts";
+import { startWebServer } from "../app/src/server/http/server.ts";
+import { ReviewInventory } from "../app/src/server/projects/review-inventory.ts";
 
 const kind = process.argv[2];
 const root = process.cwd();
@@ -22,4 +23,18 @@ if (kind === "validation") {
   } finally {
     await web.close();
   }
-} else throw new Error("Select startup, validation, checks, or web");
+} else if (kind === "reviews") {
+  const reader = new ReviewInventory(root);
+  for (const state of ["cold", "warm", "warm"]) {
+    const started = performance.now();
+    const result = await reader.collect();
+    console.log(
+      JSON.stringify({
+        state,
+        count: result.count,
+        inputs: result.inputs.size,
+        durationMs: performance.now() - started,
+      }),
+    );
+  }
+} else throw new Error("Select startup, validation, checks, web, or reviews");

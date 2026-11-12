@@ -1,8 +1,13 @@
-
 [[project]]
 id = "workbench"
 name = "workbench"
 path = "."
+
+[[project]]
+id = "workbench-app"
+name = "app"
+path = "app"
+
 
 [[language_root]]
 ci_compatibility = false

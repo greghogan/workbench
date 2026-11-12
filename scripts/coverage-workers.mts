@@ -1,10 +1,10 @@
-import { settleCleanup } from "./diagnostic-errors.mjs";
+import { settleCleanup } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
 import { Worker } from "node:worker_threads";
 import { InvalidNodeCoverageReport } from "./node-coverage-reports.mjs";
 import type { CoverageCandidate, MeasuredScript, ScannedCoverage } from "./coverage-processing.mjs";
 import type { FileCoverageData } from "istanbul-lib-coverage";
-import { positiveInteger } from "./cpu-budget.mjs";
-import { admittedWork, type WorkAdmission } from "./work-admission.mjs";
+import { positiveInteger } from "../app/src/core/execution/checks/cpu-budget.mjs";
+import { admittedWork, type WorkAdmission } from "../app/src/core/execution/checks/work-admission.mjs";
 
 interface ScanJob {
   kind: "scan";

@@ -30,7 +30,7 @@ import {
   validateMaintenanceRelease,
 } from "./plan.mjs";
 
-import { errorFrom, record, records, required, string } from "../values.mjs";
+import { errorFrom, record, records, required, string } from "../../app/src/core/runtime/values.mjs";
 
 /** Plans name known targets and published versions, never executable instructions or arbitrary write paths. */
 export function readMaintenancePlan(root: string, value: unknown) {

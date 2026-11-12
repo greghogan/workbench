@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { withCacheLock } from "../src/cache-lock.ts";
-import { userDirectory } from "../src/storage.ts";
+import { withCacheLock } from "../app/src/core/storage/cache-lock.ts";
+import { userDirectory } from "../app/src/core/storage/storage.ts";
 import type { ManagedProcessScope } from "./managed-process.mjs";
-import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "./diagnostics.mjs";
+import {
+  diagnostic,
+  LogLevel,
+  DiagnosticOperation,
+  DiagnosticOutcome,
+} from "../app/src/core/diagnostics/diagnostics.mjs";
 
 /** Serialize imports on this engine so one operation cannot remove another import's source tag. */
 export async function importManagedImage(

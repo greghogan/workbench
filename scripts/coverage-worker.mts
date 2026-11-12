@@ -7,8 +7,8 @@ import {
   type CoverageCandidate,
 } from "./coverage-processing.mjs";
 import { InvalidNodeCoverageReport } from "./node-coverage-reports.mjs";
-import { required } from "./values.mjs";
-import { describeError } from "./diagnostic-errors.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
+import { describeError } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
 import type { CoverageTransportJob, CoverageWorkerReply } from "./coverage-workers.mjs";
 const port = required(parentPort, "Coverage worker requires an owning thread");
 let context:

@@ -205,10 +205,10 @@ decision for the environment being used.
 
 ## Personal skills
 
-Shared skills stay in the project's pinned Workbench distribution. Users enable or disable skills once in user
+Workbench-supplied skills stay with the application distribution. Users enable or disable skills once in user
 configuration, without project overrides. New skills start disabled. Project configuration limits applicability:
 language skills require matching registered roots, and Nix/Guix update skills require configured checks using that
-environment. Skills still verify their target root.
+environment locally or in CI. Skills still verify their target root.
 
 ```sh
 workbench skills                         # Interactive checklist; a status table without a terminal
@@ -237,12 +237,15 @@ Applicability follows the skill's location in the distribution:
 
 Language names match the registered identifiers exactly; applicability is not inferred from source filenames. A mixed
 language project exposes selected skills for all its registered languages. Workbench creates no user-level agent
-discovery links; independently installed global skills are outside its selection and filtering.
+discovery links; independently installed global skills are outside its selection and filtering. For each harness,
+synchronization omits its managed project link when the user-level skill has identical contents, including metadata and
+supporting files. Removing or changing that user-level copy restores the project link on the next synchronization.
 
-Discovery links are local and ignored, pointing into the pinned distribution; no upstream skill copies are committed.
-Setup requires that distribution locally, and cleared caches may require reacquisition and synchronization before
-opening the agent. Synchronization preserves unrelated skills and rejects ownership collisions. Independently authored
-project skills may still be committed. Shared validation and CI do not require anyone's personal discovery links.
+Discovery links are local and ignored, pointing into the application distribution; no upstream skill copies are
+committed. Setup requires that distribution locally, and cleared caches may require reacquisition and synchronization
+before opening the agent. Synchronization preserves unrelated skills and rejects ownership collisions. Independently
+authored project skills may still be committed. Shared validation and CI do not require anyone's personal discovery
+links.
 
 Executable updates report added, removed, and changed skills, including supporting files, and refresh local links using
 the new pin. Personal choices survive updates; added skills remain disabled. User preferences select names across
@@ -258,6 +261,12 @@ These are the supported adapters. Use recent harnesses with native instruction d
 create `CLAUDE.md` or change user settings. Claude's instruction settings or existing Claude instruction files can
 affect native `AGENTS.md` loading; see its [memory documentation](https://code.claude.com/docs/en/memory). Other
 harnesses may recognize the shared format or directories, but that alone does not establish tested support.
+
+### Supplied workflows
+
+The table describes the current catalog; `workbench skills --json` lists its exact names, sources, and applicability.
+Dependency-maintenance workflows can combine deterministic tooling with skill guidance; a separate skill per language is
+not a policy requirement. Toolchain and environment updates follow workbench:ADR-A and workbench:ADR-P.
 
 | Skill                                       | Selection                                                                                       |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -279,6 +288,10 @@ action, package, and image pins. Targeted and inspection-only requests retain th
 require checking the actual package build and recording reproducible inputs; independently pinned CI environments may
 differ from native patch versions. Guix and Nix pins change only when the request covers those environments. Version
 updates preserve the configured compatibility matrix and language support boundaries.
+
+Language dependency-update skills consider current stable releases, including major upgrades, for a general update
+request. A targeted or inspection-only request retains its stated scope. Their definitions are part of the Workbench
+application distribution; support boundaries and environment pins change only when requested.
 
 Enable `fetch-and-rebase-onto` with `workbench skills enable fetch-and-rebase-onto`, then invoke it as
 `$fetch-and-rebase-onto origin/main` in a supporting harness. It refuses before fetching when staged, unstaged, or

@@ -10,9 +10,9 @@ An installed Node satisfying the CLI requirement runs directly without acquisiti
 an older native Node satisfying the launcher minimum, Workbench hands off to its verified pinned runtime before loading
 the CLI or acquiring a project-pinned executable. It reuses a cached SDK or acquires one through the authenticated
 installer; first acquisition requires connectivity and GnuPG to verify the selected Node release's signed checksum
-catalog. POSIX extraction also requires
-`tar` and XZ utilities. This does not change the system Node installation or shell defaults. The bootstrap bundle uses
-Brotli so older Node can load it independently of the application's selected compression.
+catalog. POSIX extraction also requires `tar` and XZ utilities. This does not change the system Node installation or
+shell defaults. The bootstrap bundle uses Brotli so older Node can load it independently of the application's selected
+compression.
 
 Nix, Guix, prepared, and explicit Node compatibility environments retain their selected interpreter, which must satisfy
 the full CLI minimum. A runtime below the launcher minimum fails before command loading or acquisition.
@@ -21,10 +21,11 @@ Project shells and check commands continue to select their own configured toolch
 Development pins govern those environments; a capable installed interpreter can run ordinary Workbench commands
 directly.
 
-The installed package includes `src/`, `tests/`, and `examples/` as reference material. Workbench resolves these from
-its executable distribution directory, independently of the consuming project. `workbench language` reports reference
-example locations, and `workbench language init` copies selected starters. Source and test files are readable without
-development dependencies; running Workbench's own test suite requires its development toolchain.
+Source and tests live in `app/src/` and `app/test/`; reference applications live in `examples/`. Workbench resolves
+reference material from its distribution and immutable source identity, independently of the consuming project.
+`workbench language` reports reference example locations, and `workbench language init` copies selected starters. Source
+and test files are readable without development dependencies; running Workbench's own test suite requires its
+development toolchain.
 
 Container operations acquire the Dev Container CLI from its separate committed bootstrap manifest and npm lock under
 `scripts/container-tools/`. They do not install Workbench's development dependencies.
@@ -153,9 +154,10 @@ and host aliases remain distinct. A repeated launcher handoff fails with the req
 of repeatedly launching npm.
 
 The default location is `~/.local/bin/workbench` on Linux and macOS, or `%LOCALAPPDATA%/workbench/bin/workbench.cmd` on
-Windows. `--directory PATH` selects another location, including a system directory when running with appropriate access.
-Installation preserves unrelated executables and reports when its directory is absent from `PATH`. It does not edit
-shell startup files or replace system or user Node.js/npm installations.
+Windows. User installation runs from an ordinary shell without administrator access. `--directory PATH` selects another
+location, including a system directory when running with appropriate access. Installation preserves unrelated
+executables and reports when its directory is absent from `PATH`. It does not edit shell startup files or replace system
+or user Node.js/npm installations.
 
 Installation also writes completion for the detected shell: Bash, Zsh, Fish, or PowerShell. It preserves unrelated
 completion files and reports any startup configuration needed. On Linux, Bash's standard `bash-completion` package and
@@ -164,6 +166,30 @@ requires its completion directory in `fpath` before `compinit`; PowerShell requi
 its profile. Existing source-checkout users can install completion separately with `workbench completion install bash`
 (or `zsh`, `fish`, `powershell`). Installed completions query the active executable, so command additions and renames do
 not require reinstalling completion.
+
+## Administrator installation
+
+For a shared command, install the verified release archive into a system-owned npm prefix. Use an npm executable
+available to the administrator account. On Linux or macOS, a conventional prefix is `/usr/local`:
+
+```sh
+sudo npm install --global --ignore-scripts --prefix /usr/local /absolute/path/workbench.tar.gz
+```
+
+This places the command in `/usr/local/bin`. On Windows, open PowerShell as Administrator and select a shared prefix:
+
+```powershell
+npm.cmd install --global --ignore-scripts --prefix "$env:ProgramFiles\workbench" C:\Downloads\workbench.tar.gz
+```
+
+The Windows command is placed directly in that prefix. Replace the archive paths with the verified local download.
+Arrange a supported Node.js runtime and the appropriate command directory on `PATH` for the intended users. Windows
+machine `Path` changes require an administrator; user `Path` changes apply only to that account. The installer does not
+change `PATH` automatically.
+
+Use an ordinary account for subsequent project initialization, acquisition, configuration, and checks. Install shell
+completion from that account with `workbench completion install SHELL`. For a single account with a user-managed Node
+installation, the user installation above avoids maintaining a separate administrator environment.
 
 ## Select a project revision
 
@@ -216,6 +242,10 @@ tools once the selected executable and runtime are available.
 `workbench update FULL_COMMIT` prepares an executable-pin update in an isolated checkout and applies only a successfully
 validated result. It requires a clean committed checkout and neither stages nor commits changes. Collection updates use
 `workbench collection update` separately. Review the diff and run applicable checks before committing.
+
+The installed release handles `update` even when the project selects an older executable. When the requested target
+matches that installed release's recorded source identity, preparation and synchronization reuse it without another npm
+acquisition. Other target revisions are acquired by their exact pin.
 
 `workbench completion install bash` installs completion; zsh, fish, and PowerShell are also supported. Completion and
 launcher installation are separate explicit operations. Workbench's own source checkout continues to use

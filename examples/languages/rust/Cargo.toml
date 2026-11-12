@@ -13,6 +13,9 @@ name = "workbench_rust_reference"
 name = "rust-reference"
 path = "src/main.rs"
 
+[lints.cargo]
+default = { level = "deny", priority = -1 }
+
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
 unused_must_use = "deny"

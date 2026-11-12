@@ -1,7 +1,10 @@
 import { isMainScript } from "./script-entry.mjs";
-import { required, record, records, string, strings, stringRecord } from "./values.mjs";
-import { type ManagedSource, managedDeclaration } from "./managed-source-contract.mjs";
-import { readNpmLock } from "./managed-check-inputs.mjs";
+import { required, record, records, string, strings, stringRecord } from "../app/src/core/runtime/values.mjs";
+import {
+  type ManagedSource,
+  managedDeclaration,
+} from "../app/src/core/execution/environments/managed/managed-source-contract.mjs";
+import { readNpmLock } from "../app/src/core/execution/environments/managed/managed-check-inputs.mjs";
 interface NpmManifest {
   name?: string;
   version?: string;
@@ -30,8 +33,8 @@ import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { brotliCompressSync, constants } from "node:zlib";
-import { parseToml } from "./runtime-parsers.mjs";
-import { pnpmPackages, pnpmIdentity } from "./pnpm-lock.mjs";
+import { parseToml } from "../app/src/core/configuration/runtime-parsers.mjs";
+import { pnpmPackages, pnpmIdentity } from "../app/src/core/toolchains/pnpm-lock.mjs";
 import type { PathOrFileDescriptor } from "fs";
 
 const json = (path: PathOrFileDescriptor): unknown => JSON.parse(readFileSync(path, "utf8"));
@@ -165,8 +168,8 @@ export async function refreshManagedBootstrap(distribution: string) {
   const lock = record(json(join(source, "package-lock.json")), "Invalid bootstrap lock");
   const proofs = [];
   const { verifyAttestation } = (await import(
-    pathToFileURL(join(distribution, "src/attestation-verification.ts")).href
-  )) as typeof import("../src/attestation-verification.js");
+    pathToFileURL(join(distribution, "app/src/core/toolchains/acquisition/attestation-verification.ts")).href
+  )) as typeof import("../app/src/core/toolchains/acquisition/attestation-verification.js");
   const roots = readFileSync(join(distribution, "scripts/keys/sigstore-trusted-root.jsonl"), "utf8");
   for (const [path, raw] of Object.entries(record(lock.packages, "Missing bootstrap packages"))) {
     if (!path) continue;

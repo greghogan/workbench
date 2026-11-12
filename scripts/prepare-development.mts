@@ -1,6 +1,6 @@
-import { record, string } from "./values.mjs";
-import { runOwnedChild, captureOwnedChild, processCancellation } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
+import { record, string } from "../app/src/core/runtime/values.mjs";
+import { runOwnedChild, captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 

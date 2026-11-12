@@ -14,13 +14,13 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { withManagedProcesses } from "./managed-process.mjs";
-import { isRecord } from "./values.mjs";
-import { nativeCheckEnvironment } from "../src/check-environment.ts";
-import { buildPaths, prepareBuild } from "../src/builds.ts";
-import { pruneRustCache, inspectRustCache, RustArtifactKind } from "../src/rust-cache.ts";
-import { selectedToolRequirements } from "../src/tool-references.ts";
-import { withToolCacheUseAsync } from "../src/tool-cache-lock.ts";
-import { settleCleanup } from "../src/diagnostics.ts";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
+import { nativeCheckEnvironment } from "../app/src/core/execution/checks/check-environment.ts";
+import { buildPaths, prepareBuild } from "../app/src/core/artifacts/builds.ts";
+import { pruneRustCache, inspectRustCache, RustArtifactKind } from "../app/src/core/storage/rust-cache.ts";
+import { selectedToolRequirements } from "../app/src/core/toolchains/tool-references.ts";
+import { withToolCacheUseAsync } from "../app/src/core/toolchains/tool-cache-lock.ts";
+import { settleCleanup } from "../app/src/core/diagnostics/diagnostics.mts";
 
 /** Actual Cargo output qualifies both artifact selection and reuse after cleanup; all Rust source is disposable test data. */
 async function main(): Promise<void> {

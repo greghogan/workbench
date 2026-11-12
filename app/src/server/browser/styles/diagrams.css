@@ -1,0 +1,67 @@
+.diagram-comparison {
+  margin-block: var(--space-5);
+}
+.diagram-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-block-size: var(--control-height);
+  margin-block-end: var(--space-3);
+}
+.diagram-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+.diagram-switch button {
+  border-color: transparent;
+  padding: 5px 10px;
+}
+.diagram-switch button[aria-pressed="true"] {
+  background: var(--soft);
+  border-color: var(--accent);
+}
+.diagram {
+  min-width: 0;
+  margin-block: var(--space-3);
+  margin-inline: 0;
+}
+.diagram-removed,
+.diagram-added {
+  padding: var(--space-2);
+  border: 2px solid;
+  border-radius: var(--radius-control);
+}
+.diagram-removed {
+  border-color: var(--red);
+  border-style: dashed;
+  background: var(--diff-remove);
+}
+.diagram-added {
+  border-color: var(--green);
+  background: var(--diff-add);
+}
+.diagram-viewport {
+  background: var(--paper);
+  overflow: auto;
+  margin-block-end: var(--space-3);
+  border-radius: var(--radius-control);
+}
+
+.diagram-viewport img {
+  display: block;
+  max-width: none;
+}
+
+.diagram-renderer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}

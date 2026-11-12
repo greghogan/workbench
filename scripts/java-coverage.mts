@@ -1,5 +1,5 @@
-import type { FileSummary, Summary, MetricName } from "./coverage-summary.mjs";
-import { required } from "./values.mjs";
+import type { FileSummary, Summary, MetricName } from "../app/src/core/execution/checks/coverage-summary.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 

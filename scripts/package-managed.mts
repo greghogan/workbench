@@ -1,12 +1,12 @@
 import { isMainScript } from "./script-entry.mjs";
-import { capturedText, record, required } from "./values.mjs";
+import { capturedText, record, required } from "../app/src/core/runtime/values.mjs";
 
-import { guixChannelFile } from "./managed-contract.mjs";
+import { guixChannelFile } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { builderCPUArguments, cpuBudget } from "./cpu-budget.mjs";
+import { builderCPUArguments, cpuBudget } from "../app/src/core/execution/checks/cpu-budget.mjs";
 
 export function prepareManagedPackage(
   builder: string,

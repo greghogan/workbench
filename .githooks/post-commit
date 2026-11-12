@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repository_root=$(git rev-parse --show-toplevel)
-if ! git -C "$repository_root" cat-file -e HEAD:bundle/main.cjs.br 2>/dev/null; then
+if ! git -C "$repository_root" cat-file -e HEAD:bundle/main.cjs 2>/dev/null ||
+    ! git -C "$repository_root" cat-file -e HEAD:bin/workbench.mjs 2>/dev/null; then
     export WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root"
     if ! command -v workbench >/dev/null 2>&1; then
         printf '%s\n' 'workbench: commit saved. Install Workbench to finish review bookkeeping.' \

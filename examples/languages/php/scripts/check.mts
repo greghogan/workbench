@@ -6,8 +6,8 @@ import { join, resolve } from "node:path";
 if (!process.argv[3]) throw new Error("Supply the pinned Workbench directory through the configured command");
 const distribution = resolve(process.argv[3]);
 const { cpuBudget } = (await import(
-  pathToFileURL(join(distribution, "scripts/cpu-budget.mjs")).href
-)) as typeof import("../../../../scripts/cpu-budget.mjs");
+  pathToFileURL(join(distribution, "app/src/core/execution/checks/cpu-budget.mjs")).href
+)) as typeof import("../../../../app/src/core/execution/checks/cpu-budget.mjs");
 
 const role = process.argv[2];
 if (!role) throw new Error("Specify the PHP check role");

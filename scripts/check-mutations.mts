@@ -4,10 +4,10 @@ import { readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { authoredTooling } from "./authored-tooling.mts";
 import { linkDependencies } from "./link-dependencies.mjs";
-import { processFailure } from "./process-outcome.mjs";
-import { withEngineeringRun, withEngineeringReport } from "./engineering-run.mjs";
-import { writeAtomic } from "./file-publication.mjs";
-import { readBoundedFile } from "../src/file-reads.ts";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
+import { withEngineeringRun, withEngineeringReport } from "../app/src/core/artifacts/engineering-run.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
 import { isPropertyID, propertyTitles, type PropertyID } from "./document-properties.mjs";
 
 // Small, named faults in critical contracts; this is intentionally not a general source-mutation engine.
@@ -15,28 +15,28 @@ const mutants = [
   {
     name: "accept parent-directory traversal",
     property: "relative-paths",
-    path: "src/paths.ts",
+    path: "app/src/core/runtime/paths.ts",
     before: 'part === ".."',
     after: 'part === "__mutant__"',
   },
   {
     name: "accept Windows separators and drive-relative paths",
     property: "relative-paths",
-    path: "src/paths.ts",
+    path: "app/src/core/runtime/paths.ts",
     before: "/[\\\\:]/.test(value)",
     after: "false",
   },
   {
     name: "accept ambiguous project ownership",
     property: "scope-ownership",
-    path: "src/project-configuration.ts",
+    path: "app/src/core/projects/project-configuration.ts",
     before: "ids.has(project.id) || paths.has(project.path)",
     after: "false",
   },
   {
     name: "return the unedited TOML document",
     property: "toml-values",
-    path: "src/toml-edit.ts",
+    path: "app/src/core/configuration/toml-edit.ts",
     start: "export function editToml",
     before: "return result;",
     after: "return source;",
@@ -160,8 +160,8 @@ await withEngineeringReport(report, save, async () => {
       [
         resolve("node_modules/vitest/vitest.mjs"),
         "run",
-        "tests/task_transition.test.mts",
-        "tests/maintenance_publications.test.mts",
+        "app/test/core/tasks/task_transition.test.mts",
+        "app/test/integration/maintenance/maintenance_publications.test.mts",
       ],
       { cwd: root },
     );

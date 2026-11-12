@@ -1,5 +1,5 @@
-import type { FileSummary, Summary } from "./coverage-summary.mjs";
-import { record, required } from "./values.mjs";
+import type { FileSummary, Summary } from "../app/src/core/execution/checks/coverage-summary.mjs";
+import { record, required } from "../app/src/core/runtime/values.mjs";
 import { writeFileSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 

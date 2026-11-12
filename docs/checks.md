@@ -27,11 +27,11 @@ roles, overlapping includes/excludes, and exclusion of required setup fail befor
 Use `--path` or `--project` to focus any gate, and `--verbose` to stream full logs. The matching Make targets support
 the same root and project selectors.
 
-Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree; push checks
-use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated tags are
-checked at their commit; tags pointing to non-commit objects have no project gate. Push checks leave the working tree
-and index untouched and never prompt for human record approval. The command `workbench pre-push` itself checks the
-selected project tree; it neither pushes commits nor installs hooks.
+Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
+push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
+tags are checked at their commit; tags pointing to non-commit objects have no project gate. Push checks leave the
+working tree and index untouched and never prompt for human record approval. The command `workbench pre-push` itself
+checks the selected project tree; it neither pushes commits nor installs hooks.
 
 Declare network-dependent commands with `online = true` in project checks or language automation. They default to the CI
 stage. `workbench pre-push` selects those configured for CI independently of their role. If none are configured, the
@@ -58,8 +58,8 @@ The formatter is bundled with Workbench and uses its pinned Markdown/JSON/YAML p
 prose toward `[markdown].wrap_width` in `workbench/config.toml` (120 by default). The width is a target, not a hard
 maximum for URLs, tables, or code. YAML values, sequence order, comments, and deliberate Markdown hard breaks are
 preserved. Embedded code formatting is disabled so record evidence is not reformatted as source code. Canonical
-formatting means that another pass produces identical output. Format before submitting ADRs, experiments, or hardware
-environments for human review.
+formatting means that another pass produces identical output. CLI and browser review automatically format protected
+records before presenting them; a separate formatting command is optional.
 
 `workbench sync` refreshes maps, agent context, record sequences, release indexes, and skill discovery. Generated files
 are verified against their renderers, which preserve embedded human-written charters.
@@ -480,9 +480,9 @@ the task display without a second set of coverage tables. Use `workbench check -
 output, or `WORKBENCH_VERBOSE=1 git commit` for verbose pre-commit checks. Native command logs are retained in local
 cache storage and reported with the run, including for disposable pre-commit checkouts.
 
-Retained logs preserve complete output, with credential redaction. Completed logs are compressed with Zstandard after
+Retained logs preserve complete output, with credential redaction. Closed logs use the configured compression after
 verification; compression failure preserves the complete plain log and reports the failure. The parent run owns its
-group output and child step logs together. Read either a reported path or its `.zst` form with:
+group output and child step logs together. Read either a reported path or its `.zst` or `.gz` form with:
 
 ```sh
 workbench logs read /path/to/group-0.log
@@ -494,16 +494,17 @@ files. Age-off runs first, followed by size pruning; zero disables the correspon
 GB per checkout/root namespace. Set user defaults or checkout overrides:
 
 ```sh
-workbench config set logs.max_age_days 14 --scope global
-workbench config set logs.max_bytes 2000000000 --scope local
-workbench config set logs.compress true --scope global
+workbench config set logs.check_max_age_days 14 --scope global
+workbench config set logs.check_max_bytes 2000000000 --scope local
+workbench config set logs.compression auto --scope global
 ```
 
 Older logs without a completion receipt remain available to explicit cache pruning. Automatic retention preserves them
-because completion is uncertain. Compression uses Node's native support where available, otherwise an installed `zstd`;
-unavailable compression is reported and never discards the plain output. Exported local CI job logs are also compressed;
-their report directories remain explicitly retained evidence. Diagnostic events and log locations use stderr, leaving
-structured command results on stdout.
+because completion is uncertain. Compression uses Node's built-in codecs. `logs.compression=auto` prefers Zstd and uses
+gzip when Zstd is unavailable; `zstd`, `gzip`, and `none` select an explicit format. Unavailable explicit codecs or
+compression failures are reported and preserve the plain output. Reading detects each file's format independently of the
+current preference. Exported local CI job logs are also compressed; their report directories remain explicitly retained
+evidence. Diagnostic events and log locations use stderr, leaving structured command results on stdout.
 
 Each executed run writes versioned `results.json` beside its logs, including completed checks, pending work, failures,
 cancellation, durations, and structured coverage and slow-test details. `workbench check --report PATH` additionally

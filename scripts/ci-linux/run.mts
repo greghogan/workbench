@@ -1,10 +1,10 @@
-import { required } from "../values.mjs";
+import { required } from "../../app/src/core/runtime/values.mjs";
 import { readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { readCITargets } from "../ci-contract.mjs";
-import { readCIOperation } from "../ci-operations.mjs";
-import { executeCITargets } from "../ci-execution.mjs";
-import { runSucceeded } from "../ci-results.mjs";
+import { readCITargets } from "../../app/src/core/execution/ci/support/ci-contract.mjs";
+import { readCIOperation } from "../../app/src/core/execution/ci/support/ci-operations.mjs";
+import { executeCITargets } from "../../app/src/core/execution/ci/support/ci-execution.mjs";
+import { runSucceeded } from "../../app/src/core/execution/ci/support/ci-results.mjs";
 const distribution = required(process.env.WORKBENCH_DISTRIBUTION_ROOT, "WORKBENCH_DISTRIBUTION_ROOT is required");
 const targets = readCITargets(
   JSON.parse(readFileSync(required(process.env.WORKBENCH_CI_TARGETS, "WORKBENCH_CI_TARGETS is required"), "utf8")),

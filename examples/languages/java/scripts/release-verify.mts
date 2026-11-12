@@ -38,7 +38,7 @@ try {
   if (!distribution) throw new Error("Release verification needs the selected Workbench distribution");
   const { decodeJavaRuntime, javaRuntimeArguments } = createRequire(import.meta.url)(
     join(distribution, "bundle/package.cjs"),
-  ) as typeof import("../../../../src/java-release.js");
+  ) as typeof import("../../../../app/src/core/toolchains/java-release.js");
   const runtime = decodeJavaRuntime(JSON.parse(readFileSync(join(temporary, "runtime.json"), "utf8")), true);
   const flags = javaRuntimeArguments(runtime);
   if (runtime.kind === "library") {
@@ -47,7 +47,7 @@ try {
       consumer,
       "import org.example.workbench.Count; class Consumer { public static void main(String[] args) { System.out.println(new Count().countByte(new byte[]{97, 0, 97}, 97)); } }\n",
     );
-    run("javac", ["-cp", jar, "-d", temporary, consumer]);
+    run("javac", ["-Xlint:all", "-Werror", "-cp", jar, "-d", temporary, consumer]);
     assert.equal(run("java", [...flags, "-cp", `${temporary}${delimiter}${jar}`, "Consumer"]).trim(), "2");
   } else {
     assert.equal(run("java", [...flags, "-jar", jar, "97", "banana"]).trim(), "3");

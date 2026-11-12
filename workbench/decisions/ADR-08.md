@@ -1,5 +1,5 @@
 ---
-summary: Testable comparisons, candidate refinement, effect size and uncertainty, retained evidence, and human review.
+summary: Assessable comparisons, candidate refinement, proportionate evidence, follow-on learning, and human review.
 agent_instruction:
   Obtain human review of completed experiments, environment records, and their supporting files before commit. Before
   recommending rejection, evaluate plausible improvements to the candidate's design and implementation.
@@ -7,37 +7,34 @@ agent_instruction:
 
 # ADR-8: Experiments and measurement evidence
 
-Create experiment records for testable comparisons: candidate and baseline, controlled difference, workload, correctness
-criterion, metric, and evaluation rule. Use pilot runs to refine measurement procedures. Document evaluation and
-stopping decisions, and account for adaptive sampling when assessing confidence. Use matched conditions and interleaving
-when drift matters. Scale evidence to the claimed effect and measured variation: smaller effects relative to noise need
-more independent evidence. Use no arbitrary percentage improvement cutoff; insufficient evidence yields an inconclusive
-result. Exploratory profiling and routine verification need not become experiments; their files remain disposable unless
-required as experimental evidence.
+Experiment records identify the candidate and baseline, controlled difference, workload, correctness criterion, metric,
+and evaluation and stopping rules. Evidence accounts for measured variation, drift, and adaptive sampling in proportion
+to the claimed effect. No arbitrary percentage improvement cutoff establishes success; insufficient evidence yields an
+inconclusive result. Exploratory profiling and routine verification need not become experiments; their files remain
+disposable unless required as experimental evidence.
 
 Experiment records use the `EXP` type code under `workbench/experiments/`; hardware environment records use `ENV` under
-`workbench/environments/`. Both are project-owned Markdown records with YAML frontmatter and are not inherited. An
-environment may describe one machine or a hardware family, with configuration-specific inventories and characterization
-captures in its supporting directory under ADR-4. Add relevant profiling evidence when first using a configuration;
-preserve captures referenced by earlier experiments and record the software used for characterization. Sharing an
-environment does not imply equivalent performance.
+`workbench/environments/`. Both are project-owned Markdown records with YAML frontmatter and are not inherited.
+Environments identify hardware platforms and the characteristics needed to place experiments in context and assess
+meaningful comparisons. They may describe one machine or a hardware family, using public specifications where suitable.
+Inventories and characterization are optional evidence when they materially aid interpretation. Software versions and
+run-specific settings belong in the experiment when they affect the comparison.
 
-Experiments identify the exact hardware configuration, profile capture, allocated resources, OS release, kernel, and
-toolchain versions used, directly or through linked provenance. Software changes, including OS upgrades, do not require
-new hardware environments. Record material deviations and any approved scheduler bypass or absence, without duplicating
-facts fixed by the tested revision and canonical build.
+Retain the minimum evidence needed to assess the findings and inform follow-on experiments, including material hardware,
+software, resource, and measurement conditions. Software changes do not require new hardware environments. Record
+material deviations, without duplicating facts fixed by the tested revision and canonical build or requiring a complete
+reproduction bundle.
 
-Commit accepted candidates with their experiment; that commit identifies the tested source. For candidates not retained
-in source, preserve an applicable patch against a named baseline, including rejected, inconclusive, and uncommitted
-candidates. Record build deviations needed for reproduction; neither duplicate an exact committed candidate as a patch
-nor require a commit to name itself. Microbenchmarks establish mechanisms; workflow claims need representative
-end-to-end evidence.
+Each completed experiment has its own commit, containing the record and any accepted implementation; its parent is the
+baseline. Retain an applicable candidate patch against that baseline for rejected and inconclusive experiments. Do not
+duplicate accepted implementation as a patch or require a commit to name itself. Microbenchmarks establish mechanisms;
+workflow claims need representative end-to-end evidence.
 
-Group retained evidence in the experiment's supporting directory under ADR-4. Preserve results and context needed to
-assess the conclusion, including variation, exclusions, and failures that summaries would hide. Verify extracted
-evidence against source reports; the record must remain assessable after disposable reports are deleted, without
-embedding or compressing a complete copy. Create a new record for a distinct comparison; retain protocol revisions and
-candidate refinements with the evidence they produced. Distinguish exploratory refinements from confirmatory evidence.
+Retain evidence under ADR-4, including variation, exclusions, and failures that summaries would hide. Verify extracted
+evidence against source reports; the record remains assessable after disposable reports are deleted without requiring a
+complete copy. Different experimental questions receive separate records. Keep repeated runs, protocol revisions, and
+candidate refinements for the same question together with their evidence. Distinguish exploratory refinements from
+confirmatory evidence.
 
 Before recommending rejection, assess whether material weaknesses in the candidate's design, implementation, or
 measurement explain the result. Evaluate plausible improvements in proportion to their expected benefit and cost, and
@@ -46,11 +43,11 @@ implementation alone does not establish that the underlying approach is unsuitab
 leave broader claims inconclusive.
 
 Agents may plan, run, and refine experiments within authorized work without separate protocol approval. Humans review
-completed experiments, new and changed environment records, and their supporting files before commit. ADR-1 defines the
-shared acknowledgment rules and provisional-commit exception. Changes to previously committed experimental conclusions
-retain that review requirement. Review of the completed evidence is independent of accepting or rejecting the candidate:
-rejected and inconclusive comparisons can still be satisfactorily completed experiments, and favorable measurements do
-not establish human acceptance. Keep execution recipes in the experiment workflow.
+completed experiments, new and changed environment records, and their supporting files before commit, including changes
+to committed conclusions. ADR-1 defines acknowledgment and provisional-commit rules. Human acceptance of the completed
+evidence is independent of the candidate verdict: rejected and inconclusive comparisons can be completed experiments,
+and favorable measurements do not establish human acceptance. Keep measurement methods and execution recipes in the
+records guide.
 
 Rationale: Declared comparisons and retained evidence make empirical conclusions assessable. Reviewing candidate
 limitations prevents premature rejection of promising approaches. Human review controls which conclusions enter the

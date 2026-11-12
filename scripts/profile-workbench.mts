@@ -1,15 +1,15 @@
 import { pathToFileURL } from "node:url";
-import { clipped } from "./diagnostic-text.mjs";
+import { clipped } from "../app/src/core/diagnostics/diagnostic-text.mjs";
 import { parseArgs } from "node:util";
 import { mkdirSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { availableParallelism, platform, release, arch } from "node:os";
 import { performance } from "node:perf_hooks";
-import { workingReviewTree } from "../src/git-snapshot.ts";
-import { readBoundedFile } from "../src/file-reads.ts";
-import { withEngineeringRun, withEngineeringReport } from "./engineering-run.mjs";
-import { processFailure } from "./process-outcome.mjs";
-import { writeAtomic } from "./file-publication.mjs";
+import { workingReviewTree } from "../app/src/core/git/git-snapshot.ts";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
+import { withEngineeringRun, withEngineeringReport } from "../app/src/core/artifacts/engineering-run.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import {
   profileCases,
   isProfileCase,

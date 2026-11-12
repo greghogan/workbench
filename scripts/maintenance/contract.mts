@@ -1,4 +1,4 @@
-import type { ProcessLock } from "../../src/process-lock.js";
+import type { ProcessLock } from "../../app/src/core/storage/process-lock.js";
 /** Publications may expose a digest without a download URL; a name alone is not an identity. */
 export type ReleaseAsset = { name: string } & ({ url: string; sha256?: string } | { url?: string; sha256: string });
 export enum NativeCatalog {

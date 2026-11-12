@@ -1,11 +1,11 @@
-import { processCancellation } from "./owned-child.mjs";
+import { processCancellation } from "../app/src/core/runtime/owned-child.mjs";
 import { runCIEntry } from "./ci-errors.mts";
 import { isMainScript } from "./script-entry.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readCandidate } from "./ci-candidate.mts";
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 import { successfulReleaseRun, readReleaseProof, verifyReleaseCandidate } from "./release-contract.mts";
 import { GitHubRelease } from "./github-release.mts";
 

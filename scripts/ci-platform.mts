@@ -1,15 +1,20 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CILifecycle, executeCI } from "./ci-lifecycle.mjs";
-import { readCITargets } from "./ci-contract.mjs";
-import { assertOperationCoverage, nativeCIJobs, operationPhases, CIOperation } from "./ci-operations.mjs";
-import { readAcquiredCIImage } from "./ci-image-contract.mjs";
+import { CILifecycle, executeCI } from "../app/src/core/execution/ci/support/ci-lifecycle.mjs";
+import { readCITargets } from "../app/src/core/execution/ci/support/ci-contract.mjs";
+import {
+  assertOperationCoverage,
+  nativeCIJobs,
+  operationPhases,
+  CIOperation,
+} from "../app/src/core/execution/ci/support/ci-operations.mjs";
+import { readAcquiredCIImage } from "../app/src/core/execution/ci/support/ci-image-contract.mjs";
 import { readCandidate } from "./ci-candidate.mts";
-import { runSucceeded } from "./ci-results.mjs";
-import { executeCITargets } from "./ci-execution.mjs";
-import { record, required, string, stringRecord } from "./values.mjs";
-import { acquireRegistryImage } from "./image-acquisition.mts";
+import { runSucceeded } from "../app/src/core/execution/ci/support/ci-results.mjs";
+import { executeCITargets } from "../app/src/core/execution/ci/support/ci-execution.mjs";
+import { record, required, string, stringRecord } from "../app/src/core/runtime/values.mjs";
+import { acquireRegistryImage } from "../app/src/core/toolchains/acquisition/image-acquisition.mts";
 import { runCIEntry } from "./ci-errors.mts";
 
 const lifecycle = new CILifecycle();

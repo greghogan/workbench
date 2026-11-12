@@ -1,29 +1,29 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, relative, resolve } from "node:path";
-import { cpuBudget } from "./cpu-budget.mjs";
-import { processCancellation, runOwnedChild } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
-import { createOwnedScratch } from "./owned-scratch.mjs";
-import { combineFailures, settleCleanup } from "./diagnostic-errors.mjs";
-import { publishDirectory } from "./directory-publication.mjs";
+import { cpuBudget } from "../app/src/core/execution/checks/cpu-budget.mjs";
+import { processCancellation, runOwnedChild } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
+import { createOwnedScratch } from "../app/src/core/runtime/owned-scratch.mjs";
+import { combineFailures, settleCleanup } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
+import { publishDirectory } from "../app/src/core/runtime/directory-publication.mjs";
 import { writeJavaCoverage } from "./java-coverage.mjs";
 import { retainJavaTestReports } from "./java-test-reports.mjs";
-import { mavenTestSelectionPom } from "../src/maven-test-selection.js";
+import { mavenTestSelectionPom } from "../app/src/core/toolchains/maven/maven-test-selection.js";
 import { isMainScript } from "./script-entry.mjs";
 import { canonicalJavaSources, snapshotJavaSources, publishJavaFormatting } from "./java-sources.mjs";
-import { commandInvocation } from "../src/tool-execution.js";
+import { commandInvocation } from "../app/src/core/toolchains/tool-execution.js";
 import {
   javaRuntime,
   javaRuntimeArguments,
   packageJavaRelease,
   type JavaRuntime,
   type JavaSourceArtifacts,
-} from "../src/java-release.js";
-import { decodeMavenAcquisition } from "../src/maven-policy.js";
-import { mavenChecksums } from "../src/maven-artifacts.js";
-import { readMavenMetadata, assertMavenFiles } from "../src/maven-files.js";
-import { isolatedMavenEnvironment } from "../src/maven-environment.js";
+} from "../app/src/core/toolchains/java-release.js";
+import { decodeMavenAcquisition } from "../app/src/core/toolchains/maven/maven-policy.js";
+import { mavenChecksums } from "../app/src/core/toolchains/maven/maven-artifacts.js";
+import { readMavenMetadata, assertMavenFiles } from "../app/src/core/toolchains/maven/maven-files.js";
+import { isolatedMavenEnvironment } from "../app/src/core/toolchains/maven/maven-environment.js";
 import {
   assertMavenWorkspaceExternalCoordinates,
   mavenInvocationPom,
@@ -32,10 +32,15 @@ import {
   prepareMavenCheckRepository,
   readMavenWorkspace,
   type MavenSourceProject,
-} from "../src/maven-workspace.js";
-import { withCacheLock } from "../src/cache-lock.js";
-import { required } from "./values.mjs";
-import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "./diagnostics.mjs";
+} from "../app/src/core/toolchains/maven/maven-workspace.js";
+import { withCacheLock } from "../app/src/core/storage/cache-lock.js";
+import { required } from "../app/src/core/runtime/values.mjs";
+import {
+  diagnostic,
+  DiagnosticOperation,
+  DiagnosticOutcome,
+  LogLevel,
+} from "../app/src/core/diagnostics/diagnostics.mjs";
 
 export interface JavaCheckOptions {
   distribution: string;
@@ -142,12 +147,7 @@ export async function runJavaCheck(options: JavaCheckOptions): Promise<void> {
       writeFileSync(join(directory, "pom.xml"), module?.pom ?? pom);
       writeFileSync(join(directory, ".mvn/checksums/checksums.sha256"), module?.checksums ?? index);
       if (module) {
-        const selectedRuntime: JavaRuntime =
-          root === source
-            ? runtime
-            : existsSync(join(root, ".mvn/runtime.json"))
-              ? javaRuntime(root)
-              : { kind: "library", nativeAccess: [], modules: [] };
+        const selectedRuntime: JavaRuntime = root === source ? runtime : { ...javaRuntime(root), kind: "library" };
         writeFileSync(
           join(directory, "pom.xml"),
           mavenInvocationPom(module.pom, {

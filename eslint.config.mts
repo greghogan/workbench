@@ -1,4 +1,5 @@
-import { untrackedToolingOutputs, bundledOutputs } from "./scripts/tooling-artifacts.mts";
+import { interfaceBoundaries, centralizedProjectPaths } from "./scripts/module-boundaries.mts";
+import { untrackedToolingOutputs, bundledOutputs } from "./app/src/core/distribution/tooling-artifacts.mts";
 import js from "@eslint/js";
 import { defineConfig } from "eslint/config";
 import eslintConfigPrettier from "eslint-config-prettier";
@@ -6,11 +7,6 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import { explainedSecurityExceptions } from "./scripts/security-lint.mjs";
 import { jsxRenderingRules } from "./scripts/jsx-rendering-lint.mjs";
-
-const commandPresentationImports = {
-  group: ["./cli/*", "../cli/*"],
-  message: "Shared services and web presentation must not depend on CLI presentation; compose them at startup.",
-};
 
 export default defineConfig(
   // Example checks create and remove reports concurrently; these are generated data, not source scripts.
@@ -49,9 +45,9 @@ export default defineConfig(
   },
   {
     files: [
-      "src/**/*.{ts,tsx}",
+      "app/src/**/*.{ts,tsx,mts}",
       "scripts/**/*.mts",
-      "tests/**/*.mts",
+      "app/test/**/*.{ts,mts}",
       "examples/**/scripts/*.mts",
       "bin/*.cts",
       "*.mts",
@@ -65,9 +61,31 @@ export default defineConfig(
       "@typescript-eslint/switch-exhaustiveness-check": "error",
     },
   },
+  {
+    files: ["app/src/core/**/*.{ts,mts}", "app/src/server/**/*.{ts,tsx}"],
+    ignores: ["app/src/server/browser/**"],
+    languageOptions: { globals: globals.node },
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          globals: ["window", "document", "navigator", "localStorage", "sessionStorage"].map((name) => ({
+            name,
+            message: "Browser globals belong to browser controllers; Node services receive DOM objects explicitly.",
+          })),
+          checkGlobalObject: true,
+        },
+      ],
+    },
+  },
   ...jsxRenderingRules,
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["app/src/**/*.{ts,tsx}"],
+    ignores: ["app/src/core/projects/project-paths.ts"],
+    rules: { "architecture/project-paths": "error" },
+  },
+  {
+    files: ["app/src/**/*.{ts,tsx,mts}"],
     rules: {
       "no-restricted-properties": [
         "error",
@@ -86,20 +104,23 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/main.ts", "src/launcher.ts", "src/cli/**"],
-    rules: { "no-restricted-imports": ["error", { patterns: [commandPresentationImports] }] },
+    files: ["app/src/**/*.{ts,tsx,mts}"],
+    plugins: {
+      architecture: {
+        rules: { "interface-boundaries": interfaceBoundaries, "project-paths": centralizedProjectPaths },
+      },
+    },
+    rules: { "architecture/interface-boundaries": "error" },
   },
   {
-    files: ["src/web/**/*.tsx"],
+    files: ["app/src/server/**/*.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
-              name: "./asset-response.js",
+              name: "../http/asset-response.js",
               message: "Templates use the generated asset manifest; HTTP transport belongs to the listener.",
             },
           ],
@@ -108,15 +129,14 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/web/server.ts"],
+    files: ["app/src/server/http/server.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
-              name: "../review-formatting.js",
+              name: "../../core/review/review-formatting.js",
               importNames: ["proposeReviewFormatting"],
               message:
                 "Render formatting from the worker's captured review bytes instead of reacquiring the project on the listener.",
@@ -127,12 +147,15 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/citation-*.ts", "src/citations.ts", "src/web/citation-documents.ts"],
+    files: [
+      "app/src/core/citations/citation-*.ts",
+      "app/src/core/citations/citations.ts",
+      "app/src/server/documents/citation-documents.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
               name: "node:fs",
@@ -150,12 +173,11 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/web/citation-documents.ts"],
+    files: ["app/src/server/documents/citation-documents.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
               name: "node:fs",
@@ -178,12 +200,11 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/maven-*.ts"],
+    files: ["app/src/core/toolchains/maven/maven-*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
               name: "node:fs",
@@ -201,12 +222,11 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/web/*-pages.tsx", "src/web/*-page.tsx"],
+    files: ["app/src/server/views/*-pages.tsx", "app/src/server/views/*-page.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [commandPresentationImports],
           paths: [
             {
               name: "node:fs",
@@ -217,12 +237,12 @@ export default defineConfig(
               message: "Render pages from the prepared workspace snapshot; filesystem acquisition belongs to workers.",
             },
             {
-              name: "../task-queue.js",
+              name: "../../core/tasks/task-queue.js",
               importNames: ["readTaskQueue", "inspectTaskQueue"],
               message: "Use the prepared task queue from the workspace snapshot.",
             },
             {
-              name: "../task-model.js",
+              name: "../../core/tasks/task-model.js",
               importNames: ["readTaskGraph"],
               message: "Use the prepared task graph from the workspace snapshot.",
             },
@@ -242,7 +262,7 @@ export default defineConfig(
     rules: { "@typescript-eslint/no-require-imports": ["error", { allowAsImport: true }] },
   },
   {
-    files: ["tests/**/*.mts"],
+    files: ["app/test/**/*.{ts,mts}"],
     rules: {
       // Focused tests can silently reduce the executed suite.
       "no-restricted-properties": [
@@ -256,9 +276,9 @@ export default defineConfig(
     },
   },
   {
-    files: ["tests/**/*.test.mts"],
+    files: ["app/test/**/*.test.mts"],
     // Controller tests own their live browser sessions; static markup uses the teardown-managed fixture.
-    ignores: ["tests/web_client.test.mts"],
+    ignores: ["app/test/server/browser/web_client.test.mts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -308,15 +328,19 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/project-model.ts", "src/record-identity.ts", "src/files.ts", "src/file-reads.ts"],
+    files: [
+      "app/src/core/projects/project-model.ts",
+      "app/src/core/records/record-identity.ts",
+      "app/src/core/runtime/files.ts",
+      "app/src/core/runtime/file-reads.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
-            commandPresentationImports,
             {
-              group: ["./checks.js", "./main.js", "./web/*", "./project-configuration.js", "./record-service.js"],
+              regex: "(?:^|/)(?:checks|main|program|project-configuration|record-service)\\.js$",
               message: "Foundational values and file operations must not depend on orchestration or presentation.",
             },
           ],
@@ -325,16 +349,19 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/build-cache.ts"],
+    files: ["app/src/core/storage/build-cache.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
-            commandPresentationImports,
             {
-              group: ["commander", "./terminal-*", "./web/*"],
+              group: ["commander"],
               message: "Cache services must remain independent of command and web presentation.",
+            },
+            {
+              regex: "(?:^|/)terminal-[^/]*\\.js$",
+              message: "Keep terminal presentation outside the cache service.",
             },
           ],
         },

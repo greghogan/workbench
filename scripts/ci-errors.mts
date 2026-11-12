@@ -1,6 +1,6 @@
 import { appendFileSync } from "node:fs";
-import { describeError } from "./diagnostic-errors.mjs";
-import { redact, boundedText } from "./diagnostic-text.mjs";
+import { describeError } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
+import { redact, boundedText } from "../app/src/core/diagnostics/diagnostic-text.mjs";
 
 /** The same actionable cause appears in plain logs, a job annotation, and the job summary. */
 export function reportCIFailure(operation: string, error: unknown): void {

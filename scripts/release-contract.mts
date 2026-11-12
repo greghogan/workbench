@@ -1,4 +1,4 @@
-import { record, string } from "./values.mjs";
+import { record, string } from "../app/src/core/runtime/values.mjs";
 import type { CICandidate } from "./ci-candidate.mts";
 
 /** Only promote bytes from successful complete main CI. Never execute or rebuild downloaded code. */

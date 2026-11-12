@@ -14,7 +14,12 @@ import {
 import { isAbsolute, join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { withManagedProcesses } from "./managed-process.mjs";
-import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "./diagnostics.mjs";
+import {
+  diagnostic,
+  LogLevel,
+  DiagnosticOperation,
+  DiagnosticOutcome,
+} from "../app/src/core/diagnostics/diagnostics.mjs";
 
 const inputIdentity = /^[a-f0-9]{64}$/;
 type Builder = "nix" | "guix";

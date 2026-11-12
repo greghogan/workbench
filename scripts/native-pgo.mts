@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
-import { compilerCatalog, type CompilerFamily } from "./compiler-catalog.mjs";
-import type { EngineeringRun, EngineeringCommandOptions } from "./engineering-run.mjs";
+import { compilerCatalog, type CompilerFamily } from "../app/src/core/toolchains/compiler-catalog.mjs";
+import type { EngineeringRun, EngineeringCommandOptions } from "../app/src/core/artifacts/engineering-run.mjs";
 import { optimizationInputs, fileSHA256, publishOptimization } from "./optimization-artifact.mjs";
 
 interface NativePGOContext {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withEngineeringRun } from "./engineering-run.mjs";
+import { withEngineeringRun } from "../app/src/core/artifacts/engineering-run.mjs";
 import { optimizationInputs, publishOptimization, fileSHA256 } from "./optimization-artifact.mjs";
 const language = process.argv[2];
 if (language !== "rust" && language !== "go") throw new Error("Select the rust or go PGO example");

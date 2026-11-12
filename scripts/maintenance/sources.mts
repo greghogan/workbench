@@ -1,14 +1,14 @@
 import * as http from "node:http";
-import { UserFacingError } from "../diagnostic-errors.mjs";
+import { UserFacingError } from "../../app/src/core/diagnostics/diagnostic-errors.mjs";
 import { decodePHPReleases } from "./php.mjs";
-import { metadataBytes } from "../metadata-http.mts";
+import { metadataBytes } from "../../app/src/core/toolchains/acquisition/metadata-http.mts";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
 import { JSDOM } from "jsdom";
 import { SaxesParser } from "saxes";
 import { satisfies, validRange } from "semver";
-import { captureOwnedChild } from "../owned-child.mjs";
-import { record, records, required, string } from "../values.mjs";
+import { captureOwnedChild } from "../../app/src/core/runtime/owned-child.mjs";
+import { record, records, required, string } from "../../app/src/core/runtime/values.mjs";
 
 import { ReleaseConstraint, type Release } from "./contract.mjs";
 /** Maintainer commands run on the pinned development Node; the portable CLI's runtime floor is independent. */

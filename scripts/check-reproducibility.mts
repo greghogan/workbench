@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { createSourceSnapshot } from "./source-snapshot.mts";
+import { createSourceSnapshot } from "../app/src/core/execution/snapshots/source-snapshot.mts";
 import { linkDependencies } from "./link-dependencies.mjs";
-import { withEngineeringRun, withEngineeringReport } from "./engineering-run.mjs";
+import { withEngineeringRun, withEngineeringReport } from "../app/src/core/artifacts/engineering-run.mjs";
 import { compareArtifacts, type ArtifactComparison } from "./compare-artifacts.mjs";
-import { writeAtomic } from "./file-publication.mjs";
-import { readBoundedFile } from "../src/file-reads.ts";
-import { ownedPath } from "../src/paths.ts";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
+import { ownedPath } from "../app/src/core/runtime/paths.ts";
 
 const root = process.cwd(),
   parent = process.env.WORKBENCH_BUILD_DIR;

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { parseArgs } from "node:util";
-import { isCompilerFamily } from "./compiler-catalog.mjs";
+import { isCompilerFamily } from "../app/src/core/toolchains/compiler-catalog.mjs";
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -19,7 +19,9 @@ async function main(): Promise<void> {
       "Usage: node scripts/check-consumers.mjs [--artifacts DIRECTORY] [--output NEW_DIRECTORY] [--language ID ...] [--compiler clang|gcc|mvsc] [--cold-cache] [--hosting-only]",
     );
   else {
-    const runtime = createRequire(import.meta.url)("../bundle/consumer.cjs") as typeof import("../src/consumer.js");
+    const runtime = createRequire(import.meta.url)(
+      "../bundle/consumer.cjs",
+    ) as typeof import("../app/test/integration/consumers/consumer.js");
     if (values.compiler?.some((value) => !isCompilerFamily(value)))
       throw new Error("Select integration compiler clang, gcc, or mvsc");
     const artifacts = values.artifacts ?? process.env.WORKBENCH_CI_CANDIDATE;

@@ -1,53 +1,27 @@
 ---
-summary: Storage classes, native platform locations, configuration ownership and precedence, and CLI contracts.
+summary: Storage classes, native platform locations, configuration ownership, and safe cleanup.
 ---
 
-# ADR-I: Configuration, filesystem locations, and commands
+# ADR-I: Configuration and filesystem ownership
 
-Storage and command principles apply to project-owned tools. Workbench-specific locations, configuration, and cleanup
-behavior below govern Workbench and its integration; they do not prescribe a consuming application's implementation.
+Separate configuration, durable data, restart-persistent state, disposable cache, and session files. Follow native
+platform conventions: XDG on Linux, application-support/cache/log locations on macOS, and Known Folders on Windows.
+Resolve locations through platform facilities without assumed profile layouts, respecting sandboxes and packaged-app
+storage. Roaming storage and XDG outside Linux require explicit choices. Use protected temporary and IPC facilities;
+cache deletion preserves durable data, restart-persistent state, and active work. Documents remain user-selected. Keep
+exact locations in tooling guides.
 
-Separate configuration, durable data, restart-persistent state, disposable cache, and session files. Preserve work and
-restart-persistent state when deleting caches. Follow native platform conventions: XDG on Linux,
-application-support/cache/log locations on macOS, and Known Folders on Windows. Resolve locations through platform
-facilities without assumed profile layouts, respecting sandboxes and packaged-app storage. Roaming storage and XDG
-outside Linux require explicit choices. Use protected temporary and IPC facilities; documents remain user-selected. Keep
-exact locations in the tooling guide.
+Declare configuration ownership and override order, expose selected sources, reject unknown keys except extensions, and
+validate reads and edits identically before activation. Never relocate existing data implicitly.
 
-Project settings and root registrations are project-owned; Workbench's settings are not inherited. Declare ownership and
-override order, expose selected sources, reject unknown keys except extensions, and validate reads and edits identically
-before activation. Never relocate existing data implicitly.
+For development integrations, keep machine resource and storage preferences separate from tracked project policy. CI
+supplies its allocation explicitly. Builds must reuse only compatible generated state and must not overwrite or remove
+state needed by other builds.
 
-Local CPU and concurrency budgets are user preferences, with Git-ignored checkout overrides. CI supplies its allocation
-explicitly.
+Cleanup distinguishes generated products from dependency installations and shared downloads. Verify ownership and active
+references immediately before deletion. Automatic cleanup preserves uncertain ownership or use. Explicit deletion of
+inspected uncertain cache data requires human confirmation and preserves known active work. Retained records, evidence,
+and logs follow their own retention contracts.
 
-Build products and dependencies default to ignored project directories. User preferences may select external cache
-storage, overridden by ignored checkout preferences; tracked configuration cannot select machine storage. Isolate
-checkouts, roots, toolchains/environments, and incompatible build modes. Checks and shells share storage controls, and
-package-manager entry points apply them before installation without changing active managed paths or silently falling
-back. Copied starters remain independently usable.
-
-Direnv integration is optional and preserves existing shell customizations.
-
-Ordinary cleanup removes generated products, including prepared release artifacts, while preserving dependency
-installations. Deep cleanup may also remove those installations. Both preserve shared downloads and tools. CI reports
-retain documented project paths.
-
-Shared-tool pruning preserves installations required by registered projects, active commands, retained results, or
-explicit retention choices. Requirements include supported compatibility selections. Unavailable or stale project
-requirements cannot establish that an installation is unused. Uncertain ownership or active use prevents deletion.
-
-Automatic pruning is a personal preference enabled by default. Superseded owned assets become eligible after verified
-replacements have succeeded in applicable checks and all consumers have released their requirements. Retire obsolete
-regenerable cache generations according to retention choices without deleting project records, experiment evidence, or
-retained logs. Cleanup verifies current ownership and references immediately before deletion. Failed maintenance reports
-its outcome independently of the completed checks.
-
-Provide validated configuration inspection and editing with explicit scopes and precedence; keep automation declarations
-separate. Generate completion from the CLI schema. Once the selected executable is acquired, help, inspection, and
-completion require no project initialization or external services and do not change durable state. Automation provides
-structured output, stderr diagnostics, and meaningful exit status; asynchronous commands distinguish submission from
-completion. Display byte quantities using decimal SI units. Document settings and recipes in guides.
-
-Rationale: Predictable locations, ownership, and command contracts make tools composable while separating user work from
-disposable files.
+Rationale: Predictable locations and explicit ownership separate portable project choices, personal preferences, and
+user work from disposable files.

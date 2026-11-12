@@ -1,16 +1,16 @@
-import { acquireCommand, acquisitionAttempt } from "./network-command.mts";
+import { acquireCommand, acquisitionAttempt } from "../app/src/core/toolchains/acquisition/network-command.mts";
 import {
   AcquisitionReason,
   acquisitionReason,
   retryNetwork,
   settleNetworkCleanup,
   AcquisitionRejected,
-} from "./network-retry.mts";
-import { captureOwnedChild } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
+} from "../app/src/core/toolchains/acquisition/network-retry.mts";
+import { captureOwnedChild } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { record, required } from "./values.mjs";
+import { record, required } from "../app/src/core/runtime/values.mjs";
 import { readPublishedRelease } from "./release-contract.mts";
 
 /** All authenticated GitHub effects stay behind one narrowly scoped transport. */

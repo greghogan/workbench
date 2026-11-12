@@ -1,11 +1,11 @@
-import { isStringArray, required, record, string, capturedText, errorFrom } from "./values.mjs";
-import { errorMessage } from "./ci-results.mjs";
+import { isStringArray, required, record, string, capturedText, errorFrom } from "../app/src/core/runtime/values.mjs";
+import { errorMessage } from "../app/src/core/execution/ci/support/ci-results.mjs";
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compilerCompatibilityRoles } from "./ci-contract.mjs";
-import { collectReports, reportState } from "./ci-reports.mjs";
+import { compilerCompatibilityRoles } from "../app/src/core/execution/ci/support/ci-contract.mjs";
+import { collectReports, reportState } from "../app/src/core/execution/ci/support/ci-reports.mjs";
 
 const roots: unknown = JSON.parse(process.env.CHECK_ROOTS ?? "[]");
 if (!isStringArray(roots) || !roots.length || roots.some((root) => typeof root !== "string" || !root))

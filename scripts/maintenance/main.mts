@@ -19,9 +19,14 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { MaintenanceSources, metadataRequests, configureMetadataProxy } from "./sources.mjs";
 import { applyMaintenance, readMaintenancePlan } from "./apply.mjs";
-import { captureOwnedChild, processCancellation, runOwnedChild } from "../owned-child.mjs";
-import { processFailure } from "../process-outcome.mjs";
-import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "../diagnostics.mjs";
+import { captureOwnedChild, processCancellation, runOwnedChild } from "../../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../../app/src/core/runtime/process-outcome.mjs";
+import {
+  diagnostic,
+  LogLevel,
+  DiagnosticOperation,
+  DiagnosticOutcome,
+} from "../../app/src/core/diagnostics/diagnostics.mjs";
 
 export async function maintenanceMain(
   args: string[],

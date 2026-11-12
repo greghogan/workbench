@@ -24,9 +24,9 @@ originals serve only as reconciliation inputs. Resolve policy conflicts by editi
 review. Neither source order nor a separate overriding decision silently changes another decision's meaning.
 
 When creating a group of ADRs, prefer a reading order from foundations to specializations. Preserve existing record IDs
-when later decisions add foundational material. References may name earlier or later ADRs; all references must resolve
-without cycles. Cross-namespace references name their owner and require applicability. Namespaces preserve identity, not
-policy precedence. Adopted namespaces add no governing charter or separate project registration.
+when later decisions add foundational material. ADRs may reference earlier or later ADRs without cycles. Cross-namespace
+references name their owner and require applicability. Namespaces preserve identity, not policy precedence. Adopted
+namespaces add no governing charter or separate project registration.
 
 Language definitions use complete replacement: select a complete project definition when present; otherwise use the
 complete definition from the pinned executable distribution. Ignore the displaced definition without merging fields or

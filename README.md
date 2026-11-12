@@ -28,7 +28,7 @@ originals. Reading or editing records requires neither Workbench nor upstream ac
 | Adopted ADRs and supporting files                                     | Editable project-owned copies; original Git objects supply three-way reconciliation.                            |
 | Project charter and other records                                     | Project-owned; retained collection charters supply context rather than governing intent.                        |
 | Maps and `AGENTS.md`                                                  | Committed outputs referencing authoritative project records.                                                    |
-| Skills                                                                | Personally selected, locally linked to definitions from the project's pinned executable.                        |
+| Skills                                                                | Personally selected, locally linked to definitions from the Workbench application distribution.                 |
 | Example source, environment files, Makefiles, hooks, and CI workflows | Copied starters, owned and adapted by the project.                                                              |
 | Language definitions                                                  | A complete project definition replaces the executable distribution's equivalent; project additions are allowed. |
 | Project settings, root registrations, and custom automation           | Project-owned; Workbench repository settings are not consumer defaults.                                         |
@@ -89,14 +89,14 @@ Usage: workbench docs [options] <file>
 Verify executable console examples
 
 Options:
-  --log-level <level>    Diagnostic severity (choices: "debug", "info", "warn",
-                         "error")
-  --log-format <format>  Diagnostic rendering on stderr (choices: "text",
-                         "json")
-  --log-save             Retain this command's diagnostics in native state/log
-                         storage
-  --plain                Use stable plain text and line-oriented prompts
-  --no-plain             Override a saved or inherited plain presentation
-                         preference
-  -h, --help             display help for command
+  --log-level <level>       Diagnostic severity on stderr (choices: "debug",
+                            "info", "warn", "error")
+  --log-file-level <level>  Diagnostic severity in retained logs (choices:
+                            "debug", "info", "warn", "error")
+  --log-format <format>     Diagnostic rendering on stderr (choices: "text",
+                            "json")
+  --plain                   Use stable plain text and line-oriented prompts
+  --no-plain                Override a saved or inherited plain presentation
+                            preference
+  -h, --help                display help for command
 ```

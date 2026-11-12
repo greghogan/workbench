@@ -1,14 +1,14 @@
 import { isMainScript } from "./script-entry.mjs";
-import { emitCheckDetail } from "./check-detail-data.mjs";
-import { clipped } from "./diagnostic-text.mjs";
-import { required, record, records } from "./values.mjs";
+import { emitCheckDetail } from "../app/src/core/execution/checks/check-detail-data.mjs";
+import { clipped } from "../app/src/core/diagnostics/diagnostic-text.mjs";
+import { required, record, records } from "../app/src/core/runtime/values.mjs";
 import {
   type Summary,
   type FileSummary,
   coverageMetrics,
   reportSummaryChange,
   readCoverageSummary as parseSummary,
-} from "./coverage-summary.mjs";
+} from "../app/src/core/execution/checks/coverage-summary.mjs";
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 

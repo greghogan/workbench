@@ -13,7 +13,7 @@ import {
 } from "./contract.mjs";
 import { compareVersions, stableVersion, latestRelease, MaintenanceSources } from "./sources.mjs";
 
-import { record, records, string, strings } from "../values.mjs";
+import { record, records, string, strings } from "../../app/src/core/runtime/values.mjs";
 export class MaintenanceConstraint extends ReleaseConstraint {}
 export function compareMaintenanceVersions(target: MaintenanceTarget, left: string, right: string): number {
   return target.provider === MaintenanceProvider.Go ? compareSemver(left, right) : compareVersions(left, right);
