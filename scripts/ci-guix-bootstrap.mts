@@ -1,5 +1,5 @@
 import { isMainScript } from "./script-entry.mjs";
-import { isRecord, isStringArray, required, records, strings, capturedText } from "./values.mjs";
+import { isRecord, isStringArray, required, records, strings, capturedText } from "../app/src/core/runtime/values.mjs";
 import { type SpawnSyncOptions, spawn, spawnSync } from "node:child_process";
 interface GuixBootstrap {
   schema: number;
@@ -31,7 +31,7 @@ import { dirname, join, resolve } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
-import { guixChannelFile } from "./managed-contract.mjs";
+import { guixChannelFile } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 
 import type { BinaryLike } from "crypto";
 

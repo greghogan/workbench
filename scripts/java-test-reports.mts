@@ -1,8 +1,8 @@
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { publishDirectory } from "./directory-publication.mjs";
-import { readBoundedFile } from "../src/file-reads.js";
+import { publishDirectory } from "../app/src/core/runtime/directory-publication.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.js";
 import { SaxesParser } from "saxes";
 export interface JavaModuleReports {
   id: string;

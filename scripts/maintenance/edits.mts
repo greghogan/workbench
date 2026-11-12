@@ -1,4 +1,4 @@
-import { ciActionManifest, workflowPaths } from "../ci-actions.mjs";
+import { ciActionManifest, workflowPaths } from "../../app/src/core/execution/ci/support/ci-actions.mjs";
 import {
   editJsonFields,
   editTokens,
@@ -12,9 +12,9 @@ import { locatorName, locatorField } from "./workspace.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseToml } from "smol-toml";
-import { editToml } from "../../src/toml-edit.js";
+import { editToml } from "../../app/src/core/configuration/toml-edit.js";
 import { MaintenanceProvider, requestedVersion, type MaintenanceEntry } from "./contract.mjs";
-import { record, required, strings } from "../values.mjs";
+import { record, required, strings } from "../../app/src/core/runtime/values.mjs";
 
 const expression = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

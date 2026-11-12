@@ -1,14 +1,14 @@
-import { publishDirectory } from "./directory-publication.mjs";
+import { publishDirectory } from "../app/src/core/runtime/directory-publication.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, existsSync, lstatSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { sourceCheckoutPathIncluded } from "./source-checkout.mjs";
-import { readBoundedFile } from "../src/file-reads.ts";
-import { buildPaths, readBuildIdentity } from "../src/builds.ts";
-import { withCacheLock } from "../src/cache-lock.ts";
-import { writeAtomic } from "./file-publication.mjs";
-import { cacheGenerationMarker, cacheSizeMarker } from "./cache-generation.mjs";
-import type { EngineeringRun } from "./engineering-run.mjs";
+import { sourceCheckoutPathIncluded } from "../app/src/core/execution/snapshots/source-checkout.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
+import { buildPaths, readBuildIdentity } from "../app/src/core/artifacts/builds.ts";
+import { withCacheLock } from "../app/src/core/storage/cache-lock.ts";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { cacheGenerationMarker, cacheSizeMarker } from "../app/src/core/storage/cache-generation.mjs";
+import type { EngineeringRun } from "../app/src/core/artifacts/engineering-run.mjs";
 
 export async function fileSHA256(path: string): Promise<string> {
   const hash = createHash("sha256");

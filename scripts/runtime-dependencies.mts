@@ -4,9 +4,9 @@ import { extname, isAbsolute, join, posix, relative, win32 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isBuiltin } from "node:module";
 import { parse } from "smol-toml";
-import { distributionPathIncluded } from "../src/distribution-layout.ts";
-import { nativeSources, type ToolingArtifact } from "./tooling-artifacts.mts";
-import { isRecord } from "./values.mjs";
+import { distributionPathIncluded } from "../app/src/core/distribution/distribution-layout.ts";
+import { nativeSources, type ToolingArtifact } from "../app/src/core/distribution/tooling-artifacts.mts";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
 
 interface Script {
   path: string;

@@ -1,11 +1,16 @@
-import { required, errorFrom } from "../values.mjs";
+import { required, errorFrom } from "../../app/src/core/runtime/values.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { executeCITargets } from "../ci-execution.mjs";
-import { CIOperation } from "../ci-operations.mjs";
-import { createRunReport, parseRunReport, runSucceeded, writeRunReport } from "../ci-results.mjs";
-import { parseCIWorkerRequest } from "../ci-worker-request.mjs";
+import { executeCITargets } from "../../app/src/core/execution/ci/support/ci-execution.mjs";
+import { CIOperation } from "../../app/src/core/execution/ci/support/ci-operations.mjs";
+import {
+  createRunReport,
+  parseRunReport,
+  runSucceeded,
+  writeRunReport,
+} from "../../app/src/core/execution/ci/support/ci-results.mjs";
+import { parseCIWorkerRequest } from "../../app/src/core/execution/ci/support/ci-worker-request.mjs";
 
 // This private request is created by the coordinator from its frozen source snapshot.
 const { workspace, distribution, target, operation, reports, image, profile, cache, shared, adapter, uid, gid } =

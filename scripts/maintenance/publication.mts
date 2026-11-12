@@ -10,7 +10,7 @@ import {
 } from "./contract.mjs";
 import { resolveNativeArtifacts, type NativeCatalogs, type ResolvedNativeArtifact } from "./native.mjs";
 import type { MaintenanceSources } from "./sources.mjs";
-import { isRecord, record, string } from "../values.mjs";
+import { isRecord, record, string } from "../../app/src/core/runtime/values.mjs";
 
 /** Only the proof-absence review date is incidental; all acquisition and verification policy identifies the recipe. */
 export function recipeDigest(recipe: Record<string, unknown>): string {

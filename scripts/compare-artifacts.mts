@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { combineFailures } from "./diagnostic-errors.mjs";
+import { combineFailures } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 

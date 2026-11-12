@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { documentProperties, isPropertyID } from "./document-properties.mjs";
-import { writeAtomic } from "./file-publication.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 const { values } = parseArgs({
   options: {
     property: { type: "string" },

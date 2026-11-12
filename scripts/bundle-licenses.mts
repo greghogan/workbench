@@ -1,4 +1,4 @@
-import { isRecord, isStringArray, required, record, string } from "./values.mjs";
+import { isRecord, isStringArray, required, record, string } from "../app/src/core/runtime/values.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { parse } from "smol-toml";

@@ -1,10 +1,10 @@
-import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
+import { captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { stringify } from "./runtime-parsers.mjs";
-import { record, required } from "./values.mjs";
-import { pnpmPackages, pnpmIdentity } from "./pnpm-lock.mjs";
+import { stringify } from "../app/src/core/configuration/runtime-parsers.mjs";
+import { record, required } from "../app/src/core/runtime/values.mjs";
+import { pnpmPackages, pnpmIdentity } from "../app/src/core/toolchains/pnpm-lock.mjs";
 
 /** Ask the pinned manager to retain full publication history without editing project inputs. */
 export async function retainPnpmMetadata(

@@ -254,7 +254,8 @@ directories. Host platforms retain independent generations. Older receipts witho
 for explicit reviewed pruning; new activity records that provenance for automatic retention.
 
 Rust outputs can also accumulate inside a retained generation. Automatic pruning inspects verified, Workbench-owned
-Cargo output and removes complete obsolete fingerprint groups and completed incremental sessions. The default limits are
+Cargo output and removes complete obsolete build units and completed incremental sessions. Both the unit-based layout
+and the fingerprint-based layout produced by selected managed compilers are supported. The default limits are
 `cache.rust_max_bytes=10000000000` per generation and `cache.rust_max_age_days=7`; zero disables the respective limit.
 Usage metadata records observed changes and file access/modification times, so age ordering is approximate on
 filesystems that do not record access times. The newest recent incremental session remains protected. Unrecognized
@@ -321,15 +322,29 @@ explicit user roots separately; changing a preference does not migrate existing 
 
 ### Diagnostics
 
-Workbench diagnostic events use stderr. `--log-level debug|info|warn|error` selects severity and
-`--log-format text|json` selects rendering. Flags override `WORKBENCH_LOG_LEVEL` and `WORKBENCH_LOG_FORMAT`, which
-override the user's `diagnostics.level` and `diagnostics.format`. Defaults are `info` and `text`. Human explanations are
-separate from typed operation and outcome codes. JSON events have `version: 1`, `time`, `level`, `operation`, `outcome`,
-`fields`, and optional `message`, `error`, and `omittedBytes`. Errors include names, messages, available OS codes, and
-bounded causes; debug diagnostics can include stacks. Each event is bounded to 16 KiB, and significant omissions are
-explicit. These records do not replace a command's structured stdout result or execution report. Command progress,
-status summaries, and external-tool output retain their own presentation; `--log-format` selects the Workbench event
-format rather than converting arbitrary child output to JSON.
+Workbench diagnostic events have independent stderr and retained-file thresholds. `--log-level debug|info|warn|error`
+selects stderr severity; `--log-file-level debug|info|warn|error` selects retained-file severity. Both default to
+`info`. `--log-format text|json` selects stderr rendering, defaulting to `text`; retained events always use JSON. Flags
+override `WORKBENCH_LOG_LEVEL`, `WORKBENCH_LOG_FILE_LEVEL`, and `WORKBENCH_LOG_FORMAT`, which override saved
+preferences.
+
+Set CLI preferences with `diagnostics.level` and `diagnostics.file_level`. The server uses `diagnostics.server_level`
+and `diagnostics.server_file_level`, falling back to the corresponding CLI preferences when unset. `diagnostics.format`
+applies to both. For example:
+
+```sh
+workbench config set diagnostics.server_level warn --scope global
+workbench config set diagnostics.server_file_level info --scope global
+workbench serve --log-level warn --log-file-level debug
+```
+
+A higher stderr threshold does not discard events selected for disk, including diagnostics relayed from workers. Human
+explanations are separate from typed operation and outcome codes. JSON events have `version: 1`, `time`, `level`,
+`operation`, `outcome`, `fields`, and optional `message`, `error`, and `omittedBytes`. Errors include names, messages,
+available OS codes, and bounded causes; debug diagnostics can include stacks. Each event is bounded to 16 KiB, and
+significant omissions are explicit. These records do not replace a command's structured stdout result or execution
+report. Command progress, status summaries, and external-tool output retain their own presentation; `--log-format`
+selects the Workbench event format rather than converting arbitrary child output to JSON.
 
 CLI errors and warnings wrap prose at 80 columns, or the terminal width when narrower. Longer errors separate the
 command heading, a short explanation, affected items grouped by failure, and a recovery action with blank lines. Shared
@@ -339,14 +354,73 @@ causes. Copyable values in detailed output, including paths, URLs, and quoted co
 frames preserve their spacing and alignment. JSON events and retained structured records preserve their original fields
 and messages.
 
-Use `--log-save` or user configuration `diagnostics.persist=true` to retain a command or service session.
-`WORKBENCH_LOG_PERSIST=1` enables the preference for an invocation; `0` disables an inherited preference. Linux uses the
-Workbench XDG state directory's `logs/`; macOS uses `~/Library/Logs/workbench/`; Windows uses the Workbench local state
-directory's `logs/`. An explicit `WORKBENCH_STATE_HOME` selects `logs/` beneath that directory. Startup reports the
-session directory. Saved sessions use `events.jsonl` with versioned JSON events, independently of the stderr rendering
-choice. Completed sessions use the same Zstandard compression and age/size retention settings as check logs, in their
-separate persistent namespace. Help, configuration inspection, and shell completion do not create diagnostic sessions.
-Check-log cache pruning does not remove these persistent sessions.
+Normal CLI commands and `workbench serve` retain structured diagnostics by default. Server startup reports its session
+directory. It saves redacted copies of stdout and stderr emitted during the session alongside the structured events.
+CLI saving is quiet, and failed commands identify the retained session. Help, completion, and internal workers do not
+create separate sessions. Other CLI commands retain diagnostic events, and check output has separate logs.
+Set `logs.cli_max_bytes=0` globally to disable new CLI histories. A zero `logs.cli_max_age_days` removes the age cutoff
+while keeping the byte budget in force. Linux uses the Workbench XDG state directory's `logs/`. macOS uses
+`~/Library/Logs/workbench/`; Windows
+uses the Workbench local state directory's `logs/`. An explicit `WORKBENCH_STATE_HOME` selects `logs/` beneath that
+directory. Saved sessions use `events.jsonl` with versioned JSON events, independently of the stderr rendering choice.
+CLI executions live under `logs/cli/SESSION_ID/`, with one complete log per execution. Server starts live under
+`logs/server/SESSION_ID/`, with ordered segments inside. Events and both output streams share the same rotation and
+retention budgets. Server logs rotate at 100 MB of uncompressed output or after 24 hours, keeping events intact.
+Rotation switches to the next segment before compressing the closed segment. Shutdown drains pending finalization.
+Closed server segments can be pruned while the current segment remains active. Read all retained segments in order with:
+
+```sh
+workbench logs read /path/to/logs/server/SESSION_ID
+workbench logs read /path/to/logs/server/SESSION_ID --stream stdout
+workbench logs read /path/to/logs/server/SESSION_ID --stream stderr
+```
+
+`logs.compression` applies to diagnostic and check logs. Its default `auto` selects Node's native Zstd codec, or native
+gzip when Zstd is unavailable. Explicit `zstd`, `gzip`, or `none` select that format. No external compressor is
+required. Compression, verification, or publication failures preserve the plain source and report the failure; they do
+not trigger another codec. Readers handle plain, `.zst`, and `.gz` histories regardless of the current preference.
+
+Each log category has an independent retention budget. Defaults are:
+
+| Setting                       |    Default | Meaning                                          |
+| ----------------------------- | ---------: | ------------------------------------------------ |
+| `logs.check_max_age_days`     |         30 | Completed check runs per checkout/root namespace |
+| `logs.check_max_bytes`        | 1000000000 | Stored check log bytes per namespace             |
+| `logs.cli_max_age_days`       |         30 | Completed CLI executions                         |
+| `logs.cli_max_bytes`          |  250000000 | Stored CLI diagnostic bytes                      |
+| `logs.server_max_age_days`    |         30 | Closed server segments                           |
+| `logs.server_max_bytes`       | 1000000000 | Stored server diagnostic bytes                   |
+| `logs.server_rotate_bytes`    |  100000000 | Uncompressed bytes per server segment            |
+| `logs.server_rotate_hours`    |         24 | Time per server segment                          |
+| `logs.prune_interval_seconds` |       3600 | Periodic diagnostic retention sweep              |
+
+Except for `logs.cli_max_bytes`, where zero disables saving, zero disables the corresponding limit or timer. Budgets
+count actual stored bytes, including compressed closed files and uncompressed active files. Retention removes the oldest
+eligible complete units first; active, locked, explicitly kept, damaged, and uncertain evidence remains protected, as
+does the newest complete unit. Budgets are soft when protected evidence exceeds them. Keeping a server session protects
+all of its segments. Closed segments are independent retention units; CLI executions and check runs remain whole units.
+
+Automatic diagnostic sweeps share the configured interval across sessions. Fresh sessions do not rescan the complete
+history within that interval; changed retention settings trigger a fresh sweep. Manual cleanup always uses a fresh
+inventory. Disabling new CLI histories does not itself delete existing logs.
+
+Retention inventories every entry without directory-entry cutoffs. Larger inventories use disposable sorting files to
+bound working memory and open files. Size-based decisions use the complete inventory, and deletion rechecks ownership,
+protection, and measured contents. File reads protect owned completed logs from concurrent retention. A busy sweep
+yields to the existing owner; damaged evidence is preserved and identified in diagnostics.
+
+Logging policy is resolved at command or server startup; restart the server after changing its logging preferences.
+Persistent write failures produce an immediate stderr warning, without stopping service operations. Buffer omissions and
+additional issue counts remain explicit.
+
+Retention runs at diagnostic startup and completion and when a server segment closes. While running, the server sweeps
+CLI and server diagnostics hourly by default. Check runs apply their own retention after completion. Configure these
+settings with `workbench config set NAME VALUE --scope global`; check age/size limits and compression can also have
+checkout overrides. The former `logs.max_age_days`, `logs.max_bytes`, and `logs.compress` settings have been replaced;
+update any saved preferences to the names above.
+
+Help, configuration inspection, and shell completion do not create diagnostic sessions. Check-log cache pruning does not
+remove persistent diagnostic sessions.
 
 Interrupted sessions retain their active receipt and are exempt from automatic retention. Inspect one explicitly:
 
@@ -601,11 +675,35 @@ Tools always use their manager's installation location, independently of project
 and newest times when they differ. Missing sizes are unavailable; invalidated sizes retain their previous estimate and
 are marked stale in JSON. Add `--fresh` to remeasure the selected filesystem caches and save the results. Locked caches
 remain measurable; their locks continue to prevent deletion. Concurrent changes can invalidate a scan, preserving the
-previous estimate until a later measurement succeeds.
+previous estimate until a later measurement succeeds. Size metadata publication and deletion are coordinated separately
+from directory walking: a long scan does not hold up cleanup, and a scan finishing after deletion cannot recreate the
+cache. While deletion owns a cache, measurement retains the previous estimate or leaves an unknown size unmeasured.
+Proven abandoned local accounting locks are recovered; uncertain ownership remains an explicit error. Automatic
+retention defers busy caches until a later maintenance run.
 
 `workbench cache prune` always uses a fresh filesystem analysis before preview or confirmation. Measurement has no fixed
 elapsed timeout and can be cancelled; active build caches are retained. Measurement does not authorize deletion, and
 cleanup always rechecks current ownership and references.
+
+Owned cache deletion first records an operation outside the payload and retires that payload on the same filesystem.
+Interrupted removal retains its receipt until cleanup finishes. A replacement at the original path is preserved. Before
+reusing a destination, Workbench finishes verified pending cleanup or discards identified incomplete staging files.
+Ordinary installation failures remove their staging files; failures during that cleanup retain both causes and the
+recovery evidence. Interrupted installers that may still have external writers require inspection and explicit
+confirmation. Package-manager uninstalls and retained logs keep their own lifecycle and retention rules.
+
+`workbench cache` and the browser's **Caches** page list incomplete operations and uncertain cache entries with paths,
+reasons, and available size estimates. Unknown ownership does not hide an entry or authorize automatic deletion. Use
+`workbench cache recover PATH` to inspect one entry, then `--apply` to finish verified cleanup. Uncertain files instead
+require `--confirm-delete DIGEST` with the digest from that inspection. The browser offers the same operation through a
+cleanup preview and confirmation. Both interfaces recheck the selection and refuse known active work. Automatic pruning
+resumes verified pending cleanup when enabled; disabling automatic pruning does not disable recovery before an asset is
+reused.
+
+Operation receipts live in `.workbench-cache-operations/` beside the affected cache generations or installations.
+Successful operations remove their receipts and empty grouping directories. Discovery reads receipts and saved sizes; it
+does not walk payloads. Receipts are synchronized before destructive mutation; directories are synchronized where the
+platform supports it. Windows provides process-interruption recovery without a directory-fsync power-loss guarantee.
 
 Workbench-owned prepared images appear as a separate **Images** group, initially unchecked in general cleanup.
 Assemblies whose verification failed are included for cleanup, and availability distinguishes them from verified images.

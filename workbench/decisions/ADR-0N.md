@@ -10,7 +10,7 @@ acquisition preserves host SDK and system-library selection; project bootstrap d
 replacement mode.
 
 Managed native pins select their verified installation or declared runtime-manager selection, without substituting host
-search-path executables. Previously selected versions remain resolvable across Workbench updates and disposable payload
+search-path executables. Previously selected versions remain resolvable across tooling updates and disposable payload
 cleanup. A pin that cannot be acquired or verified is unavailable rather than silently replaced.
 
 For directly acquired native artifacts, stream and filter suitable archives when the storage benefit warrants it.

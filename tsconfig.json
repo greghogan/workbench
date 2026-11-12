@@ -20,5 +20,13 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.mts", "examples/**/scripts/*.mts", "bin/*.cts", "*.mts"]
+  "include": [
+    "app/src/**/*.ts",
+    "app/src/**/*.mts",
+    "app/src/**/*.tsx",
+    "scripts/**/*.mts",
+    "examples/**/scripts/*.mts",
+    "bin/*.cts",
+    "*.mts"
+  ]
 }

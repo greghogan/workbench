@@ -1,4 +1,4 @@
-import type { ToolAsset } from "../../src/tool-downloads.js";
+import type { ToolAsset } from "../../app/src/core/toolchains/tool-downloads.js";
 import { isDeepStrictEqual } from "node:util";
 import { basename, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
@@ -8,7 +8,7 @@ import { MaintenanceSources } from "./sources.mjs";
 import { type Release, NativeCatalog, MaintenanceProvider, type MaintenanceEntry } from "./contract.mjs";
 import { phpWindowsArchive } from "./php.mjs";
 
-import { isRecord, record, records, required, string } from "../values.mjs";
+import { isRecord, record, records, required, string } from "../../app/src/core/runtime/values.mjs";
 
 /** Only acquisition fields contain substitutable versions; signer and policy metadata stay opaque. */
 function substituteRecipe(value: unknown, old: string, version: string): Record<string, unknown> {

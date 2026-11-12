@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Profiler } from "node:inspector";
 import type { FileCoverageData } from "istanbul-lib-coverage";
 import { readNodeCoverageReports, type CoverageSourceMap, type NodeCoverageReport } from "./node-coverage-reports.mjs";
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 export interface MeasuredScript {
   code: string;
   included: Set<string>;

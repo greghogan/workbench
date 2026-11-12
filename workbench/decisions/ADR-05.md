@@ -23,11 +23,11 @@ then applicable narrower maps.
 Generated context references authoritative project-owned records, including adopted collection copies. Explicit
 synchronization updates maps and context; validation only reports stale output.
 
-Project context is committed and readable without Workbench. Generate separate local agent context, including an empty
-context when no collections are active, in the native user data location and each installation's owned directory.
-Rebuild it after approved selection changes. Link current local decision maps and expose policy fingerprints for review;
-shared project context contains portable discovery instructions. Each user's local entry point links to the generated
-context for machine-wide collections, so updating that shared context does not require rewriting users' entry points.
+Project context is committed and readable without Workbench. Keep local policy context separate, reflecting the current
+approved selection, including an empty selection. Local entry points expose current decision maps and policy
+fingerprints for review; shared project context contains portable discovery instructions. Machine-wide context updates
+remain discoverable without rewriting each user's entry point. Keep generated-file locations and setup procedures in
+guides.
 
 Rationale: A discoverable entry point and scoped routing expose governing decisions without making every agent read
 every record or turning local guidance into shared policy.

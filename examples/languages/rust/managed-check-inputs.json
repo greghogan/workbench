@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_hashes": {
     "Cargo.lock": "2e9e1894ade1f0ffa02f96b2e3e31afb06a729d8a0a11ca0622f515fcd0cdaf1",
-    "Cargo.toml": "abd84e6406dc95bed20183ddb948e1d392792b77432d2e21883d36e967a539ab"
+    "Cargo.toml": "0e6415fc303d7d65603fdde97ae6e3764f180eceb945e2b29db805a4764c9b97"
   },
   "inputs": [
     {

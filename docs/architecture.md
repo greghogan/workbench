@@ -1,17 +1,42 @@
 # Workbench architecture
 
 [Workbench overview](../README.md). This guide explains the current system; the [source map](../workbench/source-map.md)
-supplies implementation entry points.
+supplies shared tooling entry points; the [app source map](../app/workbench/source-map.md) routes application work.
+
+The root `workbench/` records form the reusable Workbench collection. The registered **app** subproject at `app/` owns
+the application source and product decisions. Its human-written charter combines the CLI and service intent; the CLI,
+browser service, and shared core remain one application, package, and installed release. Application tests live beside
+the source in `app/test/`. Repository-level scripts, configuration, examples, and CI support the repository through one
+build and verification pipeline. See the [decision correspondence](project-split.md#decision-correspondence) for the
+policy extraction.
 
 Workbench is a TypeScript application distributed as prebuilt JavaScript for Node.js. One executable provides the CLI
 and the foreground local web service. Neither interface requires another language runtime, a browser engine, or a
 TypeScript compiler. Language SDKs and browser automation belong to development and consuming-project checks.
 
+## Internal modules
+
+The application has three source layers: `core/` contains shared services by domain, `cli/` contains commands and
+terminal workflows, and `server/` contains HTTP, browser presentation, workspace views, and worker coordination. Core
+services import neither interface; server modules do not import the CLI. CLI startup constructs an independent command
+program for each invocation and initializes the server only for server actions or workers. Its small executable entry
+dispatches server workers directly and loads command registration only for command execution. The corresponding
+`app/test/` groups mirror these services. Installed-consumer and browser runners live in `app/test/integration/`; root
+scripts provide their command entry points. Shipped verification resources live in `app/resources/verification/`,
+independent of the test tree.
+
+Runtime helper sources live in their core domains, including TypeScript modules also emitted as standalone JavaScript
+for bootstrap and copied examples. The generated outputs follow their authoritative source; the tooling manifest
+determines which are retained and shipped. One bundle manifest defines entry points, lazy loading, Node support, and
+compression. Bundles are generated locally and for release packaging; they are excluded from Git. The main bundle uses
+a CommonJS loader that decompresses its payload in memory. The server initializes lazily within that bundle so both
+interfaces retain the same core service instances and each listener retains its worker generation.
+
 ## Components and authority
 
 ```mermaid
 flowchart TD
-    Launcher["Launcher: select the project-pinned executable"] --> CLI["CLI: commands and terminal presentation"]
+    Scope["app scope: source, tests, and product decisions"] --> Launcher["Launcher: select the project-pinned executable"] --> CLI["CLI: commands and terminal presentation"]
     CLI --> HTTP["serve: loopback HTTP listener and rendered TSX"]
     CLI --> Domain["Shared project, record, collection, review, and execution services"]
     HTTP --> Domain
@@ -34,9 +59,6 @@ names and independent human-written charters. A **language root** selects a chec
 A **collection** supplies independently versioned decisions: adopted project copies are editable, while local
 installations remain separate policy sources. The consuming charter governs adopted adaptations. See
 [adoption](adoption.md#projects-and-subprojects) and [collections](collections.md).
-
-Runtime bundles are generated and ignored by Git. Source setup builds them once for fast CLI startup; packaged releases
-include them.
 
 ## Stored information
 
@@ -63,11 +85,12 @@ file changes meanwhile, the displayed version can still be acknowledged and newe
 requires the committed contents to match an acknowledgment. See
 [record review](checks.md#review-receipts-and-coverage-evidence).
 
-Agent change review binds the complete proposed project snapshot and baseline before commit. Accumulated task review
-binds the publication batch. These receipts record assessments and do not authenticate the reviewer or replace human
-decisions. Task files retain shared planning and acceptance; the local queue retains execution order and progress.
-Policy compatibility is a separate agent assessment, with concrete conflicts routed to human resolution through the same
-browser review queue. See [agent review evidence](records.md#agent-review-evidence) and
+Agent change review binds the complete proposed project snapshot and baseline before commit. Accumulated work review
+binds the publication batch, whether or not task records are used. These receipts record assessments and do not
+authenticate the reviewer or replace human decisions. Task files retain shared planning and acceptance; the local queue
+retains execution order and progress. Policy compatibility is a separate agent assessment, with concrete conflicts
+routed to human resolution through the same browser review queue. See
+[agent review evidence](records.md#agent-review-evidence) and
 [local compatibility](collections.md#local-context-and-compatibility).
 
 ## Checks, images, and releases

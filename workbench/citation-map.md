@@ -6,3 +6,7 @@
 - [workbench:CIT-3](citations/CIT-03.json): Revised 508 Standards and 255 Guidelines
 - [workbench:CIT-4](citations/CIT-04.json): Web Content Accessibility Guidelines (WCAG) 2.0
 - [workbench:CIT-6](citations/CIT-06.json): HTTP Semantics (RFC 9110)
+
+## Subproject citations maps
+
+- [workbench-app](../app/workbench/citation-map.md)

@@ -6,12 +6,13 @@ import { parseArgs } from "node:util";
 import { chromium, type Browser, type Page, type Locator } from "playwright-core";
 import { setTimeout as delay } from "node:timers/promises";
 import type { IScreenReader } from "@guidepup/guidepup";
-import { createOwnedScratch } from "./owned-scratch.mjs";
+import { createOwnedScratch } from "../app/src/core/runtime/owned-scratch.mjs";
 import { tmpdir } from "node:os";
-import { runOwnedChild, processCancellation } from "./owned-child.mjs";
-import { settleCleanup } from "../src/diagnostics.ts";
-import { required } from "./values.mjs";
-import { standaloneTools } from "../src/toolchains.ts";
+import { runOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { settleCleanup } from "../app/src/core/diagnostics/diagnostics.mts";
+import { required } from "../app/src/core/runtime/values.mjs";
+import { standaloneTools } from "../app/src/core/toolchains/toolchains.ts";
+import { isolateFixtureGit } from "../app/test/fixtures/git-environment.mjs";
 
 async function main() {
   const { values } = parseArgs({
@@ -37,6 +38,7 @@ async function main() {
   const cancellation = processCancellation(),
     service = new AbortController();
   const env = { ...process.env };
+  isolateFixtureGit(env);
   for (const name of ["TMP", "TEMP", "TMPDIR"]) env[name] = temporary;
   for (const key of [
     "WORKBENCH_PROJECT_ROOT",
@@ -44,12 +46,6 @@ async function main() {
     "WORKBENCH_CONTAINER_CHECKOUT",
     "WORKBENCH_BUILD_DIR",
     "WORKBENCH_DEPENDENCIES_DIR",
-    "GIT_DIR",
-    "GIT_COMMON_DIR",
-    "GIT_INDEX_FILE",
-    "GIT_WORK_TREE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   ])
     Reflect.deleteProperty(env, key);
   for (const kind of ["CONFIG", "DATA", "CACHE", "STATE"])
@@ -204,10 +200,6 @@ async function main() {
     assert(await page.getByText("Screen reader fixture edit.", { exact: true }).count());
     const reviewTitle = "ADR-0: Notes stay in ordinary files";
     await page.goto(url + "/review");
-    await heading("formatting-heading", /Review formatting/i);
-    await focus(page.getByRole("button", { name: "Apply formatting", exact: true }));
-    await capture("apply-formatting-button", /Apply formatting/i);
-    await page.keyboard.press("Enter");
     await page.getByRole("heading", { name: "Review queue", exact: true }).waitFor();
     await heading("review-queue-heading", /Review queue/i);
     await page.getByRole("link", { name: reviewTitle, exact: true }).click();
@@ -274,7 +266,7 @@ async function main() {
                 }
               ).devDependencies["@guidepup/guidepup"],
               releaseSha256: createHash("sha256")
-                .update(readFileSync(join(distribution, "bundle/main.cjs.br")))
+                .update(readFileSync(join(distribution, "bundle/main.cjs")))
                 .digest("hex"),
               conformance: "not-assessed",
               evidence,

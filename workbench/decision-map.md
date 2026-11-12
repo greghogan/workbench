@@ -7,18 +7,18 @@ Scope charter: [CHARTER.md](CHARTER.md).
   authority, and decision acceptance.
 - [workbench:ADR-2: Project scopes and adopted material](decisions/ADR-02.md) — Project ownership, collection adoption,
   complete definition replacement, and scoped references.
-- [workbench:ADR-3: Workbench adoption and distribution](decisions/ADR-03.md) — Consumer autonomy, independent
-  executable pins, runtime support, and deliberate updates.
+- [workbench:ADR-3: Independent adoption of records and tools](decisions/ADR-03.md) — Independent adoption of records
+  and tools, consumer ownership, and self-contained guidance.
 - [workbench:ADR-4: Record contracts](decisions/ADR-04.md) — Scoped identities, references, supporting files, schemas,
   migrations, and canonical formatting.
 - [workbench:ADR-5: Maps and agent context](decisions/ADR-05.md) — Generated record routing and instructions, curated
   source maps, and local context discovery.
-- [workbench:ADR-6: Skills and harness integration](decisions/ADR-06.md) — Personal skill selection, pinned definitions,
-  scoped harness discovery, invocation controls, and evaluations.
-- [workbench:ADR-7: Tasks and feedback](decisions/ADR-07.md) — Adaptive plans, significant decisions, human approval and
-  acceptance, task relationships, and completion evidence.
-- [workbench:ADR-8: Experiments and measurement evidence](decisions/ADR-08.md) — Testable comparisons, candidate
-  refinement, effect size and uncertainty, retained evidence, and human review.
+- [workbench:ADR-6: Skills and policy boundaries](decisions/ADR-06.md) — Concise workflows, policy boundaries,
+  consistent invocation, skill ownership, and behavioral evaluation.
+- [workbench:ADR-7: Tasks and feedback](decisions/ADR-07.md) — Adaptive plans, task accounts across commits, human
+  decisions, relationships, and completion evidence.
+- [workbench:ADR-8: Experiments and measurement evidence](decisions/ADR-08.md) — Assessable comparisons, candidate
+  refinement, proportionate evidence, follow-on learning, and human review.
 - [workbench:ADR-9: Citation records and source acquisition](decisions/ADR-09.md) — Preserved sources, bibliographic
   metadata, acquisition provenance, and document storage.
 - [workbench:ADR-A: Toolchains and engineering constraints](decisions/ADR-0A.md) — Authoritative pins, maintained
@@ -37,8 +37,8 @@ Scope charter: [CHARTER.md](CHARTER.md).
   durability guarantees, and interruption recovery.
 - [workbench:ADR-H: Concurrency and resource ownership](decisions/ADR-0H.md) — Operation ownership, shutdown, stale
   results, capacity limits, and responsiveness.
-- [workbench:ADR-I: Configuration, filesystem locations, and commands](decisions/ADR-0I.md) — Storage classes, native
-  platform locations, configuration ownership and precedence, and CLI contracts.
+- [workbench:ADR-I: Configuration and filesystem ownership](decisions/ADR-0I.md) — Storage classes, native platform
+  locations, configuration ownership, and safe cleanup.
 - [workbench:ADR-J: Trust and privilege boundaries](decisions/ADR-0J.md) — Authorization, helpers, plugins, caller-owned
   paths.
 - [workbench:ADR-K: Dependencies, credentials, and supply-chain evidence](decisions/ADR-0K.md) — Verified acquisition,
@@ -89,3 +89,7 @@ Scope charter: [CHARTER.md](CHARTER.md).
   scope, and supporting evidence.
 - [workbench:ADR-19: Web interfaces and stable URLs](decisions/ADR-19.md) — Stable resource identities, direct
   navigation, hypermedia controls, and explicit view choices.
+
+## Subproject decisions maps
+
+- [workbench-app](../app/workbench/decision-map.md)

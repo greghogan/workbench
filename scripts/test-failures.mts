@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
-import { isRecord } from "./values.mjs";
-import { boundedText, redact } from "./diagnostic-text.mjs";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
+import { boundedText, redact } from "../app/src/core/diagnostics/diagnostic-text.mjs";
 
 /** Keep the useful failed assertions inside the gate's bounded failure excerpt. */
 export function testFailureSummary(value: unknown): string {

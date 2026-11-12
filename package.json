@@ -16,10 +16,10 @@
   "scripts": {
     "maintenance:plan": "pnpm run tooling:maintainers && node scripts/maintenance/main.mjs plan",
     "maintenance:apply": "pnpm run tooling:maintainers && node scripts/maintenance/main.mjs apply",
-    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit && node node_modules/@typescript/native/bin/tsc --noEmit -p tests/tsconfig.json",
-    "format:check": "node node_modules/prettier/bin/prettier.cjs --check src \"tests/**/*.mts\" tests/tsconfig.json \"scripts/**/*.mts\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/ci-actions.json scripts/package-manager/*.json scripts/container-tools/*.json \"examples/**/managed-release-check.json\" \"examples/**/release-musl.json\" \"examples/**/.mvn/*.json\" \".devcontainer/**/*.json\" \"examples/**/scripts/*.mts\" bin/*.mjs bin/*.cts package.json tsconfig.json eslint.config.mts vitest.config.mts .prettierrc.json .pnpmfile.cjs",
-    "format": "node node_modules/prettier/bin/prettier.cjs --write src \"tests/**/*.mts\" tests/tsconfig.json \"scripts/**/*.mts\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/ci-actions.json scripts/package-manager/*.json scripts/container-tools/*.json \"examples/**/managed-release-check.json\" \"examples/**/release-musl.json\" \"examples/**/.mvn/*.json\" \".devcontainer/**/*.json\" \"examples/**/scripts/*.mts\" bin/*.mjs bin/*.cts package.json tsconfig.json eslint.config.mts vitest.config.mts .prettierrc.json .pnpmfile.cjs",
-    "lint": "pnpm run tooling:maintainers && node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests scripts bin \"examples/**/scripts/*.{mjs,mts}\" --max-warnings 0 .pnpmfile.cjs eslint.config.mts vitest.config.mts",
+    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit && node node_modules/@typescript/native/bin/tsc --noEmit -p app/test/tsconfig.json",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check \"app/src/**/*.{ts,tsx,mts,css}\" \"app/test/**/*.{ts,mts}\" app/test/tsconfig.json \"scripts/**/*.mts\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/ci-actions.json scripts/package-manager/*.json scripts/container-tools/*.json \"examples/**/managed-release-check.json\" \"examples/**/release-musl.json\" \"examples/**/.mvn/*.json\" \".devcontainer/**/*.json\" \"examples/**/scripts/*.mts\" bin/*.mjs bin/*.cts package.json tsconfig.json eslint.config.mts vitest.config.mts .prettierrc.json .pnpmfile.cjs",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write \"app/src/**/*.{ts,tsx,mts,css}\" \"app/test/**/*.{ts,mts}\" app/test/tsconfig.json \"scripts/**/*.mts\" scripts/*-assets.json scripts/bootstrap-tools.json scripts/ci-actions.json scripts/package-manager/*.json scripts/container-tools/*.json \"examples/**/managed-release-check.json\" \"examples/**/release-musl.json\" \"examples/**/.mvn/*.json\" \".devcontainer/**/*.json\" \"examples/**/scripts/*.mts\" bin/*.mjs bin/*.cts package.json tsconfig.json eslint.config.mts vitest.config.mts .prettierrc.json .pnpmfile.cjs",
+    "lint": "pnpm run tooling:maintainers && node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js --config eslint.config.mjs app/src app/test scripts bin \"examples/**/scripts/*.{mjs,mts}\" --max-warnings 0 .pnpmfile.cjs eslint.config.mts vitest.config.mts",
     "bundle:check": "pnpm run tooling:maintainers && node scripts/check-bundle.mjs",
     "test": "pnpm run tooling:maintainers && node node_modules/vitest/vitest.mjs run",
     "integration": "pnpm run tooling:maintainers && node scripts/check-consumers.mjs",
@@ -38,6 +38,7 @@
     "@eslint/js": "10.0.1",
     "@guidepup/guidepup": "0.40.0",
     "@guidepup/setup": "0.29.3",
+    "@mermaid-js/tiny": "12.3.0",
     "@mozilla/readability": "0.6.0",
     "@sigstore/bundle": "5.0.0",
     "@sigstore/protobuf-specs": "0.5.2",
@@ -100,13 +101,14 @@
     "languages",
     "skills",
     "scripts",
-    "tests/fixtures/records/CHARTER.md",
     "examples",
     "demo",
     ".githooks",
     ".node-version",
     ".tool-versions",
     "pnpm-lock.yaml",
-    "Makefile"
+    "Makefile",
+    "app/resources",
+    "app/src"
   ]
 }

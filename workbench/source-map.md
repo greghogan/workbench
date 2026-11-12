@@ -1,12 +1,8 @@
 # Source map
 
-Workbench resolves project-owned configuration and records, runs the resulting checks, and ships the CLI that performs
-those operations. Start with the subsystem owning the intended change; the source remains authoritative for behavior.
+Shared build automation, reusable language definitions, and independent examples support the application. Application
+code and tests are routed by the [App source map](../app/workbench/source-map.md).
 
-- [Records and knowledge](source-maps/records.md): Record identity, metadata, references, generated context, and
-  validation.
-- [Shared collections](source-maps/collections.md): Adopt editable project policy, retain Git originals, and resolve
-  independent local guidance.
 - [Distribution and updates](source-maps/distribution.md): Start the pinned CLI, publish runnable bundles, and update
   executable pins.
 - [Checks and environments](source-maps/execution.md): Resolve configured work, select tools and environments, and

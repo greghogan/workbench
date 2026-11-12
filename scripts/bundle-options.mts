@@ -2,9 +2,9 @@ import { join, resolve } from "node:path";
 import { realpathSync } from "node:fs";
 import type { BuildOptions } from "esbuild";
 import { authoredTooling } from "./authored-tooling.mts";
-import { minimumBootstrapNode, minimumCliNode } from "./node-runtimes.mjs";
-import { lazyBundles, bundleSource, bundleDefinition } from "./bundle-artifacts.mjs";
-export { lazyBundles } from "./bundle-artifacts.mjs";
+import { minimumBootstrapNode, minimumCliNode } from "../app/src/core/distribution/node-runtimes.mjs";
+import { lazyBundles, bundleSource, bundleDefinition } from "../app/src/core/distribution/bundle-artifacts.mjs";
+export { lazyBundles } from "../app/src/core/distribution/bundle-artifacts.mjs";
 
 export const bundleRuntime = (name: string): string =>
   bundleDefinition(name).runtime === "bootstrap" ? minimumBootstrapNode : minimumCliNode;
@@ -38,8 +38,8 @@ export function bundleOptions(root: string, name: string, coverage = false): Bui
           }));
           // TOML editing is a pure library; read-only bootstrap paths need no syntax-tree parser initialization.
           builder.onResolve({ filter: /(?:^|\/)toml-edit\.js$/ }, (request) =>
-            resolve(request.resolveDir, request.path) === join(root, "src/toml-edit.js")
-              ? { path: join(root, "src/toml-edit.ts"), sideEffects: false }
+            resolve(request.resolveDir, request.path) === join(root, "app/src/core/configuration/toml-edit.js")
+              ? { path: join(root, "app/src/core/configuration/toml-edit.ts"), sideEffects: false }
               : undefined,
           );
         },

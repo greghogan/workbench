@@ -1,7 +1,7 @@
 import { evaluationPolicy } from "./skill-evaluation-policy.mjs";
 import { isRebaseCase, prepareRebase, rebaseCases, verifyRebase } from "./skill-evaluation-rebase.mjs";
-import { isRecord, record, required, string } from "./values.mjs";
-import { recordDocument } from "../src/record-document.ts";
+import { isRecord, record, required, string } from "../app/src/core/runtime/values.mjs";
+import { recordDocument } from "../app/src/core/records/record-document.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";

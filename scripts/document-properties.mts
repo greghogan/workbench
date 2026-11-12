@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import fc from "fast-check";
 import { parse } from "smol-toml";
-import { editToml } from "../src/toml-edit.ts";
-import { relativePath, registeredRootPath } from "../src/paths.ts";
-import { projectsFromData } from "../src/project-configuration.ts";
+import { editToml } from "../app/src/core/configuration/toml-edit.ts";
+import { relativePath, registeredRootPath } from "../app/src/core/runtime/paths.ts";
+import { projectsFromData } from "../app/src/core/projects/project-configuration.ts";
 
 const scalar = fc.oneof(fc.string(), fc.boolean(), fc.integer());
 

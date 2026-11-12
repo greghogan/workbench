@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readCandidate } from "./ci-candidate.mts";
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 const repository = required(process.env.GITHUB_REPOSITORY, "Missing repository");
 const revision = required(process.env.GITHUB_SHA, "Missing revision");
 const candidate = readCandidate(

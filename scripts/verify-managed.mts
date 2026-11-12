@@ -1,4 +1,4 @@
-import { record, required, string, isStringArray } from "./values.mjs";
+import { record, required, string, isStringArray } from "../app/src/core/runtime/values.mjs";
 import { type SpawnSyncOptionsWithStringEncoding, spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 

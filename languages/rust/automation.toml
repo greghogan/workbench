@@ -39,6 +39,11 @@ role = "docs"
 command = [ "cargo", "test", "--doc", "--locked" ]
 
 [[command]]
+name = "API documentation"
+role = "docs"
+command = [ "cargo", "doc", "--workspace", "--no-deps", "--locked" ]
+
+[[command]]
 role = "docs"
 command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
 

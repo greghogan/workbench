@@ -28,7 +28,8 @@ human review is optional at the discretion of the agent.
 
 - [workbench:ADR-7](workbench/decisions/ADR-07.md): Obtain human approval of a concrete plan before implementing a major
   feature or materially expanding its approved scope. Record significant implementation decisions and their reasons,
-  distinguishing agent choices from human direction.
+  distinguishing agent choices from human direction. Update the owning task records in every retained commit delivering
+  task work.
 
 - [workbench:ADR-8](workbench/decisions/ADR-08.md): Obtain human review of completed experiments, environment records,
   and their supporting files before commit. Before recommending rejection, evaluate plausible improvements to the
@@ -66,6 +67,17 @@ human review is optional at the discretion of the agent.
 
 - [workbench:ADR-V](workbench/decisions/ADR-0V.md): Preserve user data and active work; obtain explicit human
   authorization before destructive resets.
+
+## workbench-app
+
+Applies to: `app/` and descendants.
+
+Decision map: [workbench-app](app/workbench/decision-map.md).
+
+### Charter
+
+Record, collection, and development-workflow management for humans and agents. The command-line and web interfaces
+provide record review, task approval and acceptance, and management of the planned work queue.
 
 ## Local collections
 

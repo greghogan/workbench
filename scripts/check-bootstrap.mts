@@ -1,4 +1,4 @@
-import { record, required } from "./values.mjs";
+import { record, required } from "../app/src/core/runtime/values.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

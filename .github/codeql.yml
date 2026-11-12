@@ -1,6 +1,6 @@
 name: Authored Workbench security analysis
 paths:
-  - src
+  - app/src
   - scripts
   - bin
 paths-ignore:

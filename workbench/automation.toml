@@ -262,8 +262,6 @@ path = "examples/languages/go"
 project = "workbench"
 source_map = "workbench/source-map.md"
 source_paths = [
-  "src",
-  "tests",
   "scripts",
   "bin",
   ".githooks",
@@ -396,3 +394,8 @@ path = "."
 role = "smoke"
 command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
 stages = []
+
+[[documentation]]
+project = "workbench-app"
+source_map = "workbench/source-map.md"
+source_paths = ["src", "test", "resources"]

@@ -1,5 +1,5 @@
 import { isMainScript } from "./script-entry.mjs";
-import { isRecord } from "./values.mjs";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
 export interface GuixImageDefinition {
   entry_point: string;
   local_state: boolean;
@@ -9,7 +9,7 @@ export interface GuixImageDefinition {
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { withManagedProcesses } from "./managed-process.mjs";
-import { managedSystem, writeGuixSystemFile } from "./managed-system.mjs";
+import { managedSystem, writeGuixSystemFile } from "../app/src/core/execution/environments/managed/managed-system.mjs";
 
 function assertGuixImageDefinition(value: unknown, path: string): asserts value is GuixImageDefinition {
   const relative = (path: unknown) =>

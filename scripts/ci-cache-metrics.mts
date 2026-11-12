@@ -1,4 +1,4 @@
-import { required, record, string, stringRecord } from "./values.mjs";
+import { required, record, string, stringRecord } from "../app/src/core/runtime/values.mjs";
 
 import { appendFileSync, existsSync, globSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";

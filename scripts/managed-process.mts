@@ -1,6 +1,6 @@
-import { isRecord } from "./values.mjs";
-import { runOwnedChild } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
+import { runOwnedChild } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 export interface ManagedRunOptions {
   capture?: boolean;
   cleanup?: boolean;

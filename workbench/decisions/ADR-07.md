@@ -1,18 +1,22 @@
 ---
-summary:
-  Adaptive plans, significant decisions, human approval and acceptance, task relationships, and completion evidence.
+summary: Adaptive plans, task accounts across commits, human decisions, relationships, and completion evidence.
 agent_instruction:
   Obtain human approval of a concrete plan before implementing a major feature or materially expanding its approved
   scope. Record significant implementation decisions and their reasons, distinguishing agent choices from human
-  direction.
+  direction. Update the owning task records in every retained commit delivering task work.
 ---
 
 # ADR-7: Tasks and feedback
 
-Project-owned `TSK` records retain a searchable account of intended outcomes, evolving plans, material findings, and
-completion evidence across coherent work. Commit messages summarize individual changes; task records supply the deeper
-account. Retain finished and canceled records, including cancellation reasons, as searchable history rather than
-unfinished work.
+Each project-owned `TSK` record describes a coherent unit of work that may span several commits. Retain a
+self-contained, searchable account of intended outcomes, evolving plans, significant decisions, and completion evidence.
+Commit messages summarize individual changes. Retain finished and canceled records, including cancellation reasons, as
+searchable history rather than unfinished work.
+
+For work tracked by tasks, every retained commit includes a meaningful update to the owning task records. Describe each
+task's contribution and relevant verification without copying commit messages. Consolidate entries when rewriting
+unpublished history while preserving significant decisions and results; the account need not mirror commit boundaries or
+contain commit IDs. Moving unchanged records between storage locations needs no implementation entry.
 
 Begin with a current human-reviewable overview; keep implementing-agent details below it. Explain why, what, and how,
 with sufficient prose and useful visuals to assess the approach, verification, and remaining decisions. Keep detail
@@ -35,7 +39,8 @@ Group coherent work without imposing a linear history. Create related or child t
 planning, evidence, or scheduling. Nesting expresses ownership, dependencies express prerequisites, and queue order
 expresses preference; none grants approval. Preserve those relationships in discovery views. Parent completion requires
 its demonstrated outcome and accepted or canceled children. Relationships reference existing tasks, allow at most one
-parent, and remain acyclic. Link related records rather than duplicating their details.
+parent, and remain acyclic. Parent records summarize child outcomes and their own integration work without duplicating
+child accounts. Link related records rather than duplicating their details.
 
 Record meaningful progress; task state remains authoritative over checklists, and acceptance requires completed steps.
 Keep local execution progress separate from shared task records. Start only approved, selected work with satisfied
@@ -51,4 +56,5 @@ references; unresolved feedback creates no project obligation. Keep record synta
 guide.
 
 Rationale: Adaptive plans preserve continuity without prematurely fixing the work breakdown. Concise overviews and
-searchable evidence support human approval and acceptance without duplicating Git history or local execution state.
+self-contained accounts support human approval and acceptance without reconstructing work from commits or local
+execution state.

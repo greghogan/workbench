@@ -1,8 +1,8 @@
-import { appendBrowserTimings } from "./ci-browser-timings.mjs";
-import { CILifecycle, executeCI } from "./ci-lifecycle.mjs";
+import { appendBrowserTimings } from "../app/src/core/execution/ci/support/ci-browser-timings.mjs";
+import { CILifecycle, executeCI } from "../app/src/core/execution/ci/support/ci-lifecycle.mjs";
 import { runCIEntry } from "./ci-errors.mts";
-import { readAcquiredCIImage } from "./ci-image-contract.mjs";
-import { required, record, string, strings, stringRecord } from "./values.mjs";
+import { readAcquiredCIImage } from "../app/src/core/execution/ci/support/ci-image-contract.mjs";
+import { required, record, string, strings, stringRecord } from "../app/src/core/runtime/values.mjs";
 
 interface HostedMatrix {
   paths: string[];
@@ -14,8 +14,13 @@ interface HostedMatrix {
 }
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { targetEnvironment, targetPhases, readCITargets } from "./ci-contract.mjs";
-import { createRunReport, runReportedTargetAsync, runSucceeded, writeRunReport } from "./ci-results.mjs";
+import { targetEnvironment, targetPhases, readCITargets } from "../app/src/core/execution/ci/support/ci-contract.mjs";
+import {
+  createRunReport,
+  runReportedTargetAsync,
+  runSucceeded,
+  writeRunReport,
+} from "../app/src/core/execution/ci/support/ci-results.mjs";
 
 const lifecycle = new CILifecycle();
 await runCIEntry("Hosted CI operation", async () => {

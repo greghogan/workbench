@@ -2,8 +2,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Profiler } from "node:inspector";
 import type convert from "ast-v8-to-istanbul";
-import { isRecord } from "./values.mjs";
-import { readBoundedFile } from "../src/file-reads.ts";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
 
 export type CoverageSourceMap = NonNullable<Parameters<typeof convert>[0]["sourceMap"]>;
 export interface NodeCoverageReport {

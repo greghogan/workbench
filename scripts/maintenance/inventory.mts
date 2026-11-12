@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { developmentRoots, targetCollector, locations } from "./workspace.mjs";
 import { MaintenanceKind, MaintenanceProvider, type MaintenanceLocator, type MaintenanceTarget } from "./contract.mjs";
-import { record, string, strings } from "../values.mjs";
+import { record, string, strings } from "../../app/src/core/runtime/values.mjs";
 
 /** Discover independent version authorities outside the language dependency manifests. */
 export function additionalMaintenanceTargets(root: string): MaintenanceTarget[] {

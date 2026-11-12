@@ -1,7 +1,7 @@
-import { required, strings } from "./values.mjs";
+import { required, strings } from "../app/src/core/runtime/values.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
-import { validateManagedPlan } from "./managed-contract.mjs";
-import { managedSystem } from "./managed-system.mjs";
+import { validateManagedPlan } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
+import { managedSystem } from "../app/src/core/execution/environments/managed/managed-system.mjs";
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 

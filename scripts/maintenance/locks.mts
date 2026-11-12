@@ -13,7 +13,7 @@ import {
   type MaintenanceCommand,
 } from "./contract.mjs";
 
-import { record, records, string, strings } from "../values.mjs";
+import { record, records, string, strings } from "../../app/src/core/runtime/values.mjs";
 
 /** Declaration kinds choose authorities; lock refresh includes every manager in each affected root. */
 export function maintenanceLockSelection(

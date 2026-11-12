@@ -2,8 +2,13 @@
 import { pathToFileURL } from "node:url";
 import { join, relative, resolve, sep } from "node:path";
 const emitCheckDetail = process.env.WORKBENCH_DISTRIBUTION_ROOT
-  ? (await import(pathToFileURL(join(process.env.WORKBENCH_DISTRIBUTION_ROOT, "scripts/check-detail-data.mjs")).href))
-      .emitCheckDetail
+  ? (
+      await import(
+        pathToFileURL(
+          join(process.env.WORKBENCH_DISTRIBUTION_ROOT, "app/src/core/execution/checks/check-detail-data.mjs"),
+        ).href
+      )
+    ).emitCheckDetail
   : () => void 0;
 import { spawnSync } from "node:child_process";
 import {
@@ -59,8 +64,12 @@ ${files}`);
 } else if (role === "fuzz") {
   const distribution = process.env.WORKBENCH_DISTRIBUTION_ROOT;
   if (!distribution) throw new Error("Run Go fuzzing through a configured Workbench check or shell");
-  const { withEngineeringRun } = await import(pathToFileURL(join(distribution, "scripts/engineering-run.mjs")).href);
-  const { processFailure } = await import(pathToFileURL(join(distribution, "scripts/process-outcome.mjs")).href);
+  const { withEngineeringRun } = await import(
+    pathToFileURL(join(distribution, "app/src/core/artifacts/engineering-run.mjs")).href
+  );
+  const { processFailure } = await import(
+    pathToFileURL(join(distribution, "app/src/core/runtime/process-outcome.mjs")).href
+  );
   await withEngineeringRun(resolve(builds), "go-fuzz", async (job) => {
     const scratch = job.directory,
       source = process.cwd();

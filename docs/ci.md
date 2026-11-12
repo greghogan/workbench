@@ -67,7 +67,7 @@ gates retain the HTTP and DOM suites; run the browser workflow explicitly with
 caller. Default runs copy screenshots, diagnostic pages, and result summaries to `coverage/browser/` for CI retention;
 fixture projects and tool caches use owned scratch and are removed after their processes drain, including failed runs.
 Default local evidence is retained under the native Workbench cache's `browser-evidence` directory. Completed runs,
-including failures, follow `logs.max_age_days` and `logs.max_bytes`; explicit cache keeps protect investigations.
+including failures, follow `logs.check_max_age_days` and `logs.check_max_bytes`; explicit cache keeps protect investigations.
 Browser artifacts have their own run manifest and producer lock, separate from text logs. Retention runs after browser
 completion and during ordinary automatic maintenance. `workbench cache prune --browser` previews expired evidence; add
 `--apply` to delete it, `--all` to use each project's retention policy, or `--json` for a structured plan and result.

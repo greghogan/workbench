@@ -5,7 +5,9 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 if (!process.argv[3]) throw new Error("Supply the pinned Workbench directory through the configured command");
 const distribution = resolve(process.argv[3]);
-const { cpuBudget } = await import(pathToFileURL(join(distribution, "scripts/cpu-budget.mjs")).href);
+const { cpuBudget } = await import(
+  pathToFileURL(join(distribution, "app/src/core/execution/checks/cpu-budget.mjs")).href
+);
 const role = process.argv[2];
 if (!role) throw new Error("Specify the PHP check role");
 const source = process.cwd();

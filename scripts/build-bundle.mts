@@ -1,4 +1,4 @@
-import { record } from "./values.mjs";
+import { record } from "../app/src/core/runtime/values.mjs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { format } from "prettier";

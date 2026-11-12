@@ -3,7 +3,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y-x";
 /** AST-only presentation rules, shared by enforcement and fast regression fixtures. */
 export const jsxRenderingRules = defineConfig(
   {
-    files: ["src/web/**/*.tsx"],
+    files: ["app/src/server/**/*.tsx"],
     extends: [jsxA11y.configs.strict],
     settings: { "jsx-a11y-x": { attributes: { for: ["for", "htmlFor"] } } },
     rules: {
@@ -22,7 +22,7 @@ export const jsxRenderingRules = defineConfig(
   },
   {
     files: ["**/*.{ts,tsx,mts,mjs,cts,cjs}"],
-    ignores: ["src/web/markdown-view.tsx"],
+    ignores: ["app/src/server/views/markdown-view.tsx"],
     rules: {
       "no-restricted-syntax": [
         "error",

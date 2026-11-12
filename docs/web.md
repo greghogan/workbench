@@ -19,11 +19,28 @@ The dashboard lists registered consuming projects, including Workbench itself wh
 its records; **Projects** returns to the dashboard. Project records and adopted collections remain separate sources
 within that project. Identical record IDs in different checkouts do not identify the same file.
 
+The Projects table shows **Project**, **Reviews**, **Cache**, and **Actions**. Review counts link to each checkout's
+pending review queue, including its subprojects and adopted collections. Counts load independently of cache sizes and
+refresh after record changes and acknowledgments; unavailable counts are not shown as zero.
+
+Counts use a lightweight review inventory; unrelated record parsing, document diffs, and cache discovery are not needed.
+An open project's completed view supplies its count directly. Project monitoring continues while its browser connection
+is open, then for `server.project_idle_seconds` (default: 1800). Dashboard polling does not extend that period. After
+inactivity, only the compact summary remains; later dashboard reads validate it in a background worker. Idle views can
+be released earlier to make room for another project.
+
+Hover, focus, or select a cache size to open its breakdown: **Owned**, **Eligible**, **Retained**, **Tools**,
+**Shared**, and **Images**. Escape dismisses the popup. **Cache details** opens the complete cache page. The size shown
+in the table is the project-owned filesystem estimate; shared tools and logical images remain separate quantities.
+
 Linked Git worktrees appear in an expandable list beneath their registered main checkout. Each link opens that
 worktree's records; its **Cache** link opens checkout-specific cache management. Registrations, queues, and cache
 ownership remain separate. The dashboard's sizes and cleanup actions apply to the named checkout; the **Caches** page
 also lists worktrees individually. Independent clones remain separate projects even when they share a name. If the main
 checkout is not registered, one registered worktree represents the group.
+
+Missing worktrees remain in their repository's group while Git retains their checkout metadata. Unavailable checkouts
+skip review scans; restoring the checkout resumes its counts. Registration and cache cleanup remain explicit actions.
 
 Use **Add project** or `workbench project add PATH` to register an existing checkout. The web form takes a directory on
 the machine running the server, including when the browser connects through SSH forwarding. Initialization registers the
@@ -33,17 +50,19 @@ without asking again. Registration is personal state and does not alter project 
 
 Project navigation is available while cache sizes load. Sizes refresh without replacing an active control or an
 unfinished Add project form. Inventory events update measured cells directly; a slow directory does not hold back the
-other measurements. The dashboard links each project's cache footprint to **Caches**. Referenced tool sizes can overlap;
-the shared subtotal identifies installations used by multiple projects. The inventory counts an installation once and
-shows its consumers, current protections, older versions, and retention choices. Build roots can serve several
-subprojects, such as crates sharing one Cargo workspace. **Clear root** clears that shared build root together. Shared
-package downloads are preserved; image layers may remain after their owned tags are removed. Filesystem and builder
-sizes are estimates. Owned, eligible, and retained filesystem totals are shown separately from logical image footprints;
-shared image-layer reclamation remains unknown. A failed inventory component reports its cause while other components
-remain available.
+other measurements. Each cache breakdown links to **Caches**. Referenced tool sizes can overlap; the shared subtotal
+identifies installations used by multiple projects. The inventory counts an installation once and shows its consumers,
+current protections, older versions, and retention choices. Build roots can serve several subprojects, such as crates
+sharing one Cargo workspace. **Clear root** clears that shared build root together. Shared package downloads are
+preserved; image layers may remain after their owned tags are removed. Filesystem and builder sizes are estimates.
+Owned, eligible, and retained filesystem totals are shown separately from logical image footprints; shared image-layer
+reclamation remains unknown. A failed inventory component reports its cause while other components remain available.
 
 Saved cache measurements survive server restarts and are reused while their directories are unchanged. Automatic
 inventory refreshes are spaced fifteen minutes apart; explicit refreshes and cache maintenance can refresh sooner.
+Filesystem notifications invalidate affected directory measurements without rediscovering the whole inventory. Periodic
+reconciliation covers missed notifications, including on network filesystems. Completed totals publish only when their
+required measurements are available; failed refreshes retain the last complete values and retry with backoff.
 Recalculation keeps the previous estimate visible until a new value is ready and has no elapsed deadline. Use
 **Recalculate sizes** on the Caches page after changes made outside Workbench. Locked or changing directories can retain
 an older estimate. Size estimates never establish permission to delete. See
@@ -113,8 +132,11 @@ children remain separately selectable. Header search spans the open project's re
 collections separate. Selecting a collection searches only that collection. Search is case-insensitive and includes file
 contents. Its record-type selector defaults to **All types**; search results retain the query and selected type. Record
 lists use this same header search rather than a separate form. It does not search other registered projects. A record
-reference selects its owning scope. **Workflow** appears above **Records** and links the project's unified **Review
-queue** and private **Task queue**, independently of the selected record source.
+reference selects its owning scope. **Workflow** appears above **Records** and links **Review queue** and the private
+**Task queue** while retaining the selected source. Workflow views include the selected project scope and its
+descendants; the root shows the unified project workflow. Selecting a different source retains the workflow view.
+Counts, review continuation, and action redirects follow that selection. Project-wide policy compatibility appears in
+the root review queue; source filtering does not waive project-wide review or publication requirements.
 
 Lists load as you scroll, with an accessible **Load more** link as a fallback. **Load previous records** returns to
 earlier entries, and the URL retains the current range for reload and browser navigation. Automatic loading pauses
@@ -130,6 +152,13 @@ the document. Supporting Markdown files use the same formatted view and record p
 record and its supporting folders; folder views list their files. Other text files retain source previews, and files can
 be downloaded for inspection. Active file content is never executed in a record view. Individual text previews and
 editable documents are limited to 2 MiB.
+
+Fenced `mermaid` blocks render as diagrams using the locally shipped Mermaid Tiny build. Diagrams load only when needed,
+scroll within the document when wide, and offer **Diagram** and **Source** views. Changed diagrams retain their graphic
+colors inside removal and addition borders; one view switch controls both versions. Unified comparisons stack the
+versions; side-by-side comparisons place them in their respective columns. Source view highlights the exact text
+changes. Unsupported or invalid diagrams and unavailable rendering select readable source with a retry action. Without
+JavaScript, source remains readable. Rendering is isolated from the page and cannot acquire external resources.
 
 Citation dates display at their recorded precision, such as **2026-11-08** for a complete access date. Undated sources
 omit the Year field.
@@ -179,14 +208,17 @@ retain evidence, format documents, and regenerate maps and agent context with `w
 The **Changes** tab appears when an ADR differs from its reviewed record or pinned upstream. Explicit comparison links
 remain usable when unchanged and show **No changes**. Unavailable comparisons show their cause.
 
-An ADR's **Changes** view shows the entire formatted document, including all unchanged context. **Unified** highlights
-one removed passage followed by its replacement within each edited paragraph. Removed text is red and struck through;
-added text is green and underlined. **Side-by-side** shows the complete previous and current documents with
-corresponding blocks aligned and edits highlighted. Both layouts preserve headings, lists, tables, links, and the normal
-Summary and Agent instructions sections. Soft line wrapping does not count as a word change. Raw Git diffs remain
-available from the command line. Notices identify changed frontmatter comments and reference definitions, including when
-paragraphs also changed. Column names remain available to assistive technology without visible labels. When fine
-matching reaches its work limit, complete edited blocks remain visible and that fallback is identified. Project
+An ADR's **Changes** view shows the entire formatted document, including all unchanged context. **Unified** groups
+nearby word edits into removed passages followed by their replacements, retaining complete unchanged sentences between
+edits. Removed text is red and struck through; added text is green and underlined. **Side-by-side** shows the complete
+previous and current documents with corresponding blocks aligned and edits highlighted. Both layouts preserve headings,
+lists, tables, links, and the normal Summary and Agent instructions sections. Edited passages align related paragraphs
+in document order, leaving gaps for inserted or deleted paragraphs. Word order helps distinguish similar passages. Soft
+line wrapping does not count as a word change. Fine comparison shares one allowance across the body and metadata;
+exhausting it preserves complete values rather than omitting content. Raw Git diffs remain available from the command
+line. Notices identify changed frontmatter comments and reference definitions, including when paragraphs also changed.
+Column names remain available to assistive technology without visible labels. When fine matching reaches its work limit,
+complete edited blocks remain visible as separate removals and additions and that fallback is identified. Project
 decisions use the most recently reviewed contents since the last non-provisional commit, or that commit when no such
 review exists. A new record without a previous review opens as a complete file instead of an empty-file comparison.
 Reviews persist across server restarts; a new non-provisional commit becomes the baseline until another review occurs.
@@ -204,17 +236,21 @@ stays open with a completion notice instead of navigating away.
 
 ## Review records
 
-Open **Review queue** to review current records and their supporting files across the project, subprojects, and adopted
-collections. Selecting a record source does not filter this queue. Record listings link **Needs review** tags to the
-owning record, including when only its supporting files changed. Each record appears once in the queue, and each file
-has its own acknowledgment. Reviewed files leave the queue; records remain only while they have unreviewed files. Later
-changes return a record to the queue.
+Open **Review queue** to review current records and their supporting files in the selected project scope and its
+descendants, or in the selected collection. The root scope provides a unified project queue, including adopted
+collections. Record listings link **Needs review** tags to the owning record, including when only its supporting files
+changed. Each record appears once in the queue, and each file has its own acknowledgment. Reviewed files leave the
+queue; records remain only while they have unreviewed files. Later changes return a record to the queue.
 
-For an existing ADR, the review offers **Unified** and **Side-by-side** comparisons against the latest review since the
-last non-provisional commit, falling back to that commit when there has been no subsequent review. Both comparisons show
-the full content. A new record without a comparison baseline opens as a complete file. A deletion opens the complete
-last-reviewed document, without an empty comparison column. Other Markdown records retain the applicable Previous and
-Current views; supporting files show contents and offer downloads for binary inspection.
+The queue separates each project's records into a named section. Main-project records come first, followed by
+subprojects in hierarchy order; headings use registered name breadcrumbs. Adopted collections have separate sections
+after project scopes. Previous/next navigation and confirmation follow the same order.
+
+For an existing ADR, experiment, environment record, or charter, review offers **Unified** and **Side-by-side**
+comparisons against the latest review since the last non-provisional commit, falling back to that commit when there has
+been no subsequent review. Both comparisons show the full content. A new record without a comparison baseline opens as a
+complete file. A deletion opens the complete last-reviewed document, without an empty comparison column. Supporting
+files show contents and offer downloads for binary inspection.
 
 Record links use canonical scoped IDs: `/projects/PROJECT_ID/records/workbench:ADR-0` opens the record and its `/review`
 subresource opens review. Supporting files use `/files?path=...`, and citation documents use `/document?source=...`.
@@ -228,6 +264,9 @@ Inspect the record and its supporting evidence, then select **Confirm new file**
 deletion**. For a charter, confirmation also acknowledges human authorship. Use **Previous** and **Next** to move
 between records. Confirmation keeps the record open while another file needs review, then advances to the next
 unreviewed record. After the final item it returns to the queue.
+
+Records are formatted automatically before review. Confirmation acknowledges the version shown and never rewrites the
+file. Later on-disk edits remain intact and pending review. Without JavaScript, **Review file** starts preparation.
 
 The layout selector marks the current choice and preserves it when moving through the review queue. The server retains
 the exact versions presented for review. If a file changes on disk, **Refresh** appears beside that file's **Confirm**
@@ -290,7 +329,16 @@ link. It supports narrow windows, browser zoom, reduced motion, and forced color
 and do not silently replace a review snapshot. These provisions support the project's Section 508 requirement; a full
 conformance claim requires the release-specific automated and human assessment described by ADR-18.
 
+Document reviews group the main project before its subprojects and collections. Within each scope, charters come first,
+followed by ADRs in canonical numeric order, environment records, and experiment records. Supporting files remain with
+their record.
+
 ## Request failures
+
+`workbench serve` saves structured diagnostics by default and reports the session directory at startup. Use
+`workbench logs read /path/to/logs/server/SESSION_ID` to read its retained segments in order, including compressed
+segments from the running server. Logging preferences, locations, and retention are described in the
+[tooling guide](tooling.md#diagnostics).
 
 The local HTTP interface distinguishes invalid input (`400`), rejected origin or session (`403`), missing resources
 (`404`), stale versions or concurrent operations (`409`), oversized requests or proposals (`413`), unexpected failures
@@ -320,8 +368,13 @@ Metrics use fixed names rather than record IDs or URLs as labels. These observat
 and persistent logging can add work.
 
 Document reads reuse a complete in-memory workspace view while background reconciliation checks for changes. Concurrent
-readers share refresh work. Review formatting uses the same captured bytes in the read worker; applying formatting still
-checks the current file before changing it. Reviews continue to acknowledge the version actually presented.
+readers share refresh work. Read acquisition only reports whether a record needs preparation. A review action saves
+canonical formatting in a worker before the formatted file is presented. Reviews acknowledge the version actually shown,
+independently of later edits.
+
+Preparation updates only the affected record maps and agent context. It is separate from acknowledgment in action
+diagnostics; preparing a file never approves it. A failed generation can be retried without reformatting an already
+current file.
 
 CSS and JavaScript use content-versioned URLs, browser caching, and negotiated Brotli or gzip compression. Document
 pages remain uncached in the browser. Original citation renderings reuse bounded server-side results only while the
@@ -331,6 +384,11 @@ verified source and its decoding metadata match; remote-image consent remains a 
 `phases` field reports fixed phase names with sample counts, total milliseconds, and maximum milliseconds; workspace
 collection and formatting include worker time. These timings distinguish filesystem and Git acquisition from rendering
 and transfer.
+
+Review-summary jobs, reuse, discarded generations, failures, and inventory retries have separate counters. The
+`reviews`, `projectDirectory`, `cacheDiscovery`, and `cacheMeasurement` phases separate overview acquisition costs. Use
+`node scripts/profile-workbench.mjs --case reviews --output DIR` inside the prepared development environment for cold
+and warm read-only review-inventory samples. Timings are advisory and do not establish a performance threshold.
 
 Run `workbench shell -- node scripts/check-web-browser.mjs --scenario "Document loading performance" --output DIR` from
 a source checkout for repeatable cold/warm document navigation, concurrent reviews, asset-cache reuse, and invalidation

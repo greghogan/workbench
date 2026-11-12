@@ -1,19 +1,22 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, mkdirSync } from "node:fs";
-import { userDirectory } from "../../src/storage.js";
+import { userDirectory } from "../../app/src/core/storage/storage.js";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { acquireProcessLock, type ProcessLock } from "../../src/process-lock.js";
-import { withToolCacheAdmissionAsync } from "../../src/tool-cache-lock.js";
+import { acquireProcessLock, type ProcessLock } from "../../app/src/core/storage/process-lock.js";
+import { withToolCacheAdmissionAsync } from "../../app/src/core/toolchains/tool-cache-lock.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { replaceManagedFiles } from "../managed-files.mjs";
-import { publishCheckedFiles } from "../file-publication.mjs";
+import { publishCheckedFiles } from "../../app/src/core/runtime/file-publication.mjs";
 import { maintenanceInputs, maintenanceTargets } from "./plan.mjs";
-import { record, string } from "../values.mjs";
+import { record, string } from "../../app/src/core/runtime/values.mjs";
 import { developmentRoots } from "./workspace.mjs";
-import { requireAcceptedMavenInputs } from "../../src/maven-proposal.js";
-export { requireMavenProposalAcceptance, requireAcceptedMavenInputs } from "../../src/maven-proposal.js";
-export { verifyJavaWorkspaceConsumerDistribution } from "../../src/consumer-integration-java.js";
+import { requireAcceptedMavenInputs } from "../../app/src/core/toolchains/maven/maven-proposal.js";
+export {
+  requireMavenProposalAcceptance,
+  requireAcceptedMavenInputs,
+} from "../../app/src/core/toolchains/maven/maven-proposal.js";
+export { verifyJavaWorkspaceConsumerDistribution } from "../../app/test/integration/consumers/consumer-integration-java.js";
 
 const operations = new WeakSet();
 export interface MaintenanceOperation {

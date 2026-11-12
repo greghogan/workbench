@@ -130,6 +130,14 @@ requiring repeated JAR output merely to calculate expected hashes. Normal releas
 shipped; they are not a separate human approval of a generated source JAR. Application distributions include the current
 invocation's source JARs and Maven-selected frozen external runtime closure.
 
+Source providers build as thin libraries for that invocation, even when their own `.mvn/runtime.json` selects an
+application. The enclosing application owns the complete runtime closure. The helper sets each staged module's
+`workbench.application` property independently; the starter's manifest configuration uses it to include application
+classpaths only in the selected application. Project-owned POMs must honor that distinction. Building a provider
+directly retains its standalone role and runtime configuration; embedding never rewrites its authoritative POM or
+repackages a verified dependency JAR. Release verification includes strict external-consumer compilation as well as
+execution, so broken manifest paths cannot hide behind an otherwise working launcher.
+
 Each operation captures its input metadata once and uses those same bytes for staging and final change detection.
 Cancellation prevents proposal and build publication; it interrupts artifact verification and repository-lock waits.
 Each invocation owns its source copy, outputs, and private repository. Formatting publishes changes only for the

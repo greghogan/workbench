@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
-import { records, string } from "../values.mjs";
+import { records, string } from "../../app/src/core/runtime/values.mjs";
 import { type MaintenanceLocator, type MaintenanceTarget } from "./contract.mjs";
 
 export function fileDigest(root: string, path: string): string {

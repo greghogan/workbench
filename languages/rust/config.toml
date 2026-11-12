@@ -15,6 +15,7 @@ starter = [
   "Cargo.lock",
   "rust-toolchain.toml",
   "rust-toolchain-miri.toml",
+  ".cargo/config.toml",
   ".config/nextest.toml",
   "src/count.rs",
   "src/lib.rs",

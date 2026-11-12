@@ -88,13 +88,13 @@ workbench check --path . --role profile --no-cache
 
 Select individual cases with
 `node scripts/profile-workbench.mjs --case validation --case web --samples 3 --output /tmp/workbench-profiles`. Other
-cases cover startup and check planning. Each report identifies its source tree, lists relative capture files and sizes,
-and records samples incrementally, retaining completed evidence and the failure if a later sample fails. Unprofiled
-samples are separate from CPU/heap-profiled runs. Reports record platform, Node, CPU availability, wall time, process
-CPU, maximum RSS, and kernel block-I/O counters where available. Those counters exclude subprocesses and do not count
-all network-filesystem requests. Fresh processes do not imply cold filesystem caches. Captures are Node CPU and sampling
-heap profiles, not whole-system accounting. The extended engineering CI job retains the execution report, rebuild
-summary, and profiling captures for comparison.
+cases cover startup, check planning, and cold/warm review inventories (`--case reviews`). Each report identifies its
+source tree, lists relative capture files and sizes, and records samples incrementally, retaining completed evidence and
+the failure if a later sample fails. Unprofiled samples are separate from CPU/heap-profiled runs. Reports record
+platform, Node, CPU availability, wall time, process CPU, maximum RSS, and kernel block-I/O counters where available.
+Those counters exclude subprocesses and do not count all network-filesystem requests. Fresh processes do not imply cold
+filesystem caches. Captures are Node CPU and sampling heap profiles, not whole-system accounting. The extended
+engineering CI job retains the execution report, rebuild summary, and profiling captures for comparison.
 
 Copy evidence needed for durable performance claims into experiment supporting files. ADR-8 governs representative
 workloads, comparisons, uncertainty, and human review; ordinary exploration need not become an experiment.

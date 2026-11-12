@@ -1,6 +1,6 @@
 import { defineConfig, type ViteUserConfig } from "vitest/config";
 import { availableParallelism } from "node:os";
-import { cpuBudget } from "./scripts/cpu-budget.mjs";
+import { cpuBudget } from "./app/src/core/execution/checks/cpu-budget.mjs";
 import { transform } from "esbuild";
 
 export default defineConfig((): ViteUserConfig => ({
@@ -38,15 +38,21 @@ export default defineConfig((): ViteUserConfig => ({
     reporters: ["default", "json"],
     outputFile: "coverage/tests.json",
     slowTestThreshold: 2000,
-    include: ["tests/**/*.test.mts"],
-    setupFiles: ["tests/setup.mts"],
+    include: ["app/test/**/*.test.mts"],
+    setupFiles: ["app/test/setup.mts"],
     // Timing caps are advisory, including on slow hosts.
     testTimeout: 0,
     hookTimeout: 0,
     coverage: {
       provider: "v8",
       // Emitted helpers carry inline maps back to their authored TypeScript.
-      include: ["src/**/*.{ts,tsx}", "scripts/**/*.{mts,mjs}", "bin/*.{js,mjs,cts}"],
+      include: [
+        "app/src/**/*.{ts,tsx,mts,mjs}",
+        "app/test/integration/consumers/*.ts",
+        "app/test/integration/browser/*.mts",
+        "scripts/**/*.{mts,mjs}",
+        "bin/*.{js,mjs,cts}",
+      ],
       // Bundled dependency maps must obey the same declared project-source scope.
       excludeAfterRemap: true,
       reportsDirectory: "coverage/unit",

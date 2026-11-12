@@ -13,6 +13,19 @@ panicking unwraps, and undocumented unsafe code. The lint gate checks all worksp
 warnings. The entire restriction group is deliberately excluded because it contains conflicting policies. Justify any
 local exceptions at the affected code; test assertions may use narrowly allowed `expect` when failure is the assertion.
 
+Cargo treats findings from its default manifest lints as errors, including unused dependencies and missing workspace
+lint inheritance. The unused-dependency check does not cover development dependencies; feature-dependent uses still
+require review. API documentation and documentation tests treat rustdoc warnings as errors.
+
+`.cargo/config.toml` sets a three-day dependency cooldown. Existing locked versions remain usable. For an urgent,
+reviewed update, override the resolver for that command:
+
+```sh
+cargo --config 'resolver.incompatible-publish-age="allow"' update -p PACKAGE --precise VERSION
+```
+
+Review why the cooldown is being bypassed and verify the updated lockfile with the configured checks.
+
 `rust-toolchain.toml` owns the host compiler, rustfmt, Clippy, rust-analyzer, and standard-library sources;
 `.tool-versions` pins host Nextest. Install the declared toolchain and components from this directory:
 
@@ -31,10 +44,10 @@ Every environment uses `Cargo.lock`. Additional compatibility profiles can verif
 Rust upstream maintains only the latest compiler. An older compiler's availability in a managed environment does not
 establish a compatibility policy or imply continued compiler maintenance. Native development selects current stable.
 
-The Nix Rust environment temporarily retains Nixpkgs `e63c96e6b5c1cd2b726895cef537fd7363fc5de6` (Rust 1.98.1).
-The newer package set combines Rust 1.99's LLVM 23 profiling runtime with an LLVM 21 compiler backend, causing
-coverage-instrumented binaries to crash. Update this environment when its compiler and profiling runtime agree;
-the remaining Nix environments and native Rust pins update independently.
+The Nix Rust environment temporarily retains Nixpkgs `e63c96e6b5c1cd2b726895cef537fd7363fc5de6` (Rust 1.98.1). The newer
+package set combines Rust 1.99's LLVM 23 profiling runtime with an LLVM 21 compiler backend, causing
+coverage-instrumented binaries to crash. Update this environment when its compiler and profiling runtime agree; the
+remaining Nix environments and native Rust pins update independently.
 
 `Cargo.toml` owns release profiles and dependencies; Cargo configuration and explicit environment settings can also
 supply compiler flags. Experimental flags do not change canonical release recipes until accepted in source.
@@ -133,6 +146,7 @@ release. The manifest derives LLVM tools from the selected Rust package's LLVM i
 independent of native `.tool-versions`.
 
 The static Makefile delegates to the repository's configured commands for this root: `make` builds, `make check` runs
-the commit gate followed by online checks when reachable, `make test` runs ordinary tests, and `make coverage` runs the same suite with instrumentation and
-coverage floors. CI selects coverage on Linux/native and ordinary tests on other targets. `make release` prepares local
-release artifacts; `make fmt` formats files. Coverage has no whole-command timing cap.
+the commit gate followed by online checks when reachable, `make test` runs ordinary tests, and `make coverage` runs the
+same suite with instrumentation and coverage floors. CI selects coverage on Linux/native and ordinary tests on other
+targets. `make release` prepares local release artifacts; `make fmt` formats files. Coverage has no whole-command timing
+cap.

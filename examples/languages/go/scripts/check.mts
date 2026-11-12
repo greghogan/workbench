@@ -1,13 +1,15 @@
 import { pathToFileURL } from "node:url";
 import { join, relative, resolve, sep } from "node:path";
-const emitCheckDetail: typeof import("../../../../scripts/check-detail-data.mjs").emitCheckDetail = process.env
-  .WORKBENCH_DISTRIBUTION_ROOT
-  ? (
-      (await import(
-        pathToFileURL(join(process.env.WORKBENCH_DISTRIBUTION_ROOT, "scripts/check-detail-data.mjs")).href
-      )) as typeof import("../../../../scripts/check-detail-data.mjs")
-    ).emitCheckDetail
-  : () => undefined;
+const emitCheckDetail: typeof import("../../../../app/src/core/execution/checks/check-detail-data.mjs").emitCheckDetail =
+  process.env.WORKBENCH_DISTRIBUTION_ROOT
+    ? (
+        (await import(
+          pathToFileURL(
+            join(process.env.WORKBENCH_DISTRIBUTION_ROOT, "app/src/core/execution/checks/check-detail-data.mjs"),
+          ).href
+        )) as typeof import("../../../../app/src/core/execution/checks/check-detail-data.mjs")
+      ).emitCheckDetail
+    : () => undefined;
 import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -65,11 +67,11 @@ if (role === "format") {
   const distribution = process.env.WORKBENCH_DISTRIBUTION_ROOT;
   if (!distribution) throw new Error("Run Go fuzzing through a configured Workbench check or shell");
   const { withEngineeringRun } = (await import(
-    pathToFileURL(join(distribution, "scripts/engineering-run.mjs")).href
-  )) as typeof import("../../../../scripts/engineering-run.mjs");
+    pathToFileURL(join(distribution, "app/src/core/artifacts/engineering-run.mjs")).href
+  )) as typeof import("../../../../app/src/core/artifacts/engineering-run.mjs");
   const { processFailure } = (await import(
-    pathToFileURL(join(distribution, "scripts/process-outcome.mjs")).href
-  )) as typeof import("../../../../scripts/process-outcome.mjs");
+    pathToFileURL(join(distribution, "app/src/core/runtime/process-outcome.mjs")).href
+  )) as typeof import("../../../../app/src/core/runtime/process-outcome.mjs");
   await withEngineeringRun(resolve(builds), "go-fuzz", async (job) => {
     const scratch = job.directory,
       source = process.cwd();
