@@ -1,13 +1,13 @@
-import { isCompilerFamily } from "./compiler-catalog.mjs";
-import { required, record, records, string, strings, stringRecord } from "./values.mjs";
-import type { CacheInspectionRequest } from "../src/ci-cache-inspection.js";
+import { isCompilerFamily } from "../app/src/core/toolchains/compiler-catalog.mjs";
+import { required, record, records, string, strings, stringRecord } from "../app/src/core/runtime/values.mjs";
+import type { CacheInspectionRequest } from "../app/src/core/execution/ci/ci-cache-inspection.js";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { ciBuildCachePaths, ciCacheEnvironment } from "./ci-layout.mjs";
-import { guixChannelFile } from "./managed-contract.mjs";
+import { ciBuildCachePaths, ciCacheEnvironment } from "../app/src/core/execution/ci/support/ci-layout.mjs";
+import { guixChannelFile } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import type { PathOrFileDescriptor } from "fs";
 
 const distribution = resolve(import.meta.dirname, "..");
@@ -75,32 +75,40 @@ const redownload = new Set([
 // Collect every source identity in the same process as tool and package-manager planning.
 const sourceGroups = {
   acquisition: [
-    "src/tool-downloads.ts",
-    "src/tool-host.ts",
-    "src/runtime-builds.ts",
-    "src/seven-zip.ts",
-    "src/artifact-streams.ts",
-    "src/archive-extraction.ts",
-    "src/artifact-decoders.ts",
-    "src/artifact-signatures.ts",
-    "src/artifact-attestations.ts",
-    "src/attestation-verification.ts",
-    "src/artifact-repositories.ts",
-    "src/artifact-policy.ts",
+    "app/src/core/toolchains/tool-downloads.ts",
+    "app/src/core/toolchains/tool-host.ts",
+    "app/src/core/artifacts/runtime-builds.ts",
+    "app/src/core/toolchains/seven-zip.ts",
+    "app/src/core/toolchains/acquisition/artifact-streams.ts",
+    "app/src/core/toolchains/acquisition/archive-extraction.ts",
+    "app/src/core/toolchains/acquisition/artifact-decoders.ts",
+    "app/src/core/toolchains/acquisition/artifact-signatures.ts",
+    "app/src/core/toolchains/acquisition/artifact-attestations.ts",
+    "app/src/core/toolchains/acquisition/attestation-verification.ts",
+    "app/src/core/toolchains/acquisition/artifact-repositories.ts",
+    "app/src/core/toolchains/acquisition/artifact-policy.ts",
   ],
-  filtered: ["src/filtered-artifacts.ts"],
-  vcpkg: ["src/vcpkg.ts", "src/mvsc.ts"],
-  ruby: ["src/ruby-manager.ts"],
-  packageManager: ["src/package-manager.ts", "src/toolchains.ts", "src/tool-downloads.ts"],
+  filtered: ["app/src/core/toolchains/filtered-artifacts.ts"],
+  vcpkg: ["app/src/core/toolchains/vcpkg.ts", "app/src/core/toolchains/mvsc.ts"],
+  ruby: ["app/src/core/toolchains/ruby-manager.ts"],
+  packageManager: [
+    "app/src/core/artifacts/package-manager.ts",
+    "app/src/core/toolchains/toolchains.ts",
+    "app/src/core/toolchains/tool-downloads.ts",
+  ],
   container: [
-    "src/container-tools.ts",
+    "app/src/core/artifacts/container-tools.ts",
     "scripts/container-tools/package.json",
     "scripts/container-tools/package-lock.json",
   ],
-  builds: ["src/builds.ts"],
+  builds: ["app/src/core/artifacts/builds.ts"],
   guix:
     target.environment === "guix"
-      ? ["scripts/ci-guix-bootstrap.mjs", "scripts/ci-guix-bootstrap.scm", "scripts/managed-contract.mjs"]
+      ? [
+          "scripts/ci-guix-bootstrap.mjs",
+          "scripts/ci-guix-bootstrap.scm",
+          "app/src/core/execution/environments/managed/managed-contract.mjs",
+        ]
       : [],
 };
 const sourceFiles = [...new Set(Object.values(sourceGroups).flat())];

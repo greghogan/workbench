@@ -1,7 +1,7 @@
 import { lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { publishCheckedFiles } from "./file-publication.mjs";
-import { required } from "./values.mjs";
+import { publishCheckedFiles } from "../app/src/core/runtime/file-publication.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 
 type JavaSources = ReadonlyMap<string, { bytes: Buffer; mode: number }>;
 

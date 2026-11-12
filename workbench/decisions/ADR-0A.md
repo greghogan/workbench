@@ -38,9 +38,8 @@ prove runtime behavior. Nix and Guix select versions independently of native pin
 application requirements, language targets, and quality checks. Examples demonstrate development and minimum targeting
 without unnecessary newer-language requirements or exhaustive matrices.
 
-Each Workbench-supplied language definition has a dependency-update skill. General upgrades consider current stable
-releases, including majors; narrower requests retain their scope. Preserve support boundaries and environment pins
-unless their change is requested.
+For general dependency updates, consider the latest stable versions, including major releases. Keep narrower requests
+within their stated scope. Preserve support boundaries and environment pins unless their change is requested.
 
 Require canonical formatting with write and check modes, comprehensive applicable compiler diagnostics and linting,
 strict type checking, and behavioral tests. Enable broad, coherent rule sets by default, including checks beyond basic

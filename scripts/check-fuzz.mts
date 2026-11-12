@@ -1,11 +1,11 @@
 import { parseArgs } from "node:util";
-import { readBoundedFile } from "../src/file-reads.ts";
-import { processFailure } from "./process-outcome.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { join, resolve } from "node:path";
 import { decodePropertyOutcome, propertyTitles, isPropertyID, type PropertyOutcome } from "./document-properties.mjs";
-import { withEngineeringRun } from "./engineering-run.mjs";
-import { writeAtomic } from "./file-publication.mjs";
-import { clipped } from "./diagnostic-text.mjs";
+import { withEngineeringRun } from "../app/src/core/artifacts/engineering-run.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { clipped } from "../app/src/core/diagnostics/diagnostic-text.mjs";
 
 const { values } = parseArgs({
   options: {

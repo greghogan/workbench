@@ -1,11 +1,14 @@
 import { isMainScript } from "./script-entry.mjs";
-import { required, strings } from "./values.mjs";
+import { required, strings } from "../app/src/core/runtime/values.mjs";
 import { type ManagedProcessScope, withManagedProcesses } from "./managed-process.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { guixChannelGroups, validateManagedPlan } from "./managed-contract.mjs";
-import { managedSystem, writeGuixSystemFile } from "./managed-system.mjs";
+import {
+  guixChannelGroups,
+  validateManagedPlan,
+} from "../app/src/core/execution/environments/managed/managed-contract.mjs";
+import { managedSystem, writeGuixSystemFile } from "../app/src/core/execution/environments/managed/managed-system.mjs";
 
 function link(target: string, path: string) {
   const temporary = `${path}.${randomUUID()}.partial`;

@@ -3,7 +3,7 @@ import { lstatSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:f
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { withManagedProcesses, type ManagedProcessScope } from "./managed-process.mjs";
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 
 /** Caller holds the dependency lock and registers ownership of both public profile paths. */
 export async function runGuixProfile(profile: string, command: string[], scope: ManagedProcessScope): Promise<void> {

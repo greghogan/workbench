@@ -1,9 +1,9 @@
-import { readAcquiredCIImage } from "./ci-image-contract.mjs";
-import { capturedText, record, string, isRecord, isStringArray } from "./values.mjs";
+import { readAcquiredCIImage } from "../app/src/core/execution/ci/support/ci-image-contract.mjs";
+import { capturedText, record, string, isRecord, isStringArray } from "../app/src/core/runtime/values.mjs";
 
-import { runOwnedChild, captureOwnedChild, processCancellation } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
-import { settleCleanup } from "./diagnostic-errors.mjs";
+import { runOwnedChild, captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
+import { settleCleanup } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
 import {
   copyFileSync,
   existsSync,
@@ -17,7 +17,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { cpuBudget } from "./cpu-budget.mjs";
+import { cpuBudget } from "../app/src/core/execution/checks/cpu-budget.mjs";
 
 const { values } = parseArgs({ options: { target: { type: "string" }, "image-profile": { type: "string" } } });
 const root = process.cwd();

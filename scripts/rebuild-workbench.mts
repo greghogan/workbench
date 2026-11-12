@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { compileBundles, publishBundles } from "./bundle-build.mjs";
-import { prepareWorkbenchPackage } from "../src/package.ts";
-import { withEngineeringRun } from "./engineering-run.mjs";
-import { writeAtomic } from "./file-publication.mjs";
+import { prepareWorkbenchPackage } from "../app/src/core/artifacts/package.ts";
+import { withEngineeringRun } from "../app/src/core/artifacts/engineering-run.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 
 // Runs from the frozen checkout after that checkout has emitted its own authored tooling.
 const root = process.cwd();

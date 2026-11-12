@@ -1,10 +1,11 @@
+import { bundleSource } from "../app/src/core/distribution/bundle-artifacts.mjs";
 import { isMainScript } from "./script-entry.mjs";
-import { admittedWork, type WorkAdmission } from "./work-admission.mjs";
+import { admittedWork, type WorkAdmission } from "../app/src/core/execution/checks/work-admission.mjs";
 import { testFailureSummary } from "./test-failures.mjs";
-import { createOwnedScratch } from "./owned-scratch.mjs";
-import { runOwnedChild, processCancellation } from "./owned-child.mjs";
+import { createOwnedScratch } from "../app/src/core/runtime/owned-scratch.mjs";
+import { runOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
 import { linkDependencies } from "./link-dependencies.mjs";
-import { processFailure } from "./process-outcome.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -22,14 +23,18 @@ import coverage from "istanbul-lib-coverage";
 import report from "istanbul-lib-report";
 import reports from "istanbul-reports";
 import { build } from "esbuild";
-import { copySourceCheckout } from "./source-checkout.mjs";
+import { copySourceCheckout } from "../app/src/core/execution/snapshots/source-checkout.mjs";
 import { bundleOptions } from "./bundle-options.mjs";
 import { bundleEntries } from "./bundle-build.mjs";
 import { InvalidNodeCoverageReport, nodeCoverageProducer, type CoverageSourceMap } from "./node-coverage-reports.mjs";
-import { coverageRepository, reportCoverageChange, type MetricName } from "./coverage-summary.mjs";
+import {
+  coverageRepository,
+  reportCoverageChange,
+  type MetricName,
+} from "../app/src/core/execution/checks/coverage-summary.mjs";
 
 import type { CoverageMap, FileCoverageData } from "istanbul-lib-coverage";
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 
 import {
   mapIdentity,
@@ -39,7 +44,7 @@ import {
   type MeasuredScript,
 } from "./coverage-processing.mjs";
 import { coverageJobs } from "./coverage-workers.mjs";
-import { cpuBudget } from "./cpu-budget.mjs";
+import { cpuBudget } from "../app/src/core/execution/checks/cpu-budget.mjs";
 import { availableParallelism, loadavg } from "node:os";
 
 type CoveragePhase =
@@ -81,13 +86,13 @@ function phaseTimings(report?: CoverageTiming) {
 // Integration tests launch and copy the distribution beside their test sources.
 // Give coverage its own distribution without changing the runnable checkout.
 export async function coverageWorkspace(root: string, temporary: string) {
-  if (!["main", "skills"].every((name) => existsSync(join(root, `src/${name}.ts`)))) return root;
+  if (!["main", "skills"].every((name) => existsSync(join(root, bundleSource(name))))) return root;
   const workspace = join(temporary, "project");
   mkdirSync(workspace);
   copySourceCheckout(root, workspace);
   linkDependencies(join(root, "node_modules"), join(workspace, "node_modules"));
   for (const name of bundleEntries)
-    if (existsSync(join(workspace, `src/${name}.ts`))) await build(bundleOptions(workspace, name, true));
+    if (existsSync(join(workspace, bundleSource(name)))) await build(bundleOptions(workspace, name, true));
   return workspace;
 }
 
@@ -116,7 +121,7 @@ export async function subprocessCoverage(
       return entry.isFile() && /\.(?:mjs|cjs|js)$/.test(entry.name) ? [path] : [];
     });
   };
-  for (const path of ["bundle", "scripts", "bin"].flatMap((name) => sources(join(root, name)))) {
+  for (const path of ["bundle", "scripts", "bin", "app/src"].flatMap((name) => sources(join(root, name)))) {
     const code = readFileSync(path, "utf8");
     const encoded = /sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,([^\s]+)/.exec(code)?.[1];
     if (!encoded) {
@@ -132,7 +137,11 @@ export async function subprocessCoverage(
       ...map,
       sources: map.sources.map((source, index) => {
         const sourcePath = resolve(dirname(path), map.sourceRoot ?? "", source ?? "");
-        if (["src", "scripts", "bin"].some((name) => sourcePath.startsWith(join(root, name) + sep))) {
+        if (
+          ["src", "app/src", "app/test/integration/consumers", "app/test/integration/browser", "scripts", "bin"].some(
+            (name) => sourcePath.startsWith(join(root, name) + sep),
+          )
+        ) {
           if (!existsSync(sourcePath) || readFileSync(sourcePath, "utf8") !== map.sourcesContent?.[index])
             throw new Error(`${sourcePath}: emitted source differs from the checkout`);
           included.add(sourcePath);
@@ -330,6 +339,7 @@ export async function runCoverage(
         // Vitest already measures its workers. Their setup enables native V8 capture only for CLI children.
         env: {
           ...process.env,
+          NODE_DISABLE_COMPILE_CACHE: "1",
           NODE_V8_COVERAGE: "",
           WORKBENCH_SUBPROCESS_COVERAGE: raw,
           ...(revision === undefined ? {} : { WORKBENCH_SOURCE_REVISION: revision }),

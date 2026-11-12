@@ -2,8 +2,8 @@ import { isMainScript } from "./script-entry.mjs";
 import { opendirSync, lstatSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { readBoundedFile } from "../src/file-reads.ts";
-import { record, records, string } from "./values.mjs";
+import { readBoundedFile } from "../app/src/core/runtime/file-reads.ts";
+import { record, records, string } from "../app/src/core/runtime/values.mjs";
 
 const diagnostic = (value: string) =>
   stripVTControlCharacters(value)

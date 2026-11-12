@@ -16,10 +16,6 @@ native fallback.
 Select the builder and host or container workspace independently within a development profile. Local development and CI
 may use different workspaces while sharing the same environment definitions.
 
-Selection precedence is explicit command, active Workbench shell, ignored local preference, then shared check default.
-Preferences cannot redefine commands, CI coverage, or generated shared context. Staged checks retain local selection
-while reading commands and definitions from the proposed tree.
-
 Prefer configured Workbench runners for builds and checks. Direct tool commands are appropriate within an already
 prepared environment. Explicit development shells use selected tools and the working checkout. Managed shells retain one
 root's environment; changing it requires leaving the shell. Native workspaces may select pins per root. Setup and
@@ -31,9 +27,9 @@ substitute another environment's tools or download a replacement interpreter. Eq
 identical recipes or builds.
 
 For Nix and Guix, derive release packages and development build inputs from one package definition, adding check,
-debugging, interactive, and IDE tools only for development. Include version-control, SSH, synchronization, navigation,
-and editing capabilities. Release packages retain only application and runtime requirements. Copied definitions remain
-project-owned without implicit Workbench updates.
+debugging, interactive, and IDE tools only for development. Release packages retain only application and runtime
+requirements. Copied definitions remain project-owned without implicit Workbench updates. Keep development-tool
+inventories and shell recipes in the environment guide.
 
 Humans initiate changes to Guix/Nix package versions, channels, flake inputs, and the Nix container image digest. Agents
 may prepare and verify requested updates; verification failures do not authorize pin changes.

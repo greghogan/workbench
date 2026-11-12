@@ -7,5 +7,7 @@ const root = process.cwd();
 const bundles = await compileBundles(root);
 verifyRuntimeDependencies({ root, artifacts: collectToolingArtifacts(root), ...bundles });
 publishBundles(root, bundles);
-const runtime = createRequire(import.meta.url)("../bundle/package.cjs") as typeof import("../src/package.js");
+const runtime = createRequire(import.meta.url)(
+  "../bundle/package.cjs",
+) as typeof import("../app/src/core/artifacts/package.js");
 await runtime.prepareWorkbenchPackage(root, { generated: bundles.outputs });

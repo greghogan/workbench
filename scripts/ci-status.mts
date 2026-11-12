@@ -1,7 +1,7 @@
 import { reportCIFailure } from "./ci-errors.mts";
 import { isMainScript } from "./script-entry.mjs";
-import { record, string } from "./values.mjs";
-import { errorMessage } from "./ci-results.mjs";
+import { record, string } from "../app/src/core/runtime/values.mjs";
+import { errorMessage } from "../app/src/core/execution/ci/support/ci-results.mjs";
 interface JobResult {
   result?: string;
   outputs?: { matrix?: string };

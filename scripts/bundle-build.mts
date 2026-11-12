@@ -2,8 +2,8 @@ import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { combineFailures } from "./diagnostic-errors.mjs";
-import { stageFile, writeAtomic, type StagedFile } from "./file-publication.mjs";
+import { combineFailures } from "../app/src/core/diagnostics/diagnostic-errors.mjs";
+import { stageFile, writeAtomic, type StagedFile } from "../app/src/core/runtime/file-publication.mjs";
 import {
   bundleArtifacts,
   bundleCompression,
@@ -12,11 +12,11 @@ import {
   bundles,
   decodeBundle,
   type BundleCompression,
-} from "./bundle-artifacts.mjs";
+} from "../app/src/core/distribution/bundle-artifacts.mjs";
 import { bundleLicenses, noticesPath, verifyBundleRuntime } from "./bundle-licenses.mjs";
 import { bundleOptions, bundleRuntime } from "./bundle-options.mjs";
 import { bundleInputDigest, saveBundleCache } from "./bundle-cache.mts";
-export { bundleEntries, compressedBundles } from "./bundle-artifacts.mjs";
+export { bundleEntries, compressedBundles } from "../app/src/core/distribution/bundle-artifacts.mjs";
 
 export interface BundleOutput {
   path: string;

@@ -1,4 +1,4 @@
-import { ciActionPins, workflowPaths } from "./ci-actions.mjs";
+import { ciActionPins, workflowPaths } from "../app/src/core/execution/ci/support/ci-actions.mjs";
 import { actionPins } from "./maintenance/syntax.mjs";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";

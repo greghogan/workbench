@@ -1,8 +1,12 @@
-import { required, isStringArray } from "./values.mjs";
+import { required, isStringArray } from "../app/src/core/runtime/values.mjs";
 import { guixImageDefinition } from "./pack-guix-image.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
 import { importManagedImage } from "./managed-image-import.mjs";
-import { builderVolumes, builderCacheKey, guixChannelFile } from "./managed-contract.mjs";
+import {
+  builderVolumes,
+  builderCacheKey,
+  guixChannelFile,
+} from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

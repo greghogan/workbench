@@ -1,7 +1,7 @@
 import { gte, parse as parseSemver } from "semver";
 import type { MaintenanceTarget, Release } from "./contract.mjs";
 import type { MaintenanceSources } from "./sources.mjs";
-import { record, string } from "../values.mjs";
+import { record, string } from "../../app/src/core/runtime/values.mjs";
 
 /** Preserve canonical Go spelling, including +incompatible and pseudo-version revisions. */
 function version(value: string): string {

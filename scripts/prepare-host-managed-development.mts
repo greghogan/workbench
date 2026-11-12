@@ -1,7 +1,7 @@
-import { required } from "./values.mjs";
+import { required } from "../app/src/core/runtime/values.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
 import { importManagedImage } from "./managed-image-import.mjs";
-import { validateManagedPlan } from "./managed-contract.mjs";
+import { validateManagedPlan } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { prepareGuixProfiles } from "./prepare-guix-profiles.mjs";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";

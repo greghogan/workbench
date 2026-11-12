@@ -1,4 +1,4 @@
-export const profileCases = ["startup", "validation", "checks", "web"] as const;
+export const profileCases = ["startup", "validation", "checks", "web", "reviews"] as const;
 export type ProfileCase = (typeof profileCases)[number];
 export function isProfileCase(value: string): value is ProfileCase {
   return (profileCases as readonly string[]).includes(value);

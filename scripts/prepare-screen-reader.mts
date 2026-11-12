@@ -1,13 +1,13 @@
-import { acquireCommand } from "./network-command.mts";
+import { acquireCommand } from "../app/src/core/toolchains/acquisition/network-command.mts";
 import { runCIEntry } from "./ci-errors.mts";
 import { appendFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { withManagedProcesses } from "./managed-process.mjs";
-import { toolDirectory } from "../src/native-assets.ts";
-import { installAsset, type ToolAsset } from "../src/tool-downloads.ts";
-import { standaloneTools } from "../src/toolchains.ts";
-import { required } from "./values.mjs";
+import { toolDirectory } from "../app/src/core/toolchains/native/native-assets.ts";
+import { installAsset, type ToolAsset } from "../app/src/core/toolchains/tool-downloads.ts";
+import { standaloneTools } from "../app/src/core/toolchains/toolchains.ts";
+import { required } from "../app/src/core/runtime/values.mjs";
 
 /** The headed browser shares the existing browser version authority; the upstream manifest pins NVDA's archive. */
 async function main() {

@@ -1,10 +1,13 @@
-import { nativeHostLanguages, nativeHostRequirements } from "./native-host-requirements.mjs";
-import { strings } from "./values.mjs";
-import { acquireCommand } from "./network-command.mts";
+import {
+  nativeHostLanguages,
+  nativeHostRequirements,
+} from "../app/src/core/toolchains/native/native-host-requirements.mjs";
+import { strings } from "../app/src/core/runtime/values.mjs";
+import { acquireCommand } from "../app/src/core/toolchains/acquisition/network-command.mts";
 import { runCIEntry } from "./ci-errors.mts";
-import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
-import { mapWork } from "./work-admission.mts";
+import { captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
+import { mapWork } from "../app/src/core/execution/checks/work-admission.mts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 await runCIEntry("Host SDK prerequisites", async () => {

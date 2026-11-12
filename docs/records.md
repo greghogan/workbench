@@ -43,12 +43,16 @@ prefer `citation add` when an arXiv ID or DOI is available. `record add experime
 record from a complete protocol without executing it. `record add release PATH` creates a release from a specification,
 as shown below.
 
+Prepare draft protocols outside the managed record directories. Create the owning record first, then add supporting
+files under the allocated record's sibling directory. A supporting directory without its owning record is rejected;
+guessing the next ID can also conflict with another creator.
+
 Creation writes canonically formatted records and refreshes their maps. Decisions, environment records, and manual
-citations start as drafts; creation reports the fields to complete. Environment drafts need hardware configuration and
-limits. Manual citations need authors, an issued date or literal, an HTTPS URL, and a corresponding acquisition source.
-For an undated source, use `"issued": { "literal": "n.d." }` and record the access date in `accessed.date-parts`.
-Validation keeps these requirements and reports bibliography and acquisition problems together. Supply a task body from
-a Markdown file or stdin when the content is already available:
+citations start as drafts; creation reports the fields to complete. Environment drafts need a hardware description.
+Manual citations need authors, an issued date or literal, an HTTPS URL, and a corresponding acquisition source. For an
+undated source, use `"issued": { "literal": "n.d." }` and record the access date in `accessed.date-parts`. Validation
+keeps these requirements and reports bibliography and acquisition problems together. Supply a task body from a Markdown
+file or stdin when the content is already available:
 
 ```sh
 workbench record add task "Improve parser" --from draft.md
@@ -142,6 +146,12 @@ Set the rule for interpreting results before execution.
 Then run `workbench record add experiment "TITLE" --protocol protocol.md`. Creation validates the protocol and leaves
 execution and evidence collection to the project's experiment workflow.
 
+Pilot runs can refine the measurement procedure before a confirmatory run. Use matched conditions and interleave
+candidate and baseline when drift could affect the comparison. Decide how repetitions will stop before interpreting
+results; if sampling changes in response to observations, account for that adaptation in confidence claims. Small
+effects relative to measured noise need more independent evidence. Preserve the observations and protocol revisions that
+explain the conclusion, including unsuccessful refinements.
+
 Start a planned experiment with `workbench experiment start REFERENCE` or the record page's **Start experiment** button.
 Protocol approval is not required. Refine the candidate and protocol within the authorized work, recording revisions
 alongside the evidence they produced. Append execution provenance, evidence, and the decision after the protocol. Before
@@ -157,9 +167,11 @@ appear under Outcomes. A rejected or inconclusive candidate can still have a ful
 **Resume experiment** or `workbench experiment start REFERENCE` to continue refining a concluded candidate without
 discarding earlier evidence.
 
-Commit accepted experiments with their exact tested implementation; that commit identifies the candidate. For a
-candidate not retained in source, link its applicable patch and baseline in the record. Do not add a self-referential
-commit hash or duplicate a patch when the record's commit contains the tested candidate.
+Give each completed experiment its own commit, including any accepted implementation. Compare the candidate against that
+commit's parent. Keep enough observations, material conditions, and explanation to assess the findings and guide
+follow-on work; a complete replay bundle is unnecessary. Retain an applicable candidate patch against the parent
+baseline for rejected and inconclusive experiments so later work can revisit the candidate. Do not duplicate accepted
+implementation as a patch or add a self-referential commit hash.
 
 Microbenchmarks isolate a mechanism: exclude setup from the timed region and retain correctness results alongside
 measurements. Workflow comparisons include the work needed for their end-to-end claim.
@@ -214,15 +226,22 @@ remain separate from this workflow.
 Use `queue start <reference>` to claim work; `queue implemented <reference> --evidence "Checks and outcome"` records a
 verified result pending acceptance. `queue block <reference> "Reason"` suspends work; `queue release <reference>`
 returns it to queued and discards its local evidence. `queue remove <reference>` removes inactive work from the
-selection. Shared-state changes retain a bounded recovery record while publishing record files, regenerated maps, and
-finally queue progress. A later task mutation recovers interrupted publication; conflicting user edits stop recovery
-with a diagnostic rather than overwriting them.
+selection. Shared-state changes retain a bounded recovery record while publishing record files, regenerated maps, queue
+progress, and human decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer
+human decisions stop recovery with a diagnostic rather than overwriting them.
 
 The queue persists under the native Workbench state directory, is never committed, and survives cache cleanup. These
 commands coordinate work; they do not launch agents or commit, squash, or push changes. Publication restrictions are
 workflow policy rather than an automatic inference of task ownership from arbitrary commits. Dependencies can be
 accepted shared tasks or locally verified implementations in the selected batch. Parent acceptance waits for accepted or
 canceled children. Publish implementation only after human acceptance; shared planning records may be published sooner.
+
+Human task confirmations live in a project decision store, separately from execution queues. Delegated agents can use
+the recorded approval of their plan without copying queue entries or obtaining approval again. Related local checkouts
+share decisions through repository identity; approval lookup does not require a particular branch or ancestry. Projects
+without Git retain decisions by project directory. Unrelated projects do not share confirmations merely because their
+task IDs match. Outcome acceptance remains bound to the delivered source snapshot; confirmations of distinct snapshots
+are retained independently.
 
 Linked Git worktrees keep separate queue order, claims, and local progress. Recording an implementation also retains
 repository-wide evidence bound to the task plan and complete Git-normalized source snapshot. Another worktree
@@ -252,22 +271,27 @@ authorized scope while record review remains pending. Major features require hum
 implementation; that approval does not replace required record review before commit. Generated `AGENTS.md` needs no
 separate approval.
 
-Keep the substantive account of completed work in task files and summarize each commit's change in its message. Include
-meaningful task-record updates with the work they describe; Git history of the record supplies that commit association
-without a special message label or an embedded completion-commit hash. It identifies commits that changed the task
-record, including record-only updates; it does not identify implementation commits that omitted that file.
+For work tracked by tasks, every retained commit includes a meaningful update to each owning task record. Write the
+task's contribution and relevant verification before committing, alongside the work. Keep significant decisions and
+their reasons in that account, and consolidate checkpoint entries when amending or squashing unpublished history. Parent
+tasks summarize child outcomes and integration work while child records retain their detailed accounts. Moving unchanged
+records between storage locations needs no implementation entry.
+
+Commit messages summarize individual changes; task records remain useful without embedded commit IDs or a special
+message label. Git history identifies commits that changed the record, including record-only updates. Agent review
+checks that retained commits delivering task work include the required substantive record updates.
 
 Record filenames pad base-36 IDs to an even number of digits. Larger IDs use all preceding digit pairs as directories:
 `app:ADR-0` resolves to `workbench/decisions/ADR-00.md`, and `app:ADR-100` to `workbench/decisions/01/ADR-0100.md`
-within that scope. Titles retain the unpadded ID. `workbench/record-sequences.toml` reserves future IDs and must be
-committed with records. Sync advances it for manually authored records; IDs are never recycled. A failed allocation may
-leave a gap. The `workbench/.record-allocation.lock` directory records allocator ownership and prevents simultaneous
-writers. Workbench recovers provably abandoned local ownership; uncertain locks require checking the recorded host and
-process before manual recovery. Never remove a live allocator's lock. The current Git gate rejects deletion or
-relocation of committed record files; ordinarily change their status or supersede them instead. Human-approved
-migrations under ADR-4 preserve record contents and supporting material, retain the old-to-new identity correspondence,
-and update references. Migration-aware gate support is required before relocating committed records through that
-workflow.
+within that scope. Titles retain the unpadded ID. Workbench maintains each scope's next record IDs under `[next]` in
+`workbench/state.toml`, separately from user-edited configuration. Commit this state with records. Sync advances it for
+manually authored records; IDs are never recycled. A failed allocation may leave a gap. The
+`workbench/.record-allocation.lock` directory records allocator ownership and prevents simultaneous writers. Workbench
+recovers provably abandoned local ownership; uncertain locks require checking the recorded host and process before
+manual recovery. Never remove a live allocator's lock. The current Git gate rejects deletion or relocation of committed
+record files; ordinarily change their status or supersede them instead. Human-approved migrations under ADR-4 preserve
+record contents and supporting material, retain the old-to-new identity correspondence, and update references.
+Migration-aware gate support is required before relocating committed records through that workflow.
 
 Keep supporting files beside their owning record in a directory with the same filename stem. For example,
 `workbench/decisions/ADR-00.md` may link a diagram at `ADR-00/design.svg`; the directory is
@@ -421,42 +445,19 @@ Viewing a document never acquires source files or updates citation metadata.
 
 ## Experiment provenance and environment profiles
 
-An ENV record can describe a single machine or a hardware family, such as AWS r8a. For a family, use its Configuration
-profiles section to link inventories and relevant characterization measurements for each configuration. For example:
+An ENV record identifies a hardware platform and helps readers assess which experimental comparisons are meaningful. It
+can cover a single machine or a family such as Amazon EC2 8a. Include useful characteristics such as processor
+architecture, frequency, SIMD capabilities, core/thread mapping, and memory options. A sourced table and links to public
+provider and processor specifications can supply this context without a separate machine inventory.
 
-```text
-workbench/environments/
-  ENV-01.md
-  ENV-01/
-    r8a.2xlarge/
-      capture-01/
-        inventory.json
-        characterization.json
-    r8a.4xlarge/
-      capture-01/
-        inventory.json
-        characterization.json
-```
+Only **Hardware configuration** is required. Add configuration profiles, measurements, or supporting captures when they
+help explain relevant differences; there is no mandatory inventory, characterization benchmark, or Limits section. Label
+base, maximum, sustained, and fixed CPU frequencies accurately.
 
-These names and formats are illustrative. For a single configuration, the ENV record itself can contain the profile.
-When an experiment first uses a new configuration, add the inventory and profiling evidence relevant to its claims to
-the existing family ENV. There is no required benchmark suite. Describe shared hardware characteristics and known
-limits; family membership does not establish equal performance for the same allocated CPU count.
-
-Each experiment's Execution provenance identifies the exact instance type or machine configuration, the ENV profile
-capture used, available and allocated resources, and applied CPU or memory constraints. Record the OS release, running
-kernel, and actual versions of the toolchains used. Link source, build, and dependency selections rather than repeating
-facts fixed by the tested revision. A linked snapshot can serve multiple runs with identical execution context; each run
-must resolve to the context actually used.
-
-Software changes, including OS upgrades, can reuse the hardware ENV. Characterization captures also identify their own
-software context. Add a new capture when relevant characteristics change, and preserve captures referenced by earlier
-experiments. The same family ENV can therefore cover multiple instance sizes and software histories without treating
-their measurements as interchangeable.
-
-Use host inventory and profiling tools to capture hardware, OS, and kernel information. Capture project toolchain
-versions and build selections separately; a host inventory does not establish which tools a run used. Link retained
-reports from the ENV or EXP that owns them, using the supporting-directory convention above.
+Each experiment's Execution provenance identifies the hardware, allocated resources, software versions, and execution
+conditions that materially affect its results. Link source, build, and dependency selections rather than repeating facts
+fixed by the tested revision. A retained host report belongs with the experiment whose execution it describes. Software
+changes can reuse the same hardware ENV. Preserve evidence referenced by earlier experiments.
 
 Human review covers changed ENV records, completed experiments, and their supporting files. Changes to previously
 committed experimental conclusions also require review. `workbench review` presents current files and asks for approval
@@ -492,16 +493,25 @@ Projects can require agent change review, accumulated task review, and human tas
 `changes`, `tasks`, and `task_approvals` in `workbench/config.toml`. Workbench enables all three. Consuming projects
 choose which requirements to enable. Existing protected-record human review remains independent.
 
+`review.tasks` requires review of accumulated work before publication, including work without a task record.
+`review.task_approvals` governs human decisions for task records that are present; it does not require creating them.
+
 `workbench review` presents current protected records, including unstaged and new records, independently of Git staging.
 It acknowledges the captured versions even when files change during confirmation; additional edits remain pending.
 Subsequent review compares against the last acknowledgment made since the last non-provisional commit, or that commit
 itself for previously accepted records. Provisional commits preserve pending review. Staging later requires no repeated
 human review when those exact contents have already been acknowledged.
 
-Review first checks record formatting. When reflow or other canonical formatting is needed, the CLI and web review page
-show the proposed changes and ask before applying them. Formatting preserves the human's words and does not stage files
-or acknowledge their contents; content review follows against the formatted version. Retained supporting files keep
-their original bytes.
+Review automatically prepares canonical record formatting, including paragraph reflow, before presenting the contents.
+Both interfaces save formatting before presenting the file. Confirmation acknowledges the retained version shown; later
+edits remain intact and pending review. Formatting does not stage files or grant approval. Retained supporting files
+keep their original bytes.
+
+Preparation also updates the selected records' generated maps and, for charters and ADRs, agent context. It leaves
+unrelated maps alone. If generation fails after saving a record, the saved formatting is preserved: retry review
+preparation to finish the affected outputs, or run `workbench sync` for a full repair. Local preparation state keeps
+repair pending across refreshes and server restarts. An older presented version can still be acknowledged; newer
+contents remain pending until preparation succeeds and those contents are reviewed.
 
 `workbench review changes` identifies current project files, including untracked implementation, and their baseline
 without staging them. After reviewing and correcting the work, record its printed digest with

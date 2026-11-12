@@ -1,0 +1,212 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { existsSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
+import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
+import { record, records, string } from "../runtime/values.mjs";
+import { BoundedState } from "../storage/bounded-state.js";
+import { withCacheLocksSync } from "../storage/cache-lock.js";
+import { taskProjectStateFile, taskRepositoryDirectory } from "./task-project-state.js";
+
+export interface TaskDecision {
+  reference: string;
+  status: "Approved" | "Accepted";
+  digest: string;
+  updated: string;
+  tree?: string;
+}
+interface TaskDecisionState {
+  reference: string;
+  revision: number;
+  decisions: TaskDecision[];
+}
+export interface TaskDecisionChange {
+  reference: string;
+  revision: number;
+  before: TaskDecision[];
+  after: TaskDecision[];
+}
+
+const decisionPaths = new AsyncLocalStorage<Map<string, string>>();
+export function taskDecisionPath(root: string): string {
+  return (
+    decisionPaths.getStore()?.get(resolve(root)) ??
+    taskProjectStateFile(taskRepositoryDirectory(root) ?? realpathSync.native(root), "task-decisions")
+  );
+}
+
+/** Freeze project identity during a mutation so locking and publication address the same store. */
+export function withTaskDecisionPath<T>(root: string, path: string, action: () => T): T {
+  return decisionPaths.run(new Map([...(decisionPaths.getStore() ?? []), [resolve(root), path]]), action);
+}
+
+function decodeTaskDecisions(input: unknown): TaskDecision[] {
+  const decisions = records(input, "Invalid task decisions").map((value): TaskDecision => {
+    if (Object.keys(value).some((key) => !["reference", "status", "digest", "updated", "tree"].includes(key)))
+      throw new InvalidInput("Unknown human task decision field");
+    const reference = decodeTaskReference(value.reference),
+      status = decodeDecisionStatus(value.status),
+      digest = string(value.digest, "Missing decision digest"),
+      updated = string(value.updated, "Missing decision time");
+    if (!/^[a-f0-9]{64}$/.test(digest) || !Number.isFinite(Date.parse(updated)))
+      throw new InvalidInput("Invalid human task decision");
+    const tree = value.tree === undefined ? undefined : string(value.tree, "Invalid accepted tree");
+    if (tree !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(tree))
+      throw new InvalidInput("Invalid accepted snapshot");
+    return { reference, status, digest, updated, ...(tree ? { tree } : {}) };
+  });
+  if (decisions.length > 20000 || new Set(decisions.map(decisionIdentity)).size !== decisions.length)
+    throw new InvalidInput("Duplicate or excessive human task decisions");
+  return decisions;
+}
+
+function decisionIdentity(decision: TaskDecision): string {
+  return JSON.stringify([decision.reference, decision.status, decision.digest, decision.tree ?? null]);
+}
+
+function decodeTaskReference(input: unknown): string {
+  const reference = string(input, "Missing decided task");
+  if (!/^[a-z][a-z0-9_-]*:TSK-[0-9A-Z]+$/.test(reference)) throw new InvalidInput("Invalid decided task reference");
+  return reference;
+}
+
+function decodeDecisionStatus(input: unknown): TaskDecision["status"] {
+  if (input !== "Approved" && input !== "Accepted") throw new InvalidInput("Invalid human task decision status");
+  return input;
+}
+
+function validRevision(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) < Number.MAX_SAFE_INTEGER;
+}
+function decodeState(input: unknown): TaskDecisionState {
+  const data = record(input, "Invalid task decision state"),
+    reference = decodeTaskReference(data.reference),
+    decisions = decodeTaskDecisions(data.decisions);
+  if (
+    !validRevision(data.revision) ||
+    decisions.some((decision) => decision.reference !== reference) ||
+    Object.keys(data).some((key) => !["reference", "revision", "decisions"].includes(key))
+  )
+    throw new InvalidInput("Invalid task decision state");
+  return { reference, revision: data.revision, decisions };
+}
+function store(path: string) {
+  return new BoundedState<{ version: 1; tasks: TaskDecisionState[] }>(
+    () => path,
+    4 * 1024 * 1024,
+    (input) => {
+      const data = record(input, "Invalid task decision store"),
+        tasks = records(data.tasks, "Invalid decided tasks").map(decodeState);
+      if (
+        data.version !== 1 ||
+        Object.keys(data).some((key) => !["version", "tasks"].includes(key)) ||
+        tasks.length > 20000 ||
+        tasks.reduce((count, task) => count + task.decisions.length, 0) > 20000 ||
+        new Set(tasks.map((task) => task.reference)).size !== tasks.length
+      )
+        throw new InvalidInput("Invalid task decision store fields, version, or size");
+      return { version: 1, tasks };
+    },
+    () => ({ version: 1, tasks: [] }),
+  );
+}
+
+export function readTaskDecisions(root: string): TaskDecision[] {
+  return store(taskDecisionPath(root))
+    .read()
+    .tasks.flatMap((task) => task.decisions);
+}
+
+/** A revision remains even after revocation, so recovery cannot restore a superseded approval. */
+export function prepareTaskDecisionChange(
+  root: string,
+  reference: string,
+  update: (decisions: TaskDecision[]) => TaskDecision[],
+): TaskDecisionChange {
+  const current = store(taskDecisionPath(root))
+    .read()
+    .tasks.find((task) => task.reference === reference);
+  const before = current?.decisions ?? [];
+  const selected = new Map<string, TaskDecision>();
+  for (const decision of update(structuredClone(before))) {
+    const identity = decisionIdentity(decision);
+    selected.delete(identity);
+    selected.set(identity, decision);
+  }
+  const after = [...selected.values()];
+  return decodeTaskDecisionChange({ reference, revision: current?.revision ?? 0, before, after });
+}
+
+export function decodeTaskDecisionChange(input: unknown): TaskDecisionChange {
+  const data = record(input, "Invalid task decision change"),
+    reference = decodeTaskReference(data.reference),
+    before = decodeTaskDecisions(data.before),
+    after = decodeTaskDecisions(data.after);
+  if (
+    !validRevision(data.revision) ||
+    Object.keys(data).some((key) => !["reference", "revision", "before", "after"].includes(key)) ||
+    [...before, ...after].some((decision) => decision.reference !== reference)
+  )
+    throw new InvalidInput("Invalid task decision change");
+  return { reference, revision: data.revision, before, after };
+}
+
+function applied(current: TaskDecisionState | undefined, change: TaskDecisionChange): boolean {
+  return (
+    current?.revision === change.revision + 1 && JSON.stringify(current.decisions) === JSON.stringify(change.after)
+  );
+}
+export function decisionChangeApplied(root: string, change: TaskDecisionChange): boolean {
+  return applied(
+    store(taskDecisionPath(root))
+      .read()
+      .tasks.find((task) => task.reference === change.reference),
+    change,
+  );
+}
+
+/** The task lock protects publication; recovery merges only the affected task's decision revision. */
+export function applyTaskDecisionChange(root: string, change: TaskDecisionChange): void {
+  const target = store(taskDecisionPath(root)),
+    data = target.read(),
+    current = data.tasks.find((task) => task.reference === change.reference);
+  if (applied(current, change)) return;
+  if (
+    (current?.revision ?? 0) !== change.revision ||
+    JSON.stringify(current?.decisions ?? []) !== JSON.stringify(change.before)
+  )
+    throw new StateConflict(
+      `${change.reference}: human decisions changed during recovery; preserve the newer decisions`,
+    );
+  const after = { reference: change.reference, revision: change.revision + 1, decisions: change.after };
+  data.tasks = [...data.tasks.filter((task) => task.reference !== change.reference), after];
+  target.write(data);
+}
+
+export function preserveRelocatedTaskDecisions(previous: string, root: string): void {
+  const project = taskRepositoryDirectory(root) ?? realpathSync.native(root),
+    location = relative(root, project);
+  if (isAbsolute(location) || location === ".." || location.startsWith(".." + sep)) return;
+  const source = taskProjectStateFile(resolve(previous, location), "task-decisions"),
+    destination = taskDecisionPath(root);
+  if (source === destination || !existsSync(source)) return;
+  withCacheLocksSync(
+    [source, destination].sort(),
+    () => {
+      const original = store(source).read(),
+        target = store(destination),
+        current = target.read(),
+        indexed = new Map(current.tasks.map((task) => [task.reference, task]));
+      for (const task of original.tasks) {
+        const existing = indexed.get(task.reference);
+        if (existing && JSON.stringify(existing) !== JSON.stringify(task))
+          throw new StateConflict("Conflicting human task decisions at the destination; reconcile before relocating");
+        if (!existing) {
+          current.tasks.push(task);
+          indexed.set(task.reference, task);
+        }
+      }
+      target.write(current);
+    },
+    { mutable: false },
+  );
+}

@@ -1,4 +1,4 @@
-import { ciActionManifest, ciActionPins, workflowPaths } from "../ci-actions.mjs";
+import { ciActionManifest, ciActionPins, workflowPaths } from "../../app/src/core/execution/ci/support/ci-actions.mjs";
 import { mavenVersions, dockerBases, actionPins, goModules, guixCommit } from "./syntax.mjs";
 import {
   ReleaseConstraint,
@@ -25,10 +25,10 @@ import {
 } from "./adapters.mjs";
 export { revisionTarget, releaseEligible, validateMaintenanceRelease, developmentDiscovery } from "./adapters.mjs";
 import { readNativeCatalogs } from "./native.mjs";
-import { describeError } from "../diagnostic-errors.mjs";
+import { describeError } from "../../app/src/core/diagnostics/diagnostic-errors.mjs";
 import { bindPublication, publicationChanged } from "./publication.mjs";
 import { additionalMaintenanceTargets } from "./inventory.mjs";
-import { errorFrom, isRecord, record, records, required, string, strings } from "../values.mjs";
+import { errorFrom, isRecord, record, records, required, string, strings } from "../../app/src/core/runtime/values.mjs";
 
 export { MaintenanceConstraint } from "./adapters.mjs";
 

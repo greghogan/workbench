@@ -35,6 +35,10 @@ Container startup reuses a prepared image, acquiring and verifying it when neede
 Each profile owns one standard `devcontainer.json`; the native configuration is `.devcontainer/devcontainer.json`.
 Editors and the upstream Dev Container CLI can also open these checked-in definitions directly.
 
+Nix container checks mount source read-only and create a disposable writable copy. Build and dependency caches mount
+separately with host ownership preserved; the Nix store can persist between runs. Setup and dependent checks share that
+container session.
+
 ### Package-derived development inputs
 
 For Guix and Nix, the package definition owns release build inputs. The development manifest or shell derives those
@@ -124,8 +128,9 @@ named multi-format packaging uses `workbench release prepare`.
 
 These commands list configured recipes, not every format a builder could produce. Development profiles select a working
 environment; release profiles select an artifact recipe. `workbench tools profiles` lists compatibility toolchain
-selections, independently of either. Bare `workbench development` also lists its profiles. Release tables group recipes by
-language root and show the target platform; matching the host platform does not establish that its builder is installed.
+selections, independently of either. Bare `workbench development` also lists its profiles. Release tables group recipes
+by language root and show the target platform; matching the host platform does not establish that its builder is
+installed.
 
 The example profiles target Linux x64, with an additional ARM64 Rust musl profile. A foreign platform fails before
 building; preparation does not automatically emulate another architecture. Use a builder native to the declared

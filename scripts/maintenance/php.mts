@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { ReleaseConstraint, type Release } from "./contract.mjs";
-import { record, records, required, string } from "../values.mjs";
+import { record, records, required, string } from "../../app/src/core/runtime/values.mjs";
 import type { MaintenanceSources } from "./sources.mjs";
 
 const windowsCatalog = "https://downloads.php.net/~windows/releases/releases.json";

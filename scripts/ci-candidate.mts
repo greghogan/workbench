@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { record, string, required } from "./values.mjs";
+import { record, string, required } from "../app/src/core/runtime/values.mjs";
 import { bundleCacheFile, reuseBundles } from "./bundle-cache.mts";
 
 export interface CICandidate {

@@ -1,6 +1,6 @@
 import { type Server, type ServerResponse, createServer } from "node:http";
-import { isRecord, required, record, records, errorFrom } from "./values.mjs";
-import { errorMessage } from "./ci-results.mjs";
+import { isRecord, required, record, records, errorFrom } from "../app/src/core/runtime/values.mjs";
+import { errorMessage } from "../app/src/core/execution/ci/support/ci-results.mjs";
 interface HarnessRequest {
   tools: { name: string | undefined }[];
 }
@@ -13,7 +13,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-const skills = createRequire(import.meta.url)("../bundle/skills.cjs") as typeof import("../src/skills.js");
+const skills = createRequire(import.meta.url)(
+  "../bundle/skills.cjs",
+) as typeof import("../app/src/core/skills/skills.js");
 
 // Real harnesses, synthetic model responses: no credentials, inference, or user history.
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));

@@ -1,13 +1,13 @@
 import { isRebaseCase } from "./skill-evaluation-rebase.mjs";
-import { gitNullConfiguration } from "../src/windows-host.ts";
-import { captureOwnedChild, processCancellation } from "./owned-child.mjs";
-import { processFailure } from "./process-outcome.mjs";
+import { gitNullConfiguration } from "../app/src/core/runtime/windows-host.ts";
+import { captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
+import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { cases, evaluationName, command, verifyOutcome, prepare, snapshot } from "./skill-evaluation-cases.mjs";
-import { record, required, string } from "./values.mjs";
+import { record, required, string } from "../app/src/core/runtime/values.mjs";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,

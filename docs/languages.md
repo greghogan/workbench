@@ -76,8 +76,9 @@ The reference configurations implement that policy with language-specific rule s
 | [C++](../examples/languages/cpp/.clang-tidy)                     | C baseline plus modernization and C++ Core Guidelines, with documented style exclusions.                                                                    |
 | [Go](../examples/languages/go/scripts/check.mjs)                 | Module integrity and tidy checks, go vet, and all Staticcheck checks.                                                                                       |
 
-Rust uses Nextest for ordinary tests, with separate documentation tests and source-based coverage. Its exact tool pins
-and release recipes remain in the reference project.
+Rust uses Nextest for ordinary tests, with separate documentation tests, API documentation with warnings denied, and
+source-based coverage. Supported Cargo manifest checks treat findings as errors. Its exact tool pins and release recipes
+remain in the reference project.
 
 The [reference CI coverage](ci.md#reference-coverage) uses each example's selected development release on the native
 platforms and independently pinned Nix/Guix tools. Workbench's own Node profiles test the CLI's runtime compatibility;

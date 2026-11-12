@@ -1,4 +1,4 @@
-import { acquireCommand } from "./network-command.mts";
+import { acquireCommand } from "../app/src/core/toolchains/acquisition/network-command.mts";
 import { runCIEntry } from "./ci-errors.mts";
 
 const [label, command, ...args] = process.argv.slice(2);
