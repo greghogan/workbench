@@ -84,38 +84,48 @@ test("execution validates protocol completeness and stale requests cannot overwr
   expect(readFileSync(path, "utf8")).toBe(current);
 });
 
-test("the browser starts without plan approval and independently reviews an inconclusive outcome", async () => {
+test("agent execution needs no plan approval and the browser only reviews the completed outcome", async () => {
   const web = await servers.start(root);
   const initial = parseDOM((await readWebPage(web, "/queue")).html).window.document;
   expect(initial.querySelector('[aria-label="Work"]')?.textContent).toContain("Compare parsers");
   expect(initial.querySelector('[aria-label="Plans"]')?.textContent).not.toContain("Compare parsers");
   const page = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
-  const form = page.querySelector<HTMLFormElement>('form[action$="/actions/task-state"]');
-  if (!form) throw new Error("Missing experiment start");
-  expect(form.textContent).toContain("Start experiment");
+  expect(page.querySelector('form[action$="/actions/task-state"]')).toBeNull();
   expect(page.body.textContent).not.toContain("Approve plan");
-  const values = Object.fromEntries(
-    [...form.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((input) => [input.name, input.value]),
-  );
-  expect(
-    (await postWebForm(web, form.getAttribute("action") ?? "", { ...values, expected: "0".repeat(64) })).status,
-  ).toBe(409);
-  expect((await postWebForm(web, form.getAttribute("action") ?? "", values)).status).toBe(200);
+  changeExperimentStatus(root, "EXP-0", "Running", readExperiment(root, "EXP-0").digest);
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Running");
   writeFileSync(path, readFileSync(path, "utf8") + evidence);
   changeExperimentStatus(root, "EXP-0", "Inconclusive");
   const outcomes = parseDOM((await readWebPage(web, "/queue")).html).window.document;
   expect(outcomes.querySelector('[aria-label="Outcomes"]')?.textContent).toContain("Compare parsers");
-  const review = parseDOM((await readWebPage(web, "/records/demo:EXP-0/review")).html).window.document;
+  const completedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
+  expect(completedPage.querySelector('form[action$="/actions/task-state"]')).toBeNull();
+  const reviewURL = [...completedPage.querySelectorAll("a")]
+    .find((link) => link.textContent === "Review outcome")
+    ?.getAttribute("href");
+  if (!reviewURL) throw new Error("Missing outcome review link");
+  const review = parseDOM((await readWebPage(web, reviewURL)).html).window.document;
   const approval = review.querySelector<HTMLFormElement>("form[data-review]");
   if (!approval) throw new Error("Missing outcome review");
   const fields = Object.fromEntries(
     [...approval.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((input) => [input.name, input.value]),
   );
+  const completed = readExperiment(root, "EXP-0");
+  const transition = await postWebForm(web, "/actions/task-state", {
+    csrf: fields.csrf ?? "",
+    reference: "demo:EXP-0",
+    expected: completed.digest,
+    state: "Planned",
+  });
+  expect(transition.status).toBe(400);
+  expect(await transition.text()).toContain("Expected a task reference");
+  expect(readFileSync(path, "utf8")).toBe(completed.contents);
   expect((await postWebForm(web, approval.getAttribute("action") ?? "", fields)).status).toBe(200);
   const accepted = parseDOM((await readWebPage(web, "/queue")).html).window.document;
   expect(accepted.querySelector('[aria-label="Outcomes"]')?.textContent).not.toContain("Compare parsers");
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Inconclusive");
+  const reviewedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
+  expect([...reviewedPage.querySelectorAll("a")].some((link) => link.textContent === "Review outcome")).toBe(false);
   writeFileSync(path, readFileSync(path, "utf8") + "\nAdditional measurement evidence.\n");
   expect(changes()).toHaveLength(1);
 });

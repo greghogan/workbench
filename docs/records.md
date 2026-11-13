@@ -152,11 +152,11 @@ results; if sampling changes in response to observations, account for that adapt
 effects relative to measured noise need more independent evidence. Preserve the observations and protocol revisions that
 explain the conclusion, including unsuccessful refinements.
 
-Start a planned experiment with `workbench experiment start REFERENCE` or the record page's **Start experiment** button.
-Protocol approval is not required. Refine the candidate and protocol within the authorized work, recording revisions
-alongside the evidence they produced. Append execution provenance, evidence, and the decision after the protocol. Before
-recommending rejection, assess whether reasonable design, implementation, or measurement improvements could change the
-result. Explain which refinements were evaluated and the limits of the conclusion.
+Start a planned experiment with `workbench experiment start REFERENCE`. Protocol approval is not required. Refine the
+candidate and protocol within the authorized work, recording revisions alongside the evidence they produced. Append
+execution provenance, evidence, and the decision after the protocol. Before recommending rejection, assess whether
+reasonable design, implementation, or measurement improvements could change the result. Explain which refinements were
+evaluated and the limits of the conclusion.
 
 Finish with `workbench experiment finish REFERENCE --result Accepted|Rejected|Inconclusive`. The verdict describes the
 candidate, not human acceptance of the work. Review completed evidence with `workbench experiment accept REFERENCE` or
@@ -164,8 +164,8 @@ the web review page. Completed records and each changed supporting file require 
 unfinished plans and protocol revisions do not. Changes to already committed conclusions still require review, including
 when reopening an experiment. Planned and running experiments appear under Work; completed results awaiting review
 appear under Outcomes. A rejected or inconclusive candidate can still have a fully reviewed, complete experiment. Use
-**Resume experiment** or `workbench experiment start REFERENCE` to continue refining a concluded candidate without
-discarding earlier evidence.
+`workbench experiment start REFERENCE` to continue refining a concluded candidate without discarding earlier evidence.
+Agents maintain execution state through the CLI; the browser presents completed evidence for human review.
 
 Give each completed experiment its own commit, including any accepted implementation. Compare the candidate against that
 commit's parent. Keep enough observations, material conditions, and explanation to assess the findings and guide

@@ -209,8 +209,8 @@ build inputs match, or rebuild from that captured source using matching prepared
 the proposed tracked tree unchanged. Packages include runnable bundles and compiled consumer helpers, with the private
 build receipt excluded.
 
-Tracked bootstrap helpers retain their third-party notices in `scripts/licenses/BOOTSTRAP_NOTICES.txt`. Runtime bundle
-notices are generated with the packaged bundles.
+Tracked bootstrap helpers retain their third-party notices in `scripts/licenses/BOOTSTRAP_NOTICES.txt`. Runtime
+bundle notices are generated with the packaged bundles.
 
 `tooling:build` also updates the generated development-output block in `.gitignore`. `build-tooling.mts --check`
 verifies tracked outputs and that block; `--maintainers-only` prepares ignored development outputs without repairing
@@ -233,13 +233,22 @@ verification, and shell checks. Rust tools in the root development manifest supp
 Workbench CLI itself runs on Node.js. The reference's `rust-toolchain.toml` selects its compiler when using rustup,
 while its `Cargo.toml` declares its minimum Rust version. `pnpm run bundle:build` rebuilds local bundles;
 `pnpm run bundle:check` builds and verifies runtime dependencies, supported Node targets, and licensing without changing
-tracked source. Shipped bundles contain minified JavaScript without source maps. The launcher runs directly; small
-CommonJS loaders decompress the main and helper payloads in memory without dependency installation or expanded files on
-disk. `bundle.compression` selects their format in `workbench/config.toml`: `brotli` (default), `zlib` (gzip), or
-`zstd`. Set it with `workbench config set bundle.compression zstd`, then rebuild the distribution. Consuming projects
-use their pinned artifact's format; changing their configuration does not recompress an existing dependency. The
-older-Node bootstrap always uses Brotli. All formats use Node's built-in decompression; Zstandard needs a runtime with
-built-in Zstandard support, available in every selected Node CI version.
+tracked source. Shipped bundles contain minified JavaScript without source maps. The launcher and main application are
+ordinary CommonJS files loaded directly by Node. The other bundles use small CommonJS loaders that decompress their
+payloads in memory, with no dependency installation or expanded files on disk. `bundle.compression` selects their format
+in `workbench/config.toml`: `brotli` (default), `zlib` (gzip), or `zstd`. Set it with
+`workbench config set bundle.compression zstd`, then rebuild the distribution. Consuming projects use their pinned
+artifact's format; changing their configuration does not recompress an existing dependency. The older-Node bootstrap
+always uses Brotli. All formats use Node's built-in decompression; Zstandard needs a runtime with built-in Zstandard
+support, available in every selected Node CI version.
+
+Before loading the application, the launcher enables Node's native compilation cache under the native user cache's
+`node-compile/` directory (`~/.cache/workbench/node-compile` on Linux). Node validates source changes and separates
+incompatible runtime versions. `NODE_COMPILE_CACHE` selects an alternative location and `NODE_DISABLE_COMPILE_CACHE=1`
+disables caching. Coverage runs disable caching to preserve V8 coverage precision; disposable snapshot runs skip
+automatic caching. An unavailable cache does not prevent execution. Automatic maintenance removes aged bytecode from the
+Workbench-owned location according to `cache.max_age_days` when `cache.auto_prune` is enabled; explicit Node cache
+locations remain caller-owned.
 
 Coverage builds unminified bundles with inline source maps in a temporary workspace, reuses installed development
 dependencies, and removes that workspace afterward. Coverage reports refer to the original source paths. Rust, Python,

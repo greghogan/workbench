@@ -5,6 +5,8 @@
 
 - `src/cli/launcher.ts`: Validates the bootstrap runtime, resolves project pins, and dispatches exact Git packages
   through npm.
+- `src/core/storage/node-compile-cache.ts`: Enables optional native Node compilation caching and retires aged owned
+  bytecode through automatic maintenance.
 - `src/core/distribution/bootstrap.ts`, `src/core/distribution/startup-runtime.ts`: Hand older native Node to a verified
   pinned runtime before loading the CLI.
 - `src/core/distribution/distribution-identity.ts`: Reads immutable package source identity for project-pin dispatch.

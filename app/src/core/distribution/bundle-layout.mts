@@ -6,7 +6,7 @@ interface BundleDefinition {
   compression: "configured" | "brotli" | "none";
 }
 export const bundles = {
-  main: { source: "app/src/cli/main.ts", lazy: false, runtime: "cli", compression: "configured" },
+  main: { source: "app/src/cli/main.ts", lazy: false, runtime: "cli", compression: "none" },
   launcher: { source: "app/src/cli/launcher.ts", lazy: false, runtime: "bootstrap", compression: "none" },
   bootstrap: {
     source: "app/src/core/distribution/bootstrap.ts",

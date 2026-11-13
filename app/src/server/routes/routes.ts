@@ -1,7 +1,7 @@
 import type { QueueChange } from "../../core/tasks/task-queue.js";
 import { recordTypes } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { taskStatuses, type TaskStatus, type ExperimentStatus } from "../../core/records/record-document.js";
+import { taskStatuses, type TaskStatus } from "../../core/records/record-document.js";
 import type { DocumentView, DifferenceLayout, ViewState, ReviewView } from "./navigation-state.js";
 import { InvalidInput } from "../../core/runtime/input-errors.js";
 import { ActionEffect, WebAction } from "../../core/diagnostics/diagnostics.mjs";
@@ -166,7 +166,7 @@ export interface MutationFields {
     decision: "approve" | "dismiss";
     reviewed: "yes";
   };
-  [Route.TaskState]: { reference: string; expected: string; state: TaskStatus | ExperimentStatus };
+  [Route.TaskState]: { reference: string; expected: string; state: TaskStatus };
   [Route.QueueChange]: { operation: QueueOperation; reference: string; target: string; expected: string };
   [Route.WorkspaceRetry]: EmptyFields;
   [Route.Save]: { id: string; expected: string };
