@@ -10,6 +10,7 @@ import { npmWorkbench } from "../core/distribution/launcher-acquisition.js";
 import { executingToolPin, readToolPin, toolProjectRoot } from "../core/distribution/launcher-identity.js";
 import { ownsStartupRuntime } from "../core/distribution/launcher-runtime.js";
 import { projectRegistration, Registration } from "../core/projects/project-registry.js";
+import { enableRuntimeCompileCache } from "../core/storage/node-compile-cache.js";
 import { sameToolPin, specificationPin, toolSpecification, type ToolPin } from "../core/toolchains/tool-pin.js";
 import { commandAdmission } from "./commands.js";
 import { approveProjectRegistration, registrationInstruction } from "./project-admission.js";
@@ -94,5 +95,6 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
   }
   delete process.env.WORKBENCH_LAUNCH_CHAIN;
   process.env.WORKBENCH_DISTRIBUTION_ROOT = distribution;
+  enableRuntimeCompileCache();
   await import(pathToFileURL(join(distribution, "bundle/main.cjs")).href);
 }

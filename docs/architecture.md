@@ -28,9 +28,10 @@ independent of the test tree.
 Runtime helper sources live in their core domains, including TypeScript modules also emitted as standalone JavaScript
 for bootstrap and copied examples. The generated outputs follow their authoritative source; the tooling manifest
 determines which are retained and shipped. One bundle manifest defines entry points, lazy loading, Node support, and
-compression. Bundles are generated locally and for release packaging; they are excluded from Git. The main bundle uses
-a CommonJS loader that decompresses its payload in memory. The server initializes lazily within that bundle so both
-interfaces retain the same core service instances and each listener retains its worker generation.
+compression. Bundles are generated locally and for release packaging; they are excluded from Git. Node loads the
+uncompressed main bundle directly and can reuse its native compilation cache; the server initializes lazily within that
+bundle so both interfaces retain the same core service instances. Compilation caching does not change module identity,
+source validation, or the worker generation captured by a listener.
 
 ## Components and authority
 

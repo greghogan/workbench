@@ -10,10 +10,9 @@ import { WebError } from "../http/errors.js";
 import { decodeCollectionRequest, type CollectionPreview } from "./protocol.js";
 import { Route, actionDefinition, queueOperations, type ActionResult } from "../routes/routes.js";
 import type { ReviewTarget } from "../review/review-request.js";
-import { changeExperimentStatus } from "../../core/experiments/experiment-workflow.js";
 import { changeTaskStatus } from "../../core/tasks/task-service.js";
 import { changeTaskQueue, type QueueChange } from "../../core/tasks/task-queue.js";
-import { taskStatuses, experimentStatuses } from "../../core/records/record-document.js";
+import { taskStatuses } from "../../core/records/record-document.js";
 import { ReviewVersions } from "../review/review-versions.js";
 
 interface Proposal {
@@ -107,15 +106,9 @@ export class WebActions {
           expected = form.get("expected") ?? "",
           selected = form.get("state");
         if (!expected) throw new WebError(400, "Supply the reviewed record version");
-        if (/:EXP-[0-9A-Z]+$/.test(reference)) {
-          const state = experimentStatuses.find((state) => state === selected);
-          if (!state) throw new WebError(400, "Unknown experiment state");
-          changeExperimentStatus(this.root, reference, state, expected);
-        } else {
-          const state = taskStatuses.find((state) => state === selected);
-          if (!state) throw new WebError(400, "Unknown task state");
-          changeTaskStatus(this.root, reference, state, expected, true);
-        }
+        const state = taskStatuses.find((state) => state === selected);
+        if (!state) throw new WebError(400, "Unknown task state");
+        changeTaskStatus(this.root, reference, state, expected, true);
         return result(
           selected === "Approved" || selected === "Accepted" ? Route.TaskQueue : recordURL(form.get("reference") ?? ""),
         );

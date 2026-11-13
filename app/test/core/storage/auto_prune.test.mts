@@ -1,6 +1,6 @@
 import { cacheAmount } from "../../../src/core/storage/cache-size.ts";
 import { afterEach, expect, test, vi } from "vitest";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, existsSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -88,14 +88,20 @@ test("automatic pruning retires only superseded patches with working replacement
 });
 test("disabled pruning, protected installations, and unsuccessful replacement evidence preserve old tools", async () => {
   const { base, root } = fixture();
+  const bytecode = join(base, "CACHE/node-compile/old-node/bytecode");
+  mkdirSync(join(base, "CACHE/node-compile/old-node"), { recursive: true });
+  writeFileSync(bytecode, "old bytecode");
+  utimesSync(bytecode, new Date(0), new Date(0));
   mkdirSync(join(base, "CONFIG"), { recursive: true });
   writeFileSync(join(base, "CONFIG/config.toml"), "[cache]\nauto_prune=false\n");
   await autoPrune(root);
   expect(fake.removed).toEqual([]);
+  expect(existsSync(bytecode)).toBe(true);
   writeFileSync(join(base, "CONFIG/config.toml"), "[cache]\nauto_prune=true\n");
   fake.report.entries[0]?.protected.push("active command");
   await autoPrune(root);
   expect(fake.removed).toEqual([]);
+  expect(existsSync(bytecode)).toBe(false);
   updateProjectRequirements(root, [], "", []);
   fake.report.entries[0]?.protected.splice(0);
   await autoPrune(root);
