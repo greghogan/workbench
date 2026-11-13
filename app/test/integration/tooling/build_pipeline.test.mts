@@ -1,5 +1,5 @@
-import { bundleInputDigest, reuseBundles, bundleCacheFile } from "../../../../scripts/bundle-cache.mts";
 import { bundleSource, lazyBundles } from "../../../src/core/distribution/bundle-artifacts.mts";
+import { bundleInputDigest, reuseBundles, bundleCacheFile } from "../../../../scripts/bundle-cache.mts";
 import { afterEach, expect, test } from "vitest";
 import {
   cpSync,
@@ -150,6 +150,26 @@ test("missing, incomplete, malformed, and damaged bundle caches are rebuilt with
   expect(() => {
     publishBundles(root, set);
   }).toThrow(/Source changed/);
+});
+
+test("the native main bundle loads without custom VM evaluation or a compressed payload", async () => {
+  const root = fixture();
+  const candidates = await compileBundles(root);
+  publishBundles(root, candidates);
+  expect(existsSync(join(root, "bundle/main.cjs.br"))).toBe(false);
+  const result = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      'require("node:vm").compileFunction=()=>{throw Error("custom loader used")}; console.log(require("./bundle/main.cjs").value)',
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout.trim()).toBe("42");
 });
 
 test.each([false, true])(

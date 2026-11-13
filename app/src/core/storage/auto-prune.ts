@@ -1,4 +1,5 @@
 import { pruneBrowserEvidence } from "./browser-evidence.js";
+import { pruneRuntimeCompileCache } from "./node-compile-cache.js";
 import { discoverCacheSizes } from "./cache-size.js";
 import { totalBytes, addBytes } from "../runtime/byte-size.js";
 import {
@@ -202,6 +203,7 @@ export async function autoPrune(root: string): Promise<"skipped" | "finished" | 
     if (config["cache.auto_prune"] === false) return "skipped";
     const recovery = discoverCacheSizes(() => inspectBuildCache(root)).value;
     await recoverPendingCacheOperations(recovery);
+    await pruneRuntimeCompileCache(config["cache.max_age_days"] as number);
     await pruneBrowserEvidence(root);
     await autoPrunePreparedImages(root);
     const registry = projectRegistrySnapshot(),
