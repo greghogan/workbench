@@ -1,5 +1,5 @@
 import { open, lstat } from "node:fs/promises";
-import { constants, lstatSync, openSync, fstatSync, readSync, closeSync, type Stats } from "node:fs";
+import { constants, lstatSync, openSync, fstatSync, readSync, closeSync, writeFileSync, type Stats } from "node:fs";
 import { InvalidInput } from "./input-errors.js";
 import { createHash } from "node:crypto";
 import { combineFailures } from "../diagnostics/diagnostic-errors.mjs";
@@ -53,6 +53,17 @@ function withReadDescriptor<T>(path: string, read: (descriptor: number, leaf: St
   return value;
 }
 
+/** Bind a delegated read to one stable regular file, including path-aware Git conversions. */
+export function withStableFile<T>(path: string, read: (descriptor: number, metadata: Stats) => T): T {
+  return withReadDescriptor(path, (descriptor, leaf) => {
+    const before = fstatSync(descriptor);
+    validateFile(path, before, Number.MAX_SAFE_INTEGER, "file", leaf);
+    const value = read(descriptor, before);
+    validateRead(path, "file", before, fstatSync(descriptor), before.size);
+    return value;
+  });
+}
+
 /** The descriptor binds validation and bounded allocation to the same regular file. */
 export function readBoundedFile(path: string, maximum: number, kind = "file"): Buffer {
   validateLimit(maximum);
@@ -73,13 +84,19 @@ export function readBoundedFile(path: string, maximum: number, kind = "file"): B
 }
 
 /** Hash a verified regular file without allocating its contents or following a replacement symlink. */
-export function hashFile(path: string, maximum = Number.MAX_SAFE_INTEGER, kind = "file"): string {
+export function hashFile(
+  path: string,
+  maximum = Number.MAX_SAFE_INTEGER,
+  kind = "file",
+  options: { algorithm: "sha1" | "sha256"; prefix?: (size: number) => string } = { algorithm: "sha256" },
+): string {
   validateLimit(maximum);
   return withReadDescriptor(path, (descriptor, leaf) => {
     const before = fstatSync(descriptor);
     validateFile(path, before, maximum, kind, leaf);
-    const hash = createHash("sha256"),
+    const hash = createHash(options.algorithm),
       block = Buffer.alloc(64 * 1024);
+    if (options.prefix) hash.update(options.prefix(before.size));
     let length = 0;
     for (;;) {
       const count = readSync(descriptor, block, 0, block.length, null);
@@ -90,6 +107,23 @@ export function hashFile(path: string, maximum = Number.MAX_SAFE_INTEGER, kind =
     }
     validateRead(path, kind, before, fstatSync(descriptor), length);
     return hash.digest("hex");
+  });
+}
+
+/** Copy a stable regular file into a caller-owned candidate without retaining the payload in memory. */
+export function copyFileToDescriptor(path: string, output: number): void {
+  withReadDescriptor(path, (descriptor, leaf) => {
+    const before = fstatSync(descriptor);
+    validateFile(path, before, Number.MAX_SAFE_INTEGER, "copy source", leaf);
+    const block = Buffer.alloc(64 * 1024);
+    let length = 0;
+    for (;;) {
+      const count = readSync(descriptor, block, 0, block.length, null);
+      if (!count) break;
+      writeFileSync(output, block.subarray(0, count));
+      length += count;
+    }
+    validateRead(path, "copy source", before, fstatSync(descriptor), length);
   });
 }
 

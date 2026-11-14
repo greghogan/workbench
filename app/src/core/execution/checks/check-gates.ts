@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { checkArchivePublication } from "../../records/archive-publication.js";
 import { verifyCIImages } from "../ci/ci-images.js";
 import { checkAgentCommit, checkAgentPush } from "../../review/agent-review.js";
 import { checkReview } from "../../review/review-check.js";
@@ -82,6 +84,14 @@ async function executeGate(
   }
   if (!options.list && mode === "pre-push" && process.env.WORKBENCH_PUSH_TIP) {
     if (!process.env.WORKBENCH_PUSH_REMOTE) throw new Error("Push review requires the remote revision");
+    const archiveUpdates = process.env.WORKBENCH_PUSH_UPDATES;
+    checkArchivePublication(
+      process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? root,
+      archiveUpdates
+        ? readFileSync(archiveUpdates, "utf8")
+        : `${process.env.WORKBENCH_PUSH_LOCAL_REF ?? "HEAD"} ${process.env.WORKBENCH_PUSH_TIP} ${process.env.WORKBENCH_PUSH_REMOTE_REF ?? "HEAD"} ${process.env.WORKBENCH_PUSH_REMOTE}\n`,
+      process.env.WORKBENCH_PUSH_REMOTE_NAME ?? options.remote ?? "",
+    );
     checkAgentPush(
       process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? root,
       process.env.WORKBENCH_PUSH_TIP,

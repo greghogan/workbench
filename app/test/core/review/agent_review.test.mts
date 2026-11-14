@@ -19,7 +19,7 @@ import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
 import { changeTaskQueue, readTaskQueue, taskQueuePath } from "../../../src/core/tasks/task-queue.ts";
 import { readTaskDecisions, taskDecisionPath } from "../../../src/core/tasks/task-decisions.ts";
 import { changeExperimentStatus } from "../../../src/core/experiments/experiment-workflow.ts";
-import { requiredExperimentProtocol } from "../../../src/core/records/records.ts";
+import { requiredExperimentProtocol } from "../../../src/core/records/record-content.ts";
 import { syncMaps } from "../../../src/core/records/maps.ts";
 const temporary: string[] = [];
 afterEach(() => {

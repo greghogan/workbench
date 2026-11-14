@@ -10,10 +10,10 @@ export interface GitEntry {
   mode: string;
   oid: string;
 }
-export function gitBytes(root: string, args: string[], input?: string): Buffer {
+export function gitBytes(root: string, args: string[], input?: string, env?: NodeJS.ProcessEnv): Buffer {
   const result = spawnSync("git", ["-C", root, ...args], {
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1" },
+    env: { ...process.env, ...env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1" },
     ...(input === undefined ? {} : { input }),
   });
   if (result.error || result.status !== 0)

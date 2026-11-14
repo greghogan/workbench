@@ -1,14 +1,14 @@
+import { recordInventory, readInventoryRecords } from "../records/archive-store.js";
 import { createHash } from "node:crypto";
 import { readProjects, selectProject } from "../projects/project-configuration.js";
-import { rootOf } from "../projects/project-context.js";
-import { scan, parseReference } from "../records/record-files.js";
+import { parseReference } from "../records/record-files.js";
 import { recordTitle, recordDocument, type MetadataByKind } from "../records/record-document.js";
-import { readBoundedFile } from "../runtime/file-reads.js";
 import { InvalidInput, MissingResource } from "../runtime/input-errors.js";
 
 import { attachTaskImplementations, type ApplicableTaskImplementation } from "./task-implementations.js";
 
 export interface TaskRecord {
+  archived?: boolean;
   implementation?: ApplicableTaskImplementation;
   reference: string;
   title: string;
@@ -125,12 +125,18 @@ export class TaskGraph {
 }
 
 export function readTaskGraph(root: string): TaskGraph {
-  const tasks = readProjects(root).flatMap((project) =>
-    scan(rootOf(root, project), "TSK").map((file) => {
-      const contents = readBoundedFile(file.path, 2 * 1024 * 1024, "task record").toString("utf8");
-      return parseTask(root, `${project.id}:TSK-${file.number}`, file.path, contents);
-    }),
-  );
+  const tasks = readProjects(root).flatMap((project) => {
+    const files = recordInventory(root, project.path, "TSK");
+    const bodies = readInventoryRecords(root, files);
+    return files.map((file) => {
+      const contents = bodies.get(file.path)?.toString("utf8");
+      if (contents === undefined) throw new MissingResource(`Missing task: ${file.path}`);
+      return {
+        ...parseTask(root, `${project.id}:TSK-${file.number}`, file.path, contents),
+        ...(file.archive ? { archived: true } : {}),
+      };
+    });
+  });
   const graph = new TaskGraph(tasks).validate();
   attachTaskImplementations(root, tasks);
   return graph;

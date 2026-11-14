@@ -1,6 +1,7 @@
 import { listCitationStatus } from "./citation-output.js";
 import { Argument, Command } from "commander";
 import { readFileSync } from "node:fs";
+import { readBoundedFile } from "../core/runtime/file-reads.js";
 import { addCitation, fetchCitation, importCitation, syncCitations } from "../core/citations/citations.js";
 import { currentProject } from "../core/projects/project-configuration.js";
 import { type Kind } from "../core/records/record-identity.js";
@@ -9,6 +10,7 @@ import { addRecord, createExperiment } from "../core/records/records.js";
 import { addRelease } from "../core/records/releases.js";
 import { registerCommand } from "./commands.js";
 import { reportCreatedRecord } from "./record-output.js";
+import { registerArchiveCommands } from "./record-archive.js";
 
 const recordNames = {
   task: "TSK",
@@ -37,6 +39,29 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
   const records = registerCommand(program, "record").description(
     "Create records with allocated IDs and canonical metadata",
   );
+  registerArchiveCommands(records, root);
+  records
+    .command("show")
+    .description("Read a live, adopted, or archived record")
+    .argument("<reference>", "Scoped record reference, or a short reference in the current scope")
+    .option("--project <id>", "Scope for a short record reference")
+    .option("--json", "Print the resolved reference and contents as JSON")
+    .action((value: string, options: { project?: string; json?: boolean }) => {
+      const scoped = value.includes(":") ? value : `${currentProject(root, options.project)}:${value}`;
+      const selected = resolveRecordReference(root, scoped);
+      if (options.project && selected.project.id !== options.project.toLowerCase())
+        throw new Error(`record ${value} conflicts with --project ${options.project}`);
+      const contents = selected.contents ?? readBoundedFile(selected.path, 2 * 1024 * 1024, "record").toString();
+      console.log(
+        options.json
+          ? JSON.stringify(
+              { reference: `${selected.project.id}:${selected.kind}-${selected.number}`, contents },
+              null,
+              2,
+            )
+          : contents,
+      );
+    });
   records
     .command("add")
     .description("Create a record with an allocated ID and canonical metadata")

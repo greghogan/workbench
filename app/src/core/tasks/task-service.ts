@@ -70,6 +70,7 @@ export function changeTaskStatus(
     if (!taskStatuses.includes(status)) throw new InvalidInput("Unknown shared task state");
     const graph = readTaskGraph(root),
       task = graph.require(taskReference(root, value));
+    if (task.archived) throw new InvalidInput("Restore archived records before changing their workflow state");
     if (expected !== undefined && expected !== task.digest)
       throw new StateConflict("Task changed; refresh and review its current contents");
     const enforce = readConfig(root).review?.task_approvals === true;

@@ -1,3 +1,4 @@
+import { archivedScopeRecords } from "./archive-store.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { writeDiagnosticText } from "../diagnostics/diagnostics.mjs";
 import { validateManagedImageInputs } from "../artifacts/image-input-validation.js";
@@ -68,6 +69,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
     () => validateCommitPolicy(root),
     () => citationLibrarySetting(root),
     () => readProjects(root),
+    () => archivedScopeRecords(root),
     () => {
       // Validate declared defaults independently of the shell's active tool profile.
       for (const entry of readLanguageRoots(root)) selectedCompiler(join(root, entry.path), { toolchain: false });
@@ -97,7 +99,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
   }
   for (const project of projects) {
     const directory = rootOf(root, project);
-    errors.push(...validateRecords(directory, project.id));
+    errors.push(...validateRecords(directory, project.id, root));
     if (project.path !== ".") {
       const charter = join(directory, projectPaths.charter);
       if (!existsSync(charter)) errors.push(`${charter}: required file is missing`);

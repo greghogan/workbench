@@ -24,7 +24,7 @@ export async function createRecord(
   ) => string | { record: string; supporting: Record<string, string | Uint8Array> },
 ): Promise<string> {
   const project = selectProject(root, projectId);
-  const number = reserveRecordNumber(rootOf(root, project), kind);
+  const number = reserveRecordNumber(rootOf(root, project), kind, root);
   const path = join(rootOf(root, project), "workbench", relativeRecordPath(kind, number));
   const prepared = contents(number, project);
   const formatted = await formatDocument(

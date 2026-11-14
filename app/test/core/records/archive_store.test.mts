@@ -73,7 +73,7 @@ test("pinned orphan archives preserve bytes and modes through later tips, disabl
 
 test("one inventory deduplicates identical copies but refuses different content or executable modes", () => {
   const root = repository(),
-    body = "# TSK-0: Existing\n";
+    body = "---\nstatus: Accepted\n---\n\n# TSK-0: Existing\n";
   const revision = archive(root, { [task]: { body } });
   updateProjectState(root, (state) => {
     state.archive = { revision };
@@ -88,6 +88,22 @@ test("one inventory deduplicates identical copies but refuses different content 
     chmodSync(join(root, task), 0o755);
     expect(() => recordInventory(root, ".", "TSK")).toThrow(/contents differ/);
   }
+});
+
+test("an archived record and a Git-converted working copy share one inventory entry", () => {
+  const root = repository();
+  const body = "---\nstatus: Accepted\n---\n\n# TSK-0: Existing\n";
+  const revision = archive(root, { [task]: { body } });
+  updateProjectState(root, (state) => {
+    state.archive = { revision };
+  });
+  writeFileSync(join(root, ".gitattributes"), "*.md text eol=crlf\n");
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(join(root, task), body.replaceAll("\n", "\r\n"));
+
+  const inventory = recordInventory(root, ".", "TSK");
+  expect(inventory).toHaveLength(1);
+  expect(readInventoryRecords(root, inventory).get(join(root, task))?.toString()).toBe(body);
 });
 
 test("unavailable archives and configuration removal never become empty inventories", () => {
@@ -117,12 +133,13 @@ test.each([
 test("archive updates and record allocation preserve each other's fields and comments", () => {
   const root = repository();
   writeFileSync(join(root, "workbench/state.toml"), '# Keep this\n[next]\nTSK="A"\n');
+  const revision = archive(root, { [task]: { body: "---\nstatus: Accepted\n---\n\n# TSK-0: Completed\n" } });
   updateProjectState(root, (state) => {
-    state.archive = { revision: "a".repeat(40) };
+    state.archive = { revision };
   });
   expect(reserveRecordNumber(root, "TSK")).toBe("A");
   const state = parse(readFileSync(join(root, "workbench/state.toml"), "utf8"));
-  expect(state.archive).toEqual({ revision: "a".repeat(40) });
+  expect(state.archive).toEqual({ revision });
   expect(state.next).toMatchObject({ TSK: "B" });
   expect(readFileSync(join(root, "workbench/state.toml"), "utf8")).toContain("# Keep this");
 });

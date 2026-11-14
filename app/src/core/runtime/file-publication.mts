@@ -26,6 +26,7 @@ export interface StagedFile {
 export interface PublicationOptions {
   createParent?: boolean;
 }
+export type FileContents = string | Uint8Array | ((descriptor: number) => void);
 export const publicationTemporaryGlob = ".*.????????-????-????-????-????????????.tmp";
 const retryWait = new Int32Array(new SharedArrayBuffer(4));
 
@@ -56,7 +57,7 @@ export function publicationTarget(path: string): string | undefined {
 /** Finish writing and closing every candidate before publishing a batch. */
 export function stageFile(
   path: string,
-  contents: string | Uint8Array,
+  contents: FileContents,
   mode?: number,
   options: PublicationOptions = {},
 ): StagedFile {
@@ -78,7 +79,8 @@ export function stageFile(
     },
   };
   try {
-    writeFileSync(descriptor, contents);
+    if (typeof contents === "function") contents(descriptor);
+    else writeFileSync(descriptor, contents);
     if (mode !== undefined) fchmodSync(descriptor, mode);
     const written = descriptor;
     descriptor = undefined; // A failed close may have released its descriptor already.
@@ -125,7 +127,7 @@ function publish(staged: StagedFile, action: () => void): void {
 }
 export function writeAtomic(
   path: string,
-  contents: string | Uint8Array,
+  contents: FileContents,
   mode?: number,
   beforeReplace?: () => void,
   options: PublicationOptions = {},
@@ -136,7 +138,7 @@ export function writeAtomic(
   });
 }
 /** Publish a completely written new file without replacing an existing destination. */
-export function writeNew(path: string, contents: string | Uint8Array, mode?: number): void {
+export function writeNew(path: string, contents: FileContents, mode?: number): void {
   const staged = stageFile(path, contents, mode);
   publish(staged, () => {
     linkSync(staged.temporary, path);

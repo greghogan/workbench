@@ -1,9 +1,11 @@
+import { projectArchive, readProjectRecordFile } from "../records/archive-store.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../diagnostics/diagnostics.mjs";
 import { reviewedCommit } from "../git/commit-history.js";
+import { storageReviewContext } from "../records/archive-transfer-proof.js";
 import { GitSnapshot, writeRawReviewObjects } from "../git/git-snapshot.js";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
 import { recordDocument } from "../records/record-document.js";
@@ -17,7 +19,6 @@ import {
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
-import { required } from "../runtime/invariants.js";
 import { ownedPath } from "../runtime/paths.js";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 import {
@@ -94,6 +95,7 @@ export function proposedReview(
   const collections = working ? (readConfig(root).collections?.sources ?? []).map((pin) => pin.id) : [];
   const allScopes = [...new Set([...scopes, ...trees.flatMap((tree) => tree.scopes)])];
   const allCollections = [...new Set([...collections, ...trees.flatMap((tree) => tree.collections)])];
+  const currentArchive = working ? projectArchive(root) : undefined;
   const experiments = new Map<string, boolean>();
   const reviewRequired = (path: string): boolean => {
     const owner = recordOwnerPath(path, allScopes, allCollections);
@@ -104,10 +106,8 @@ export function proposedReview(
       const bytes = tree.bytes(owner);
       return bytes ? [bytes.toString("utf8")] : [];
     });
-    if (working && existsSync(ownedPath(root, owner)))
-      versions.push(
-        readBoundedFile(ownedPath(root, owner), reviewFileLimit, "experiment review status").toString("utf8"),
-      );
+    if (working && (currentArchive?.files.has(owner) || existsSync(ownedPath(root, owner))))
+      versions.push(readProjectRecordFile(root, ownedPath(root, owner), reviewFileLimit).toString("utf8"));
     // Drafts need no human decision. A prior completed conclusion or malformed record stays protected.
     const required =
       !versions.length ||
@@ -126,9 +126,14 @@ export function proposedReview(
     const algorithm = reviewGit(root, ["rev-parse", "--show-object-format"]).trim() === "sha256" ? "sha256" : "sha1";
     const zero = "0".repeat(algorithm === "sha256" ? 64 : 40);
     const headTree = trees[0];
+    for (const path of currentArchive?.files.keys() ?? []) {
+      if (!allScopes.some((scope) => path.startsWith(`${scope === "." ? "" : scope + "/"}workbench/`)))
+        throw new InvalidInput(`Archived scope is not registered: ${path}`);
+    }
     const roots = protectedRecordPaths(allScopes, allCollections);
     const candidates = new Set([
       ...trees.flatMap((tree) => [...tree.entries.keys()]),
+      ...(currentArchive?.files.keys() ?? []),
       ...(roots.length
         ? reviewGit(root, [
             "--literal-pathspecs",
@@ -168,24 +173,29 @@ export function proposedReview(
           : (trees[0]?.entries.get(path)?.mode ?? previous?.mode ?? "100644");
         after = `${mode}:${hashWorking(file, algorithm, () => workingBlob(file, algorithm))}`;
       }
+      const archived = currentArchive?.files.get(path);
+      if (archived) {
+        const identity = `${archived.mode}:${archived.oid}`;
+        if (existsSync(file) && after !== identity)
+          throw new StateConflict(`Live and archived contents differ: ${path}`);
+        after = identity;
+      }
       if (before !== after)
         changes.push({ path, before, after, charter: locations.some((location) => location.charter) });
     }
   } else {
-    const raw = snapshot.changes;
-    for (let index = 0; index < raw.length - 1; index += 2) {
-      const header = required(raw[index], "expected raw[index]");
-      const path = required(raw[index + 1], "expected raw[index + 1]");
-      const fields = header.slice(1).split(" ");
-      if (fields[4] === "U") throw new Error(`resolve the conflicted index entry: ${path}`);
+    const after = trees[0],
+      before = trees[1];
+    const zero = "0".repeat(reviewGit(root, ["rev-parse", "--show-object-format"]).trim() === "sha256" ? 64 : 40);
+    for (const path of new Set(trees.flatMap((tree) => [...tree.entries.keys()]))) {
       const locations = trees.map((tree) => tree.classify(path));
-      if (locations.some((location) => location.protected) && reviewRequired(path))
-        changes.push({
-          path,
-          before: `${String(fields[0])}:${String(fields[2])}`,
-          after: `${String(fields[1])}:${String(fields[3])}`,
-          charter: locations.some((location) => location.charter),
-        });
+      if (!locations.some((location) => location.protected) || !reviewRequired(path)) continue;
+      const previous = before?.entries.get(path),
+        current = after?.entries.get(path);
+      const prior = previous ? `${previous.mode}:${previous.oid}` : `000000:${zero}`;
+      const next = current ? `${current.mode}:${current.oid}` : `000000:${zero}`;
+      if (prior !== next)
+        changes.push({ path, before: prior, after: next, charter: locations.some((location) => location.charter) });
     }
   }
   changes.sort((a, b) => a.path.localeCompare(b.path));
@@ -396,7 +406,7 @@ export function approveReviewFiles(
           const size = change.after.startsWith("000000:")
             ? 0
             : source === ReviewSource.Working
-              ? lstatSync(ownedPath(root, change.path)).size
+              ? (projectArchive(root)?.sizes.get(change.path) ?? lstatSync(ownedPath(root, change.path)).size)
               : Number(reviewGit(root, ["cat-file", "-s", change.after.split(":")[1] ?? ""]).trim());
           if (size <= reviewFileLimit)
             contents =
@@ -433,11 +443,19 @@ export function captureReviews(
 ): CapturedReviews {
   const present = changes.filter((change) => !change.after.startsWith("000000:"));
   if (source === ReviewSource.Working) {
+    const archived = projectArchive(root);
+    const physical = present.filter((change) => {
+      const entry = archived?.files.get(change.path);
+      if (!entry) return true;
+      if (`${entry.mode}:${entry.oid}` !== change.after)
+        throw new StateConflict("Archive changed while capturing review; refresh the review");
+      return false;
+    });
     const ids = writeRawReviewObjects(
       root,
-      present.map((change) => ownedPath(root, change.path)),
+      physical.map((change) => ownedPath(root, change.path)),
     );
-    if (present.some((change, index) => ids[index] !== change.after.split(":")[1]))
+    if (physical.some((change, index) => ids[index] !== change.after.split(":")[1]))
       throw new StateConflict("Working file changed while capturing review; refresh the review");
   }
   snapshot.prefetch(
@@ -573,7 +591,7 @@ export function workingReviewContents(root: string, change: ReviewChange): Buffe
     if (existsSync(file)) throw new StateConflict("working file changed; refresh the review");
     return undefined;
   }
-  const bytes = readBoundedFile(file, reviewFileLimit, "review file");
+  const bytes = readProjectRecordFile(root, file, reviewFileLimit);
   if (!reviewBuffer(change, bytes)) throw new StateConflict("working file changed; refresh the review");
   return bytes;
 }
@@ -584,9 +602,24 @@ export function reviewedBaselines(
   head = reviewHead(root),
 ): Map<string, { contents: string; approvedAt: string; mode: string }> {
   const receipt = reviewReceipt(root);
+  const matches = new Map<string, boolean>();
+  const matchingHead = (source: string | undefined) => {
+    if (source === head) return true;
+    if (!source || !head) return false;
+    const cached = matches.get(source);
+    if (cached !== undefined) return cached;
+    let same: boolean;
+    try {
+      same = storageReviewContext(root, reviewGit(root, ["rev-parse", `${source}^{tree}`]).trim(), head);
+    } catch {
+      same = false;
+    }
+    matches.set(source, same);
+    return same;
+  };
   return new Map(
     [...savedApprovals(receipt).values()].flatMap((ack) =>
-      ack.latest && ack.approval.head === head && ack.approval.contents !== undefined
+      ack.latest && matchingHead(ack.approval.head) && ack.approval.contents !== undefined
         ? [
             [
               ack.change.path,

@@ -550,3 +550,30 @@ The root `workbench/state.toml` records `archive.revision`. Reads use that immut
 archive branch tip. Archive trees contain tasks, experiments, and their owned supporting files. They have independent
 Git history and do not require a checkout. Identical live copies appear once; differing contents or file modes require
 explicit reconciliation. Missing objects require fetching the archive history rather than treating records as absent.
+
+
+Enable archival with `workbench record archive enable`, optionally selecting `--branch`, `--group-size`,
+`--integration-branch`, and `--remote`. Commit that configuration before transferring records. `workbench record archive`
+or `workbench record archive status` previews fixed ID ranges separately for each scope and record type. Every existing
+record in a range must be completed and eligible; gaps do not require placeholder records. A completed experiment's last
+committed version must have passed human review, rather than being marked provisional.
+
+`workbench record archive run` previews and confirms two local commits. `--yes` authorizes those commits without a
+terminal; `--include-partial` explicitly includes eligible incomplete final groups. `--json` returns transfer details.
+Unrelated staged or working files remain intact. Affected edits, uncommitted supporting files, or an archive branch
+checked out in another worktree block the transfer.
+
+Use `workbench record archive recover` after interruption. Recovery reuses the recorded commits and stops if an affected
+file has changed. `workbench record archive disable` restores the selected archive and clears archival configuration,
+then retires those copies from the archive tip. Earlier archive versions remain available to older branches. Restore
+records this way before editing or changing their workflow state; changing the archive destination also requires
+restoration first.
+
+`workbench record archive fetch` explicitly acquires archive history from the integration remote. Ordinary reads use
+local Git objects and do not contact the network. `workbench record archive publish` requests publication of both
+branches, atomically when supported. Its fallback verifies each published counterpart before continuing: archive copies
+precede removals, while restored project records precede retirement of archive copies.
+
+Enabling installs repository-local hook routing that preserves existing hooks and protects archive history even when
+archival is later disabled or an archive-only branch is checked out. Local Git hooks can be bypassed; remote branch
+protection is a separate repository setting. Keep archive and integration branches on the configured integration remote.

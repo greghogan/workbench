@@ -1,14 +1,14 @@
+import { recordInventory } from "./archive-store.js";
 import { withProjectStateLock } from "../projects/project-state.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { required } from "../runtime/invariants.js";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { editToml } from "../configuration/toml-edit.js";
 import { compareRecordNumbers, kinds, nextNumber, normalizedNumber, type Kind } from "./record-identity.js";
 import { readProjects } from "../projects/project-configuration.js";
 import { readToml, readText } from "../runtime/files.js";
 import { rootOf } from "../projects/project-context.js";
-import { scan } from "./record-files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { isRecord, record } from "../runtime/values.mjs";
 
@@ -32,10 +32,10 @@ function readSequences(directory: string): Sequences {
   return { ...document, next };
 }
 
-function currentSequences(directory: string): Sequences {
+function currentSequences(directory: string, root = directory): Sequences {
   const document = readSequences(directory);
   for (const kind of kinds) {
-    const records = scan(directory, kind);
+    const records = recordInventory(root, relative(root, directory).replaceAll("\\", "/") || ".", kind);
     const floor = records.length ? nextNumber(required(records.at(-1), "expected records.at(-1)").number) : "0";
     if (!document.next[kind] || compareRecordNumbers(floor, document.next[kind]) > 0) document.next[kind] = floor;
   }
@@ -43,9 +43,9 @@ function currentSequences(directory: string): Sequences {
 }
 
 /** Reserve before publishing a record; failed writes leave an intentional gap, never a reusable ID. */
-export function reserveRecordNumber(directory: string, kind: Kind): string {
+export function reserveRecordNumber(directory: string, kind: Kind, root = directory): string {
   return withProjectStateLock(directory, () => {
-    const document = currentSequences(directory);
+    const document = currentSequences(directory, root);
     const number = required(document.next[kind], "expected document.next[kind]");
     document.next[kind] = nextNumber(number);
     const path = join(directory, projectPaths.state);
@@ -61,7 +61,7 @@ export function syncRecordSequences(root: string, checkOnly = false): string[] {
     const path = join(directory, projectPaths.state);
     const synchronize = () => {
       const actual = readSequences(directory);
-      const expected = currentSequences(directory);
+      const expected = currentSequences(directory, root);
       if (kinds.every((kind) => actual.next[kind] === expected.next[kind])) return;
       if (checkOnly) throw new Error(`${path}: missing or stale record sequences; run 'workbench sync'`);
       writeAtomic(path, editToml(existsSync(path) ? readText(path) : "", expected));

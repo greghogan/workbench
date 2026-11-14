@@ -82,7 +82,8 @@ while read -r local_ref local_object remote_ref remote_object extra; do
     fi
     local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
     printf 'Checking outgoing %s (%s).\n' "$local_ref" "$commit"
-    WORKBENCH_PUSH_TIP="$commit" WORKBENCH_PUSH_REMOTE="$remote_object" \
+    WORKBENCH_PUSH_LOCAL_REF="$local_ref" WORKBENCH_PUSH_REMOTE_REF="$remote_ref" \
+        WORKBENCH_PUSH_TIP="$commit" WORKBENCH_PUSH_REMOTE="$remote_object" \
         WORKBENCH_PUSH_REMOTE_NAME="${1:-}" WORKBENCH_PUSH_REMOTE_URL="${2:-}" \
         WORKBENCH_PROJECT_ROOT="$snapshot" WORKBENCH_EPHEMERAL_CHECKOUT=1 WORKBENCH_LOCAL_CONFIG_ROOT="$local_config_root" \
         "${launcher[@]}" pre-push "$snapshot" </dev/null
