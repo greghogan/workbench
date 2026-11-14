@@ -1,3 +1,8 @@
+import {
+  captureCommittedReview,
+  committedReview,
+  pendingCommitReviews,
+} from "../../../src/core/review/review-units.ts";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,6 +18,7 @@ import {
 } from "../../../src/core/review/agent-review.ts";
 import {
   approveReviewFiles,
+  approveCapturedReviews,
   reviewStatus,
   ReviewSource,
   reviewedBaselines,
@@ -124,10 +130,9 @@ test("provisional commits retain checks and review baselines, cannot be pushed a
   f.run("commit", "--provisional", "-m", "feat: record draft");
   expect(git(f.root, "log", "-1", "--format=%B")).toContain("Workbench-Provisional: true");
   expect(reviewedCommit(f.root, "HEAD")).toBe(base);
-  expect(new GitSnapshot(f.root, { review: true }).head).toBe(base);
-  expect(reviewStatus(f.root, ReviewSource.Working).changes).toEqual([
-    expect.objectContaining({ path, approved: false }),
-  ]);
+  expect(new GitSnapshot(f.root).head).toBe(git(f.root, "rev-parse", "HEAD"));
+  expect(reviewStatus(f.root, ReviewSource.Working).changes).toEqual([]);
+  expect(pendingCommitReviews(f.root)[0]?.changes).toEqual([expect.objectContaining({ path, approved: false })]);
   stage("Revised draft");
   f.review();
   const piped = f.invoke(
@@ -136,13 +141,7 @@ test("provisional commits retain checks and review baselines, cannot be pushed a
     "refactor: refine draft\n",
   );
   expect(piped.status, piped.stdout + piped.stderr).toBe(0);
-  const reviewed = reviewStatus(f.root, ReviewSource.Working);
-  approveReviewFiles(
-    f.root,
-    reviewed.changes.map((change) => ({ path: change.path, digest: change.digest })),
-    false,
-    ReviewSource.Working,
-  );
+  approveCapturedReviews(f.root, captureCommittedReview(f.root, "HEAD").captured, false);
   stage("Further refinement");
   f.review();
   const message = join(f.state, "commit-message"),
@@ -150,22 +149,21 @@ test("provisional commits retain checks and review baselines, cannot be pushed a
   writeFileSync(message, "fix: refine proposed decision\n");
   f.run("commit", "--provisional", "--amend", "--file", message);
   expect(git(f.root, "rev-parse", "HEAD^")).toBe(parent);
-  expect(reviewedBaselines(f.root).get(path)?.contents).toBe(decision("Revised draft"));
-  expect(reviewStatus(f.root, ReviewSource.Working).changes[0]?.approved).toBe(false);
+  expect(reviewedBaselines(f.root).get(path)).toBeUndefined();
+  expect(committedReview(f.root, "HEAD").changes[0]?.approved).toBe(false);
   git(f.root, "checkout", "-b", "integration", base);
   expect(f.invoke("git", ["merge", "--ff-only", "feature"]).status).toBe(0);
   const pushed = f.invoke("git", ["push", "origin", "HEAD:main"]);
   expect(pushed.status).not.toBe(0);
   expect(pushed.stderr).toContain("provisional commits");
   expect(git(f.root, "ls-remote", "origin", "refs/heads/main").split("\t")[0]).toBe(base);
-  const final = reviewStatus(f.root, ReviewSource.Working);
+  git(f.root, "reset", "--soft", base);
+  const final = reviewStatus(f.root, ReviewSource.Staged);
   approveReviewFiles(
     f.root,
     final.changes.map((change) => ({ path: change.path, digest: change.digest })),
     false,
-    ReviewSource.Working,
   );
-  git(f.root, "reset", "--soft", base);
   f.review();
   f.run("commit", "-m", "feat: accept reviewed result");
   expect(git(f.root, "log", "-1", "--format=%B")).not.toContain("Workbench-Provisional");
@@ -179,10 +177,10 @@ test("an entirely provisional history retains an empty baseline and cannot reach
   git(f.root, "add", ".");
   git(f.root, "commit", "-qm", "Initial draft\n\nWorkbench-Provisional: true");
   expect(reviewedCommit(f.root, "HEAD")).toBe("");
-  const snapshot = new GitSnapshot(f.root, { review: true });
-  expect(snapshot.committed.size).toBe(0);
+  const snapshot = new GitSnapshot(f.root);
+  expect(snapshot.committed.size).toBeGreaterThan(0);
   expect(snapshot.staged.has("workbench/CHARTER.md")).toBe(true);
-  expect(reviewStatus(f.root, ReviewSource.Working).changes.some((change) => change.charter)).toBe(true);
+  expect(pendingCommitReviews(f.root)[0]?.changes.some((change) => change.charter)).toBe(true);
   expect(() => {
     checkProvisionalPush(f.root, "HEAD", "0".repeat(40));
   }).toThrow(/provisional commit/);

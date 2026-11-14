@@ -27,7 +27,7 @@ export function recordList(records: BrowserRecord[], context: WorkspaceView, hea
           {record.type === "CHARTER" && record.collection && badge("Collection charter · context")}
           {record.local && badge("Local collection · read only")}
           {recordStatus(record)}
-          {!record.local && context.index.reviews.pendingPaths.has(record.path) && (
+          {!record.local && context.hasPendingReview(record.path) && (
             <a class="badge pending" aria-label={record.id + ": Needs review"} href={reviewLocation(context, record)}>
               Needs review
             </a>

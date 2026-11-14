@@ -20,7 +20,7 @@ function git(root: string, args: string[], input?: string): string {
     {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
       ...(input === undefined ? {} : { input }),
     },
   );
@@ -83,6 +83,32 @@ export function reviewedCommit(root: string, head: string): string {
     count = 32;
   }
   return "";
+}
+
+/** Retained checkpoints in parent order; finalized ancestry is outside the pending review set. */
+function markedCommits(root: string, revisions: string[]): string[] {
+  const entries = history(root, [
+    "--reverse",
+    "--topo-order",
+    "--max-count=1001",
+    "--regexp-ignore-case",
+    `--grep=^${provisionalTrailer}:`,
+    ...revisions,
+  ]);
+  if (entries.length > 1000)
+    throw new InvalidInput("Arrange at most 1000 retained commits before finalizing this review set");
+  return entries.filter((entry) => entry.provisional).map((entry) => entry.commit);
+}
+export function provisionalCommits(root: string, tip = "HEAD"): string[] {
+  return markedCommits(root, [git(root, ["rev-parse", "--verify", `${tip}^{commit}`]).trim()]);
+}
+export function retainedProvisionalCommits(root: string): string[] {
+  const heads = git(root, ["for-each-ref", "--format=%(objectname)", "refs/heads"]).trim().split("\n").filter(Boolean),
+    selected = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" });
+  if (selected.error || (selected.status !== 0 && selected.status !== 1))
+    throw new InvalidInput("Cannot inspect retained history");
+  const revisions = [...new Set([...heads, ...(selected.status === 0 ? [selected.stdout.trim()] : [])])];
+  return revisions.length ? markedCommits(root, revisions) : [];
 }
 
 export function checkProvisionalPush(root: string, tip: string, remote: string): void {

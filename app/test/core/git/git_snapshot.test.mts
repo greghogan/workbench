@@ -7,6 +7,7 @@ import {
   writeRawReviewObjects,
   readGitObjects,
   writeReviewBlobs,
+  readGitTree,
 } from "../../../src/core/git/git-snapshot.ts";
 import {
   reviewStatus,
@@ -58,6 +59,14 @@ test("a Git read session retains its captured HEAD and staged blobs across later
   git(root, "add", file);
   const snapshot = new GitSnapshot(root),
     pending = reviewStatus(root, ReviewSource.Staged, snapshot);
+  const original = readGitTree(root, snapshot.head),
+    copy = readGitTree(root, snapshot.head);
+  const entry = copy.get(file);
+  if (!entry) throw new Error("Missing captured tree entry");
+  entry.mode = "100755";
+  copy.delete(file);
+  expect(readGitTree(root, snapshot.head)).toEqual(original);
+  expect(readGitTree(root, "HEAD")).toEqual(original);
   const oid = snapshot.staged.get(file)?.oid;
   if (!oid) throw new Error("Missing captured staged object");
   expect(snapshot.blob(oid).toString()).toBe("staged content\n");
@@ -67,6 +76,8 @@ test("a Git read session retains its captured HEAD and staged blobs across later
   expect(snapshot.blob(oid).toString()).toBe("staged content\n");
   expect(reviewStatus(root, ReviewSource.Staged, snapshot).digest).toBe(pending.digest);
   expect(new GitSnapshot(root).head).not.toBe(snapshot.head);
+  expect(readGitTree(root, snapshot.head)).toEqual(original);
+  expect(readGitTree(root, "HEAD").get(file)).not.toEqual(original.get(file));
 });
 
 test("batch raw object writes preserve Unicode, spaces and exact bytes without applying Git filters", () => {

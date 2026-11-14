@@ -12,7 +12,7 @@ export function experimentControls(context: ViewContext, record: BrowserRecord):
     record.collection ||
     !!record.archive ||
     !experimentIsResult(record.status) ||
-    (context.index.reviews.byOwner.get(record.path)?.pending ?? 0) === 0 ||
+    !context.hasPendingReview(record.path) ||
     context.document(record.id).error
   )
     return null;

@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { combineFailures } from "../diagnostics/diagnostic-errors.mjs";
 import { required } from "../runtime/invariants.js";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { reviewedCommit } from "./commit-history.js";
+import { WeightedCache } from "../storage/weighted-cache.js";
+import { retainedBytes } from "../runtime/retained-bytes.js";
 export interface GitEntry {
   mode: string;
   oid: string;
@@ -13,7 +14,7 @@ export interface GitEntry {
 export function gitBytes(root: string, args: string[], input?: string, env?: NodeJS.ProcessEnv): Buffer {
   const result = spawnSync("git", ["-C", root, ...args], {
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, ...env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1" },
+    env: { ...process.env, ...env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
     ...(input === undefined ? {} : { input }),
   });
   if (result.error || result.status !== 0)
@@ -106,14 +107,25 @@ function headAt(root: string): string {
   if (result.error || (result.status !== 0 && result.status !== 1)) throw new Error("cannot inspect committed records");
   return result.stdout.trim();
 }
+const trees = new WeightedCache<ReadonlyMap<string, GitEntry>>(16 * 1024 * 1024);
 export function readGitTree(root: string, tree: string): Map<string, GitEntry> {
+  // Mutable refs must be resolved by Git; only object identities can outlive an acquisition.
+  const key = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(tree) ? JSON.stringify([resolve(root), tree]) : undefined;
+  const cached = key ? trees.get(key) : undefined;
+  if (cached) return new Map([...cached].map(([path, entry]) => [path, { ...entry }]));
   const result = new Map<string, GitEntry>();
-  for (const row of gitBytes(root, ["ls-tree", "-r", "-z", "--full-tree", tree]).toString().split("\0")) {
+  const bytes = gitBytes(root, ["ls-tree", "-r", "-z", "--full-tree", tree]);
+  for (const row of bytes.toString().split("\0")) {
     if (!row) continue;
     const tab = row.indexOf("\t"),
       [mode, , oid] = row.slice(0, tab).split(" ");
     if (tab < 0 || !mode || !oid) throw new Error("invalid Git tree entry");
     result.set(row.slice(tab + 1), { mode, oid });
+  }
+  if (key) {
+    const cost = retainedBytes(result, 16 * 1024 * 1024) + key.length * 2;
+    if (cost <= 16 * 1024 * 1024)
+      trees.set(key, new Map([...result].map(([path, entry]) => [path, { ...entry }])), cost);
   }
   return result;
 }
@@ -128,10 +140,10 @@ export class GitSnapshot {
   private retained = 0;
   constructor(
     readonly root: string,
-    options: { staged?: boolean; tree?: string; review?: boolean } = {},
+    options: { staged?: boolean; tree?: string; base?: string } = {},
   ) {
     const head = headAt(root);
-    this.head = options.review ? reviewedCommit(root, head) : head;
+    this.head = options.base ?? head;
     this.committed = this.head ? readGitTree(root, this.head) : new Map<string, GitEntry>();
     this.staged = new Map(this.committed);
     this.changes =
@@ -143,11 +155,7 @@ export class GitSnapshot {
               ? [this.head || gitBytes(root, ["mktree"], "").toString().trim(), options.tree]
               : [
                   "--cached",
-                  ...(this.head
-                    ? [this.head]
-                    : options.review && head
-                      ? [gitBytes(root, ["mktree"], "").toString().trim()]
-                      : []),
+                  ...(this.head ? [this.head] : head ? [gitBytes(root, ["mktree"], "").toString().trim()] : []),
                 ]),
             "--raw",
             "--no-abbrev",

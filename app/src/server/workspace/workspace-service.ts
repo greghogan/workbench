@@ -1,3 +1,4 @@
+import { allCommitReviews, reviewRecordGroups } from "../../core/review/review-units.js";
 import { readPlanOperations } from "../../core/tasks/planning/plan-operation-store.js";
 import { workGraph } from "../../core/tasks/planning/work-plans.js";
 import { planningInputs } from "../../core/tasks/planning/planning-inputs.js";
@@ -105,6 +106,7 @@ export interface WorkspaceSnapshot {
   records: BrowserRecord[];
   collections: { pin: CollectionPin; local: boolean; directory: string; localScope?: LocalCollectionScope }[];
   review: ReturnType<typeof reviewStatus>;
+  commitReviews: { revision: string; subject: string; paths: string[]; files: number }[];
   documents: Map<string, RecordDocument>;
   reviewDocuments: Map<string, ReviewDocument>;
   comparisons: Map<string, CollectionComparison>;
@@ -385,7 +387,7 @@ export class WorkspaceView {
       const document = this.index.snapshot.documents.get(record.id);
       if (!document || document.error) return [];
       if (experimentIsResult(record.status))
-        return this.index.reviews.byId.get(record.id)?.pending ? [{ record, phase: "outcome" }] : [];
+        return this.hasPendingReview(record.path) ? [{ record, phase: "outcome" }] : [];
       return [{ record, phase: "work" }];
     });
   }
@@ -422,8 +424,41 @@ export class WorkspaceView {
       ),
     ];
   }
+  get commitReviews() {
+    return this.index.snapshot.commitReviews
+      .map((unit) => ({
+        ...unit,
+        paths: unit.paths.filter((path) => {
+          const record = this.index.byPath.get(path);
+          if (record) return this.includesWorkflow(record.scope, record.collection ? record.scope : undefined);
+          if (this.selection) return path.startsWith(`workbench/collections/${this.selection}/`);
+          if (this.all || !this.scope || this.scope === this.projects[0]?.id) return true;
+          const scope = this.index.snapshot.projects.find((project) => project.id === this.scope);
+          return !!scope && path.startsWith(`${scope.path === "." ? "" : scope.path + "/"}workbench/`);
+        }),
+      }))
+      .filter((unit) => unit.paths.length > 0)
+      .map((unit) => ({
+        ...unit,
+        groups: reviewRecordGroups(unit.paths).map((group) => ({
+          ...group,
+          record: this.index.byPath.get(group.path),
+        })),
+      }));
+  }
+  commitReviewFor(path: string) {
+    const prefix = path.slice(0, -3) + "/";
+    return this.commitReviews.find((unit) => unit.paths.some((member) => member === path || member.startsWith(prefix)));
+  }
+  hasPendingReview(path: string): boolean {
+    return this.index.reviews.pendingPaths.has(path) || this.commitReviewFor(path) !== undefined;
+  }
   get pendingReviews(): number {
-    return this.reviewQueue.length + (this.compatibilityNeedsHumanReview ? 1 : 0);
+    return (
+      this.commitReviews.reduce((count, unit) => count + unit.groups.length, 0) +
+      this.reviewQueue.length +
+      (this.compatibilityNeedsHumanReview ? 1 : 0)
+    );
   }
 
   searchRecords({ type, scope, query }: { type: string; scope: string; query: string }): BrowserRecord[] {
@@ -517,7 +552,7 @@ export class WorkspaceCollector {
       observe(resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", selected.stdout.trim()]).trim()));
     const projects = readProjects(this.root);
     const collections = resolveCollections(this.root);
-    const git = new GitSnapshot(this.root, { staged: false, review: true });
+    const git = new GitSnapshot(this.root, { staged: false });
     const committedRecords = new Set([...git.committed.keys()].map((path) => join(this.root, path)));
     const records = this.catalog.records(collections, observe, committedRecords);
     const primaryReviewPaths = new Set(records.map((record) => record.path));
@@ -767,6 +802,12 @@ export class WorkspaceCollector {
     }
     const snapshot: WorkspaceSnapshot = {
       retainedSize: 0,
+      commitReviews: allCommitReviews(this.root).map((unit) => ({
+        revision: unit.revision,
+        subject: unit.message.split("\n")[0] ?? "",
+        paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
+        files: unit.changes.length,
+      })),
       compatibility,
       tasks,
       root: this.root,

@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { reviewAuthorityPath } from "../review/review-authority.js";
+import { gitReferenceInputs } from "../git/refs.js";
 export { inputStamp } from "../runtime/file-identity.js";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -63,5 +65,7 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
       ? resolve(root, excludes.stdout.trim())
       : join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "git/ignore"),
   );
+  observe(reviewAuthorityPath(root));
+  for (const path of gitReferenceInputs(root, ["refs/heads/"])) observe(path);
   return indexPath;
 }

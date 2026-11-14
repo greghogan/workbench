@@ -69,6 +69,39 @@ export function reviewPage(
         )}
         {context.pendingReviews ? (
           <>
+            {context.commitReviews.map((unit) => (
+              <section class="panel" key={unit.revision} data-review-commit={unit.revision}>
+                <div class="panel-heading">
+                  <div class="commit-review-context">
+                    <h2>{unit.subject}</h2>
+                    <p class="muted">
+                      {String(unit.groups.length)} {unit.groups.length === 1 ? "review" : "reviews"} · Commit{" "}
+                      <code>{unit.revision.slice(0, 12)}</code>
+                    </p>
+                  </div>
+                </div>
+                {unit.groups.map((group) => (
+                  <article class="record-row" data-card="" data-review-record={group.path}>
+                    {group.record && badge(group.record.id)}
+                    <h3>
+                      <a
+                        data-card-link=""
+                        href={sourceURL(
+                          context,
+                          routeURL(Route.History, {
+                            commit: unit.revision,
+                            path: group.paths.includes(group.path) ? group.path : (group.paths[0] ?? group.path),
+                          }),
+                        )}
+                      >
+                        {group.record?.title ?? basename(group.path)}
+                      </a>
+                    </h3>
+                    <p class="file-path">{group.path}</p>
+                  </article>
+                ))}
+              </section>
+            ))}
             {context.reviewSections.map((section) => (
               <section
                 class="panel"

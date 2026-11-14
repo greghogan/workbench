@@ -17,7 +17,7 @@ export function repositoryStatePath(root: string, ...parts: string[]): string {
 export function withRepositoryOperation<T>(
   root: string,
   action: () => T,
-  kind: "archive" | "integration" | "acquire" | "planning" | "plan-operation" = "archive",
+  kind: "archive" | "integration" | "acquire" | "planning" | "plan-operation" | "finalization" = "archive",
 ): T {
   return withCacheLockSync(
     repositoryStatePath(root, "record-operation"),
@@ -29,7 +29,7 @@ export function withRepositoryOperation<T>(
             `The planning ${pending.operation.kind} requires recovery in ${pending.operation.checkout}`,
           );
       }
-      for (const other of ["archive", "integration", "planning"] as const) {
+      for (const other of ["archive", "integration", "planning", "finalization"] as const) {
         if (other === kind || kind === "acquire") continue;
         const path = repositoryStatePath(root, `${other}-operation.json`);
         if (existsSync(path)) {

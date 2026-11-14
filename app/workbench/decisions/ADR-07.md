@@ -38,6 +38,10 @@ Retain the approved plan and supporting files so revised plans can be compared a
 work. Implementation accounts and checklist progress do not by themselves change the approved scope. Renaming a future
 plan preserves its meaning, approval, relationships, and queue position.
 
+Reconcile record identities during integration without transferring approval to unrelated work. Preserve mechanical
+renumbering only when meaning and relationships remain unchanged; changed implementation contexts require renewed
+applicable review and verification.
+
 Reject stale task and queue updates and conflicting starts of the same queued task. Recovery restores consistency
 between task records, human decisions, and local queue progress without overwriting intervening user edits or newer
 human decisions.
