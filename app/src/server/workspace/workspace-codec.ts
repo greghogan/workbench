@@ -89,6 +89,9 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     const unit = object(value);
     strings(unit, ["revision", "subject"]);
     check(bytes(unit.files));
+    list(unit.taskPaths, (path) => {
+      check(text(path));
+    });
     list(unit.paths, (path) => {
       check(text(path));
     });

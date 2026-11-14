@@ -67,3 +67,37 @@ export function taskPlanDigest(
     )
     .digest("hex");
 }
+
+/** Delivery notes remain outside the human-approved plan, including when later sections follow the account. */
+export function appendTaskAccount(contents: string, entry: string): string {
+  const { body } = parseProseRecord(contents, "task account"),
+    tokens = parser.parse(body, {}),
+    lines = body.split("\n");
+  for (let index = 0; index < tokens.length; index++) {
+    const heading = tokens[index];
+    if (
+      heading?.type !== "heading_open" ||
+      heading.level !== 0 ||
+      tokens[index + 1]?.content !== "Implementation account" ||
+      !heading.map
+    )
+      continue;
+    const level = Number(heading.tag.slice(1));
+    let end = lines.length;
+    for (let next = index + 2; next < tokens.length; next++) {
+      const candidate = tokens[next];
+      if (
+        candidate?.type === "heading_open" &&
+        candidate.level === 0 &&
+        Number(candidate.tag.slice(1)) <= level &&
+        candidate.map
+      ) {
+        end = candidate.map[0];
+        break;
+      }
+    }
+    lines.splice(end, 0, "", entry.trim(), "");
+    return contents.slice(0, contents.length - body.length) + lines.join("\n");
+  }
+  return contents.trimEnd() + `\n\n## Implementation account\n\n${entry.trim()}\n`;
+}

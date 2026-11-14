@@ -27,6 +27,24 @@ modules. Application modules do not import repository scripts; build tooling con
 `scripts/` contains shared build, verification, packaging, and maintenance tooling. The root package configuration
 continues to own one application build and test pipeline.
 
+## Implementation review
+
+Changeset review covers the pending changes and their interactions. Task review assesses the integrated outcome across
+its commits against the approved intent, including the experience delivered through commands, pages, and records. Record
+what was exercised and observed, with any unexamined scope, before claiming readiness for acceptance.
+
+For interface work, use the current source build for a workflow walkthrough. The commit gate includes domain and
+rendering tests; the shipped-browser suite is a separate CI role, also available locally:
+
+```sh
+./bin/workbench check --role browser
+./bin/workbench serve --demo
+```
+
+The browser role prepares its tooling and assets before execution. Automated results and screenshots support review;
+inspect the running result as well. For substantial work, an authorized fresh-context reviewer can assess the intended
+outcome without inheriting the author's conclusions.
+
 ## Documentation
 
 The [extended engineering guide](engineering.md) covers generated-input exploration, targeted mutation, security
@@ -137,6 +155,8 @@ node scripts/evaluate-skills.mjs claude review refactors --output /tmp/workbench
 node scripts/evaluate-skills.mjs codex project-review --output /tmp/workbench-project-review-results
 # Verified defect and unsupported bug concern
 node scripts/evaluate-skills.mjs codex bugs bugs-clean --output /tmp/workbench-bug-results
+# Interface changeset review, accumulated task review, and a coherent control case
+node scripts/evaluate-skills.mjs codex review-interface task-review-interface review-interface-clean --output /tmp/workbench-interface-review-results
 # Adaptive planning and advisory plan review
 node scripts/evaluate-skills.mjs codex planning plan-review --output /tmp/workbench-planning-results
 # Git histories and refusal cases use only disposable local remotes
@@ -161,6 +181,16 @@ The planning scenarios provide an existing plan, developer answers that supersed
 review report. Their outcome checks require changes to stay within the requested planning document or report, with no
 implementation, staging, or commits. The retained assessment prompts ask whether answers, changed steps, evidence, and
 remaining questions were handled correctly; the deterministic checks do not establish planning or review quality.
+
+The interface cases use a small local request-review application whose domain tests already pass. Changeset and task
+variants place presentation defects in pending work or retained feature history; the control case starts coherent.
+Outcome checks follow the rendered confirmation links and forms over loopback HTTP, check state-dependent actions and
+queue membership, and preserve the fixture's domain contract. They do not grade visual quality or prove that an agent
+used the running interface; those remain explicit questions in the retained qualitative assessment. A successful
+contract check alone does not establish that the skill improved review quality.
+
+Interface reviewers can retain inspection artifacts under `review-evidence/`. The runner preserves these separately
+from product changes in the selected result directory, including for the coherent control case.
 
 These optional evaluations use paid or subscription inference and, for dependencies, the public package registry. Codex
 uses `OPENAI_API_KEY` or a temporary copy of its authentication file; Claude requires `ANTHROPIC_API_KEY` or
@@ -209,8 +239,8 @@ build inputs match, or rebuild from that captured source using matching prepared
 the proposed tracked tree unchanged. Packages include runnable bundles and compiled consumer helpers, with the private
 build receipt excluded.
 
-Tracked bootstrap helpers retain their third-party notices in `scripts/licenses/BOOTSTRAP_NOTICES.txt`. Runtime
-bundle notices are generated with the packaged bundles.
+Tracked bootstrap helpers retain their third-party notices in `scripts/licenses/BOOTSTRAP_NOTICES.txt`. Runtime bundle
+notices are generated with the packaged bundles.
 
 `tooling:build` also updates the generated development-output block in `.gitignore`. `build-tooling.mts --check`
 verifies tracked outputs and that block; `--maintainers-only` prepares ignored development outputs without repairing

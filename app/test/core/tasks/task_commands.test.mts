@@ -1,4 +1,4 @@
-import { git } from "../../fixtures/adoption.mjs";
+import { git, distribution } from "../../fixtures/adoption.mjs";
 import { Command } from "commander";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -94,6 +94,7 @@ test("CLI scope selection resolves short task IDs and retains hierarchy in struc
 });
 
 test("named-plan CLI edits and grouped checkpoints preserve source history and require an inspected draft version", async () => {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   const file = join(root, "plan-input.md"),
     source = git(root, "rev-parse", "HEAD");
   writeFileSync(file, "---\nstatus: Planned\n---\n\n# Service installation\n\nInstall for the current user.\n");

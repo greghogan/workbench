@@ -150,10 +150,10 @@ export function compatibilityReviewPage(context: ViewContext): string {
                   fields: {
                     policy_digest: assessment.policy_digest,
                     finding: finding.id,
-                    decision: CompatibilityDecision.Approve,
+                    decision: CompatibilityDecision.Dismiss,
                     reviewed: "yes",
                   },
-                  children: () => submitButton("Approve resolution", { approve: true }),
+                  children: () => submitButton("Dismiss finding", { approve: true, secondary: true }),
                 })}
                 {mutationForm({
                   action: Route.PolicyResolution,
@@ -162,10 +162,10 @@ export function compatibilityReviewPage(context: ViewContext): string {
                   fields: {
                     policy_digest: assessment.policy_digest,
                     finding: finding.id,
-                    decision: CompatibilityDecision.Dismiss,
+                    decision: CompatibilityDecision.Approve,
                     reviewed: "yes",
                   },
-                  children: () => submitButton("Dismiss finding", { approve: true }),
+                  children: () => submitButton("Approve resolution", { approve: true }),
                 })}
               </div>
             )}

@@ -78,6 +78,9 @@ test("reported incompatibilities join document reviews; approval records a resol
   const document = parseDOM(page.html).window.document;
   expect(document.querySelector("main")?.textContent).toContain(proposed.proposed_resolution);
   expect(document.querySelector('a[href*="/records/hostrules:ADR-0"]')).not.toBeNull();
+  const choices = [...document.querySelectorAll<HTMLButtonElement>(".actions button")];
+  expect(choices.map((button) => button.textContent)).toEqual(["Dismiss finding", "Approve resolution"]);
+  expect(choices.map((button) => button.classList.contains("secondary"))).toEqual([true, false]);
   const finding = hiddenValue(page.html, "finding");
   const response = await postWebForm(web, "/actions/policy-resolution", {
     csrf: hiddenValue(page.html, "csrf"),

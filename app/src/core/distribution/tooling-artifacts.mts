@@ -194,6 +194,7 @@ export const maintainerSources: ReadonlySet<string> = new Set([
     "refresh-managed-inputs",
     "setup-development",
     "skill-evaluation-cases",
+    "skill-evaluation-interface",
     "skill-evaluation-policy",
     "skill-evaluation-rebase",
 
@@ -203,6 +204,7 @@ export const maintainerSources: ReadonlySet<string> = new Set([
 ]);
 const bundledSources = new Set<string>([
   "scripts/check-web-browser.mts",
+  "scripts/evaluate-skills.mts",
   // Sent as a standalone program into managed shells; no checkout-relative imports may remain.
   "scripts/cache-ownership.mts",
   "scripts/check-security-results.mts",

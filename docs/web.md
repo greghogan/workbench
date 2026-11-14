@@ -102,10 +102,19 @@ stages or approves the file. Run `workbench sync` after saving to refresh maps a
 
 ## Browse and follow records
 
-**Tasks** under **Records** shows all task states as a hierarchy, with nested subtasks. The generated task map is an
-index, not an execution queue. All four shared states (Planned, Approved, Accepted, and Canceled) have separate history
-views with automatic loading and a **Load more** fallback. Global search includes every state. Invalid or missing
-metadata remains visible under **Tasks needing attention**.
+**Tasks** under **Records** counts and shows numeric task records in all states as a hierarchy, with nested subtasks.
+The generated task map is an index, not an execution queue. All four shared states (Planned, Approved, Accepted, and
+Canceled) have separate history views with automatic loading and a **Load more** fallback. Global search includes every
+state and named future plans; Workflow keeps those plans separate from task record counts. Invalid or missing metadata
+remains visible under **Tasks needing attention**.
+
+Task pages list their associated commits alongside outcome acceptance. Open a commit to inspect its changed files in
+unified or side-by-side views, then return through the task breadcrumb. Inspection preserves the selected scope and does
+not grant document review or task acceptance. Task pages separate approval and acceptance from secondary actions. Cancel
+and delete each open a confirmation page; cancellation optionally retains a reason, while deletion has no reason field.
+Accepted work must be reopened or explicitly reverted; active queued work must be released or blocked before
+cancellation. Related protected-document reviews remain visible from a task even when they belong to another project
+scope.
 
 Task pages allow human plan approval, outcome acceptance, replanning, or cancellation. Each decision applies to the
 exact displayed task version. **Task queue** under **Workflow** presents three sections on one page: **Plans** awaiting

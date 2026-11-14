@@ -1,8 +1,13 @@
+import { historyFiles } from "../../core/git/history.js";
 import { allCommitReviews, reviewRecordGroups } from "../../core/review/review-units.js";
 import { readPlanOperations } from "../../core/tasks/planning/plan-operation-store.js";
 import { workGraph } from "../../core/tasks/planning/work-plans.js";
 import { planningInputs } from "../../core/tasks/planning/planning-inputs.js";
-import { readPlanningRecords, type PlanningRecord } from "../../core/tasks/planning/planning-read-model.js";
+import {
+  readPlanningRecords,
+  planningBrowserRecord,
+  type PlanningRecord,
+} from "../../core/tasks/planning/planning-read-model.js";
 import { attachTaskPlanApprovals } from "../../core/tasks/task-approvals.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
 import { pendingRecordOutputs, reviewPreparationPath } from "../../core/review/review-preparation-state.js";
@@ -106,7 +111,7 @@ export interface WorkspaceSnapshot {
   records: BrowserRecord[];
   collections: { pin: CollectionPin; local: boolean; directory: string; localScope?: LocalCollectionScope }[];
   review: ReturnType<typeof reviewStatus>;
-  commitReviews: { revision: string; subject: string; paths: string[]; files: number }[];
+  commitReviews: { revision: string; subject: string; paths: string[]; files: number; taskPaths: string[] }[];
   documents: Map<string, RecordDocument>;
   reviewDocuments: Map<string, ReviewDocument>;
   comparisons: Map<string, CollectionComparison>;
@@ -173,20 +178,14 @@ export class WorkspaceIndex {
     for (const plan of snapshot.tasks.plans.filter(
       (plan) => !plan.implementation || !this.taskGraph.byReference.has(plan.implementation.task),
     ))
-      this.byId.set(plan.reference, {
-        id: plan.reference,
-        type: "TSK",
-        scope: plan.scope,
-        title: plan.title,
-        summary: plan.summary,
-        status: this.taskGraph.byReference.get(plan.reference)?.metadata.status ?? plan.status,
-        path: `plans/${plan.scope}/${plan.name}/plan.md`,
-        directory: snapshot.root,
-        editable: true,
-        local: false,
-        collection: false,
-        ...(plan.problem ? { previewError: plan.problem } : {}),
-      });
+      this.byId.set(
+        plan.reference,
+        planningBrowserRecord(
+          snapshot.root,
+          plan,
+          this.taskGraph.byReference.get(plan.reference)?.metadata.status ?? plan.status,
+        ),
+      );
     this.byPath = new Map(
       [...this.byId.values()].filter((record) => !record.local).map((record) => [record.path, record]),
     );
@@ -211,10 +210,13 @@ export class WorkspaceIndex {
     const metadata = [record.id, record.title, record.summary, record.status].join(" ").toLowerCase();
     if (metadata.includes(query)) return true;
     const document = this.snapshot.documents.get(record.id);
-    if (!document || document.error) return false;
+    if (document?.error) return false;
+    const plan = this.taskGraph.byReference.get(record.id),
+      contents = document?.contents ?? (plan?.planning ? plan.contents : undefined);
+    if (contents === undefined) return false;
     const saved = this.searchable.get(record.id);
     if (saved !== undefined) return saved.includes(query);
-    const text = document.contents.toLowerCase();
+    const text = contents.toLowerCase();
     const bytes = Buffer.byteLength(text);
     // Search acceleration is disposable and bounded independently of the acquired snapshot.
     if (this.searchBytes + bytes <= 8 * 1024 * 1024) {
@@ -247,7 +249,7 @@ export class WorkspaceIndex {
       scope = review.scope;
     } else if (parameters.path && !all) {
       selection = reviewCollection(parameters.path);
-      scope = selection ? "" : (this.projectForPath(parameters.path)?.id ?? "");
+      scope = selection ? "" : (this.projectForPath(parameters.path)?.id ?? scope);
       all = false;
     } else if (parameters.collection === undefined && parameters.id) {
       const namespace = parameters.id.split(":")[0];
@@ -807,6 +809,13 @@ export class WorkspaceCollector {
         subject: unit.message.split("\n")[0] ?? "",
         paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
         files: unit.changes.length,
+        taskPaths: unit.pending
+          ? historyFiles(this.root, unit.revision)
+              .changes.filter((file) =>
+                /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(file.path),
+              )
+              .map((file) => file.path)
+          : [],
       })),
       compatibility,
       tasks,

@@ -1,5 +1,6 @@
 import type { TaskDecisionChange } from "../task-decisions.js";
 import { type TransferPlan, type TransferData } from "./plan-operation-data.js";
+import { maintainPlanning } from "./planning-retention.js";
 import { rewritePlanReferences } from "./plan-references.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
@@ -393,5 +394,6 @@ export async function changeWorkQueue(root: string, change: QueueChange, expecte
     return readTaskQueue(root);
   }
   const result = changeTaskQueue(root, change, expected);
+  maintainPlanning(root);
   return result;
 }

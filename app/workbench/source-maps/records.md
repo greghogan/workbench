@@ -67,13 +67,16 @@
 - `src/core/tasks/planning/plan-model.ts`, `src/core/tasks/planning/planning-index.ts`: Define scoped named plans and
   index independent planning history without checking it out.
 - `src/core/tasks/planning/planning-store.ts`, `src/core/tasks/planning/planning-operations.ts`: Retain durable drafts
-  and exact approvals, and coordinate recoverable grouped checkpoints with concurrent editors.
+  and exact approvals. `src/core/tasks/planning/planning-checkpoint.ts` coordinates recoverable grouped checkpoints with
+  concurrent editors; `src/core/tasks/planning/plan-git.ts` owns immutable tree and reference transactions.
 - `src/core/tasks/planning/plan-transfer.ts`, `src/core/tasks/planning/plan-retirement.ts`: Transfer approved plans into
   implementation and retire saved copies after verifying their first source commit.
-- `src/core/tasks/planning/plan-rename.ts`, `src/core/tasks/planning/plan-operation-store.ts`: Retain recoverable
-  identity changes, exact inputs, and implementation claims across interruption and Git collection.
+- `src/core/tasks/planning/plan-rename.ts`, `src/core/tasks/planning/plan-operation-store.ts`,
+  `src/core/tasks/planning/plan-operation-data.ts`: Validate typed recovery payloads and retain recoverable identity
+  changes, exact inputs, and implementation claims across interruption and Git collection.
 - `src/core/tasks/planning/work-plans.ts`, `src/core/tasks/planning/planning-read-model.ts`: Join personal plans and
   source tasks for workflow discovery, hierarchy, and readiness without adding drafts to committed record maps.
+  Named-plan metadata also supports CLI search, browser references, and full-text discovery.
 - `src/core/tasks/task-approvals.ts`, `src/core/tasks/task-approval-store.ts`, `src/core/tasks/task-plan.ts`: Retain
   exact human-approved plans and supporting files, separating approved scope from implementation accounts and progress.
 - `src/cli/task-plans.ts`, `src/server/views/plan-pages.tsx`: Present named-plan editing, approval comparisons,
@@ -101,16 +104,30 @@
   application checkout.
 - `src/core/git/branch-integration.ts`, `src/cli/branch-integration.ts`: Capture rebase/merge targets, retain recovery
   references, and reconcile pinned inventories through explicit continuation or abortion.
-- `src/core/git/tree-publication.ts`, `src/core/git/refs.ts`: Apply verified Git-tree transitions while preserving
-  unrelated edits and centralize branch-name validation.
+- `src/core/git/tree-publication.ts`, `src/core/git/index-transaction.ts`, `src/core/git/refs.ts`: Apply verified
+  Git-tree transitions using Git checkout conversions and index locking while preserving unrelated edits and centralize
+  branch-name validation.
 
 - `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`, `src/core/git/finalization.ts`: Capture
   parent-bound commit reviews and activate reviewed replacement history through recoverable reference updates.
 - `src/core/git/identity-reconciliation.ts`: Prove mechanical task renumbering before preserving real plan and document
   approvals, and update related personal plan references without granting new consent.
-- `src/server/views/history-page.tsx`: Present immutable commit files with shared document comparisons and exact version
-  confirmation.
 
 - `src/core/review/review-authority.ts`, `src/core/git/integration-review.ts`, `src/core/git/commit-writing.ts`:
   Preserve accepted-history authority, distinguish new integration contexts, and prepare rewritten commits with their
   original authors and current signing policy.
+
+- `src/core/git/push-updates.ts`, `src/core/tasks/planning/planning-publication.ts`: Validate complete planning
+  histories and exempt only the configured manual publication destination.
+- `src/core/tasks/planning/planning-retention.ts`, `src/core/tasks/planning/plan-disposition.ts`: Protect drafts,
+  relationships, execution queues, and unpushed history during explicit deletion and empty-branch retention.
+- `src/core/tasks/task-disposition.ts`, `src/server/views/task-operation-page.tsx`: Preview recoverable removal of
+  unpublished task commits or staged inverse work while preserving unrelated and published history.
+- `src/core/git/history.ts`, `src/server/review/historical-records.ts`: Read immutable branch histories and route record
+  and supporting-file links within their captured revision.
+
+- `src/core/git/recovery-refs.ts`: Inspect retained recovery references and explicitly release inspected backups while
+  protecting pending operations and concurrent reference changes.
+- `src/core/tasks/task-queue-state.ts`, `src/core/tasks/task-decision-state.ts`: Decode queue and human-decision state
+  without loading workflow runtime into bootstrap guards.
+- `src/core/storage/weighted-cache.ts`: Bound disposable immutable metadata caches with weighted LRU retention.

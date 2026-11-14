@@ -1,3 +1,4 @@
+import { maintainPlanning } from "./planning-retention.js";
 import { gitRevision, validateBranch } from "../../git/refs.js";
 
 import {
@@ -25,6 +26,7 @@ import { BoundedState } from "../../storage/bounded-state.js";
 
 import {
   planIdentity,
+  parsePlanReference,
   planPrefix,
   planDraftRef,
   planBaseRef,
@@ -220,7 +222,7 @@ export function checkpointPlans(
   references?: readonly PlanIdentity[],
   options: { message?: string; onRecorded?: () => void } = {},
 ): string | undefined {
-  return withRepositoryOperation(
+  const result = withRepositoryOperation(
     root,
     () => {
       const pending = planningOperation(root);
@@ -236,7 +238,15 @@ export function checkpointPlans(
         );
       const before = gitRevision(root, `refs/heads/${settings.branch}`),
         saved = savedPlanTrees(root),
-        requested = references ?? [...draftPlanIdentities(root), ...draftPlanIdentities(root, planningPaths.removals)],
+        requested = references ?? [
+          ...new Map(
+            [
+              ...draftPlanIdentities(root),
+              ...draftPlanIdentities(root, planningPaths.removals),
+              ...readDraftGroups(root).groups.flat().map(parsePlanReference),
+            ].map((identity) => [identity.reference, identity]),
+          ).values(),
+        ],
         selected = [...expandDraftSelection(root, new Set(requested.map((identity) => identity.reference)))].map(
           (reference) => {
             const match = /^([^:]+):plan\/(.+)$/.exec(reference);
@@ -386,4 +396,6 @@ export function checkpointPlans(
     },
     "planning",
   );
+  maintainPlanning(root);
+  return result;
 }

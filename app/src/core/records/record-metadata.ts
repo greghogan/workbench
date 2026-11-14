@@ -1,3 +1,6 @@
+import type { BrowserRecord } from "./record-service.js";
+import { markdownExcerpt } from "./markdown-excerpt.js";
+import { parseProseRecord } from "./record-document.js";
 import { citationDateFields as dateFields, citationDateText } from "../citations/citation-dates.js";
 import type { Kind } from "./record-identity.js";
 
@@ -127,4 +130,30 @@ export function yamlMetadata(contents: string): Record<string, unknown> {
   const value: unknown = document.toJS();
   if (!metadataObject(value)) throw new Error("expected metadata fields");
   return value;
+}
+
+export function describeRecord(record: BrowserRecord, contents: string): void {
+  const type = record.type;
+  record.title = /^#\s+(.+)$/m.exec(contents)?.[1] ?? record.title;
+  if (type === "CIT") {
+    const citation = citationMetadata(contents);
+    record.title = citation.title || record.title;
+    record.summary = citation.summary;
+  } else if (type === "REL") {
+    const release = yamlMetadata(contents);
+    if (typeof release.version === "string") record.title = `Release ${release.version}`;
+    record.summary = [release.tag, release.released, release.yanked === true ? "Yanked" : undefined]
+      .filter((value) => typeof value === "string")
+      .join(" · ");
+  } else if (type === "CHARTER") {
+    record.summary = markdownExcerpt(contents);
+  } else if (["ADR", "TSK", "EXP", "ENV"].includes(type)) {
+    const { metadata, body } = parseProseRecord(contents, record.path);
+    if (typeof metadata.summary === "string") record.summary = markdownExcerpt(metadata.summary);
+    else record.summary = markdownExcerpt(body);
+    if (typeof metadata.status === "string") record.status = metadata.status;
+  }
+  record.title = record.title.slice(0, 512);
+  record.summary = record.summary.slice(0, 512);
+  record.status = record.status.slice(0, 128);
 }

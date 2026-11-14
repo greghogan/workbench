@@ -1,13 +1,13 @@
+import { canceledContents } from "./planning/plan-disposition.js";
 import { readWorkGraph } from "./planning/work-plans.js";
 import { retainTaskPlanApproval, readTaskPlanApproval, taskPlanFiles, taskReviewVersion } from "./task-approvals.js";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
-import { parseDocument } from "yaml";
 import { workingReviewTree } from "../git/git-snapshot.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { readConfig } from "../projects/project-configuration.js";
 import { ProjectEdits } from "../projects/project-edits.js";
-import { splitFrontmatter, taskStatuses, terminalTask, type TaskStatus } from "../records/record-document.js";
+import { replaceRecordStatus, taskStatuses, terminalTask, type TaskStatus } from "../records/record-document.js";
 import { taskChecklistChanges } from "./task-checklists.js";
 import { taskDigest, taskReference, type TaskRecord } from "./task-model.js";
 import { publishTaskTransition, readTaskQueue, TaskBlockerKind, TaskReadiness, withTaskLock } from "./task-queue.js";
@@ -25,6 +25,8 @@ export function taskTransitionProblem(
   status: TaskStatus,
 ): string | undefined {
   if (task.metadata.status === status && status !== "Accepted") return undefined;
+  if (status === "Canceled" && task.metadata.status === "Accepted")
+    return "Accepted work cannot be canceled; reopen the task or explicitly revert its implementation";
   if (
     (status === "Approved" && !["Planned", "Approved"].includes(task.metadata.status)) ||
     (status === "Accepted" && task.metadata.status !== "Approved" && task.metadata.status !== "Accepted")
@@ -74,6 +76,7 @@ export function changeTaskStatus(
   status: TaskStatus,
   expected?: string,
   humanReviewed = false,
+  cancellationReason?: string,
 ): void {
   withTaskLock(root, () => {
     if (!taskStatuses.includes(status)) throw new InvalidInput("Unknown shared task state");
@@ -104,14 +107,10 @@ export function changeTaskStatus(
     const problem = taskTransitionProblem(task, new TaskReadiness(graph, queue), status);
     if (problem) throw new StateConflict(problem);
     const originalQueue = structuredClone(queue);
-    const parts = splitFrontmatter(task.contents);
-    if (!parts) throw new InvalidInput("Task frontmatter is missing");
-    const document = parseDocument(parts.yaml);
-    document.set("status", status);
-    const ending = task.contents.includes("\r\n") ? "\r\n" : "\n";
-    const header = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(task.contents)?.[0];
-    if (!header) throw new InvalidInput("Task frontmatter is incomplete");
-    const contents = `---${ending}${document.toString().replaceAll("\n", ending)}---${ending}${task.contents.slice(header.length)}`;
+    const contents =
+      status === "Canceled"
+        ? canceledContents(task.contents, cancellationReason ?? "")
+        : replaceRecordStatus(task.contents, status);
     const changes = taskChecklistChanges(root, new Map([[task.path, contents]]));
     const edits = new ProjectEdits(root);
     for (const change of changes) {

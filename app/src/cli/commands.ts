@@ -139,7 +139,7 @@ const commands: Record<string, Admission> = {
   merge: { project: true, registration: true, policy: true },
 
   record: { project: true, registration: true },
-  task: { project: true, registration: true },
+  task: { project: true, registration: true, children: { plan: { project: false } } },
   experiment: { project: true, registration: true, policy: true, children: { show: { policy: false } } },
   queue: { project: true, registration: true },
 

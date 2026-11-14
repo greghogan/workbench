@@ -310,6 +310,9 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
   if (context.index.snapshot.tasks.problem) return <p class="notice">{context.index.snapshot.tasks.problem}</p>;
   const task = context.index.taskGraph.byReference.get(record.id);
   if (!task) return null;
+  const pendingDocuments = context.index.snapshot.commitReviews.filter(
+    (unit) => unit.taskPaths.includes(record.path) && unit.paths.length,
+  );
   const expected = task.reviewDigest ?? task.digest;
   const readiness = context.index.taskReadiness;
   const transition = (state: TaskStatus, label: string) =>
@@ -321,7 +324,6 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
           action: Route.TaskState,
           context,
           csrf: context.csrf,
-          class: state === "Canceled" ? "task-cancel" : "",
           fields: { reference: record.id, expected, state },
           children: () => submitButton(label, { secondary: state !== "Approved" && state !== "Accepted" }),
         })
@@ -330,7 +332,8 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
     <section aria-label="Task actions" class="task-workflow">
       {entry && (
         <p>
-          {badge(entry.state)} {entry.reason ?? entry.evidence}
+          {badge(entry.state === TaskExecution.Implemented ? "Awaiting acceptance" : entry.state)}{" "}
+          {entry.reason ?? entry.evidence}
         </p>
       )}
       {!entry && task.implementation && (
@@ -348,11 +351,26 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
           ))}
         </ul>
       )}
+      {pendingDocuments.length > 0 && (
+        <section aria-label="Pending document reviews">
+          <h2>Pending document reviews</h2>
+          <ul>
+            {pendingDocuments.flatMap((unit) =>
+              unit.paths.map((path) => (
+                <li key={unit.revision + path}>
+                  <a href={routeURL(Route.History, { commit: unit.revision, path, all: "1" })}>{path}</a>
+                  {" · "}
+                  {unit.subject}
+                </li>
+              )),
+            )}
+          </ul>
+        </section>
+      )}
       <div class="task-actions">
-        {!terminalTask.has(record.status) && transition("Canceled", "Cancel task")}
-        {record.status !== "Planned" && transition("Planned", "Return to planning")}
         {record.status === "Approved" &&
           !entry &&
+          !task.implementation &&
           mutationForm({
             action: Route.QueueChange,
             context,
@@ -363,12 +381,54 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
         {(record.status === "Planned" || (record.status === "Approved" && task.approval && !task.approval.current)) &&
           transition("Approved", record.status === "Approved" ? "Approve revised plan" : "Approve plan")}
         {record.status === "Approved" &&
-          (!entry || entry.state === TaskExecution.Implemented) &&
+          (entry?.state === TaskExecution.Implemented || (!entry && task.implementation)) &&
           transition("Accepted", "Accept outcome")}
-        {record.status === "Accepted" &&
-          context.index.snapshot.tasks.decisionsRequired &&
-          transition("Accepted", "Renew acceptance")}
       </div>
+      {(record.status !== "Planned" ||
+        !!task.implementation ||
+        !taskTransitionProblem(task, readiness, "Canceled")) && (
+        <details>
+          <summary>More task actions</summary>
+          <div class="task-actions">
+            {!terminalTask.has(record.status) && !taskTransitionProblem(task, readiness, "Canceled") && (
+              <a
+                class="button secondary"
+                href={routeURL(Route.TaskOperation, { id: record.id, kind: "cancel", scope: context.scope })}
+              >
+                Cancel task
+              </a>
+            )}
+            {record.status !== "Planned" &&
+              transition(
+                "Planned",
+                record.status === "Accepted" || record.status === "Canceled" ? "Reopen task" : "Return to planning",
+              )}
+            {(!!task.implementation ||
+              (!!entry && entry.state !== TaskExecution.Queued) ||
+              record.status === "Approved" ||
+              record.status === "Accepted") && (
+              <>
+                <a
+                  class="button secondary"
+                  href={routeURL(Route.TaskOperation, { id: record.id, kind: "delete", scope: context.scope })}
+                >
+                  Delete unpublished work
+                </a>
+                <a
+                  class="button secondary"
+                  href={routeURL(Route.TaskOperation, { id: record.id, kind: "revert", scope: context.scope })}
+                >
+                  Revert work…
+                </a>
+              </>
+            )}
+            {record.status === "Accepted" &&
+              context.index.snapshot.tasks.decisionsRequired &&
+              transition("Accepted", "Renew acceptance")}
+            {record.status === "Approved" && !entry && !task.implementation && transition("Accepted", "Accept outcome")}
+          </div>
+        </details>
+      )}
     </section>
   );
 }
@@ -434,14 +494,53 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
     recordWindowLimit
   )
     throw new WebError(400, "Workflow window exceeds its limit; open the next page");
-  const action = (operation: QueueOperation, reference: string, label: string, target = "") =>
+  const queueForm = (operation: QueueOperation, reference: string, children: JSX.Element, target = "") =>
     mutationForm({
       action: Route.QueueChange,
       context,
       csrf: context.csrf,
       fields: { operation, reference, target, expected: queue.digest },
-      children: () => submitButton(label, { secondary: true, id: `queue-${operation}-${reference}` }),
+      children: () => children,
     });
+  const action = (operation: QueueOperation, reference: string, label: string, target = "") =>
+    queueForm(
+      operation,
+      reference,
+      submitButton(label, { secondary: true, id: `queue-${operation}-${reference}` }),
+      target,
+    );
+  const orderControls = (
+    reference: string,
+    title: string,
+    before: string | undefined,
+    after: string | undefined,
+    removable: boolean,
+  ) => {
+    const control = (operation: QueueOperation, glyph: string, label: string, disabled: boolean, target = "") =>
+      queueForm(
+        operation,
+        reference,
+        <button
+          type="submit"
+          class="secondary icon-button"
+          id={`queue-${operation}-${reference}`}
+          aria-label={`${label}: ${title}`}
+          title={`${label}: ${title}`}
+          disabled={disabled}
+        >
+          <span aria-hidden="true">{glyph}</span>
+        </button>,
+        target,
+      );
+    return (
+      <fieldset class="task-queue-controls">
+        <legend class="sr-only">Queue controls: {title}</legend>
+        {control("move-before", "↑", "Move up", !before, before)}
+        {control("remove", "×", "Remove from queue", !removable)}
+        {control("move-after", "↓", "Move down", !after, after)}
+      </fieldset>
+    );
+  };
   return shell(
     context,
     "Task workflow",
@@ -459,24 +558,20 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
             taskList(context, [...planWindow.visible], (record) => {
               const position = plans.findIndex((item) => item.id === record.id),
                 queued = selected.has(record.id);
+              if (!queued && !record.id.includes(":plan/")) return recordList([record], context, 3);
               return (
-                <>
-                  {recordList([record], context, 3)}
-                  {record.id.includes(":plan/") && (
-                    <div class="task-actions">
-                      {!queued && action("add", record.id, "Select plan")}
-                      {queued &&
-                        position > 0 &&
-                        selected.has(plans[position - 1]?.id ?? "") &&
-                        action("move-before", record.id, "Move up", plans[position - 1]?.id)}
-                      {queued &&
-                        position + 1 < plans.length &&
-                        selected.has(plans[position + 1]?.id ?? "") &&
-                        action("move-after", record.id, "Move down", plans[position + 1]?.id)}
-                      {queued && action("remove", record.id, "Remove from queue")}
-                    </div>
+                <div class="task-queue-row">
+                  {orderControls(
+                    record.id,
+                    record.title,
+                    queued && selected.has(plans[position - 1]?.id ?? "") ? plans[position - 1]?.id : undefined,
+                    queued && selected.has(plans[position + 1]?.id ?? "") ? plans[position + 1]?.id : undefined,
+                    queued &&
+                      queue.entries.find((entry) => entry.reference === record.id)?.state !== TaskExecution.Active,
                   )}
-                </>
+                  <div class="task-queue-content">{recordList([record], context, 3)}</div>
+                  {!queued && <div class="task-queue-selection">{action("add", record.id, "Select plan")}</div>}
+                </div>
               );
             })
           ) : (
@@ -484,7 +579,6 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
           )}
           {planWindow.loader}
         </div>
-        {!context.selection && linkButton("New plan", routeURL(Route.PlanNew, { scope: context.scope }), true)}
       </section>
       <section aria-label="Work">
         <h2>Work</h2>
@@ -499,74 +593,82 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
             {workWindow.visible.map((entry) => {
               const index = work.findIndex((item) => item.reference === entry.reference);
               return (
-                <li key={entry.reference} data-task-node={entry.reference}>
-                  <h3>
-                    <a href={recordURL(entry.reference)}>{entry.title}</a>
-                  </h3>
-                  <p>
-                    {badge(entry.status ?? "Missing")} {badge(entry.state)}{" "}
-                    {queue.ready.includes(entry.reference) && badge("Ready")}
-                  </p>
-                  {entry.blockers.length > 0 && (
-                    <ul>
-                      {entry.blockers.map((reason) => (
-                        <li>{reason}</li>
-                      ))}
-                    </ul>
+                <li key={entry.reference} data-task-node={entry.reference} class="task-queue-row">
+                  {orderControls(
+                    entry.reference,
+                    entry.title,
+                    work[index - 1]?.reference,
+                    work[index + 1]?.reference,
+                    entry.state !== TaskExecution.Active,
                   )}
-                  {entry.evidence && <p>{entry.evidence}</p>}
-                  <div class="task-actions">
-                    {index > 0 && action("move-before", entry.reference, "Move up", work[index - 1]?.reference)}
-                    {index + 1 < work.length &&
-                      action("move-after", entry.reference, "Move down", work[index + 1]?.reference)}
-                    {queue.ready.includes(entry.reference) && action("start", entry.reference, "Start task")}
-                    {entry.state !== TaskExecution.Active && action("remove", entry.reference, "Remove from queue")}
-                    {entry.state !== TaskExecution.Queued && action("release", entry.reference, "Return to queue")}
-                    {entry.state === TaskExecution.Implemented &&
-                      entry.status !== "Accepted" &&
-                      linkButton("Review outcome", recordURL(entry.reference), true)}
+                  <div class="task-queue-content">
+                    <h3>
+                      <a href={recordURL(entry.reference)}>{entry.title}</a>
+                    </h3>
+                    <p>
+                      {badge(entry.status ?? "Missing")}{" "}
+                      {badge(entry.state === TaskExecution.Implemented ? "Awaiting acceptance" : entry.state)}{" "}
+                      {queue.ready.includes(entry.reference) && badge("Ready")}
+                    </p>
+                    {entry.blockers.length > 0 && (
+                      <ul>
+                        {entry.blockers.map((reason) => (
+                          <li>{reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {entry.evidence && <p>{entry.evidence}</p>}
+                    <div class="task-actions">
+                      {queue.ready.includes(entry.reference) && action("start", entry.reference, "Start task")}
+                      {entry.state !== TaskExecution.Queued && action("release", entry.reference, "Return to queue")}
+                      {entry.state === TaskExecution.Implemented &&
+                        entry.status !== "Accepted" &&
+                        linkButton("Review outcome", recordURL(entry.reference), true)}
+                    </div>
+                    {(entry.state === TaskExecution.Active || entry.state === TaskExecution.Queued) &&
+                      mutationForm({
+                        action: Route.QueueChange,
+                        context,
+                        csrf: context.csrf,
+                        class: "form-grid queue-work-form",
+                        fields: { operation: "block", reference: entry.reference, target: "", expected: queue.digest },
+                        children: (fields) => (
+                          <>
+                            {fields.text("detail", {
+                              id: `block-${entry.reference}`,
+                              label: "Blocking reason",
+                              required: true,
+                              maxLength: 16384,
+                            })}
+                            <div class="task-actions">{submitButton("Mark blocked", { secondary: true })}</div>
+                          </>
+                        ),
+                      })}
+                    {entry.state === TaskExecution.Active &&
+                      mutationForm({
+                        action: Route.QueueChange,
+                        context,
+                        csrf: context.csrf,
+                        class: "form-grid queue-work-form",
+                        fields: {
+                          operation: "implemented",
+                          reference: entry.reference,
+                          target: "",
+                          expected: queue.digest,
+                        },
+                        children: (fields) => (
+                          <>
+                            {fields.text("detail", {
+                              id: `evidence-${entry.reference}`,
+                              label: "Verification and outcome",
+                              required: true,
+                              maxLength: 16384,
+                            })}
+                            <div class="task-actions">{submitButton("Report implemented")}</div>
+                          </>
+                        ),
+                      })}
                   </div>
-                  {(entry.state === TaskExecution.Active || entry.state === TaskExecution.Queued) &&
-                    mutationForm({
-                      action: Route.QueueChange,
-                      context,
-                      csrf: context.csrf,
-                      fields: { operation: "block", reference: entry.reference, target: "", expected: queue.digest },
-                      children: (fields) => (
-                        <>
-                          {fields.text("detail", {
-                            id: `block-${entry.reference}`,
-                            label: "Blocking reason",
-                            required: true,
-                            maxLength: 16384,
-                          })}
-                          {submitButton("Mark blocked", { secondary: true })}
-                        </>
-                      ),
-                    })}
-                  {entry.state === TaskExecution.Active &&
-                    mutationForm({
-                      action: Route.QueueChange,
-                      context,
-                      csrf: context.csrf,
-                      fields: {
-                        operation: "implemented",
-                        reference: entry.reference,
-                        target: "",
-                        expected: queue.digest,
-                      },
-                      children: (fields) => (
-                        <>
-                          {fields.text("detail", {
-                            id: `evidence-${entry.reference}`,
-                            label: "Verification and outcome",
-                            required: true,
-                            maxLength: 16384,
-                          })}
-                          {submitButton("Report implemented")}
-                        </>
-                      ),
-                    })}
                 </li>
               );
             })}
