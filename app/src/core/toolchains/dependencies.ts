@@ -72,7 +72,7 @@ function nodeVirtualStore(directory: string): string | undefined {
   if (!existsSync(metadata)) return;
   const document = parse(readFileSync(metadata, "utf8")) as { virtualStoreDir?: unknown };
   return typeof document.virtualStoreDir === "string"
-    ? resolve(directory, "node_modules", document.virtualStoreDir)
+    ? resolve(dirname(realpathSync.native(metadata)), document.virtualStoreDir)
     : undefined;
 }
 

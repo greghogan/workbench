@@ -122,6 +122,8 @@ const commitPrefixes: Validator = (value, location) => {
 
 /** Human-owned project options also drive config browsing, editing, and completion. */
 export const projectFields: Record<string, Record<string, Validator>> = {
+  integration: { branch: ref, remote: ref },
+  records: { archive_branch: ref, archive_group_size: integer },
   collections: { sources: validateProjectCollections },
   tool: { repository: ref, revision: ref },
   markdown: { wrap_width: integer },

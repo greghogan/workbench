@@ -31,6 +31,9 @@ if ! command -v node >/dev/null 2>&1; then
         "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
     exit 1
 fi
+if [[ -f "$staged_snapshot/scripts/setup-development.mjs" ]]; then
+    bash "$staged_snapshot/.githooks/prepare-source" "$repository_root" "$staged_snapshot"
+fi
 
 message_file=$(node -p 'require("node:path").resolve(process.argv[1])' "$message_file")
 
