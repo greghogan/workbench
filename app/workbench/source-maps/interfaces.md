@@ -320,3 +320,6 @@
   field-specific boundary errors, budget-aware graph accounting, and filesystem identity observations.
 
 - `src/server/views/diagram-view.tsx`: Share isolated diagram and source presentations across records and comparisons.
+- `src/server/views/task-history.tsx`, `src/server/views/history-page.tsx`, `src/server/views/code-difference.tsx`:
+  Present task-linked deliveries and immutable file comparisons during outcome acceptance, sharing exact-version
+  document review rendering without granting acknowledgment through inspection.

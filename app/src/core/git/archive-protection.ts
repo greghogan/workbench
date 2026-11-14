@@ -45,6 +45,10 @@ const quote = (text: string) =>
 /** A repository-local router keeps archive guards available even in an archive-only checkout. */
 export function protectArchiveBranch(root: string, branch: string): void {
   validateBranch(root, branch);
+  installRepositoryHooks(root, branch);
+}
+
+export function installRepositoryHooks(root: string, branch?: string): void {
   const router = repositoryStatePath(root, "hooks");
   const selected = spawnSync("git", ["-C", root, "config", "--get", "core.hooksPath"], { encoding: "utf8" });
   if (selected.error || (selected.status !== 0 && selected.status !== 1))
@@ -61,26 +65,28 @@ export function protectArchiveBranch(root: string, branch: string): void {
         original
     )
       throw new Error(
-        "Git hooks changed after archive protection was installed; reconcile core.hooksPath before continuing",
+        "Git hooks changed after repository hook routing was installed; reconcile core.hooksPath before continuing",
       );
   } else {
     original =
       current ?? gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-path", "hooks"]).toString().trim();
     if (original === router)
       throw new Error(
-        "Archive hook routing metadata is missing; preserve the existing hooks and recover it explicitly",
+        "Repository hook routing metadata is missing; preserve the existing hooks and recover it explicitly",
       );
     writeAtomic(originalFile, original, 0o600);
   }
-  const protection = repositoryStatePath(root, "archives", "protected", "refs", "heads", branch);
-  mkdirSync(dirname(protection), { recursive: true, mode: 0o700 });
-  if (!existsSync(protection)) {
-    const existing = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
-      encoding: "utf8",
-    });
-    if (existing.error || (existing.status !== 0 && existing.status !== 1))
-      throw new Error("Cannot capture archive protection baseline");
-    writeAtomic(protection, (existing.status === 0 ? existing.stdout.trim() : "new") + "\n", 0o600);
+  if (branch) {
+    const protection = repositoryStatePath(root, "archives", "protected", "refs", "heads", branch);
+    mkdirSync(dirname(protection), { recursive: true, mode: 0o700 });
+    if (!existsSync(protection)) {
+      const existing = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
+        encoding: "utf8",
+      });
+      if (existing.error || (existing.status !== 0 && existing.status !== 1))
+        throw new Error("Cannot capture archive protection baseline");
+      writeAtomic(protection, (existing.status === 0 ? existing.stdout.trim() : "new") + "\n", 0o600);
+    }
   }
   const previousDirectory = isAbsolute(original) ? original : join(root, original);
   const requiredPush = join(router, "pre-push-required");
@@ -126,7 +132,7 @@ fi
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 cat >"$scratch/updates"
-node ${quote(join(router, "archive-guard.cjs"))} "$(git rev-parse --show-toplevel)" "$2" "$scratch/updates" "$scratch/project-updates"
+node ${quote(join(router, "archive-guard.cjs"))} "$(git rev-parse --show-toplevel)" "$1" "$2" "$scratch/updates" "$scratch/project-updates"
 if [[ -s "$scratch/project-updates" ]]; then
   if [[ -x ${prior} ]]; then
     WORKBENCH_PUSH_UPDATES="$scratch/updates" ${prior} "$@" <"$scratch/project-updates"

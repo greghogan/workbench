@@ -12,11 +12,19 @@ developer's chosen planning method and existing document conventions. Reuse the 
 not invent a record type or impose a specification framework. A plan describes future work; a task can aggregate
 coherent work across several commits. Keep substantive context searchable in files.
 
+In a Git-backed Workbench project, inspect `workbench task plan` and `workbench queue` before creating future work. Use
+named plan drafts and the CLI's save/checkpoint operations; ordinary saves do not commit or push. Starting an approved
+plan through `queue start plan/NAME` assigns its task ID and preserves approval. Queue order is not a numeric identity.
+
 Develop the intended outcome, scope, constraints, acceptance criteria, approach, dependencies, and verification to the
 depth the work needs. Keep alternatives and unresolved choices visible. These are useful contents, not mandatory
 sections or a fixed sequence. Link authoritative requirements rather than copying them into competing specifications.
 Separate a human-reviewable overview of why, what, and how from proportionate implementing-agent detail; use visuals
 where they help understanding.
+
+For user-facing work, make the intended workflow and consequential choices assessable before implementation, including
+how the completed experience will be verified. Use the established product direction to resolve ordinary presentation
+details; bring choices affecting intent or constraints to the developer.
 
 Distinguish planning acceptance, readiness to execute, verified implementation, and any reserved developer completion
 acceptance using the project's supported lifecycle. Explain dependency constraints and preferred order separately;

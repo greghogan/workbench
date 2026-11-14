@@ -1,3 +1,4 @@
+import { historyBranches, historyCommits, historyFiles } from "../core/git/history.js";
 import { Option, type Command } from "commander";
 import { finalizationPlan, finalizeHistory } from "../core/git/finalization.js";
 import { pendingCommitReviews } from "../core/review/review-units.js";
@@ -8,6 +9,8 @@ import { checkCommit } from "../core/git/commit.js";
 import { gitBytes, stagedReviewTree } from "../core/git/git-snapshot.js";
 import { collect, registerCommand } from "./commands.js";
 import { checkCommitReview, createCommit } from "./commit-workflow.js";
+import { recoveryReferences, removeRecoveryReference } from "../core/git/recovery-refs.js";
+import { InvalidInput } from "../core/runtime/input-errors.js";
 
 export function registerCommitCommands(program: Command, root: string): void {
   const commit = registerCommand(program, "commit")
@@ -18,6 +21,90 @@ export function registerCommitCommands(program: Command, root: string): void {
     .option("--amend", "Replace the current commit using the supplied message")
     .action((options: { message: string[]; file?: string; provisional?: boolean; amend?: boolean }) =>
       createCommit(root, options),
+    );
+  commit
+    .command("recovery")
+    .description("Inspect retained Git recovery references or explicitly release an inspected backup")
+    .option("--json", "Print recovery references and object identities")
+    .option("--delete <reference>", "Release one recovery reference without changing project branches")
+    .option("--expected <object>", "Require the inspected object identity before deletion")
+    .option("--yes", "Confirm removal of the selected recovery reference")
+    .action((options: { json?: boolean; delete?: string; expected?: string; yes?: boolean }) => {
+      if (options.delete) {
+        if (!options.expected || !options.yes)
+          throw new InvalidInput("Inspect the backup, then supply --expected OBJECT --yes to release it");
+        removeRecoveryReference(root, options.delete, options.expected);
+      } else if (options.expected || options.yes) throw new InvalidInput("Select a recovery reference with --delete");
+      const references = recoveryReferences(root);
+      console.log(
+        options.json
+          ? JSON.stringify(references, null, 2)
+          : terminalTable(
+              ["REFERENCE", "OBJECT", "TYPE"],
+              references.map((entry) => [entry.reference, entry.object, entry.type]),
+            ),
+      );
+    });
+  commit
+    .command("history")
+    .description("Inspect local branches, commits and their diffs without checking them out")
+    .argument("[revision]", "Branch or revision (default: HEAD)")
+    .option("--branches", "List local branches")
+    .option("--from <revision>", "Continue the selected first-parent history")
+    .option("--diff", "Show the selected commit's patch")
+    .option("--file <path>", "Restrict the patch to a file")
+    .option("--json", "Print immutable history metadata")
+    .action(
+      (
+        selected: string | undefined,
+        options: { branches?: boolean; from?: string; diff?: boolean; file?: string; json?: boolean },
+      ) => {
+        if (options.branches) {
+          const branches = historyBranches(root);
+          console.log(
+            options.json
+              ? JSON.stringify(branches, null, 2)
+              : terminalTable(
+                  ["BRANCH", "COMMIT", "CONTENT"],
+                  branches.map((branch) => [
+                    branch.name,
+                    branch.revision.slice(0, 12),
+                    branch.planning ? "Planning" : "Implementation",
+                  ]),
+                ),
+          );
+          return;
+        }
+        if (options.diff || options.file) {
+          const { unit } = historyFiles(root, selected ?? "HEAD");
+          console.log(
+            gitBytes(root, [
+              "diff",
+              "--no-ext-diff",
+              "--no-textconv",
+              unit.parents[0] ?? gitBytes(root, ["mktree"], "").toString().trim(),
+              unit.revision,
+              "--",
+              ...(options.file ? [options.file] : []),
+            ]).toString(),
+          );
+          return;
+        }
+        const history = historyCommits(root, selected, options.from);
+        console.log(
+          options.json
+            ? JSON.stringify(history, null, 2)
+            : terminalTable(
+                ["COMMIT", "STATE", "SUBJECT"],
+                history.commits.map((unit) => [
+                  unit.revision.slice(0, 12),
+                  unit.provisional ? "Provisional" : "Final",
+                  unit.subject,
+                ]),
+              ),
+        );
+        if (history.next && !options.json) console.log(`\nContinue with --from ${history.next}`);
+      },
     );
   commit
     .command("reviews")

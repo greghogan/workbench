@@ -98,7 +98,7 @@ separation before deletion.
 - [x] Add optional planning storage, durable drafts, explicit checkpoints, and approval checkpoints.
 - [x] Integrate named plans with CLI/browser editing, approval diffs, queue ordering, and transfer into implementation.
 - [x] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
-- [ ] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
+- [x] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
 - [ ] Record and display Added at metadata, preserving it across plan and task transitions.
 
 ## Implementation account
@@ -117,6 +117,15 @@ history recoverable. Accepted Git history preserves unchanged comparison authori
 Mechanical renumbering preserves approval when identity and meaning are proven unchanged. Immutable comparisons are
 cached separately from live review decisions. Verification exercised browser progression and review continuity across
 clones and rebases.
+
+The CLI creates and checkpoints plans. The browser edits and reviews existing plans, with queue controls attached to the
+task they affect. Task outcome pages link to related document reviews and delivered commits across scopes. Cancellation
+keeps a supplied reason, deletion previews affected unpublished work, and reversion prepares an inverse for renewed
+review.
+
+The planning-only push exception applies to the configured destination. Cleanup preserves unpushed checkpoints and
+unfinished work. Existing plans moved into named storage with their order and supporting material intact. Tests
+exercised publication boundaries, pruning, and interrupted deletion.
 
 ## Implementing-agent detail
 

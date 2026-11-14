@@ -1,3 +1,12 @@
+import {
+  interfaceCases,
+  interfaceEvidenceDirectory,
+  interfaceFiles,
+  interfacePackage,
+  interfaceProbe,
+  isInterfaceCase,
+  verifyInterfaceProbe,
+} from "./skill-evaluation-interface.mjs";
 import { evaluationPolicy } from "./skill-evaluation-policy.mjs";
 import { isRebaseCase, prepareRebase, rebaseCases, verifyRebase } from "./skill-evaluation-rebase.mjs";
 import { isRecord, record, required, string } from "../app/src/core/runtime/values.mjs";
@@ -21,6 +30,7 @@ interface EvaluationPackage {
 }
 
 export const cases = {
+  ...interfaceCases,
   ...rebaseCases,
   review: {
     skill: "review-changes",
@@ -172,13 +182,14 @@ function dependencyLock(root: string) {
 }
 
 // A digest covers file content, symlink targets, and file modes, including untracked work.
-export function snapshot(root: string) {
+export function snapshot(root: string, excludedPaths: readonly string[] = []) {
   const entries: (string | number)[][] = [];
   function walk(directory: string, prefix = "") {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if ([".git", "node_modules"].includes(entry.name)) continue;
       const path = join(directory, entry.name);
       const relative = join(prefix, entry.name);
+      if (excludedPaths.includes(relative)) continue;
       if (entry.isDirectory()) walk(path, relative);
       else
         entries.push([
@@ -226,7 +237,9 @@ export function prepare(root: string, distribution: string, env: NodeJS.ProcessE
   write(
     root,
     "workbench/CHARTER.md",
-    "# Charter\n\nProvide predictable basket totals for a small command-line shop.\n",
+    isInterfaceCase(name)
+      ? "# Charter\n\nProvide a clear local request-review workflow.\n"
+      : "# Charter\n\nProvide predictable basket totals for a small command-line shop.\n",
   );
   write(
     root,
@@ -240,6 +253,40 @@ export function prepare(root: string, distribution: string, env: NodeJS.ProcessE
     readFileSync(join(root, "workbench/config.toml"), "utf8") +
       '\n[[check]]\nname = "Behavior"\nrole = "test"\ncommand = ["node", "--test"]\n',
   );
+  if (isInterfaceCase(name)) {
+    write(root, ".gitignore", readFileSync(join(root, ".gitignore"), "utf8") + `/${interfaceEvidenceDirectory}/\n`);
+    for (const [path, contents] of Object.entries(interfaceFiles(false))) write(root, path, contents);
+    workbench(root, env, "format", "--all", "--write");
+    workbench(root, env, "sync");
+    workbench(root, env, "validate", root);
+    let head = baseline(root, env);
+    if (name === "task-review-interface") command(root, env, "git", ["tag", "review-base", head]);
+    if (name !== "review-interface-clean")
+      write(root, "views.mjs", required(interfaceFiles(true)["views.mjs"], "Missing interface fixture"));
+    if (name === "task-review-interface") {
+      command(root, env, "git", ["add", "."]);
+      command(root, env, "git", [
+        "-c",
+        "user.name=Workbench evaluation",
+        "-c",
+        "user.email=evaluation@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "Complete request-review feature",
+      ]);
+      head = command(root, env, "git", ["rev-parse", "HEAD"]).trim();
+    }
+    const packageJson: EvaluationPackage = interfacePackage;
+    return {
+      snapshot: snapshot(root, [interfaceEvidenceDirectory]),
+      head,
+      packageJson,
+      task: undefined,
+      lock: undefined,
+      hooks: undefined,
+    };
+  }
   write(
     root,
     "README.md",
@@ -508,6 +555,23 @@ export function verifyOutcome(
     "",
     "agent changed policy, charter, checks, or supply-chain controls",
   );
+  if (isInterfaceCase(name)) {
+    for (const path of ["README.md", "model.mjs", "model.test.mjs", "package.json"])
+      assert.equal(
+        command(root, env, "git", ["diff", before.head, "--", path]),
+        "",
+        `interface review changed the fixture contract: ${path}`,
+      );
+    if (name === "review-interface-clean")
+      assert.equal(
+        snapshot(root, [interfaceEvidenceDirectory]),
+        before.snapshot,
+        "coherent interface was changed without a demonstrated defect",
+      );
+    command(root, env, process.execPath, ["--test", "model.test.mjs"]);
+    verifyInterfaceProbe(command(root, env, process.execPath, ["--input-type=module", "-e", interfaceProbe]));
+    return;
+  }
   if (name === "refactors") {
     assert.equal(snapshot(root), before.snapshot, "advisory request changed project files");
     return;

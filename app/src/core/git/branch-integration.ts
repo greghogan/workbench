@@ -1,3 +1,4 @@
+import { includesPlanningHistory } from "../tasks/planning/planning-publication.js";
 import { prepareIntegrationReview } from "./integration-review.js";
 import { reconcileTaskIdentities } from "./identity-reconciliation.js";
 import { ArchiveUnavailable } from "../records/archive-index.js";
@@ -290,6 +291,10 @@ export function integrateBranch(
           before = head(root),
           target = resolveTarget(root, kind, options.target),
           id = randomUUID();
+        if (includesPlanningHistory(root, before) || includesPlanningHistory(root, target))
+          throw new InvalidInput(
+            "Planning history stays outside implementation ancestry; transfer selected plans through the task queue",
+          );
         try {
           for (const revision of [archiveAt(root, before), archiveAt(root, target)])
             if (revision) readArchiveIndex(root, revision);

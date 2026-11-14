@@ -14,6 +14,7 @@ import { prepareReviewPage, reviewPageModel, resolveReviewPage } from "../review
 import { reviewLocation } from "../review/review-navigation.js";
 import { sourceURL } from "../routes/sources.js";
 import { recordPane } from "./record-pane.js";
+import { commitReviewContext } from "./commit-review-context.js";
 export function reviewPreparationPage(
   context: ViewContext,
   prepared: NonNullable<ReturnType<typeof resolveReviewPage>>,
@@ -72,13 +73,12 @@ export function reviewPage(
             {context.commitReviews.map((unit) => (
               <section class="panel" key={unit.revision} data-review-commit={unit.revision}>
                 <div class="panel-heading">
-                  <div class="commit-review-context">
-                    <h2>{unit.subject}</h2>
-                    <p class="muted">
-                      {String(unit.groups.length)} {unit.groups.length === 1 ? "review" : "reviews"} · Commit{" "}
-                      <code>{unit.revision.slice(0, 12)}</code>
-                    </p>
-                  </div>
+                  {commitReviewContext(
+                    context.root,
+                    unit.revision,
+                    unit.subject,
+                    `${String(unit.groups.length)} ${unit.groups.length === 1 ? "review" : "reviews"}`,
+                  )}
                 </div>
                 {unit.groups.map((group) => (
                   <article class="record-row" data-card="" data-review-record={group.path}>

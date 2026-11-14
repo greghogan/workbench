@@ -29,14 +29,55 @@ function git(root: string, args: string[], input?: string): string {
   return result.stdout;
 }
 
-export function provisionalMessage(root: string, message: string): boolean {
-  const markers = git(root, ["interpret-trailers", "--parse"], message)
+function parsedProvisionalTrailers(trailers: string): boolean {
+  const markers = trailers
     .split(/\r?\n/)
     .filter((line) => line.slice(0, line.indexOf(":")).toLowerCase() === provisionalTrailer.toLowerCase());
   if (!markers.length) return false;
   if (markers.length !== 1 || markers[0]?.slice(markers[0].indexOf(":") + 1).trim() !== "true")
     throw new InvalidInput(`The reserved ${provisionalTrailer} trailer must appear once with value true`);
   return true;
+}
+
+export function provisionalMessage(root: string, message: string): boolean {
+  return parsedProvisionalTrailers(git(root, ["interpret-trailers", "--parse"], message));
+}
+
+/** A page of history is one Git read, without opening one process per commit. */
+export function commitSummaries(root: string, start: string, task?: { path: string; skip: number; after?: string }) {
+  const { path, skip = 0 } = task ?? {};
+  const fields = git(root, [
+    "log",
+    "--no-show-signature",
+    "--first-parent",
+    `--max-count=${String(path ? skip + 51 : 51)}`,
+    `--skip=${String(path ? 0 : skip)}`,
+    "-z",
+    `--format=%H%x00%s%x00%an <%ae>%x00%(trailers:key=${provisionalTrailer},only)`,
+    start,
+    ...(task?.after ? [`^${task.after}`] : []),
+    ...(path ? ["--follow", "--remove-empty", "--", path] : []),
+  ]).split("\0");
+  if (fields.at(-1) === "") fields.pop();
+  if (fields.length % 4) throw new InvalidInput("Invalid commit summary page");
+  const result: { revision: string; subject: string; author: string; provisional: boolean }[] = [];
+  for (let offset = 0; offset < fields.length; offset += 4) {
+    const revision = fields[offset],
+      subject = fields[offset + 1],
+      author = fields[offset + 2],
+      trailers = fields[offset + 3];
+    if (
+      !revision ||
+      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(revision) ||
+      subject === undefined ||
+      author === undefined ||
+      trailers === undefined
+    )
+      throw new InvalidInput("Invalid commit summary");
+    result.push({ revision, subject, author, provisional: parsedProvisionalTrailers(trailers) });
+  }
+  // Git applies --skip before following renames; retain that context before slicing the requested task page.
+  return path ? result.slice(skip) : result;
 }
 
 export function provisionalCommitRequested(tree: string, environment = process.env): boolean {

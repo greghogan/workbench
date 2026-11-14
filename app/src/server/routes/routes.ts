@@ -26,18 +26,21 @@ export const Route = {
   Record: "/records/:id",
   Records: "/records",
   TaskQueue: "/queue",
+  TaskHistory: "/records/:id/history",
   Plan: "/plans/:id",
-  PlanNew: "/plan/new",
   PlanFile: "/plans/:id/files",
-  PlanCreate: "/actions/plan-create",
   PlanSave: "/actions/plan-save",
   PlanRename: "/actions/plan-rename",
   PlanApprove: "/actions/plan-approve",
-  PlanCheckpoint: "/actions/plan-checkpoint",
   TaskState: "/actions/task-state",
   QueueChange: "/actions/task-queue",
   Review: "/review",
   History: "/history",
+  HistoryFile: "/history/file",
+  PlanCancel: "/actions/plan-cancel",
+  PlanDelete: "/actions/plan-delete",
+  TaskDisposition: "/actions/task-disposition",
+  TaskOperation: "/task-operation",
   ReviewStatus: "/review-status",
   PolicyResolution: "/actions/policy-resolution",
   ReviewFile: "/review-file",
@@ -63,6 +66,7 @@ export type Route = (typeof Route)[keyof typeof Route];
 
 const recordTemplates = {
   [Route.Record]: Route.Record,
+  [Route.TaskHistory]: Route.TaskHistory,
   [Route.Plan]: Route.Plan,
   [Route.PlanFile]: Route.PlanFile,
   [Route.Review]: Route.Record + Route.Review,
@@ -128,13 +132,24 @@ export interface RouteQueries {
     cursor_revision?: string;
     task_windows?: string;
   };
-  [Route.Plan]: SourceQuery & { id: string; view?: "read" | "changes" | "edit"; layout?: DifferenceLayout };
-  [Route.PlanNew]: SourceQuery;
+  [Route.Plan]: SourceQuery & {
+    id: string;
+    view?: "read" | "changes" | "edit" | "delete" | "cancel";
+    layout?: DifferenceLayout;
+  };
   [Route.PlanFile]: { id: string; path: string; version?: "approved"; download?: "1" | "0" };
   [Route.Overview]: SourceQuery;
   [Route.Projects]: { refresh?: "1"; "refresh-sizes"?: "1" };
   [Route.Inventory]: { view?: "projects" | "caches"; project?: string; owner?: string };
   [Route.Record]: SourceQuery & Omit<ViewState, "view"> & { id: string; saved?: "1"; view?: DocumentView };
+  [Route.TaskHistory]: SourceQuery & {
+    id: string;
+    commit?: string;
+    path?: string;
+    layout?: DifferenceLayout;
+    tip?: string;
+    offset?: string;
+  };
   [Route.Records]: SourceQuery & {
     type?: BrowserRecord["type"] | "";
     status?: TaskStatus;
@@ -147,7 +162,13 @@ export interface RouteQueries {
     task_windows?: string;
     attention?: "1";
   };
-  [Route.History]: SourceQuery & { commit?: string; path?: string; layout?: DifferenceLayout };
+  [Route.History]: SourceQuery & {
+    commit?: string;
+    path?: string;
+    layout?: DifferenceLayout;
+  };
+  [Route.TaskOperation]: SourceQuery & { id: string; kind: "delete" | "revert" | "cancel"; reason?: string };
+  [Route.HistoryFile]: { commit: string; path: string; side: "before" | "after" };
   [Route.ReviewStatus]: { id?: string; path?: string; compatibility?: "1" };
   [Route.Review]: SourceQuery & {
     compatibility?: "1";
@@ -188,11 +209,12 @@ export interface MutationFields {
     decision: "approve" | "dismiss";
     reviewed: "yes";
   };
-  [Route.PlanCreate]: { scope: string };
   [Route.PlanSave]: { reference: string; expected: string };
   [Route.PlanRename]: { reference: string; expected: string };
   [Route.PlanApprove]: { reference: string; expected: string };
-  [Route.PlanCheckpoint]: { reference: string; expected: string };
+  [Route.PlanCancel]: { reference: string; expected: string };
+  [Route.PlanDelete]: { reference: string; expected: string };
+  [Route.TaskDisposition]: { reference: string; expected: string; kind: "delete" | "revert"; reason: string };
   [Route.TaskState]: { reference: string; expected: string; state: TaskStatus };
   [Route.QueueChange]: { operation: QueueOperation; reference: string; target: string; expected: string };
   [Route.WorkspaceRetry]: EmptyFields;
@@ -247,6 +269,41 @@ type RouteContracts = {
   };
 };
 export const routeContracts: RouteContracts = {
+  [Route.TaskOperation]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
+      id: bounded(1024),
+      kind: oneOf(["delete", "revert", "cancel"]),
+      reason: bounded(16384),
+    },
+  },
+  [Route.HistoryFile]: {
+    scope: "project",
+    methods: ["GET"],
+    query: { commit: bounded(1024), path: bounded(4096), side: oneOf(["before", "after"]) },
+  },
+  [Route.PlanCancel]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
+  [Route.PlanDelete]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
+  [Route.TaskDisposition]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
   [Route.History]: {
     scope: "project",
     methods: ["GET"],
@@ -254,6 +311,21 @@ export const routeContracts: RouteContracts = {
       commit: bounded(1024),
       path: bounded(4096),
       layout: oneOf(["unified", "split"]),
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
+    },
+  },
+  [Route.TaskHistory]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      id: bounded(1024),
+      commit: bounded(1024),
+      path: bounded(4096),
+      layout: oneOf(["unified", "split"]),
+      tip: bounded(1024),
+      offset: bounded(16),
       scope: bounded(1024),
       collection: bounded(1024),
       all: oneOf(["1"]),
@@ -276,7 +348,7 @@ export const routeContracts: RouteContracts = {
     methods: ["GET"],
     query: {
       id: bounded(1024),
-      view: oneOf(["read", "changes", "edit"]),
+      view: oneOf(["read", "changes", "edit", "delete", "cancel"]),
       layout: oneOf(["unified", "split"]),
       collection: bounded(1024),
       scope: bounded(1024),
@@ -287,17 +359,6 @@ export const routeContracts: RouteContracts = {
     scope: "project",
     methods: ["GET"],
     query: { id: bounded(1024), path: bounded(4096), version: oneOf(["approved"]), download: oneOf(["1", "0"]) },
-  },
-  [Route.PlanNew]: {
-    scope: "project",
-    methods: ["GET"],
-    query: { collection: bounded(1024), scope: bounded(1024), all: oneOf(["1"]) },
-  },
-  [Route.PlanCreate]: {
-    scope: "project",
-    methods: ["POST"],
-    query: {},
-    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
   },
   [Route.PlanSave]: {
     scope: "project",
@@ -312,12 +373,6 @@ export const routeContracts: RouteContracts = {
     action: { operation: WebAction.Save, effect: ActionEffect.Applied },
   },
   [Route.PlanApprove]: {
-    scope: "project",
-    methods: ["POST"],
-    query: {},
-    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
-  },
-  [Route.PlanCheckpoint]: {
     scope: "project",
     methods: ["POST"],
     query: {},

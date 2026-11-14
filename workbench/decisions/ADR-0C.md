@@ -1,20 +1,20 @@
 ---
 summary: Whole-changeset review, cause and recurrence, semantic boundaries, and coherent commits.
 agent_instruction:
-  Review the pending changeset before commit and the accumulated work before task completion; fix findings and repeat
-  until no further in-scope changes are needed and record applicable review evidence. Keep implementation unpublished
-  until human acceptance and publication authorization.
+  Review the pending changeset before commit and the accumulated work before task completion, including affected user
+  workflows; fix findings and repeat until no further in-scope changes are needed and record applicable review evidence.
+  Keep implementation unpublished until human acceptance and publication authorization.
 ---
 
 # ADR-C: Review and coherent changes
 
 Before commit, review the complete pending changeset; before task completion, review the accumulated implementation
-across its commits and pending changes against the intended outcome. Assess correctness, scope, failure handling,
-interactions, and agreement among behavior, tests, documentation, decisions, and generated artifacts. Fix material
-findings and worthwhile design improvements, rerun affected checks, and repeat until a complete pass requires no further
-in-scope changes. Report verification, unresolved decisions, and limitations. Retain content-bound evidence of agent
-change and accumulated task review. Required review evidence must cover committed and outgoing work; human record
-review, plan approval, and outcome acceptance retain their independent authority.
+across its commits and pending changes against the intended outcome. Assess correctness, usability, scope, failure
+handling, interactions, and agreement among behavior, tests, documentation, decisions, and generated artifacts. Fix
+material findings and worthwhile design improvements, rerun affected checks, and repeat until a complete pass requires
+no further in-scope changes. Report verification, unresolved decisions, and limitations. Retain content-bound evidence
+of agent change and accumulated task review. Required review evidence must cover committed and outgoing work; human
+record review, plan approval, and outcome acceptance retain their independent authority.
 
 Investigate causes of defects and unsuitable structures encountered during authorized work, and prevent recurrence in
 the responsible definitions or checks. Record independent opportunities as tasks or feedback without deferring defects

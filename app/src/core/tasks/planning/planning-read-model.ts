@@ -1,6 +1,7 @@
+import type { BrowserRecord } from "../../records/record-service.js";
 import { markdownExcerpt } from "../../records/markdown-excerpt.js";
 import type { TaskStatus } from "../../records/record-document.js";
-import { planningPaths } from "./plan-model.js";
+import { planningPaths, planPrefix } from "./plan-model.js";
 import { readPlans, type PlanView } from "./planning-store.js";
 import { planClaims, type PlanClaim } from "./plan-operation-store.js";
 
@@ -82,4 +83,21 @@ export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecor
 export function readPlanningRecords(root: string): PlanningRecord[] {
   const claims = new Map(planClaims(root).map((claim) => [claim.reference, claim]));
   return readPlans(root).map((view) => planningRecord(view, claims.get(view.reference)));
+}
+
+export function planningBrowserRecord(root: string, plan: PlanningRecord, status = plan.status): BrowserRecord {
+  return {
+    id: plan.reference,
+    type: "TSK",
+    scope: plan.scope,
+    title: plan.title,
+    summary: plan.summary,
+    status,
+    path: planPrefix(plan) + planningPaths.document,
+    directory: root,
+    editable: true,
+    local: false,
+    collection: false,
+    ...(plan.problem ? { previewError: plan.problem } : {}),
+  };
 }

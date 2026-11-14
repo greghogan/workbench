@@ -1,4 +1,5 @@
 import { isRebaseCase } from "./skill-evaluation-rebase.mjs";
+import { interfaceEvidenceDirectory, isInterfaceCase } from "./skill-evaluation-interface.mjs";
 import { gitNullConfiguration } from "../app/src/core/runtime/windows-host.ts";
 import { captureOwnedChild, processCancellation } from "../app/src/core/runtime/owned-child.mjs";
 import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
@@ -165,7 +166,8 @@ for (const name of names) {
       : name === "commit-push"
         ? "Push only to the configured disposable local origin."
         : "Do not stage or commit.";
-    const prompt = `${skill ? `Use ${harness === "codex" ? "$" : "/"}${skill}. ` : ""}${cases[name].request} ${permissions} Work only in this disposable project.`;
+    const evidence = isInterfaceCase(name) ? ` Retain inspection artifacts in ${interfaceEvidenceDirectory}/.` : "";
+    const prompt = `${skill ? `Use ${harness === "codex" ? "$" : "/"}${skill}. ` : ""}${cases[name].request} ${permissions} Work only in this disposable project.${evidence}`;
     report.prompt = prompt;
     const args =
       harness === "codex"
@@ -236,6 +238,11 @@ for (const name of names) {
           mkdirSync(join(target, ".."), { recursive: true });
           cpSync(join(root, path), target, { dereference: false });
         }
+        if (isInterfaceCase(name) && existsSync(join(root, interfaceEvidenceDirectory)))
+          cpSync(join(root, interfaceEvidenceDirectory), join(resultDirectory, interfaceEvidenceDirectory), {
+            recursive: true,
+            dereference: false,
+          });
       }
       report.finished = new Date().toISOString();
       writeFileSync(join(resultDirectory, "result.json"), JSON.stringify(report, null, 2) + "\n");

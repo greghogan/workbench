@@ -1,7 +1,9 @@
+import { installRepositoryHooks } from "../../git/archive-protection.js";
 import { changeTaskQueue } from "../task-queue.js";
+
 import { gitRevision, validateBranch } from "../../git/refs.js";
-import { planClaim } from "./plan-operation-store.js";
-import { prepareDraftGroups, draftGroupCommands } from "./planning-draft-groups.js";
+import { planClaim, readPlanOperations } from "./plan-operation-store.js";
+import { readDraftGroups, prepareDraftGroups, draftGroupCommands } from "./planning-draft-groups.js";
 import { indexPlanningRevision, validatePlanEntries } from "./planning-index.js";
 
 import { existsSync } from "node:fs";
@@ -160,10 +162,7 @@ export function configurePlanning(root: string, settings: PlanningSettings): voi
         if (!gitBytes(root, ["remote"]).toString().trim().split("\n").includes(settings.remote))
           throw new InvalidInput("Planning remote not found");
         validateBranch(root, settings.remote_branch ?? "");
-        if (
-          settings.remote === target.remote &&
-          (settings.remote_branch === target.branch || settings.remote_branch === archive)
-        )
+        if (settings.remote_branch === target.branch || settings.remote_branch === archive)
           throw new InvalidInput("The planning destination cannot be the integration or archive destination");
       }
       const previous = planningSettings(root);
@@ -187,6 +186,7 @@ export function configurePlanning(root: string, settings: PlanningSettings): voi
         for (const revision of gitBytes(root, ["rev-list", prior]).toString().trim().split("\n").filter(Boolean))
           indexPlanningRevision(root, revision);
       }
+      installRepositoryHooks(root);
       writeAtomic(path, editToml(before, data), 0o600);
     },
     "planning",
@@ -301,4 +301,25 @@ export function approvePlanDraft(
   if (planningSettings(root).branch) checkpointPlans(root, [identity]);
   changeTaskQueue(root, { action: "add", references: [identity.reference] });
   return readPlan(root, identity);
+}
+
+export function disablePlanning(root: string): void {
+  withRepositoryOperation(
+    root,
+    () => {
+      if (
+        savedPlanTrees(root).size ||
+        draftPlanIdentities(root).length ||
+        draftPlanIdentities(root, planningPaths.removals).length ||
+        readDraftGroups(root).groups.length ||
+        readPlanOperations(root).length
+      )
+        throw new StateConflict("Checkpoint and preserve existing plans before disabling their storage");
+      const settings = planningSettings(root),
+        path = repositoryStatePath(root, planningPaths.settings),
+        original = existsSync(path) ? readBoundedFile(path, 64 * 1024, "planning settings").toString() : "";
+      writeAtomic(path, editToml(original, { auto_prune: settings.auto_prune }), 0o600);
+    },
+    "planning",
+  );
 }

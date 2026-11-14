@@ -42,6 +42,17 @@ export function submitButton(
   );
 }
 
+export function confirmationActions(label: string, back: string): JSX.Element {
+  return (
+    <div class="confirmation-actions">
+      <a class="button secondary" href={back}>
+        Back
+      </a>
+      {submitButton(label)}
+    </div>
+  );
+}
+
 interface TextField {
   id: string;
   name: string;
@@ -55,10 +66,10 @@ interface TextField {
 }
 function field(label: string, id: string, control: JSX.Element): JSX.Element {
   return (
-    <label for={id}>
-      {label}
+    <div class="field">
+      <label for={id}>{label}</label>
       {control}
-    </label>
+    </div>
   );
 }
 export function textField(options: TextField): JSX.Element {
@@ -77,11 +88,20 @@ export function textField(options: TextField): JSX.Element {
     />,
   );
 }
-export function textArea(options: Pick<TextField, "id" | "name" | "label"> & { value: string }): JSX.Element {
+export function textArea(
+  options: Pick<TextField, "id" | "name" | "label" | "required" | "maxLength"> & { value: string; rows?: number },
+): JSX.Element {
   return field(
     options.label,
     options.id,
-    <textarea id={options.id} name={options.name} spellcheck={false} required>
+    <textarea
+      id={options.id}
+      name={options.name}
+      spellcheck={false}
+      required={options.required ?? true}
+      rows={options.rows ?? 3}
+      maxLength={options.maxLength}
+    >
       {options.value}
     </textarea>,
   );

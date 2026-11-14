@@ -8,7 +8,6 @@ const protectedForms = {
   [Route.PolicyResolution]: "resolution",
   [Route.Save]: "editor",
   [Route.PlanSave]: "editor",
-  [Route.PlanCreate]: "editor",
   [Route.CreateCharter]: "editor",
   [Route.Approve]: "review",
   [Route.Apply]: "proposal",
@@ -20,11 +19,14 @@ type ScopedAction =
   | typeof Route.ReviewPrepare
   | typeof Route.PlanRename
   | typeof Route.PlanApprove
-  | typeof Route.PlanCheckpoint
+  | typeof Route.PlanCancel
+  | typeof Route.PlanDelete
+  | typeof Route.TaskDisposition
   | typeof Route.TaskState
   | typeof Route.QueueChange;
 interface EditableFields {
-  [Route.PlanCreate]: { name: "text"; contents: "area" };
+  [Route.PlanCancel]: { reason: "area" };
+  [Route.TaskState]: { reason: "area" };
   [Route.PlanSave]: { contents: "area" };
   [Route.PlanRename]: { name: "text" };
   [Route.QueueChange]: { detail: "text" };

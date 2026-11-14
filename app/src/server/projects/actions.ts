@@ -1,9 +1,10 @@
+import { cancelPlan, deletePlan } from "../../core/tasks/planning/plan-disposition.js";
+import { applyTaskDisposition } from "../../core/tasks/task-disposition.js";
 import { committedReview } from "../../core/review/review-units.js";
 import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
 import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
 import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
-import { readPlan } from "../../core/tasks/planning/planning-store.js";
-import { savePlanDraft, approvePlanDraft, checkpointPlans } from "../../core/tasks/planning/planning-operations.js";
+import { savePlanDraft, approvePlanDraft } from "../../core/tasks/planning/planning-operations.js";
 import { StateConflict } from "../../core/runtime/input-errors.js";
 import { recordURL, routeURL } from "../routes/locations.js";
 import { CompatibilityDecision } from "../../core/collections/policy-findings.js";
@@ -108,10 +109,27 @@ export class WebActions {
         return result(routeURL(Route.Review, { compatibility: "1" }));
       }
 
-      case Route.PlanCreate: {
-        const identity = planIdentity(form.get("scope") ?? "", form.get("name") ?? "");
-        savePlanDraft(this.root, identity, form.get("contents") ?? "");
-        return result(routeURL(Route.Plan, { id: identity.reference, scope: identity.scope }));
+      case Route.PlanCancel:
+        cancelPlan(
+          this.root,
+          parsePlanReference(form.get("reference") ?? ""),
+          form.get("expected") ?? "",
+          form.get("reason") ?? "",
+        );
+        return result(routeURL(Route.Plan, { id: form.get("reference") ?? "" }));
+      case Route.PlanDelete:
+        deletePlan(this.root, parsePlanReference(form.get("reference") ?? ""), form.get("expected") ?? "");
+        return result(Route.TaskQueue);
+      case Route.TaskDisposition: {
+        const kind = form.get("kind");
+        if (kind !== "delete" && kind !== "revert") throw new WebError(400, "Select deletion or reversion");
+        applyTaskDisposition(this.root, {
+          reference: form.get("reference") ?? "",
+          kind,
+          reason: form.get("reason") ?? "",
+          expected: form.get("expected") ?? "",
+        });
+        return result(kind === "revert" ? recordURL(form.get("reference") ?? "") : Route.TaskQueue);
       }
       case Route.PlanRename: {
         const identity = parsePlanReference(form.get("reference") ?? ""),
@@ -120,18 +138,12 @@ export class WebActions {
         return result(routeURL(Route.Plan, { id: target.reference, scope: target.scope }));
       }
       case Route.PlanSave:
-      case Route.PlanApprove:
-      case Route.PlanCheckpoint: {
+      case Route.PlanApprove: {
         const identity = parsePlanReference(form.get("reference") ?? ""),
           expected = form.get("expected") ?? "";
         if (!expected) throw new WebError(400, "Supply the inspected plan version");
         if (path === Route.PlanSave) savePlanDraft(this.root, identity, form.get("contents") ?? "", { expected });
-        else if (path === Route.PlanApprove) approvePlanDraft(this.root, identity, expected, true);
-        else {
-          if (readPlan(this.root, identity).digest !== expected)
-            throw new StateConflict("Plan changed; inspect it before checkpointing");
-          checkpointPlans(this.root, [identity]);
-        }
+        else approvePlanDraft(this.root, identity, expected, true);
         return result(routeURL(Route.Plan, { id: identity.reference, scope: identity.scope }));
       }
 
@@ -142,7 +154,7 @@ export class WebActions {
         if (!expected) throw new WebError(400, "Supply the reviewed record version");
         const state = taskStatuses.find((state) => state === selected);
         if (!state) throw new WebError(400, "Unknown task state");
-        changeTaskStatus(this.root, reference, state, expected, true);
+        changeTaskStatus(this.root, reference, state, expected, true, form.get("reason") ?? "");
         return result(
           selected === "Approved" || selected === "Accepted" ? Route.TaskQueue : recordURL(form.get("reference") ?? ""),
         );

@@ -42,8 +42,9 @@ human review is optional at the discretion of the agent.
   lowering coverage floors, expanding exclusions, or reducing required test or coverage scope.
 
 - [workbench:ADR-C](workbench/decisions/ADR-0C.md): Review the pending changeset before commit and the accumulated work
-  before task completion; fix findings and repeat until no further in-scope changes are needed and record applicable
-  review evidence. Keep implementation unpublished until human acceptance and publication authorization.
+  before task completion, including affected user workflows; fix findings and repeat until no further in-scope changes
+  are needed and record applicable review evidence. Keep implementation unpublished until human acceptance and
+  publication authorization.
 
 - [workbench:ADR-D](workbench/decisions/ADR-0D.md): Only humans change `compatibility.required` and
   `compatibility.data`; when compatibility is disabled, update project-owned callers without shims. Follow the selected

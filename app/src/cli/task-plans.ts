@@ -1,3 +1,4 @@
+import { cancelPlan, deletePlan, planDeletion } from "../core/tasks/planning/plan-disposition.js";
 import type { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { lstatSync, writeFileSync } from "node:fs";
@@ -31,6 +32,7 @@ import {
   approvePlanDraft,
   checkpointPlans,
   configurePlanning,
+  disablePlanning,
   recoverPlanningCheckpoint,
   resolvePlanDraft,
   savePlanDraft,
@@ -125,22 +127,29 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
   plans
     .command("configure")
     .description("Inspect or select repository-local planning storage")
+    .option("--disable", "Disable empty planning storage without removing remote history")
     .option("--branch <name>", "Use an independent planning branch (suggested: workbench/plans)")
     .option("--remote <name>", "Select the remote used for manual planning pushes")
     .option("--destination <branch>", "Select the exact remote planning branch")
     .option("--no-auto-prune", "Retain the planning branch when all work is finished")
-    .action((options: { branch?: string; remote?: string; destination?: string; autoPrune?: boolean }) => {
-      if (options.branch)
-        configurePlanning(root, {
-          branch: options.branch,
-          ...(options.remote ? { remote: options.remote } : {}),
-          ...(options.destination ? { remote_branch: options.destination } : {}),
-          auto_prune: options.autoPrune !== false,
-        });
-      else if (options.remote || options.destination || options.autoPrune === false)
-        throw new InvalidInput("Select the planning branch with these settings");
-      console.log(JSON.stringify(planningSettings(root), null, 2));
-    });
+    .action(
+      (options: { disable?: boolean; branch?: string; remote?: string; destination?: string; autoPrune?: boolean }) => {
+        if (options.disable) {
+          if (options.branch || options.remote || options.destination || options.autoPrune === false)
+            throw new InvalidInput("Use --disable without other planning selections");
+          disablePlanning(root);
+        } else if (options.branch)
+          configurePlanning(root, {
+            branch: options.branch,
+            ...(options.remote ? { remote: options.remote } : {}),
+            ...(options.destination ? { remote_branch: options.destination } : {}),
+            auto_prune: options.autoPrune !== false,
+          });
+        else if (options.remote || options.destination || options.autoPrune === false)
+          throw new InvalidInput("Select the planning branch with these settings");
+        console.log(JSON.stringify(planningSettings(root), null, 2));
+      },
+    );
   plans
     .command("show")
     .description("Read a named plan or its diff since approval")
@@ -305,6 +314,40 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
           });
         show(savePlanDraft(root, selected, view.contents, { expected: options.expected, files }), command);
       });
+  plans
+    .command("cancel")
+    .description("Keep the plan with the reason work was canceled")
+    .argument("<name>")
+    .requiredOption("--reason <text>", "Why the work is being canceled")
+    .requiredOption("--expected <digest>", "Inspected plan version")
+    .action((value: string, options: { reason: string; expected: string }, command: Command) => {
+      show(cancelPlan(root, identity(value, command), options.expected, options.reason), command);
+    });
+  plans
+    .command("delete")
+    .description("Preview or delete a future plan while protecting relationships and queued work")
+    .argument("<name>")
+    .option("--apply", "Confirm the inspected deletion")
+    .option("--expected <digest>", "Digest from the deletion preview")
+    .action((value: string, options: { apply?: boolean; expected?: string }, command: Command) => {
+      const selected = identity(value, command);
+      if (options.apply) {
+        if (!options.expected) throw new InvalidInput("Inspect the deletion, then supply its --expected digest");
+        const recovery = deletePlan(root, selected, options.expected);
+        console.log(
+          command.optsWithGlobals<PlanOptions>().json
+            ? JSON.stringify({ reference: selected.reference, recovery })
+            : `Deleted plan. Recovery: ${recovery}`,
+        );
+      } else {
+        const plan = planDeletion(root, selected);
+        console.log(
+          command.optsWithGlobals<PlanOptions>().json
+            ? JSON.stringify(plan, null, 2)
+            : `${plan.title}\n${plan.files.join("\n")}\n\n${plan.problems.join("\n")}\nDeletion digest: ${plan.digest}`,
+        );
+      }
+    });
   plans
     .command("approve")
     .description("Record human approval and checkpoint the selected plan")

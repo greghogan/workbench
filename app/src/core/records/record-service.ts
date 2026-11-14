@@ -1,8 +1,7 @@
 import { recordInventory, readInventoryRecords, readArchiveFileAt, readArchiveIndex } from "./archive-store.js";
 import { projectPaths } from "../projects/project-paths.js";
-import { markdownExcerpt } from "./markdown-excerpt.js";
 import { InvalidInput, MissingResource, StateConflict } from "../runtime/input-errors.js";
-import { citationMetadata, yamlMetadata, recordPresentations } from "./record-metadata.js";
+import { describeRecord, recordPresentations } from "./record-metadata.js";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
@@ -14,7 +13,6 @@ import { writeAtomic, writeNew } from "../runtime/file-publication.mjs";
 import { resolveCollections, type ResolvedCollection } from "../collections/collections.js";
 import { ownedFileBytes } from "../collections/collection-files.js";
 import { ownedPath } from "../runtime/paths.js";
-import { parseProseRecord } from "./record-document.js";
 import { reviewGit } from "../review/review-service.js";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 
@@ -139,25 +137,7 @@ export function workspaceRecords(
     }
     try {
       const contents = (captured ?? recordBytes(record)).toString("utf8");
-      record.title = /^#\s+(.+)$/m.exec(contents)?.[1] ?? record.title;
-      if (type === "CIT") {
-        const citation = citationMetadata(contents);
-        record.title = citation.title || record.title;
-        record.summary = citation.summary;
-      } else if (type === "REL") {
-        const release = yamlMetadata(contents);
-        if (typeof release.version === "string") record.title = `Release ${release.version}`;
-        record.summary = [release.tag, release.released, release.yanked === true ? "Yanked" : undefined]
-          .filter((value) => typeof value === "string")
-          .join(" · ");
-      } else if (type === "CHARTER") {
-        record.summary = markdownExcerpt(contents);
-      } else if (["ADR", "TSK", "EXP", "ENV"].includes(type)) {
-        const { metadata, body } = parseProseRecord(contents, record.path);
-        if (typeof metadata.summary === "string") record.summary = markdownExcerpt(metadata.summary);
-        else record.summary = markdownExcerpt(body);
-        if (typeof metadata.status === "string") record.status = metadata.status;
-      }
+      describeRecord(record, contents);
     } catch (error) {
       record.previewError = (error instanceof Error ? error.message : String(error)).slice(0, 2048);
     }

@@ -1,3 +1,4 @@
+import { maintainPlanning } from "./planning-retention.js";
 import { realpathSync } from "node:fs";
 import { gitAncestor, gitRevision } from "../../git/refs.js";
 import { gitBytes, readGitTree, readGitObjects } from "../../git/git-snapshot.js";
@@ -168,5 +169,6 @@ export function finishPlanTransfers(
     );
     finished.push(...data.plans.map((plan) => plan.task));
   }
+  maintainPlanning(root);
   return finished;
 }

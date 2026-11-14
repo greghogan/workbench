@@ -1,5 +1,6 @@
+import { historyCommits } from "../../../src/core/git/history.ts";
 import { afterEach, expect, test } from "vitest";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -7,6 +8,7 @@ import { git } from "../../fixtures/adoption.mjs";
 import { gitBytes, readGitTree, updatedReviewTree, writeReviewBlobs } from "../../../src/core/git/git-snapshot.ts";
 import { publishGitTree, sameGitEntry } from "../../../src/core/git/tree-publication.ts";
 import { withGitIndex } from "../../../src/core/git/index-transaction.ts";
+import { recoveryReferences, removeRecoveryReference } from "../../../src/core/git/recovery-refs.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -80,4 +82,39 @@ test("index publication excludes competing Git writers and leaves the real index
   expect(readFileSync(join(root, "encoded.txt"))).toEqual(Buffer.from("Before.\n", "utf16le"));
   expect(git(root, "rev-parse", "HEAD")).toBe(prepared.before);
   expect(readFileSync(join(root, ".git/index.lock"), "utf8")).toBe("Other Git writer\n");
+});
+test("recovery cleanup requires the inspected reference and protects unfinished operations", () => {
+  const root = fixture(),
+    head = git(root, "rev-parse", "HEAD"),
+    reference = "refs/workbench/recovery/example/before";
+  git(root, "update-ref", reference, head);
+  expect(recoveryReferences(root)).toEqual([{ reference, object: head, type: "commit" }]);
+  expect(() => {
+    removeRecoveryReference(root, reference, "0".repeat(head.length));
+  }).toThrow(/changed/);
+  mkdirSync(join(root, ".git/workbench"), { recursive: true });
+  writeFileSync(join(root, ".git/workbench/archive-operation.json"), JSON.stringify({ version: 1, completed: false }));
+  expect(() => {
+    removeRecoveryReference(root, reference, head);
+  }).toThrow(/pending repository recovery/);
+  rmSync(join(root, ".git/workbench/archive-operation.json"));
+  removeRecoveryReference(root, reference, head);
+  expect(recoveryReferences(root)).toEqual([]);
+  expect(git(root, "rev-parse", "HEAD")).toBe(head);
+});
+
+test("history cursors accept only the selected first-parent chain, including merge boundaries", () => {
+  const root = fixture(),
+    base = git(root, "rev-parse", "HEAD");
+  git(root, "checkout", "-qb", "feature");
+  git(root, "commit", "--allow-empty", "-qm", "Feature");
+  const side = git(root, "rev-parse", "HEAD");
+  git(root, "checkout", "-q", "main");
+  git(root, "commit", "--allow-empty", "-qm", "Main work");
+  const main = git(root, "rev-parse", "HEAD");
+  git(root, "merge", "--no-ff", "feature", "-qm", "Integrate feature");
+  const tip = git(root, "rev-parse", "HEAD");
+  expect(historyCommits(root, tip, main).commits.map((unit) => unit.revision)).toEqual([main, base]);
+  expect(historyCommits(root, tip, tip).commits[0]?.revision).toBe(tip);
+  expect(() => historyCommits(root, tip, side)).toThrow(/cursor does not belong/);
 });
