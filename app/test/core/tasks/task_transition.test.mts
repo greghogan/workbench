@@ -1,3 +1,5 @@
+import * as taskAPIs from "../../../src/core/tasks/task-model.ts";
+import { readTaskPlanApproval } from "../../../src/core/tasks/task-approvals.ts";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -76,7 +78,9 @@ test.each([false, true])(
         ).toEqual(["demo:TSK-0", "demo:TSK-1"]);
         expect(existsSync(taskQueuePath(root) + ".transition.json")).toBe(false);
       }
-      expect(existsSync(taskQueuePath(root))).toBe(false);
+      expect(readTaskQueue(root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
+        ["demo:TSK-0", "Queued"],
+      ]);
     } finally {
       fault.state = "";
       vi.unstubAllEnvs();
@@ -116,6 +120,68 @@ test("a file publication failure rolls back records without discarding local imp
     expect(readTaskQueue(root)).toEqual(before);
   } finally {
     fault.file = "";
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each([true, false])("exact approvals retain supporting bytes and active work with enforcement=%s", (enforce) => {
+  const root = webFixture();
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, ".git/state"));
+  try {
+    const config = join(root, "workbench/config.toml");
+    writeFileSync(config, readFileSync(config, "utf8") + `\n[review]\ntask_approvals=${String(enforce)}\n`);
+    mkdirSync(join(root, "workbench/tasks/TSK-00"), { recursive: true });
+    const path = join(root, "workbench/tasks/TSK-00.md"),
+      file = join(root, "workbench/tasks/TSK-00/requirements.bin");
+    writeFileSync(
+      path,
+      "---\nstatus: Planned\n---\n\n# TSK-0: Install a service\n\n## Plan\n\nInstall for the current user.\n\n- [ ] Verify restart.\n\n## Implementing-agent detail\n\nPreserve existing services.\n\n```markdown\n- [ ] An example contract.\n```\n",
+    );
+    writeFileSync(file, Buffer.from([0, 255, 12]));
+    const { readTaskGraph } = taskAPIs;
+    let task = readTaskGraph(root).require("demo:TSK-0");
+    changeTaskStatus(root, task.reference, "Approved", task.reviewDigest, true);
+    const original = readTaskDecisions(root).find((decision) => decision.status === "Approved");
+    if (!original) throw new Error("Missing approval");
+    expect(readTaskPlanApproval(root, original)?.files[0]?.contents).toBe(Buffer.from([0, 255, 12]).toString("base64"));
+    changeTaskQueue(root, { action: "add", references: [task.reference] });
+    changeTaskQueue(root, { action: "start", reference: task.reference });
+    const active = readTaskQueue(root),
+      approvedPlan = readTaskGraph(root).require(task.reference).planDigest;
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace(
+        "- [ ] Verify restart.",
+        "- [x] Verify restart.\n\n### Implementation account\n\nThe user service starts successfully.",
+      ),
+    );
+    task = readTaskGraph(root).require(task.reference);
+    expect(task.planDigest).toBe(approvedPlan);
+    expect(task.approval?.current).toBe(true);
+    changeTaskStatus(root, task.reference, "Approved", task.reviewDigest, true);
+    expect(readTaskQueue(root)).toEqual(active);
+    writeFileSync(path, readFileSync(path, "utf8").replace("- [ ] An example contract.", "- [x] An example contract."));
+    task = readTaskGraph(root).require(task.reference);
+    expect(task.planDigest).not.toBe(approvedPlan);
+    expect(task.approval?.current).toBe(false);
+    changeTaskStatus(root, task.reference, "Approved", task.reviewDigest, true);
+    expect(readTaskQueue(root)).toEqual(active);
+    writeFileSync(file, Buffer.from([9, 1]));
+    expect(() => {
+      changeTaskStatus(root, task.reference, "Approved", task.reviewDigest, true);
+    }).toThrow(/changed/);
+    task = readTaskGraph(root).require(task.reference);
+    expect(task.approval?.files).toEqual([{ name: "requirements.bin", change: "changed" }]);
+    changeTaskStatus(root, task.reference, "Approved", task.reviewDigest, true);
+    expect(readTaskGraph(root).require(task.reference).approval?.current).toBe(true);
+    expect(readTaskQueue(root)).toEqual(active);
+    expect(readTaskPlanApproval(root, original)?.files[0]?.contents).toBe(Buffer.from([0, 255, 12]).toString("base64"));
+    changeTaskQueue(root, { action: "release", reference: task.reference });
+    changeTaskStatus(root, task.reference, "Planned");
+    expect(readTaskDecisions(root).filter((decision) => decision.status === "Approved")).toEqual([]);
+    expect(readTaskGraph(root).require(task.reference).approval).toBeUndefined();
+  } finally {
     vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   }

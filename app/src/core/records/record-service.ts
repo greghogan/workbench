@@ -244,7 +244,9 @@ export function findRecord(root: string, id: string): BrowserRecord {
   return record;
 }
 
-export function supportingFiles(record: BrowserRecord): { path: string; size: number }[] {
+export function supportingFiles(
+  record: Pick<BrowserRecord, "type" | "path" | "directory" | "archive">,
+): { path: string; size: number }[] {
   if (record.type === "CHARTER") return [];
   const base = record.path.slice(0, -extname(record.path).length);
   if (record.archive) {

@@ -1,3 +1,4 @@
+import { parsePlanReference } from "../../core/tasks/planning/plan-model.js";
 import { recordTypes } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import { WebError } from "../http/errors.js";
@@ -8,18 +9,29 @@ export const RecordOrder = {
   TaskDescending: "task-descending",
 } as const;
 export type RecordOrder = (typeof RecordOrder)[keyof typeof RecordOrder];
-function recordKey(id: string) {
+export function recordKey(id: string) {
+  if (id.includes(":plan/")) {
+    const plan = parsePlanReference(id);
+    return { scope: plan.scope, type: recordTypes.indexOf("TSK"), value: plan.name, planning: true };
+  }
   const match = /^([a-z][a-z0-9_-]*):(CHARTER|ADR|TSK|EXP|ENV|CIT|REL)(?:-([0-9A-Z]+))?$/.exec(id);
   if (!match) throw new WebError(400, "invalid record cursor");
-  return { scope: match[1] ?? "", type: recordTypes.findIndex((type) => type === match[2]), number: match[3] ?? "" };
+  return {
+    scope: match[1] ?? "",
+    type: recordTypes.findIndex((type) => type === match[2]),
+    value: match[3] ?? "",
+    planning: false,
+  };
 }
-function compare(left: ReturnType<typeof recordKey>, right: ReturnType<typeof recordKey>): number {
+function compareValue(left: ReturnType<typeof recordKey>, right: ReturnType<typeof recordKey>): number {
   return (
-    left.scope.localeCompare(right.scope) ||
-    left.type - right.type ||
-    left.number.length - right.number.length ||
-    left.number.localeCompare(right.number)
+    Number(left.planning) - Number(right.planning) ||
+    (!left.planning ? left.value.length - right.value.length : 0) ||
+    left.value.localeCompare(right.value)
   );
+}
+export function compareRecordKeys(left: ReturnType<typeof recordKey>, right: ReturnType<typeof recordKey>): number {
+  return left.scope.localeCompare(right.scope) || left.type - right.type || compareValue(left, right);
 }
 /** Parse each identity once per query, including removed cursor identities. */
 export function recordBatch(
@@ -33,11 +45,8 @@ export function recordBatch(
   const ordered = (a: ReturnType<typeof recordKey>, b: ReturnType<typeof recordKey>) => {
     const value =
       order === RecordOrder.Identity
-        ? compare(a, b)
-        : a.number.length - b.number.length ||
-          a.number.localeCompare(b.number) ||
-          a.scope.localeCompare(b.scope) ||
-          a.type - b.type;
+        ? compareRecordKeys(a, b)
+        : compareValue(a, b) || a.scope.localeCompare(b.scope) || a.type - b.type;
     return order === RecordOrder.TaskDescending ? -value : value;
   };
   const sorted = records.map((record) => ({ record, key: recordKey(record.id) })).sort((a, b) => ordered(a.key, b.key));

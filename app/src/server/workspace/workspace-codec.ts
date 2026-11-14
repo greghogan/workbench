@@ -126,6 +126,34 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     );
   });
   const tasks = object(data.tasks);
+  list(tasks.plans, (value) => {
+    const plan = object(value);
+    strings(plan, ["reference", "scope", "name", "title", "summary", "contents", "digest", "status"]);
+    check(bool(plan.draft) && bool(plan.conflict));
+    if (plan.implementation !== undefined) {
+      const implementation = object(plan.implementation);
+      strings(implementation, ["task", "checkout"]);
+      check(bool(implementation.pending));
+    }
+    check(plan.problem === undefined || text(plan.problem));
+    check(plan.parent === undefined || text(plan.parent));
+    list(plan.dependencies, (value) => {
+      check(text(value));
+    });
+    list(plan.files, (value) => {
+      const file = object(value);
+      strings(file, ["name", "oid"]);
+      check(bool(file.executable));
+    });
+    list(plan.changedFiles, (value) => {
+      const file = object(value);
+      check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
+    });
+    if (plan.approval !== undefined) {
+      const approval = object(plan.approval);
+      check(text(approval.at) && text(approval.contents) && bool(approval.current));
+    }
+  });
   check(bool(tasks.decisionsRequired));
   check(text(tasks.problem));
   decodeQueue(tasks.queue);
@@ -135,6 +163,15 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
   list(tasks.records, (value) => {
     const task = object(value);
     strings(task, ["reference", "title", "path", "contents", "digest", "planDigest"]);
+    check(task.reviewDigest === undefined || text(task.reviewDigest));
+    if (task.approval !== undefined) {
+      const approval = object(task.approval);
+      check(text(approval.at) && text(approval.contents) && bool(approval.current));
+      list(approval.files, (value) => {
+        const file = object(value);
+        check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
+      });
+    }
     check(task.parent === undefined || text(task.parent));
     check(task.archived === undefined || bool(task.archived));
     if (task.implementation !== undefined) decodeApplicableTaskImplementation(task.implementation);

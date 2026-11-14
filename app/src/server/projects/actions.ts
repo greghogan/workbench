@@ -1,3 +1,9 @@
+import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
+import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
+import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
+import { readPlan } from "../../core/tasks/planning/planning-store.js";
+import { savePlanDraft, approvePlanDraft, checkpointPlans } from "../../core/tasks/planning/planning-operations.js";
+import { StateConflict } from "../../core/runtime/input-errors.js";
 import { recordURL, routeURL } from "../routes/locations.js";
 import { CompatibilityDecision } from "../../core/collections/policy-findings.js";
 import { randomBytes } from "node:crypto";
@@ -11,7 +17,7 @@ import { decodeCollectionRequest, type CollectionPreview } from "./protocol.js";
 import { Route, actionDefinition, queueOperations, type ActionResult } from "../routes/routes.js";
 import type { ReviewTarget } from "../review/review-request.js";
 import { changeTaskStatus } from "../../core/tasks/task-service.js";
-import { changeTaskQueue, type QueueChange } from "../../core/tasks/task-queue.js";
+import { type QueueChange } from "../../core/tasks/task-queue.js";
 import { taskStatuses } from "../../core/records/record-document.js";
 import { ReviewVersions } from "../review/review-versions.js";
 
@@ -101,6 +107,33 @@ export class WebActions {
         return result(routeURL(Route.Review, { compatibility: "1" }));
       }
 
+      case Route.PlanCreate: {
+        const identity = planIdentity(form.get("scope") ?? "", form.get("name") ?? "");
+        savePlanDraft(this.root, identity, form.get("contents") ?? "");
+        return result(routeURL(Route.Plan, { id: identity.reference, scope: identity.scope }));
+      }
+      case Route.PlanRename: {
+        const identity = parsePlanReference(form.get("reference") ?? ""),
+          target = planIdentity(identity.scope, form.get("name") ?? "");
+        renamePlan(this.root, identity, target, form.get("expected") ?? "");
+        return result(routeURL(Route.Plan, { id: target.reference, scope: target.scope }));
+      }
+      case Route.PlanSave:
+      case Route.PlanApprove:
+      case Route.PlanCheckpoint: {
+        const identity = parsePlanReference(form.get("reference") ?? ""),
+          expected = form.get("expected") ?? "";
+        if (!expected) throw new WebError(400, "Supply the inspected plan version");
+        if (path === Route.PlanSave) savePlanDraft(this.root, identity, form.get("contents") ?? "", { expected });
+        else if (path === Route.PlanApprove) approvePlanDraft(this.root, identity, expected, true);
+        else {
+          if (readPlan(this.root, identity).digest !== expected)
+            throw new StateConflict("Plan changed; inspect it before checkpointing");
+          checkpointPlans(this.root, [identity]);
+        }
+        return result(routeURL(Route.Plan, { id: identity.reference, scope: identity.scope }));
+      }
+
       case Route.TaskState: {
         const reference = form.get("reference") ?? "",
           expected = form.get("expected") ?? "",
@@ -131,7 +164,7 @@ export class WebActions {
           change = { action: operation, reference, detail: form.get("detail") ?? "" };
         else throw new WebError(400, "Unknown queue operation");
         if (!form.get("expected")) throw new WebError(400, "Supply the queue version");
-        changeTaskQueue(this.root, change, form.get("expected") ?? "");
+        await changeWorkQueue(this.root, change, form.get("expected") ?? "");
         return result(Route.TaskQueue);
       }
       case Route.CreateCharter: {

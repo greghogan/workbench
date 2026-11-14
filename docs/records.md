@@ -178,7 +178,7 @@ measurements. Workflow comparisons include the work needed for their end-to-end 
 
 Tasks have four shared states: **Planned**, **Approved**, **Accepted**, and **Canceled**. Approving authorizes the
 current plan; accepting confirms that its outcome meets the developer's expectations. A plan can stay Planned while it
-is refined. Material changes return to planning. Task records contain a human-readable overview followed by
+is refined. Material changes require renewed approval. Task records contain a human-readable overview followed by
 proportionate implementation details and verification evidence.
 
 Keep unresolved recommendations distinct from agreed requirements. Record significant implementation decisions and their
@@ -199,6 +199,9 @@ implementation, material departures from the plan, and verification results. Pre
 a conversation transcript. Move useful planning documents into the task or its supporting directory instead of
 maintaining duplicate accounts under `docs/`; keep current user and architecture guidance in the normal guides.
 
+Keep delivery updates under `Implementation account`, with planned scope outside it. Updating that account or checking
+off delivery steps does not itself revise the approved plan.
+
 The task schema allows one parent and multiple dependencies, rejects missing relationships and cycles, and keeps task
 state authoritative over its checklist. The default task view and generated map preserve nesting; state history and the
 local queue provide other orders. Finishing a parent requires its demonstrated outcome, accepted prerequisites, and
@@ -209,8 +212,39 @@ parents in another phase; the selected execution queue retains its explicit run 
 
 `workbench task` lists unfinished plans and nested work. Use `--all` or `--status Accepted` for history,
 `--project <id>` for a scope, and `--json` for structured output. `workbench task show <reference>` reads the full
-record. Human decisions use `workbench task approve`, `accept`, `replan`, or `cancel` followed by the task reference.
-`--expected <sha256>` binds a decision to the digest returned by `task show --json`.
+record; `task show <reference> --diff` compares it with the retained approved plan. Human decisions use
+`workbench task approve`, `accept`, `replan`, or `cancel` followed by the task reference. `--expected <sha256>` binds a
+decision to the digest returned by `task show --json`.
+
+Future plans can remain outside implementation history. `workbench task plan configure --branch workbench/plans` enables
+an independent planning branch; the branch name is configurable and storage is disabled by default. An optional
+`--remote <remote> --destination <branch>` records the exact destination for manual pushes. Saving or approving never
+pushes it.
+
+Create a named draft with `workbench task plan create service --file plan.md`. `task plan show service --json` returns
+its inspected version. Use that digest with `task plan save service --file plan.md --expected <digest>` to retain an
+edit. Incomplete drafts remain available. Supporting files use
+`task plan attach service requirements.md --expected <digest>` and `detach`; `--name <path>` selects their path within
+the plan. These saves do not create commits.
+
+Use `task plan checkpoint service` to commit selected drafts together, or omit names for all drafts. Human approval
+through `task plan approve service --expected <digest>` or the browser also checkpoints the approved plan when storage
+is enabled. Approval retains the exact Markdown and supporting files even without planning storage. Inspect a supporting
+file with `task plan show service --file requirements.md`; `--approved` selects its approved version. `--output <path>`
+saves exact bytes to a new file and refuses to replace an existing file. Later changes are available through
+`task plan show service --diff` and the browser's Diff view. Renaming with
+`task plan rename service background-service --expected <digest>` updates saved relationships and queue references
+together. Related edits checkpoint together; unrelated drafts remain uncommitted.
+
+Queue a named plan with `workbench queue add plan/service`. Selection can order unapproved future plans, but starting
+requires approval and satisfied prerequisites. `queue start plan/service` assigns a numeric task ID and copies the plan,
+its supporting files, and approval into implementation. Starting a child also preserves its ancestor context without
+approving that context or starting siblings. The numeric task becomes authoritative. After its first implementation
+commit is verified, Workbench retires the saved plan and updates remaining references. `task plan recover` resumes
+interrupted transfers, renames, and checkpoints while preserving intervening edits.
+
+The planning branch can also be edited with Git and an ordinary editor. A separate worktree is optional. CLI and browser
+checkpoints preserve editor changes and stop on conflicting edits rather than replacing them.
 
 `workbench queue` shows the selected local execution order and the next eligible task. Add approved work with
 `workbench queue add <references...>` and reorder it with `queue move <reference> --before <other>` or
@@ -542,9 +576,10 @@ human identity or prove review quality.
 
 ## Archived-record storage
 
-Archive configuration is optional and requires Git 2.45 or newer for offline object access. `[records]` selects `archive_branch` and a positive integer `archive_group_size`
-(default 1296). `[integration]` selects `branch` and optionally `remote`; discovery proposes the remote default, then an
-existing `main` or `master`, and requires an explicit choice when remotes are ambiguous.
+Archive configuration is optional and requires Git 2.45 or newer for offline object access. `[records]` selects
+`archive_branch` and a positive integer `archive_group_size` (default 1296). `[integration]` selects `branch` and
+optionally `remote`; discovery proposes the remote default, then an existing `main` or `master`, and requires an
+explicit choice when remotes are ambiguous.
 
 The root `workbench/state.toml` records `archive.revision`. Reads use that immutable commit, independently of the moving
 archive branch tip. Archive trees contain tasks, experiments, and their owned supporting files. They have independent
@@ -570,10 +605,10 @@ restoration first.
 
 `workbench record archive fetch` explicitly acquires archive history from the integration remote. Use
 `--from <revision>` to acquire the archive referenced by another branch before integrating it; this leaves the current
-checkout's configuration unchanged. `--remote <name>` selects an acquisition remote explicitly. Ordinary reads use
-local Git objects and do not contact the network. `workbench record archive publish` requests publication of both
-branches, atomically when supported. Its fallback verifies each published counterpart before continuing: archive copies
-precede removals, while restored project records precede retirement of archive copies.
+checkout's configuration unchanged. `--remote <name>` selects an acquisition remote explicitly. Ordinary reads use local
+Git objects and do not contact the network. `workbench record archive publish` requests publication of both branches,
+atomically when supported. Its fallback verifies each published counterpart before continuing: archive copies precede
+removals, while restored project records precede retirement of archive copies.
 
 Enabling installs repository-local hook routing that preserves existing hooks and protects archive history even when
 archival is later disabled or an archive-only branch is checked out. Local Git hooks can be bypassed; remote branch
@@ -583,7 +618,6 @@ Archived records remain available in the browser and through `workbench record s
 text with `workbench record search QUERY`, optionally selecting `--project ID` or `--type TSK`. Archive views are
 read-only; disabling archival restores records for editing. Supporting-file previews and downloads read Git objects
 without creating working-tree copies.
-
 
 ## Rebase and merge
 
@@ -597,8 +631,8 @@ conflict. It repairs archive references when an existing pinned revision contain
 record versions or divergent archive inventories require explicit reconciliation; the archive history is preserved.
 Missing archive objects require explicit acquisition before retrying.
 
-After resolving and staging conflicts, run `workbench rebase --continue` or `workbench merge --continue`. Use the matching
-`--status` to inspect recovery state or `--abort` to return to the original branch. Status and abort remain available
-when conflicted project configuration cannot be parsed. An abort after Git has completed
-requires a clean checkout and retains the abandoned result for recovery. Do not start another Git operation while one is
-awaiting recovery. Successful integration does not replace semantic review, configured checks, or human approval.
+After resolving and staging conflicts, run `workbench rebase --continue` or `workbench merge --continue`. Use the
+matching `--status` to inspect recovery state or `--abort` to return to the original branch. Status and abort remain
+available when conflicted project configuration cannot be parsed. An abort after Git has completed requires a clean
+checkout and retains the abandoned result for recovery. Do not start another Git operation while one is awaiting
+recovery. Successful integration does not replace semantic review, configured checks, or human approval.

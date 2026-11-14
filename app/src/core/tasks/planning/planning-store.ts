@@ -10,14 +10,13 @@ import { existsSync } from "node:fs";
 import { parse } from "smol-toml";
 import { gitBytes, readGitObjects, readGitTree, type GitEntry } from "../../git/git-snapshot.js";
 import { repositoryStatePath } from "../../git/repository-state.js";
-import { validateBranch } from "../../git/refs.js";
+import { gitRevision, validateBranch } from "../../git/refs.js";
 import { readBoundedFile } from "../../runtime/file-reads.js";
 import { InvalidInput, MissingResource } from "../../runtime/input-errors.js";
 import { record, string } from "../../runtime/values.mjs";
 import { readProjects } from "../../projects/project-configuration.js";
 import { projectPaths } from "../../projects/project-paths.js";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import {
   parsePlan,
   planContent,
@@ -25,6 +24,7 @@ import {
   planStateVersion,
   planDraftRef,
   planBaseRef,
+  planRemovalRef,
   planIdentity,
   planningPaths,
   type PlanIdentity,
@@ -73,20 +73,11 @@ export function planningSettings(root: string): PlanningSettings {
   if (typeof input.remote_branch === "string") validateBranch(root, input.remote_branch);
   return { ...input, auto_prune: input.auto_prune !== false };
 }
-export function planningRevision(root: string, ref: string): string | undefined {
-  const result = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", ref], {
-    encoding: "utf8",
-    env: { ...process.env, GIT_NO_LAZY_FETCH: "1" },
-  });
-  if (result.error || (result.status !== 0 && result.status !== 1))
-    throw new InvalidInput(`Cannot inspect ${ref}`, { cause: result.error });
-  return result.status === 0 ? result.stdout.trim() : undefined;
-}
 export function planningScopes(root: string): PlanScope[] {
   if (existsSync(join(root, projectPaths.projects)))
     return readProjects(root).map(({ id, path, name }) => ({ id, path, ...(name ? { name } : {}) }));
   const branch = planningSettings(root).branch,
-    tip = branch ? planningRevision(root, `refs/heads/${branch}`) : undefined;
+    tip = branch ? gitRevision(root, `refs/heads/${branch}`) : undefined;
   const entry = tip ? readGitTree(root, tip).get(planningPaths.scopes) : undefined,
     bytes = entry ? readGitObjects(root, [entry.oid]).get(entry.oid) : undefined;
   if (!bytes) throw new InvalidInput("Open a configured project checkout before creating plans");
@@ -94,18 +85,18 @@ export function planningScopes(root: string): PlanScope[] {
 }
 export function savedPlanTrees(root: string): ReadonlyMap<string, SavedPlan> {
   const branch = planningSettings(root).branch,
-    tip = branch ? planningRevision(root, `refs/heads/${branch}`) : undefined;
+    tip = branch ? gitRevision(root, `refs/heads/${branch}`) : undefined;
   if (!tip) return new Map();
   return indexPlanningRevision(root, tip);
 }
-export function draftPlanIdentities(root: string): PlanIdentity[] {
-  return gitBytes(root, ["for-each-ref", "--format=%(refname)", planningPaths.drafts])
+export function draftPlanIdentities(root: string, prefix: string = planningPaths.drafts): PlanIdentity[] {
+  return gitBytes(root, ["for-each-ref", "--format=%(refname)", prefix])
     .toString()
     .trim()
     .split("\n")
     .filter(Boolean)
     .map((ref) => {
-      const [scope, name, ...extra] = ref.slice(planningPaths.drafts.length).split("/");
+      const [scope, name, ...extra] = ref.slice(prefix.length).split("/");
       if (!scope || !name || extra.length) throw new InvalidInput("Invalid plan draft reference");
       return planIdentity(scope, name);
     });
@@ -124,13 +115,15 @@ function planRead(
   saved: ReadonlyMap<string, SavedPlan>,
   refs?: ReadonlyMap<string, string>,
 ): PlanRead {
+  if (refs ? refs.has(planRemovalRef(identity)) : gitRevision(root, planRemovalRef(identity)))
+    throw new MissingResource(`Plan removed locally: ${identity.reference}; checkpoint the pending changes`);
   const branch = saved.get(identity.reference),
     branchTree = branch?.tree,
-    draftTree = refs ? refs.get(planDraftRef(identity)) : planningRevision(root, planDraftRef(identity)),
+    draftTree = refs ? refs.get(planDraftRef(identity)) : gitRevision(root, planDraftRef(identity)),
     baseTree = draftTree
       ? refs
         ? refs.get(planBaseRef(identity))
-        : planningRevision(root, planBaseRef(identity))
+        : gitRevision(root, planBaseRef(identity))
       : undefined,
     tree = draftTree ?? branchTree;
   if (!tree) throw new MissingResource(`Plan not found: ${identity.reference}`);
@@ -206,7 +199,13 @@ export function readPlan(root: string, identity: PlanIdentity, saved = savedPlan
 export function readPlans(root: string): PlanView[] {
   const saved = savedPlanTrees(root),
     refs = new Map(
-      gitBytes(root, ["for-each-ref", "--format=%(refname) %(objectname)", planningPaths.drafts, planningPaths.bases])
+      gitBytes(root, [
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        planningPaths.drafts,
+        planningPaths.bases,
+        planningPaths.removals,
+      ])
         .toString()
         .trim()
         .split("\n")
@@ -224,8 +223,14 @@ export function readPlans(root: string): PlanView[] {
       const identity = planIdentity(scope, name);
       identities.set(identity.reference, identity);
     }
+  for (const ref of refs.keys())
+    if (ref.startsWith(planningPaths.removals)) {
+      const [scope, name, ...rest] = ref.slice(planningPaths.removals.length).split("/");
+      if (!scope || !name || rest.length) throw new InvalidInput("Invalid removed plan reference");
+      identities.delete(planIdentity(scope, name).reference);
+    }
   const inputs = [...identities.values()].map((identity) => planRead(root, identity, saved, refs)),
-    objects = readGitObjects(root, inputs.flatMap(planRequests));
+    objects = readGitObjects(root, inputs.flatMap(planRequests), 2 * 1024 * 1024, { retainedBytes: 64 * 1024 * 1024 });
   return inputs
     .map((input) => planView(input, objects))
     .sort((a, b) => a.scope.localeCompare(b.scope) || a.name.localeCompare(b.name));

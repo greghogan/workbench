@@ -291,7 +291,7 @@ export function recordPage(
           .map(({ value, label }) =>
             linkButton(label, viewLocation(context, base, parameters, { baseline: value }), true),
           )}
-        <a href={projectPath("/review")}>Review files</a>
+        {record.type !== "TSK" && <a href={projectPath("/review")}>Review files</a>}
       </div>
     );
     body =

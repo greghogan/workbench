@@ -1,3 +1,8 @@
+import { changeWorkQueue } from "../core/tasks/planning/plan-transfer.js";
+import { createPatch } from "diff";
+import { InvalidInput } from "../core/runtime/input-errors.js";
+import { workReference } from "../core/tasks/planning/work-plans.js";
+import { registerTaskPlanCommands } from "./task-plans.js";
 import { Option, type Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { terminalTable } from "../core/diagnostics/terminal-table.js";
@@ -5,13 +10,7 @@ import { currentProject, readConfig, selectProject } from "../core/projects/proj
 import { taskStatuses, terminalTask, type TaskStatus } from "../core/records/record-document.js";
 import type { TaskRecord } from "../core/tasks/task-model.js";
 import { readTaskGraph, taskReference, type TaskNode } from "../core/tasks/task-model.js";
-import {
-  changeTaskQueue,
-  inspectTaskQueue,
-  readTaskQueue,
-  TaskReadiness,
-  type QueueChange,
-} from "../core/tasks/task-queue.js";
+import { inspectTaskQueue, readTaskQueue, TaskReadiness, type QueueChange } from "../core/tasks/task-queue.js";
 import { changeTaskStatus } from "../core/tasks/task-service.js";
 import { registerCommand } from "./commands.js";
 import { terminalAvailable } from "./terminal/terminal-choice.js";
@@ -100,11 +99,18 @@ export function registerTaskCommands(program: Command, root: string): void {
   });
   tasks
     .command("show")
-    .description("Read a task and its exact version")
+    .description("Read a task or its diff since plan approval")
     .argument("<reference>")
     .option("--json", "Print the record and metadata as JSON")
-    .action((value: string, _options: unknown, command: Command) => {
+    .option("--diff", "Show changes since the retained plan approval")
+    .action((value: string, options: { diff?: boolean }, command: Command) => {
       const task = readTaskGraph(root).require(reference(value, command));
+      if (options.diff) {
+        if (!task.approval) throw new InvalidInput("This task has no retained approval snapshot");
+        console.log(createPatch(task.reference, task.approval.contents, task.contents));
+        for (const file of task.approval.files) console.log(`${file.change}: ${file.name}`);
+        return;
+      }
       console.log(
         command.optsWithGlobals<TaskOptions>().json
           ? JSON.stringify(
@@ -112,7 +118,8 @@ export function registerTaskCommands(program: Command, root: string): void {
                 reference: task.reference,
                 title: task.title,
                 ...task.metadata,
-                digest: task.digest,
+                digest: task.reviewDigest ?? task.digest,
+                approval: task.approval,
                 contents: task.contents,
                 ...(task.implementation ? { implementation: task.implementation } : {}),
               },
@@ -144,7 +151,7 @@ export function registerTaskCommands(program: Command, root: string): void {
           if (!terminalAvailable())
             throw new Error("Human task decisions require an interactive terminal or the task page");
           const task = readTaskGraph(root).require(id);
-          expected ??= task.digest;
+          expected ??= task.reviewDigest ?? task.digest;
           console.log(task.contents);
           const prompt = createInterface({ input: process.stdin, output: process.stdout });
           try {
@@ -166,6 +173,7 @@ export function registerTaskCommands(program: Command, root: string): void {
         if (command.optsWithGlobals<TaskOptions>().json) console.log(JSON.stringify({ reference: id, status }));
         else console.log(`${id}: ${status}`);
       });
+  registerTaskPlanCommands(tasks, root);
   for (const command of tasks.commands) {
     command.option("--project <id>", "Resolve short references in this project scope");
     if (!command.options.some((option) => option.attributeName() === "json"))
@@ -199,8 +207,14 @@ export function registerTaskCommands(program: Command, root: string): void {
       );
     }
   };
-  const mutate = (change: QueueChange, command: Command) => {
-    changeTaskQueue(root, change);
+  const queueReference = (value: string, command: Command) =>
+    workReference(
+      root,
+      value,
+      command.optsWithGlobals<TaskOptions>().project ?? (value.includes(":") ? undefined : currentProject(root)),
+    );
+  const mutate = async (change: QueueChange, command: Command) => {
+    await changeWorkQueue(root, change);
     inspect(command.optsWithGlobals<TaskOptions>());
   };
   queue.action(inspect);
@@ -209,7 +223,7 @@ export function registerTaskCommands(program: Command, root: string): void {
     .argument("<references...>")
     .description("Select approved tasks for local execution")
     .action((values: string[], _options: unknown, command: Command) => {
-      mutate({ action: "add", references: values.map((value) => reference(value, command)) }, command);
+      return mutate({ action: "add", references: values.map((value) => queueReference(value, command)) }, command);
     });
   queue
     .command("move")
@@ -218,12 +232,12 @@ export function registerTaskCommands(program: Command, root: string): void {
     .option("--before <reference>", "Place before another queued task")
     .option("--after <reference>", "Place after another queued task")
     .action((value: string, options: { before?: string; after?: string }, command: Command) => {
-      mutate(
+      return mutate(
         {
           action: "move",
-          reference: reference(value, command),
-          ...(options.before ? { before: reference(options.before, command) } : {}),
-          ...(options.after ? { after: reference(options.after, command) } : {}),
+          reference: queueReference(value, command),
+          ...(options.before ? { before: queueReference(options.before, command) } : {}),
+          ...(options.after ? { after: queueReference(options.after, command) } : {}),
         },
         command,
       );
@@ -238,7 +252,7 @@ export function registerTaskCommands(program: Command, root: string): void {
       .description(description)
       .argument("<reference>")
       .action((value: string, _options: unknown, command: Command) => {
-        mutate({ action: name, reference: reference(value, command) }, command);
+        return mutate({ action: name, reference: queueReference(value, command) }, command);
       });
   queue
     .command("implemented")
@@ -246,7 +260,10 @@ export function registerTaskCommands(program: Command, root: string): void {
     .argument("<reference>")
     .requiredOption("--evidence <text>", "Verification performed and its outcome")
     .action((value: string, options: { evidence: string }, command: Command) => {
-      mutate({ action: "implemented", reference: reference(value, command), detail: options.evidence }, command);
+      return mutate(
+        { action: "implemented", reference: queueReference(value, command), detail: options.evidence },
+        command,
+      );
     });
   queue
     .command("block")
@@ -254,7 +271,7 @@ export function registerTaskCommands(program: Command, root: string): void {
     .argument("<reference>")
     .argument("<reason>")
     .action((value: string, detail: string, _options: unknown, command: Command) => {
-      mutate({ action: "block", reference: reference(value, command), detail }, command);
+      return mutate({ action: "block", reference: queueReference(value, command), detail }, command);
     });
   for (const command of queue.commands)
     command

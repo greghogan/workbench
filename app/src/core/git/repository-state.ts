@@ -1,3 +1,4 @@
+import { readPlanOperations } from "../tasks/planning/plan-operation-store.js";
 import { existsSync } from "node:fs";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
@@ -16,11 +17,18 @@ export function repositoryStatePath(root: string, ...parts: string[]): string {
 export function withRepositoryOperation<T>(
   root: string,
   action: () => T,
-  kind: "archive" | "integration" | "acquire" | "planning" = "archive",
+  kind: "archive" | "integration" | "acquire" | "planning" | "plan-operation" = "archive",
 ): T {
   return withCacheLockSync(
     repositoryStatePath(root, "record-operation"),
     () => {
+      if (kind !== "plan-operation" && kind !== "acquire") {
+        const pending = readPlanOperations(root).find((entry) => !entry.operation.completed);
+        if (pending)
+          throw new StateConflict(
+            `The planning ${pending.operation.kind} requires recovery in ${pending.operation.checkout}`,
+          );
+      }
       for (const other of ["archive", "integration", "planning"] as const) {
         if (other === kind || kind === "acquire") continue;
         const path = repositoryStatePath(root, `${other}-operation.json`);

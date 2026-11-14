@@ -1,3 +1,7 @@
+import { parsePlanReference, planningPaths } from "../../core/tasks/planning/plan-model.js";
+import { readPlan } from "../../core/tasks/planning/planning-store.js";
+import { readGitObjects, gitBytes } from "../../core/git/git-snapshot.js";
+import { planPage, planFilePage, newPlanPage } from "../views/plan-pages.js";
 import { PreparationState } from "../review/review-state.js";
 import { decodeReviewTarget, type ReviewTarget } from "../review/review-request.js";
 import { performance } from "node:perf_hooks";
@@ -34,13 +38,13 @@ import { type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, extname } from "node:path";
 import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
-import { recordBytes, supportingFiles } from "../../core/records/record-service.js";
+import { recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
 import type { runCollectionWorker } from "../projects/collection-runner.js";
-import { sendDownload, sendArchivedDownload } from "./downloads.js";
+import { sendDownload, sendArchivedDownload, sendGitDownload } from "./downloads.js";
 import { WebError } from "./errors.js";
 import { readForm, requestOrigin, secureResponse, send } from "./http.js";
 import { WorkspaceMonitor } from "../workspace/live.js";
@@ -331,8 +335,37 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           case Route.Overview:
             page = overview(selected);
             break;
+          case Route.PlanFile: {
+            const filePath = query.path ?? "",
+              plan = readPlan(root, parsePlanReference(query.id ?? ""));
+            const entry = (query.version === "approved" ? plan.approval?.entries : plan.entries)?.get(
+              planningPaths.files + filePath,
+            );
+            if (!entry) throw new WebError(404, "Plan supporting file not found");
+            if (
+              query.download === "1" ||
+              ![".md", ".markdown", ".txt", ".json", ".toml", ".yaml", ".yml"].includes(extname(filePath).toLowerCase())
+            ) {
+              sendGitDownload(response, root, entry.oid, filePath);
+              return;
+            }
+            const size = Number(gitBytes(root, ["cat-file", "-s", entry.oid]).toString());
+            if (!Number.isSafeInteger(size) || size < 0)
+              throw new WebError(500, "Cannot inspect the plan supporting file");
+            const bytes =
+              size <= previewLimit ? readGitObjects(root, [entry.oid], previewLimit).get(entry.oid) : undefined;
+            if (size <= previewLimit && !bytes) throw new WebError(404, "Plan supporting content is unavailable");
+            page = planFilePage(selected, query, bytes?.toString());
+            break;
+          }
+          case Route.Plan:
+            page = planPage(selected, query);
+            break;
+          case Route.PlanNew:
+            page = newPlanPage(selected);
+            break;
           case Route.TaskQueue:
-            page = taskQueuePage(selected);
+            page = taskQueuePage(selected, query);
             break;
           case Route.Records:
             page = recordsPage(selected, query);
@@ -406,6 +439,11 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             page = collectionProposalPage(selected, token, saved.request, saved.plan);
             break;
           }
+          case Route.PlanCreate:
+          case Route.PlanRename:
+          case Route.PlanSave:
+          case Route.PlanApprove:
+          case Route.PlanCheckpoint:
           case Route.TaskState:
           case Route.QueueChange:
           case Route.Approve:
@@ -613,6 +651,33 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
               contents: form.get("contents") ?? "",
               error: publicMessage,
             }),
+          );
+          return;
+        }
+        if (url?.pathname === Route.PlanCreate && form) {
+          send(
+            response,
+            status,
+            "text/html; charset=utf-8",
+            newPlanPage(context(), {
+              name: form.get("name") ?? "",
+              contents: form.get("contents") ?? "",
+              error: publicMessage,
+            }),
+          );
+          return;
+        }
+        if (url?.pathname === Route.PlanSave && form) {
+          const id = form.get("reference") ?? "";
+          send(
+            response,
+            status,
+            "text/html; charset=utf-8",
+            planPage(
+              context(),
+              { id, view: "edit" },
+              { contents: form.get("contents") ?? "", expected: form.get("expected") ?? "", error: publicMessage },
+            ),
           );
           return;
         }

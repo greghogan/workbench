@@ -1,7 +1,9 @@
+import { TaskExecution, decodeQueue, type TaskQueueEntry, type TaskQueue } from "./task-queue-state.js";
+export { TaskExecution, decodeQueue, type TaskQueueEntry, type TaskQueue } from "./task-queue-state.js";
+import { readWorkGraph, workReference } from "./planning/work-plans.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { record, string } from "../runtime/values.mjs";
 import { BoundedState } from "../storage/bounded-state.js";
 import {
   CacheLockState,
@@ -16,7 +18,7 @@ import { ownedPath } from "../runtime/paths.js";
 import { ProjectEdits } from "../projects/project-edits.js";
 import { projectQueueKey } from "../projects/project-registry.js";
 import { userDirectory } from "../storage/storage.js";
-import { readTaskGraph, taskDigest, TaskGraph, taskReference, type TaskRecord } from "./task-model.js";
+import { taskDigest, TaskGraph, type TaskRecord } from "./task-model.js";
 
 import { recordTaskImplementation } from "./task-implementations.js";
 import {
@@ -28,26 +30,6 @@ import {
   type TaskDecisionChange,
 } from "./task-decisions.js";
 
-export const TaskExecution = {
-  Queued: "Queued",
-  Active: "Active",
-  Implemented: "Implemented",
-  Blocked: "Blocked",
-} as const;
-export type TaskExecution = (typeof TaskExecution)[keyof typeof TaskExecution];
-export interface TaskQueueEntry {
-  reference: string;
-  state: TaskExecution;
-  updated: string;
-  reason?: string;
-  evidence?: string;
-  planDigest?: string;
-}
-export interface TaskQueue {
-  version: 1;
-  revision: number;
-  entries: TaskQueueEntry[];
-}
 const queuePaths = new AsyncLocalStorage<Map<string, string>>();
 export function taskQueuePath(root: string): string {
   return (
@@ -75,65 +57,6 @@ export function withTaskLock<T>(root: string, action: () => T): T {
     },
     { mutable: false },
   );
-}
-export function decodeQueue(input: unknown): TaskQueue {
-  const data = record(input, "Invalid task queue");
-  if (Object.keys(data).some((key) => !["version", "revision", "entries"].includes(key)))
-    throw new InvalidInput("Unknown task queue field");
-  if (
-    data.version !== 1 ||
-    !Number.isSafeInteger(data.revision) ||
-    Number(data.revision) < 0 ||
-    !Array.isArray(data.entries) ||
-    data.entries.length > 10000
-  )
-    throw new InvalidInput("Invalid task queue version, revision, or entries");
-  const references = new Set<string>();
-  const entries = data.entries.map((input: unknown): TaskQueueEntry => {
-    const entry = record(input, "Invalid task queue entry");
-    if (
-      Object.keys(entry).some(
-        (key) => !["reference", "state", "updated", "reason", "evidence", "planDigest"].includes(key),
-      )
-    )
-      throw new InvalidInput("Unknown task queue entry field");
-    const reference = string(entry.reference, "Missing queue task reference");
-    if (
-      !/^[a-z][a-z0-9_-]*:TSK-[0-9A-Z]+$/.test(reference) ||
-      references.has(reference) ||
-      !Object.values(TaskExecution).includes(entry.state as TaskExecution) ||
-      typeof entry.updated !== "string" ||
-      !Number.isFinite(Date.parse(entry.updated))
-    )
-      throw new InvalidInput("Invalid or duplicate task queue entry");
-    references.add(reference);
-    for (const key of ["reason", "evidence", "planDigest"] as const)
-      if (
-        entry[key] !== undefined &&
-        (typeof entry[key] !== "string" || entry[key].length > 16384 || entry[key].includes("\0"))
-      )
-        throw new InvalidInput(`Invalid queue ${key}`);
-    if (
-      entry.state === TaskExecution.Implemented &&
-      (!entry.evidence || !/^[a-f0-9]{64}$/.test(String(entry.planDigest)))
-    )
-      throw new InvalidInput("Implemented work requires evidence and a plan digest");
-    if (entry.state === TaskExecution.Blocked && !entry.reason)
-      throw new InvalidInput("Blocked work requires a reason");
-    return {
-      reference,
-      state: entry.state as TaskExecution,
-      updated: entry.updated,
-      ...(entry.reason === undefined ? {} : { reason: string(entry.reason, "Invalid queue reason") }),
-      ...(entry.evidence === undefined ? {} : { evidence: string(entry.evidence, "Invalid queue evidence") }),
-      ...(entry.planDigest === undefined ? {} : { planDigest: string(entry.planDigest, "Invalid queue planDigest") }),
-    };
-  });
-  return {
-    version: 1,
-    revision: Number(data.revision),
-    entries,
-  };
 }
 const store = (root: string) => {
   const path = taskQueuePath(root);
@@ -182,6 +105,7 @@ export class TaskReadiness {
     return (
       task.metadata.status === "Accepted" ||
       (task.metadata.status === "Approved" &&
+        (!task.approval || task.approval.current) &&
         this.allowImplementationEvidence &&
         (entry
           ? entry.state === TaskExecution.Implemented && entry.planDigest === task.planDigest
@@ -192,6 +116,9 @@ export class TaskReadiness {
     const reasons: TaskBlocker[] = [];
     const add = (kind: TaskBlocker["kind"], message: string, reference?: string) =>
       reasons.push({ kind, message, ...(reference ? { reference } : {}) });
+    if (task.planning?.problem) add(TaskBlockerKind.State, task.planning.problem);
+    if ((task.planning && !task.planning.approved) || (task.approval && !task.approval.current))
+      add(TaskBlockerKind.State, "Review and approve the current plan");
     if (task.metadata.status !== "Approved")
       add(TaskBlockerKind.State, `Task is ${task.metadata.status.toLowerCase()}`);
     if (task.metadata.status === "Accepted" || task.metadata.status === "Canceled") return reasons;
@@ -245,7 +172,7 @@ export function inspectQueue(readiness: TaskReadiness) {
   return { ...queue, digest: queueDigest(queue), entries, ready };
 }
 export function inspectTaskQueue(root: string) {
-  return inspectQueue(new TaskReadiness(readTaskGraph(root), readTaskQueue(root)));
+  return inspectQueue(new TaskReadiness(readWorkGraph(root), readTaskQueue(root)));
 }
 export type QueueChange =
   | { action: "add"; references: string[] }
@@ -253,28 +180,28 @@ export type QueueChange =
   | { action: "move"; reference: string; before?: string; after?: string };
 export function changeTaskQueue(root: string, change: QueueChange, expected?: string): TaskQueue {
   return withTaskLock(root, () => {
-    const graph = readTaskGraph(root),
+    const graph = readWorkGraph(root),
       queue = readTaskQueue(root);
     if (expected !== undefined && expected !== queueDigest(queue))
       throw new StateConflict("Task queue changed; refresh and retry");
     const now = new Date().toISOString();
     if (change.action === "add") {
       for (const value of change.references) {
-        const reference = taskReference(root, value),
+        const reference = workReference(root, value),
           task = graph.require(reference);
-        if (task.metadata.status !== "Approved")
+        if (task.metadata.status !== "Approved" || (task.planning && !task.planning.approved))
           throw new StateConflict(`${reference}: approve the task before queueing it`);
         if (!queue.entries.some((entry) => entry.reference === reference))
           queue.entries.push({ reference, state: TaskExecution.Queued, updated: now });
       }
     } else {
-      const reference = taskReference(root, change.reference),
+      const reference = workReference(root, change.reference),
         index = queue.entries.findIndex((entry) => entry.reference === reference),
         entry = queue.entries[index];
       if (!entry) throw new InvalidInput(`${reference}: task is not in the local queue`);
       if (change.action === "move") {
         if (!!change.before === !!change.after) throw new InvalidInput("Supply exactly one of before or after");
-        const target = taskReference(root, change.before ?? change.after ?? "");
+        const target = workReference(root, change.before ?? change.after ?? "");
         if (target === reference || !queue.entries.some((entry) => entry.reference === target))
           throw new InvalidInput("Choose a different queued task as the move target");
         queue.entries.splice(index, 1);
@@ -287,6 +214,8 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
       } else {
         const task = graph.require(reference);
         if (change.action === "start") {
+          if (task.planning)
+            throw new StateConflict("Transfer the approved plan into an implementation task before starting it");
           const reasons = new TaskReadiness(graph, queue).blockers(task).map((blocker) => blocker.message);
           if (reasons.length) throw new StateConflict(`${reference}: ${reasons.join("; ")}`);
           entry.state = TaskExecution.Active;

@@ -1,3 +1,5 @@
+import { readWorkGraph } from "./planning/work-plans.js";
+import { retainTaskPlanApproval, readTaskPlanApproval, taskPlanFiles, taskReviewVersion } from "./task-approvals.js";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { parseDocument } from "yaml";
@@ -7,9 +9,14 @@ import { readConfig } from "../projects/project-configuration.js";
 import { ProjectEdits } from "../projects/project-edits.js";
 import { splitFrontmatter, taskStatuses, terminalTask, type TaskStatus } from "../records/record-document.js";
 import { taskChecklistChanges } from "./task-checklists.js";
-import { readTaskGraph, taskDigest, taskReference, type TaskRecord } from "./task-model.js";
+import { taskDigest, taskReference, type TaskRecord } from "./task-model.js";
 import { publishTaskTransition, readTaskQueue, TaskBlockerKind, TaskReadiness, withTaskLock } from "./task-queue.js";
-import { applyTaskDecisionChange, prepareTaskDecisionChange, type TaskDecisionChange } from "./task-decisions.js";
+import {
+  readTaskDecisions,
+  applyTaskDecisionChange,
+  prepareTaskDecisionChange,
+  type TaskDecisionChange,
+} from "./task-decisions.js";
 
 /** Shared capability rules keep CLI/web controls and the mutation guard in agreement. */
 export function taskTransitionProblem(
@@ -19,10 +26,10 @@ export function taskTransitionProblem(
 ): string | undefined {
   if (task.metadata.status === status && status !== "Accepted") return undefined;
   if (
-    (status === "Approved" && task.metadata.status !== "Planned") ||
+    (status === "Approved" && !["Planned", "Approved"].includes(task.metadata.status)) ||
     (status === "Accepted" && task.metadata.status !== "Approved" && task.metadata.status !== "Accepted")
   )
-    return `Cannot change ${task.metadata.status} to ${status}; return to planning before approving revised work`;
+    return `Cannot change ${task.metadata.status} to ${status}; review the current plan before continuing`;
   const tasks = readiness.graph.tasks,
     entry = readiness.entries.get(task.reference);
   if (status !== "Accepted") {
@@ -49,6 +56,8 @@ export function taskTransitionProblem(
     }
   }
   if (status === "Accepted") {
+    if (task.approval && !task.approval.current)
+      return "Review and approve the current plan before accepting its outcome";
     const blockers = new TaskReadiness(readiness.graph, { ...readiness.queue, entries: [] }, false)
       .blockers(task)
       .filter((blocker) => blocker.kind === TaskBlockerKind.Dependency || blocker.kind === TaskBlockerKind.Child);
@@ -68,17 +77,28 @@ export function changeTaskStatus(
 ): void {
   withTaskLock(root, () => {
     if (!taskStatuses.includes(status)) throw new InvalidInput("Unknown shared task state");
-    const graph = readTaskGraph(root),
+    const graph = readWorkGraph(root),
       task = graph.require(taskReference(root, value));
     if (task.archived) throw new InvalidInput("Restore archived records before changing their workflow state");
-    if (expected !== undefined && expected !== task.digest)
+    if (expected !== undefined && expected !== (task.reviewDigest ?? task.digest))
       throw new StateConflict("Task changed; refresh and review its current contents");
     const enforce = readConfig(root).review?.task_approvals === true;
     if (enforce && ["Approved", "Accepted"].includes(status) && !humanReviewed)
       throw new InvalidInput(
         "Human confirmation is required for task approval or acceptance; use the interactive task command or the task page",
       );
-    if (task.metadata.status === status && !(enforce && humanReviewed)) return;
+    if (task.metadata.status === status && !humanReviewed) return;
+    const priorApproval = readTaskDecisions(root).find(
+        (decision) => decision.reference === task.reference && decision.status === "Approved",
+      ),
+      priorPlan = priorApproval ? readTaskPlanApproval(root, priorApproval) : undefined;
+    if (
+      status === "Approved" &&
+      task.metadata.status === status &&
+      priorPlan?.contents === task.contents &&
+      JSON.stringify(priorPlan.files) === JSON.stringify(taskPlanFiles(root, task))
+    )
+      return;
     const queue = readTaskQueue(root),
       entry = queue.entries.find((entry) => entry.reference === task.reference);
     const problem = taskTransitionProblem(task, new TaskReadiness(graph, queue), status);
@@ -102,34 +122,49 @@ export function changeTaskStatus(
     }
     if (readFileSync(task.path, "utf8") !== task.contents)
       throw new StateConflict("Task changed during its state transition");
-    if (entry && status !== "Accepted") {
-      entry.state = "Queued";
-      delete entry.reason;
-      delete entry.evidence;
-      delete entry.planDigest;
-      entry.updated = new Date().toISOString();
+    if (entry && status !== "Accepted" && status !== "Approved") {
+      queue.entries = queue.entries.filter((item) => item !== entry);
+      queue.revision++;
+    }
+    if (!entry && status === "Approved") {
+      queue.entries.push({ reference: task.reference, state: "Queued", updated: new Date().toISOString() });
       queue.revision++;
     }
     let decisions: TaskDecisionChange | undefined;
-    if (enforce) {
+    if (enforce || humanReviewed || priorApproval) {
       decisions = prepareTaskDecisionChange(root, task.reference, (before) => {
         const after = before.filter(
           (decision) =>
             (decision.status === "Accepted" && decision.tree !== undefined) ||
             (status === "Accepted" && decision.status === "Approved"),
         );
-        if (status === "Approved" || status === "Accepted")
+        if ((enforce || humanReviewed) && (status === "Approved" || status === "Accepted")) {
+          const updated = new Date().toISOString(),
+            reviewed = changes.find((change) => change.path === task.path)?.contents ?? contents,
+            snapshot =
+              status === "Approved"
+                ? retainTaskPlanApproval(root, {
+                    reference: task.reference,
+                    at: updated,
+                    contents: reviewed,
+                    files: taskPlanFiles(root, task),
+                  })
+                : undefined;
           after.push({
             reference: task.reference,
             status,
-            digest: taskDigest(changes.find((change) => change.path === task.path)?.contents ?? contents),
-            updated: new Date().toISOString(),
+            digest: taskDigest(reviewed),
+            updated,
+            ...(snapshot ? { snapshot } : {}),
           });
+        }
         return after;
       });
     }
+    if (taskReviewVersion(root, task) !== (task.reviewDigest ?? task.digest))
+      throw new StateConflict("Task supporting files changed during approval; refresh and review again");
     publishTaskTransition(root, edits, originalQueue, queue, decisions);
-    if (enforce && status === "Accepted") {
+    if ((enforce || humanReviewed) && status === "Accepted") {
       const tree = workingReviewTree(root);
       applyTaskDecisionChange(
         root,
