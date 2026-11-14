@@ -279,7 +279,8 @@ export function createCLI(root: string = projectRoot()) {
   registerServerCommands(program, root);
   const review = registerCommand(program, "review")
     .description("Review protected records or record agent change and task review")
-    .action(() => reviewInteractively(root));
+    .option("--commit <revision>", "Review protected files in one retained commit")
+    .action((options: { commit?: string }) => reviewInteractively(root, undefined, options.commit));
   registerAgentReviewCommands(review, root);
   review
     .command("check", { hidden: true })

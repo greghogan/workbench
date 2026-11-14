@@ -33,7 +33,7 @@ import {
 } from "../../../src/core/records/archive-workflow.ts";
 import { checkArchivePublication } from "../../../src/core/records/archive-publication.ts";
 import { archiveRevision, readArchiveIndex, readArchivedFile } from "../../../src/core/records/archive-store.ts";
-import { verifyArchiveTransfer } from "../../../src/core/records/archive-transfer-proof.ts";
+import { verifyArchiveTransfer, storageReviewContext } from "../../../src/core/records/archive-transfer-proof.ts";
 import { gitBytes } from "../../../src/core/git/git-snapshot.ts";
 import { checkRecordRetention } from "../../../src/core/records/record-retention.ts";
 import { hashFile } from "../../../src/core/runtime/file-reads.ts";
@@ -346,12 +346,21 @@ test("storage-only commits preserve document acknowledgment and logical retentio
   if (!selected) throw new Error("Expected pending decision");
   approveReviewFiles(root, [selected], false, ReviewSource.Working);
   expect(reviewStatus(root, ReviewSource.Working).changes.find((change) => change.path === path)?.approved).toBe(true);
-  transferArchive(root);
+  const baselineTree = git(root, "rev-parse", "HEAD^{tree}"),
+    operation = transferArchive(root);
+  expect(storageReviewContext(root, "0".repeat(40), operation.after)).toBe(false);
+  expect(storageReviewContext(root, baselineTree, operation.after)).toBe(true);
+  expect(storageReviewContext(root, baselineTree, "HEAD")).toBe(true);
   expect(reviewedBaselines(root).get(path)?.contents).toBe(reviewed);
   expect(reviewStatus(root, ReviewSource.Working).changes.filter((change) => !change.approved)).toEqual([]);
   expect(() => {
     checkRecordRetention(root);
   }).not.toThrow();
+  writeFileSync(join(root, "unrelated.txt"), "Different implementation context.\n");
+  git(root, "add", "unrelated.txt");
+  git(root, "commit", "-qm", "Different implementation");
+  expect(storageReviewContext(root, baselineTree, "HEAD")).toBe(false);
+  expect(storageReviewContext(root, baselineTree, operation.after)).toBe(true);
 });
 
 test("sequential publication verifies ordering and retries either interrupted transfer without new commits", () => {

@@ -13,6 +13,12 @@ export function reviewLocation(
   if ("compatibility" in item) return sourceURL(context, routeURL(Route.Review, { compatibility: "1" }));
   const owner = context.index.reviewOwnerPath(item.path);
   const group = context.index.reviews.byOwner.get(owner);
+  if (!group?.pending) {
+    const unit = context.commitReviewFor(owner),
+      prefix = owner.slice(0, -3) + "/",
+      path = unit?.paths.find((path) => path === owner || path.startsWith(prefix));
+    if (unit && path) return sourceURL(context, routeURL(Route.History, { commit: unit.revision, path, layout }));
+  }
   const selected =
     group && !context.includesWorkflow(group.scope, group.collection)
       ? context.index.select(group.collection ? { collection: group.collection } : { scope: group.scope })

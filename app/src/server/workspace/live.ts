@@ -235,6 +235,11 @@ export class WorkspaceMonitor extends EventEmitter {
   get watcherCount(): number {
     return this.watchers.size;
   }
+  /** Cross the mutation boundary, then let observed inputs decide whether acquisition is needed. */
+  async reconcileAfterChange(): Promise<void> {
+    if (this.pending) await this.pending.catch(() => undefined);
+    await this.reconcile();
+  }
   reconcile(fresh = false): Promise<void> {
     if (this.closed) return Promise.resolve();
     if (this.pending) {

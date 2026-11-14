@@ -1,10 +1,11 @@
+import { acceptedComparisonDigests } from "./review-authority.js";
 import { projectArchive, readProjectRecordFile } from "../records/archive-store.js";
+import { retainedAcknowledgments } from "./review-retention.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../diagnostics/diagnostics.mjs";
-import { reviewedCommit } from "../git/commit-history.js";
 import { storageReviewContext } from "../records/archive-transfer-proof.js";
 import { GitSnapshot, writeRawReviewObjects } from "../git/git-snapshot.js";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
@@ -27,6 +28,7 @@ import {
   reviewContents,
   reviewFileLimit,
   reviewIdentity,
+  reviewChangeDigest,
   reviewReceiptLimit,
 } from "./review-snapshot.js";
 
@@ -43,7 +45,7 @@ export function reviewGit(root: string, args: string[], input?: string): string 
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     ...(input === undefined ? {} : { input }),
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
   });
   if (result.error || result.status !== 0)
     throw new Error(`cannot inspect proposed review: ${String(result.stderr || result.error)}`);
@@ -54,7 +56,7 @@ export type ReviewSource = (typeof ReviewSource)[keyof typeof ReviewSource];
 export function reviewHead(root: string): string {
   const result = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" });
   if (result.error || (result.status !== 0 && result.status !== 1)) throw new Error("cannot inspect review HEAD");
-  return reviewedCommit(root, result.stdout.trim());
+  return result.stdout.trim();
 }
 /** Hash raw bytes in bounded memory; reading a workspace must never run Git clean filters. */
 function workingBlob(file: string, algorithm: string): string {
@@ -81,7 +83,7 @@ function workingBlob(file: string, algorithm: string): string {
 export function proposedReview(
   root: string,
   source: ReviewSource = ReviewSource.Staged,
-  snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged, review: true }),
+  snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged }),
   hashWorking: (file: string, algorithm: string, read: () => string) => string = (_file, _algorithm, read) => read(),
 ) {
   const changes: ReviewChange[] = [];
@@ -208,7 +210,7 @@ function reviewReceipt(root: string): string {
   return resolve(root, reviewGit(root, ["rev-parse", "--git-path", "workbench/review.json"]).trim());
 }
 
-export const reviewChangeDigest = (change: ReviewChange): string => changesDigest([reviewIdentity(change)]);
+export { reviewChangeDigest } from "./review-snapshot.js";
 export const presentedReviewDigest = (change: ReviewChange, head: string): string =>
   createHash("sha256")
     .update(JSON.stringify([reviewChangeDigest(change), head]))
@@ -314,7 +316,7 @@ function decodeReviewReceipt(value: unknown): Map<string, Acknowledgment> {
   if (value.digest !== changesDigest(changes)) throw new InvalidInput("Invalid review receipt");
   const result = new Map<string, Acknowledgment>();
   if (value.alternatives !== undefined) {
-    if (!Array.isArray(value.alternatives) || value.alternatives.length > changes.length * 2)
+    if (!Array.isArray(value.alternatives) || value.alternatives.length > 4096)
       throw new InvalidInput("Invalid review receipt");
     for (const alternate of value.alternatives as unknown[]) {
       if (!table(alternate)) throw new InvalidInput("Invalid review receipt");
@@ -337,19 +339,28 @@ function decodeReviewReceipt(value: unknown): Map<string, Acknowledgment> {
 export function reviewStatus(
   root: string,
   source: ReviewSource,
-  snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged, review: true }),
+  snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged }),
   hashWorking?: (file: string, algorithm: string, read: () => string) => string,
 ) {
   const pending = proposedReview(root, source, snapshot, hashWorking);
-  const approved = savedApprovals(pending.receipt);
   return {
     ...pending,
     head: snapshot.head,
     source,
-    changes: pending.changes.map((change) => ({
+    ...reviewedChanges(root, pending.changes, pending.receipt),
+  };
+}
+
+/** Consent and accepted-history authority stay live even when comparison contents are immutable. */
+export function reviewedChanges(root: string, changes: readonly ReviewChange[], receipt = reviewReceipt(root)) {
+  const approved = savedApprovals(receipt),
+    history = acceptedComparisonDigests(root);
+  return {
+    receipt,
+    changes: changes.map((change) => ({
       ...change,
       digest: reviewChangeDigest(change),
-      approved: approved.has(reviewChangeDigest(change)),
+      approved: approved.has(reviewChangeDigest(change)) || history.has(reviewChangeDigest(change)),
     })),
   };
 }
@@ -419,7 +430,7 @@ export function approveReviewFiles(
       }
       if (reviewHead(root) !== head || proposedReview(root, source).digest !== pending.digest)
         throw new StateConflict("review contents changed during confirmation; refresh the review");
-      publishAcknowledgments(receipt, acknowledgments, head);
+      publishAcknowledgments(receipt, acknowledgments, head, root);
     },
     0,
   );
@@ -490,7 +501,7 @@ export function approveCapturedReviews(root: string, captured: CapturedReviews, 
     receipt,
     () => {
       const head = reviewHead(root);
-      publishAcknowledgments(receipt, selected, head);
+      publishAcknowledgments(receipt, selected, head, root);
     },
     0,
   );
@@ -519,7 +530,7 @@ export function approvePresentedReview(root: string, value: unknown, digest: str
     receipt,
     () => {
       const head = reviewHead(root);
-      publishAcknowledgments(receipt, [selected], head);
+      publishAcknowledgments(receipt, [selected], head, root);
     },
     0,
   );
@@ -530,6 +541,7 @@ export function mergeAcknowledgments(
   existing: ReadonlyMap<string, Acknowledgment>,
   selected: Acknowledgment[],
   head: string,
+  retained: ReadonlySet<string> = new Set(),
 ): string {
   const approved = new Map(existing);
   for (const acknowledgment of selected) {
@@ -546,12 +558,12 @@ export function mergeAcknowledgments(
   const files = Object.fromEntries(acknowledgments.map(({ change, approval }) => [change.path, approval]));
   const counts = new Map<string, number>();
   const alternatives = [...approved.values()]
-    .filter((ack) => !ack.latest && ack.approval.head === head)
+    .filter((ack) => !ack.latest && (ack.approval.head === head || retained.has(reviewChangeDigest(ack.change))))
     .reverse()
     .filter(({ change }) => {
       const count = counts.get(change.path) ?? 0;
       counts.set(change.path, count + 1);
-      return count < 2;
+      return retained.has(reviewChangeDigest(change)) || count < 2;
     })
     .reverse()
     .map(({ change, approval }) => ({
@@ -560,16 +572,29 @@ export function mergeAcknowledgments(
         approved_at: approval.approved_at,
         human_written_charter: approval.human_written_charter,
         ...(approval.head !== undefined ? { head: approval.head } : {}),
+        ...(retained.has(reviewChangeDigest(change)) && approval.contents !== undefined
+          ? { contents: approval.contents }
+          : {}),
       },
     }));
   const serialized = JSON.stringify({ digest: changesDigest(changes), changes, files, alternatives }, null, 2) + "\n";
-  if (Buffer.byteLength(serialized) > reviewReceiptLimit)
+  if (alternatives.length > 4096 || Buffer.byteLength(serialized) > reviewReceiptLimit)
     throw new InvalidInput("review receipt exceeds 64 MiB; no acknowledgment was changed");
   return serialized;
 }
 /** The caller owns the receipt lock across reading, merging and publication. */
-function publishAcknowledgments(receipt: string, selected: Acknowledgment[], head: string): void {
-  writeAtomic(receipt, mergeAcknowledgments(savedApprovals(receipt), selected, head));
+function publishAcknowledgments(receipt: string, selected: Acknowledgment[], head: string, root: string): void {
+  const existing = savedApprovals(receipt),
+    selectedPaths = new Set(selected.map((ack) => ack.change.path)),
+    selectedDigests = new Set(selected.map((ack) => reviewChangeDigest(ack.change))),
+    candidates = [...existing.values()]
+      .filter(
+        (ack) =>
+          (!ack.latest || selectedPaths.has(ack.change.path)) && !selectedDigests.has(reviewChangeDigest(ack.change)),
+      )
+      .map((ack) => ack.change),
+    retained = retainedAcknowledgments(root, candidates);
+  writeAtomic(receipt, mergeAcknowledgments(existing, selected, head, retained));
 }
 
 export function reviewFileContents(root: string, identity: string, snapshot?: GitSnapshot): Buffer | undefined {
@@ -596,7 +621,7 @@ export function workingReviewContents(root: string, change: ReviewChange): Buffe
   return bytes;
 }
 
-/** Reviews share an accepted commit baseline across provisional local commits. */
+/** Further edits within one review unit use its most recent acknowledgment. */
 export function reviewedBaselines(
   root: string,
   head = reviewHead(root),
@@ -632,5 +657,50 @@ export function reviewedBaselines(
           ]
         : [],
     ),
+  );
+}
+
+/** Copy actual consent only after proving a complete mechanical transformation on both sides. */
+export function preserveTranslatedReviews(
+  root: string,
+  prior: { changes: ReviewChange[]; snapshot: GitSnapshot }[],
+  next: { changes: ReviewChange[]; snapshot: GitSnapshot; head: string }[],
+  transform: (contents: string, path: string) => string,
+): void {
+  const receipt = reviewReceipt(root);
+  withCacheLockSync(
+    receipt,
+    () => {
+      const saved = savedApprovals(receipt),
+        selected: Acknowledgment[] = [];
+      for (const unit of next)
+        for (const change of unit.changes) {
+          if (saved.has(reviewChangeDigest(change))) continue;
+          for (const oldUnit of prior) {
+            const previous = oldUnit.changes.find((item) => item.path === change.path),
+              approval = previous ? saved.get(reviewChangeDigest(previous))?.approval : undefined;
+            if (!previous || !approval || previous.charter !== change.charter) continue;
+            const same = (a: string, b: string) => {
+              if (a.split(":")[0] !== b.split(":")[0]) return false;
+              const left = reviewFileContents(root, a, oldUnit.snapshot),
+                right = reviewFileContents(root, b, unit.snapshot);
+              if (!left || !right) return left === right;
+              if (left.includes(0) || left.toString("utf8").includes("\ufffd")) return left.equals(right);
+              return Buffer.from(transform(left.toString("utf8"), change.path)).equals(right);
+            };
+            if (!same(previous.before, change.before) || !same(previous.after, change.after)) continue;
+            const contents = change.path.endsWith(".md")
+              ? (reviewFileContents(root, change.after, unit.snapshot)?.toString("base64") ?? "")
+              : undefined;
+            selected.push({
+              change: reviewIdentity(change),
+              approval: { ...approval, head: unit.head, ...(contents === undefined ? {} : { contents }) },
+            });
+            break;
+          }
+        }
+      if (selected.length) publishAcknowledgments(receipt, selected, reviewHead(root), root);
+    },
+    0,
   );
 }

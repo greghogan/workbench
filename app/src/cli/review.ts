@@ -1,3 +1,4 @@
+import { committedReview } from "../core/review/review-units.js";
 import { spawnSync } from "node:child_process";
 import { relative } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -17,8 +18,7 @@ import { terminalAvailable } from "./terminal/terminal-choice.js";
 
 function presentation(root: string, source: ReviewSource, snapshot: GitSnapshot, changes: ReviewChange[]) {
   const captured = captureReviews(root, changes, source, snapshot);
-  const previous =
-    source === ReviewSource.Working ? reviewedBaselines(root, snapshot.head) : new Map<string, { contents: string }>();
+  const previous = reviewedBaselines(root, snapshot.head);
   const prior = changes.flatMap((change) => {
     const review = previous.get(change.path);
     return review ? [{ change, contents: review.contents }] : [];
@@ -49,8 +49,11 @@ function presentation(root: string, source: ReviewSource, snapshot: GitSnapshot,
   };
 }
 
-export function reviewStatus(root: string, source: ReviewSource = ReviewSource.Working): void {
-  const snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged, review: true });
+export function reviewStatus(root: string, source: ReviewSource = ReviewSource.Working, commit?: string): void {
+  const snapshot =
+    commit !== undefined
+      ? committedReview(root, commit).snapshot
+      : new GitSnapshot(root, { staged: source === ReviewSource.Staged });
   const { changes, digest, receipt } = fileReviewStatus(root, source, snapshot);
   if (!changes.length) {
     console.log("No protected record changes.");
@@ -73,10 +76,11 @@ export function reviewStatus(root: string, source: ReviewSource = ReviewSource.W
 }
 
 /** Terminal approval is deliberately unavailable through flags or redirected input. */
-export async function reviewInteractively(root: string, recordPath?: string): Promise<void> {
-  await formatPendingReviews(root, recordPath);
-  const snapshot = new GitSnapshot(root, { staged: false, review: true });
-  const pending = fileReviewStatus(root, ReviewSource.Working, snapshot);
+export async function reviewInteractively(root: string, recordPath?: string, commit?: string): Promise<void> {
+  if (commit === undefined) await formatPendingReviews(root, recordPath);
+  const source = commit !== undefined ? ReviewSource.Staged : ReviewSource.Working;
+  const snapshot = commit ? committedReview(root, commit).snapshot : new GitSnapshot(root, { staged: false });
+  const pending = fileReviewStatus(root, source, snapshot);
   const record = recordPath ? relative(root, recordPath).replaceAll("\\", "/").replace(/\.md$/, "") : undefined;
   const changes = pending.changes.filter(
     (change) => !change.approved && (!record || change.path === record + ".md" || change.path.startsWith(record + "/")),
@@ -86,14 +90,14 @@ export async function reviewInteractively(root: string, recordPath?: string): Pr
     return;
   }
   if (!terminalAvailable() || !pending.changes.length) {
-    reviewStatus(root);
+    reviewStatus(root, source, commit);
     return;
   }
   if (pending.changes.every((change) => change.approved)) {
     console.log("Protected record changes are already approved.");
     return;
   }
-  const { captured, baseline, tree } = presentation(root, ReviewSource.Working, snapshot, changes);
+  const { captured, baseline, tree } = presentation(root, source, snapshot, changes);
   const diff = spawnSync(
     "git",
     [

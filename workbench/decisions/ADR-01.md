@@ -31,9 +31,10 @@ Required human review precedes commit. An explicitly marked provisional local co
 preserve records awaiting review as an unpublished checkpoint, without accepting them. Code gates and agent reviews
 still apply. Complete required human review and consolidate or rewrite provisional history before publication.
 
-Use the record's contents from the last commit not marked provisional as the baseline. If a newer human-reviewed version
-exists, use the most recent reviewed version instead. If neither version exists, the baseline is empty. Provisional
-commits do not advance it.
+Review each retained commit against its parent; uncommitted work is a separate unit. Within a unit, further edits
+compare against its most recent human-reviewed version. A new record without a baseline is presented in full. Reviewing
+a later unit does not approve earlier intermediate versions. Arrange the intended commit boundaries before review;
+discarded checkpoints do not require separate acknowledgment. Finalization preserves actual review evidence and dates.
 
 Rationale: Explicit authority and review boundaries preserve human control of durable choices while allowing agents to
 develop and verify the implementation without waiting for acceptance.

@@ -5,8 +5,11 @@ summary: Exact presented versions, meaningful comparisons, review continuity, an
 # ADR-6: Document review experience
 
 CLI and browser review share the exact per-file acknowledgments and human authority defined by workbench:ADR-1. Format
-records canonically under workbench:ADR-4 before presenting them for review; acknowledgment covers the presented
-version. Reviewing does not stage or commit files.
+working records canonically under workbench:ADR-4 before presenting them for review. Retained commit reviews use their
+immutable contents. Acknowledgment covers the presented version; reviewing does not stage or commit files.
+
+Present pending decisions across retained commit units and current work, with progress within the selected unit.
+Finalization preserves source contents, authorship, and recoverable original history while removing provisional markers.
 
 Use the review baseline defined by workbench:ADR-1. A new record without a baseline is presented as a complete document.
 Deletions show the complete version being removed. ADR comparisons retain full document context in unified and

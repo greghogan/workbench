@@ -1,3 +1,4 @@
+import { historyPage } from "../views/history-page.js";
 import { parsePlanReference, planningPaths } from "../../core/tasks/planning/plan-model.js";
 import { readPlan } from "../../core/tasks/planning/planning-store.js";
 import { readGitObjects, gitBytes } from "../../core/git/git-snapshot.js";
@@ -6,7 +7,7 @@ import { PreparationState } from "../review/review-state.js";
 import { decodeReviewTarget, type ReviewTarget } from "../review/review-request.js";
 import { performance } from "node:perf_hooks";
 import { FormattingProblem } from "../../core/review/review-formatting.js";
-import { recordURL } from "../routes/locations.js";
+import { recordURL, routeURL } from "../routes/locations.js";
 import { sourceURL } from "../routes/sources.js";
 import { localEndpoint, createLocalServer, listenLocal, closeLocalServer } from "./http-listener.js";
 import { compatibilityReviewPage } from "../views/compatibility-review.js";
@@ -329,6 +330,9 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         const renderStarted = performance.now();
         let page: string;
         switch (route) {
+          case Route.History:
+            page = historyPage(selected, query, actions.reviews);
+            break;
           case Route.NewCharter:
             page = newCharterPage(selected, query.project ?? "");
             break;
@@ -526,7 +530,9 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       });
       let result: Awaited<ReturnType<WebActions["run"]>>;
       try {
-        result = await actions.run(url.pathname, form, preparation);
+        const actionPath = url.pathname,
+          actionForm = form;
+        result = await timings.measure("action", () => actions.run(actionPath, actionForm, preparation));
       } catch (error) {
         metrics.count("actionFailures");
         const rejected =
@@ -560,29 +566,31 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         observed: operation === WebAction.Preview ? "preview prepared" : "operation completed",
         outcome: result.effect,
       });
-      await monitor.reconcile(true).catch((error: unknown) => {
-        metrics.count("refreshAfterMutationFailures");
-        diagnostic(
-          LogLevel.Warn,
-          DiagnosticOperation.WebActionRefresh,
-          DiagnosticOutcome.Unavailable,
-          {
-            requestId,
-            operation,
-            outcome: result.effect,
-            observed: "previous snapshot retained",
-          },
-          error,
-          "action completed; refreshed view unavailable",
-        );
-        if (route === Route.ReviewPrepare) throw error;
-      });
+      await timings
+        .measure("workspace", () => monitor.reconcileAfterChange())
+        .catch((error: unknown) => {
+          metrics.count("refreshAfterMutationFailures");
+          diagnostic(
+            LogLevel.Warn,
+            DiagnosticOperation.WebActionRefresh,
+            DiagnosticOutcome.Unavailable,
+            {
+              requestId,
+              operation,
+              outcome: result.effect,
+              observed: "previous snapshot retained",
+            },
+            error,
+            "action completed; refreshed view unavailable",
+          );
+          if (route === Route.ReviewPrepare) throw error;
+        });
       if (result.reviewTarget && monitor.index) {
         const target = result.reviewTarget;
         const context = monitor.index.select(actionSource);
         result.redirect = reviewLocation(context, { path: target.path }, target.layout, target.view);
       }
-      if (reviewContext && monitor.index) {
+      if (reviewContext && monitor.index && !form.get("review_commit")) {
         const context = new WorkspaceView(
           monitor.index,
           reviewContext.selection,
@@ -597,6 +605,20 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         result.redirect = next
           ? reviewLocation(context, next, form.get("review_layout") === "split" ? "split" : "unified")
           : sourceURL(context, Route.Review);
+      }
+      if (route === Route.Approve && form.get("review_commit") && monitor.index) {
+        const reviewCommit = form.get("review_commit"),
+          selected = monitor.index.select(actionSource),
+          next = selected.commitReviews.find((unit) => unit.revision === reviewCommit) ?? selected.commitReviews[0];
+        result.redirect = next
+          ? sourceURL(
+              selected,
+              routeURL(Route.History, {
+                commit: next.revision,
+                layout: form.get("review_layout") === "split" ? "split" : "unified",
+              }),
+            )
+          : sourceURL(selected, Route.Review);
       }
       if (operation === WebAction.PolicyResolution && monitor.index) {
         const current = monitor.index.select(actionSource);

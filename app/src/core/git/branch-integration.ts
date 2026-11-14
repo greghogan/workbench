@@ -1,3 +1,5 @@
+import { prepareIntegrationReview } from "./integration-review.js";
+import { reconcileTaskIdentities } from "./identity-reconciliation.js";
 import { ArchiveUnavailable } from "../records/archive-index.js";
 import { gitRevision, validateBranch } from "./refs.js";
 import { existsSync } from "node:fs";
@@ -35,6 +37,8 @@ export interface BranchIntegration {
   recovery: string;
   result?: string;
   reconciliation?: Reconciliation;
+  reviewHistory?: { before: string; after: string };
+  identities?: { before: string; after: string };
   completed: boolean;
 }
 const validOid = (value: string) => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
@@ -72,6 +76,14 @@ function store(root: string) {
         completed: data.completed,
         ...(data.result === undefined ? {} : { result: oid(data.result) }),
       };
+      if (data.identities !== undefined) {
+        const prepared = record(data.identities, "Invalid integration identities");
+        result.identities = { before: oid(prepared.before), after: oid(prepared.after) };
+      }
+      if (data.reviewHistory !== undefined) {
+        const prepared = record(data.reviewHistory, "Invalid integration review history");
+        result.reviewHistory = { before: oid(prepared.before), after: oid(prepared.after) };
+      }
       if (data.reconciliation !== undefined) {
         const reconciliation = record(data.reconciliation, "Invalid reconciliation");
         if (!Array.isArray(reconciliation.updates)) throw new InvalidInput("Invalid reconciliation updates");
@@ -332,6 +344,8 @@ export function integrateBranch(
           operation.result = aborted;
           store(root).write(operation);
           gitBytes(root, ["reset", "--hard", operation.before]);
+          if (operation.identities)
+            reconcileTaskIdentities(root, operation.identities.after, operation.before, { allowMissing: true });
         }
         operation.completed = true;
         store(root).write(operation);
@@ -351,6 +365,12 @@ export function integrateBranch(
       operation.result = head(root);
       store(root).write(operation);
       reconcile(root, operation);
+      operation.identities = { before: operation.before, after: head(root) };
+      store(root).write(operation);
+      reconcileTaskIdentities(root, operation.before, head(root));
+      prepareIntegrationReview(root, operation, () => {
+        store(root).write(operation);
+      });
       operation.result = head(root);
       operation.completed = true;
       store(root).write(operation);

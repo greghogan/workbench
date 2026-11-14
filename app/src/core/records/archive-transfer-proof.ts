@@ -6,6 +6,8 @@ import { gitBytes, readGitObjects, readGitTree, type GitEntry } from "../git/git
 import { InvalidInput } from "../runtime/input-errors.js";
 import { record } from "../runtime/values.mjs";
 import { readArchiveIndex } from "./archive-store.js";
+import { WeightedCache } from "../storage/weighted-cache.js";
+import { resolve } from "node:path";
 
 const equal = (a: GitEntry | undefined, b: GitEntry | undefined) => a?.oid === b?.oid && a?.mode === b?.mode;
 function document(root: string, entries: ReadonlyMap<string, GitEntry>, path: string): Record<string, unknown> {
@@ -90,33 +92,40 @@ export function verifyArchiveTransfer(root: string, before: string, after: strin
   return transferred;
 }
 
-/** A deletion is safe only when its exact committed bytes and mode remain in the selected archive. */
-const contexts = new Map<string, boolean>();
+interface StorageStep {
+  commit: string;
+  tree: string;
+  parent?: string;
+  verified?: boolean;
+}
+const contexts = new WeightedCache<StorageStep>(1024 * 1024);
 /** Unchanged storage commits retain the reviewed project context without rewriting acknowledgments. */
 export function storageReviewContext(root: string, sourceTree: string, targetCommit: string): boolean {
-  const key = `${root}:${sourceTree}:${targetCommit}`,
-    cached = contexts.get(key);
-  if (cached !== undefined) return cached;
-  let result = false;
   try {
     let current = targetCommit;
     while (current) {
-      const [commit, tree, ...parents] = gitBytes(root, ["log", "-1", "--format=%H %T %P", current])
-        .toString()
-        .trim()
-        .split(" ");
-      if (tree === sourceTree) {
-        result = true;
-        break;
+      const key = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(current)
+        ? JSON.stringify([resolve(root), current])
+        : undefined;
+      let step = key ? contexts.get(key) : undefined;
+      if (!step) {
+        const [commit, tree, ...parents] = gitBytes(root, ["log", "-1", "--format=%H %T %P", current])
+          .toString()
+          .trim()
+          .split(" ");
+        if (!commit || !tree) throw new InvalidInput("Missing archive history tree");
+        step = { commit, tree, ...(parents.length === 1 ? { parent: parents[0] } : {}) };
+        if (key) contexts.set(key, step, key.length * 2 + 512);
       }
-      const parent = parents[0];
-      if (!commit || !parent || parents.length !== 1 || !verifyArchiveTransfer(root, parent, commit).size) break;
-      current = parent;
+      if (step.tree === sourceTree) return true;
+      if (!step.parent) return false;
+      // A failed acquisition remains unverified so an explicit fetch can supply missing objects.
+      step.verified ??= verifyArchiveTransfer(root, step.parent, step.commit).size > 0;
+      if (!step.verified) return false;
+      current = step.parent;
     }
   } catch {
-    result = false;
+    return false;
   }
-  if (contexts.size >= 128) contexts.delete(contexts.keys().next().value ?? "");
-  contexts.set(key, result);
-  return result;
+  return false;
 }

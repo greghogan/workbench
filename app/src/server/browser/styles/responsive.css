@@ -74,7 +74,8 @@
     padding: 18px;
   }
   .record-row,
-  [data-review-source] > .panel-heading {
+  [data-review-source] > .panel-heading,
+  [data-review-commit] > .panel-heading {
     padding: var(--space-4);
   }
   h1 {

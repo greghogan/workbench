@@ -37,6 +37,7 @@ export const Route = {
   TaskState: "/actions/task-state",
   QueueChange: "/actions/task-queue",
   Review: "/review",
+  History: "/history",
   ReviewStatus: "/review-status",
   PolicyResolution: "/actions/policy-resolution",
   ReviewFile: "/review-file",
@@ -146,6 +147,7 @@ export interface RouteQueries {
     task_windows?: string;
     attention?: "1";
   };
+  [Route.History]: SourceQuery & { commit?: string; path?: string; layout?: DifferenceLayout };
   [Route.ReviewStatus]: { id?: string; path?: string; compatibility?: "1" };
   [Route.Review]: SourceQuery & {
     compatibility?: "1";
@@ -200,6 +202,7 @@ export interface MutationFields {
     path: string;
     digest: string;
     review_layout: DifferenceLayout;
+    review_commit?: string;
     reviewed: "yes";
     human_written: "yes" | "no";
   };
@@ -244,6 +247,18 @@ type RouteContracts = {
   };
 };
 export const routeContracts: RouteContracts = {
+  [Route.History]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      commit: bounded(1024),
+      path: bounded(4096),
+      layout: oneOf(["unified", "split"]),
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
+    },
+  },
   [Route.ReviewPrepare]: {
     scope: "project",
     methods: ["POST"],

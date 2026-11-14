@@ -45,7 +45,7 @@
 - `src/core/tasks/task-implementations.ts`: Share plan- and source-bound implementation evidence through Git repository
   identity while keeping active execution state separate from historical verification and human acceptance.
 - `src/core/tasks/task-decisions.ts`: Store human task confirmations independently of execution queues, retain
-  acceptance of distinct source snapshots, and recover interrupted decisions without overwriting newer human choices.
+  acceptance of distinct task outcomes, and recover interrupted decisions without overwriting newer human choices.
 - `src/core/tasks/task-project-state.ts`: Resolve shared project state independently of branch or ancestry, with
   directory identity for projects without Git.
 - `src/core/citations/citation-format.ts`, `src/core/citations/citation-dates.ts`: Define citation formats, byte limits,
@@ -103,3 +103,14 @@
   references, and reconcile pinned inventories through explicit continuation or abortion.
 - `src/core/git/tree-publication.ts`, `src/core/git/refs.ts`: Apply verified Git-tree transitions while preserving
   unrelated edits and centralize branch-name validation.
+
+- `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`, `src/core/git/finalization.ts`: Capture
+  parent-bound commit reviews and activate reviewed replacement history through recoverable reference updates.
+- `src/core/git/identity-reconciliation.ts`: Prove mechanical task renumbering before preserving real plan and document
+  approvals, and update related personal plan references without granting new consent.
+- `src/server/views/history-page.tsx`: Present immutable commit files with shared document comparisons and exact version
+  confirmation.
+
+- `src/core/review/review-authority.ts`, `src/core/git/integration-review.ts`, `src/core/git/commit-writing.ts`:
+  Preserve accepted-history authority, distinguish new integration contexts, and prepare rewritten commits with their
+  original authors and current signing policy.

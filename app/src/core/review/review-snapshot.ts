@@ -12,6 +12,10 @@ export const reviewIdentity = (change: ReviewChange): ReviewChange => ({
   after: change.after,
   charter: change.charter,
 });
+export const reviewChangeDigest = (change: ReviewChange): string =>
+  createHash("sha256")
+    .update(JSON.stringify([reviewIdentity(change)]))
+    .digest("hex");
 /** Shared byte validation for presented snapshots and persisted Markdown baselines. */
 export function reviewContents(change: ReviewChange, encoded: string): Buffer | undefined {
   if (encoded.length > reviewEncodedLimit) return undefined;
