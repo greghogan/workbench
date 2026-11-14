@@ -30,19 +30,17 @@ import {
 import { WorkspaceView } from "../workspace/workspace-service.js";
 import { reviewLocation } from "../review/review-navigation.js";
 import { randomBytes } from "node:crypto";
-import { lstatSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, extname } from "node:path";
 import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
-import { ownedPath } from "../../core/runtime/paths.js";
 import { recordBytes, supportingFiles } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
 import type { runCollectionWorker } from "../projects/collection-runner.js";
-import { sendDownload } from "./downloads.js";
+import { sendDownload, sendArchivedDownload } from "./downloads.js";
 import { WebError } from "./errors.js";
 import { readForm, requestOrigin, secureResponse, send } from "./http.js";
 import { WorkspaceMonitor } from "../workspace/live.js";
@@ -275,11 +273,19 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           }
           if (!files.some((file) => file.path === path)) throw new WebError(404, "supporting file not found");
           if (query.download === "1") {
-            sendDownload(response, record.directory, path);
+            if (record.archive) sendArchivedDownload(response, record.archive, path);
+            else sendDownload(response, record.directory, path);
             return;
           }
-          const stat = lstatSync(ownedPath(record.directory, path));
-          const bytes = stat.size <= 2 * 1024 * 1024 ? recordBytes({ directory: record.directory, path }) : undefined;
+          const size = files.find((file) => file.path === path)?.size ?? Infinity;
+          const bytes =
+            size <= 2 * 1024 * 1024
+              ? recordBytes({
+                  ...record,
+                  path,
+                  ...(record.archive ? { archive: { ...record.archive, path } } : {}),
+                })
+              : undefined;
           send(
             response,
             200,

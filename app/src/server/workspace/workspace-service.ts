@@ -540,7 +540,7 @@ export class WorkspaceCollector {
       });
     const currentModes = new Map(review.changes.map((change) => [change.path, change.after.split(":")[0]]));
     for (const record of records) {
-      observe(join(record.directory, record.path));
+      if (!record.archive) observe(join(record.directory, record.path));
       let contents = "",
         digest = "",
         error = "",
@@ -553,8 +553,8 @@ export class WorkspaceCollector {
         digest = contentDigest(bytes);
         files = supportingFiles(record);
         const support = join(record.directory, record.path.replace(/\.[^.]+$/, ""));
-        observe(support);
-        for (const file of files) {
+        if (!record.archive) observe(support);
+        for (const file of record.archive ? [] : files) {
           const absolute = join(record.directory, file.path);
           observe(absolute);
           for (let directory = dirname(absolute); directory.startsWith(support); directory = dirname(directory))

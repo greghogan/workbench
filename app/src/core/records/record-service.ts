@@ -1,3 +1,4 @@
+import { recordInventory, readInventoryRecords, readArchiveFileAt, readArchiveIndex } from "./archive-store.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { markdownExcerpt } from "./markdown-excerpt.js";
 import { InvalidInput, MissingResource, StateConflict } from "../runtime/input-errors.js";
@@ -30,12 +31,23 @@ export interface BrowserRecord {
   editable: boolean;
   local: boolean;
   collection: boolean;
+  archive?: { repository: string; revision: string; path: string };
   previewError?: string;
   adaptation?: "modified" | "added";
   citationPresence?: { present: number; total: number } | { error: string };
 }
 export const contentDigest = (bytes: string | Buffer): string => createHash("sha256").update(bytes).digest("hex");
-export function recordBytes(record: Pick<BrowserRecord, "directory" | "path">): Buffer {
+export function recordBytes(record: Pick<BrowserRecord, "directory" | "path" | "archive">): Buffer {
+  if (record.archive) {
+    const body = readArchiveFileAt(
+      record.archive.repository,
+      record.archive.revision,
+      record.archive.path,
+      previewLimit,
+    );
+    if (!body) throw new MissingResource("Archived record is unavailable");
+    return body;
+  }
   return ownedFileBytes(record.directory, record.path, previewLimit);
 }
 
@@ -84,6 +96,8 @@ export function workspaceRecords(
     number: string,
     local: boolean,
     collection = false,
+    archived?: BrowserRecord["archive"],
+    captured?: Buffer,
   ) => {
     const record: BrowserRecord = {
       id: `${scope}:${type}${number ? `-${number}` : ""}`,
@@ -97,16 +111,21 @@ export function workspaceRecords(
       status: "",
       path: relative(directory, path).replaceAll("\\", "/"),
       directory,
-      editable: !local && recordPresentations[type].editable,
+      editable: !local && !archived && recordPresentations[type].editable,
+      ...(archived ? { archive: archived } : {}),
       local,
       collection,
     };
     const absolute = ownedPath(directory, record.path);
     seen.add(absolute);
-    observe(dirname(absolute));
-    observe(absolute);
-    const info = lstatSync(absolute);
-    const stamp = `${String(info.ino)}:${String(info.size)}:${String(info.mtimeMs)}:${String(info.ctimeMs)}:${record.title}`;
+    if (!archived) {
+      observe(dirname(absolute));
+      observe(absolute);
+    }
+    const info = archived ? undefined : lstatSync(absolute);
+    const stamp = archived
+      ? `archive:${archived.revision}:${archived.path}`
+      : `${String(info?.ino)}:${String(info?.size)}:${String(info?.mtimeMs)}:${String(info?.ctimeMs)}:${record.title}`;
     const cached = cache.get(absolute);
     if (cached?.stamp === stamp) {
       records.push({
@@ -119,7 +138,7 @@ export function workspaceRecords(
       return;
     }
     try {
-      const contents = recordBytes(record).toString("utf8");
+      const contents = (captured ?? recordBytes(record)).toString("utf8");
       record.title = /^#\s+(.+)$/m.exec(contents)?.[1] ?? record.title;
       if (type === "CIT") {
         const citation = citationMetadata(contents);
@@ -157,13 +176,35 @@ export function workspaceRecords(
   for (const project of projects) {
     const directory = rootOf(root, project);
     observe(join(directory, "workbench"));
+    observe(join(directory, projectPaths.state));
     const charter = join(directory, projectPaths.charter);
     observe(charter);
     if (existsSync(charter)) add(root, charter, project.id, "CHARTER", "", false);
     for (const kind of kinds) {
       observe(join(directory, "workbench", detail(kind).directory));
-      for (const file of scanRecordDirectory(join(directory, "workbench"), kind, committedRecords))
-        add(root, file.path, project.id, kind, file.number, false);
+      const inventory = recordInventory(root, project.path, kind, committedRecords);
+      const bodies = readInventoryRecords(
+        root,
+        inventory.filter((file) => file.archive !== undefined),
+      );
+      for (const file of inventory)
+        add(
+          root,
+          file.path,
+          project.id,
+          kind,
+          file.number,
+          false,
+          false,
+          file.archive
+            ? {
+                repository: root,
+                revision: file.archive.revision,
+                path: relative(root, file.path).replaceAll("\\", "/"),
+              }
+            : undefined,
+          bodies.get(file.path),
+        );
     }
   }
   for (const collection of collections) {
@@ -206,6 +247,15 @@ export function findRecord(root: string, id: string): BrowserRecord {
 export function supportingFiles(record: BrowserRecord): { path: string; size: number }[] {
   if (record.type === "CHARTER") return [];
   const base = record.path.slice(0, -extname(record.path).length);
+  if (record.archive) {
+    const archive = readArchiveIndex(record.archive.repository, record.archive.revision);
+    const prefix = record.archive.path.slice(0, -extname(record.archive.path).length) + "/";
+    const files = [...archive.files.keys()]
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => ({ path, size: archive.sizes.get(path) ?? 0 }));
+    if (files.length > 1000) throw new InvalidInput("supporting file list exceeds 1000 entries");
+    return files;
+  }
   const files: { path: string; size: number }[] = [];
   const walk = (path: string) => {
     const absolute = ownedPath(record.directory, path);
