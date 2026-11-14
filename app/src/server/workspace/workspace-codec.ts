@@ -99,6 +99,13 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
         bool(record.local) &&
         bool(record.collection),
     );
+    if (record.archive !== undefined) {
+      const archive = object(record.archive);
+      strings(archive, ["repository", "revision", "path"]);
+      check(text(archive.revision) && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(archive.revision));
+      check(!record.editable && !record.local && !record.collection);
+      check(archive.repository === data.root && archive.path === record.path && record.directory === data.root);
+    }
     check(record.previewError === undefined || text(record.previewError));
     check(record.adaptation === undefined || record.adaptation === "added" || record.adaptation === "modified");
     if (record.citationPresence !== undefined) {
@@ -129,6 +136,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     const task = object(value);
     strings(task, ["reference", "title", "path", "contents", "digest", "planDigest"]);
     check(task.parent === undefined || text(task.parent));
+    check(task.archived === undefined || bool(task.archived));
     if (task.implementation !== undefined) decodeApplicableTaskImplementation(task.implementation);
     list(task.dependencies, (value) => {
       check(text(value));

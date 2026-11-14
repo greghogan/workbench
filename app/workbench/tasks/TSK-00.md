@@ -97,7 +97,7 @@ semantic review or grant human approval.
 
 - [x] Establish shared integration-target configuration and Git-backed archived-record access.
 - [x] Implement the archive CLI's resumable enable, transfer, recovery, and restore workflows.
-- [ ] Integrate archived history, search, references, and supporting files into CLI, agent context, and browser views.
+- [x] Integrate archived history, search, references, and supporting files into CLI, agent context, and browser views.
 - [ ] Add archive-aware CLI rebase/integration operations and update the supplied rebase skill to use them.
 
 ## Implementation account
@@ -113,6 +113,10 @@ Archive and restore operations can resume safely after interruption. Both record
 stay intact, and recovery references protect prepared commits until both phases finish. Archive-only checkouts keep
 their publication guards, including after archival is disabled. Verified storage-only transfers preserve existing review
 evidence. Tests exercised intervening edits, restricted clones, and large supporting files.
+
+CLI search and browser navigation use the combined record inventory. Archived records and supporting files can be read
+without restoring them to disk. CLI and browser checks exercised body search, linked prerequisites, and supporting-file
+previews and downloads.
 
 ## Implementing-agent detail
 

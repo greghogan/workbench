@@ -368,6 +368,7 @@ export function recordPage(
             "pending",
           )}
         {recordStatus(record)}
+        {record.archive && badge("Archived · read only")}
         {record.local && badge("Local collection · read only")}
       </p>
       {record.type === "CHARTER" && record.collection && (

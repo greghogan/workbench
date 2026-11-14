@@ -10,6 +10,7 @@ export function experimentControls(context: ViewContext, record: BrowserRecord):
     record.type !== "EXP" ||
     record.local ||
     record.collection ||
+    !!record.archive ||
     !experimentIsResult(record.status) ||
     (context.index.reviews.byOwner.get(record.path)?.pending ?? 0) === 0 ||
     context.document(record.id).error

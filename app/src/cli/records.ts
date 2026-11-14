@@ -1,3 +1,4 @@
+import { safeText } from "../core/diagnostics/diagnostic-text.mjs";
 import { listCitationStatus } from "./citation-output.js";
 import { Argument, Command } from "commander";
 import { readFileSync } from "node:fs";
@@ -10,6 +11,8 @@ import { addRecord, createExperiment } from "../core/records/records.js";
 import { addRelease } from "../core/records/releases.js";
 import { registerCommand } from "./commands.js";
 import { reportCreatedRecord } from "./record-output.js";
+import { InvalidInput } from "../core/runtime/input-errors.js";
+import { terminalTable } from "../core/diagnostics/terminal-table.js";
 import { registerArchiveCommands } from "./record-archive.js";
 
 const recordNames = {
@@ -41,6 +44,51 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
   );
   registerArchiveCommands(records, root);
   records
+    .command("search")
+    .description("Search record metadata and full text, including archived history")
+    .argument("<query>", "Case-insensitive text")
+    .option("--project <id>", "Limit results to one project or collection scope")
+    .option("--type <code>", "Record type, such as TSK or EXP")
+    .option("--json", "Print matching record metadata as JSON")
+    .action(async (query: string, options: { project?: string; type?: string; json?: boolean }) => {
+      const { workspaceRecords, recordBytes } = await import("../core/records/record-service.js");
+      const records = workspaceRecords(root),
+        type = options.type?.toUpperCase(),
+        scope = options.project?.toLowerCase();
+      if (scope && !records.some((record) => record.scope === scope))
+        throw new InvalidInput(`Unknown record scope: ${scope}`);
+      if (type && ![...Object.values(recordNames), "CHARTER"].includes(type))
+        throw new InvalidInput(`Unknown record type: ${type}`);
+      const normalized = query.toLowerCase();
+      const found = records
+        .filter((record) => (!scope || record.scope === scope) && (!type || record.type === type))
+        .filter((record) =>
+          [record.id, record.title, record.summary, record.status, recordBytes(record).toString()]
+            .join("\n")
+            .toLowerCase()
+            .includes(normalized),
+        )
+        .map((record) => ({
+          reference: record.id,
+          title: record.title,
+          status: record.status,
+          archived: !!record.archive,
+        }));
+      console.log(
+        options.json
+          ? JSON.stringify(found, null, 2)
+          : terminalTable(
+              ["RECORD", "TITLE", "STATUS", "STORAGE"],
+              found.map((record) => [
+                record.reference,
+                record.title,
+                record.status,
+                record.archived ? "Archive" : "Live",
+              ]),
+            ),
+      );
+    });
+  records
     .command("show")
     .description("Read a live, adopted, or archived record")
     .argument("<reference>", "Scoped record reference, or a short reference in the current scope")
@@ -52,15 +100,15 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
       if (options.project && selected.project.id !== options.project.toLowerCase())
         throw new Error(`record ${value} conflicts with --project ${options.project}`);
       const contents = selected.contents ?? readBoundedFile(selected.path, 2 * 1024 * 1024, "record").toString();
-      console.log(
-        options.json
-          ? JSON.stringify(
-              { reference: `${selected.project.id}:${selected.kind}-${selected.number}`, contents },
-              null,
-              2,
-            )
-          : contents,
-      );
+      if (options.json)
+        console.log(
+          JSON.stringify(
+            { reference: `${selected.project.id}:${selected.kind}-${selected.number}`, contents },
+            null,
+            2,
+          ),
+        );
+      else process.stdout.write(process.stdout.isTTY ? safeText(contents) : contents);
     });
   records
     .command("add")

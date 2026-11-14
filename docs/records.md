@@ -551,12 +551,11 @@ archive branch tip. Archive trees contain tasks, experiments, and their owned su
 Git history and do not require a checkout. Identical live copies appear once; differing contents or file modes require
 explicit reconciliation. Missing objects require fetching the archive history rather than treating records as absent.
 
-
 Enable archival with `workbench record archive enable`, optionally selecting `--branch`, `--group-size`,
-`--integration-branch`, and `--remote`. Commit that configuration before transferring records. `workbench record archive`
-or `workbench record archive status` previews fixed ID ranges separately for each scope and record type. Every existing
-record in a range must be completed and eligible; gaps do not require placeholder records. A completed experiment's last
-committed version must have passed human review, rather than being marked provisional.
+`--integration-branch`, and `--remote`. Commit that configuration before transferring records.
+`workbench record archive` or `workbench record archive status` previews fixed ID ranges separately for each scope and
+record type. Every existing record in a range must be completed and eligible; gaps do not require placeholder records. A
+completed experiment's last committed version must have passed human review, rather than being marked provisional.
 
 `workbench record archive run` previews and confirms two local commits. `--yes` authorizes those commits without a
 terminal; `--include-partial` explicitly includes eligible incomplete final groups. `--json` returns transfer details.
@@ -577,3 +576,8 @@ precede removals, while restored project records precede retirement of archive c
 Enabling installs repository-local hook routing that preserves existing hooks and protects archive history even when
 archival is later disabled or an archive-only branch is checked out. Local Git hooks can be bypassed; remote branch
 protection is a separate repository setting. Keep archive and integration branches on the configured integration remote.
+
+Archived records remain available in the browser and through `workbench record show REFERENCE`. Search metadata and full
+text with `workbench record search QUERY`, optionally selecting `--project ID` or `--type TSK`. Archive views are
+read-only; disabling archival restores records for editing. Supporting-file previews and downloads read Git objects
+without creating working-tree copies.
