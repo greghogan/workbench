@@ -9,7 +9,9 @@ description:
 
 Read the requested plan, applicable charters and decisions, related records, and relevant source. Follow the project's
 chosen planning method without imposing a different framework. Separate future work from delivered results, and
-confirmed human decisions from assumptions or proposals.
+confirmed human decisions from assumptions or proposals. Read named Workbench plans with `workbench task plan show NAME`
+and supporting files with `--file`; use `--diff` when an approval baseline exists. Reading a plan needs no branch
+switch.
 
 Check whether another agent could understand the intended outcome and execute the next work without the originating
 conversation. Investigate contradictions, missing acceptance criteria, dependencies, failure and recovery behavior,
@@ -17,6 +19,10 @@ verification gaps, and unjustified scope. Check that newly discovered work and r
 throughout the plan. Assess the parts material to this work; do not fill a checklist with speculative concerns. Check
 that the human overview explains why, what, and how with useful prose and visuals, while implementing-agent details
 remain clearly separate and proportionate.
+
+For user-facing work, assess whether the plan explains a coherent user workflow and its verification, beyond the
+presence of commands, pages, or data operations. Distinguish consequential unresolved product choices from ordinary
+design details the implementing agent can resolve within the approved direction.
 
 For multi-task work, check dependency readiness, preferred order, shared changes that constrain parallel execution, and
 the authorized execution scope. Check acceptance criteria and how verified implementation will be presented for any

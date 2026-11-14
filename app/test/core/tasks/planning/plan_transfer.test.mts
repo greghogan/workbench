@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { join } from "node:path";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { webFixture } from "../../../fixtures/web.mjs";
-import { git } from "../../../fixtures/adoption.mjs";
+import { git, distribution } from "../../../fixtures/adoption.mjs";
 import { planIdentity } from "../../../../src/core/tasks/planning/plan-model.ts";
 import {
   configurePlanning,
@@ -26,6 +26,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function fixture(storage = true) {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   const root = webFixture();
   roots.push(root);
   vi.stubEnv("WORKBENCH_STATE_HOME", join(root, ".git/private-state"));

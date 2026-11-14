@@ -1,3 +1,4 @@
+import { taskDisposition, applyTaskDisposition } from "../core/tasks/task-disposition.js";
 import { changeWorkQueue } from "../core/tasks/planning/plan-transfer.js";
 import { createPatch } from "diff";
 import { InvalidInput } from "../core/runtime/input-errors.js";
@@ -143,7 +144,8 @@ export function registerTaskCommands(program: Command, root: string): void {
       .description(description)
       .argument("<reference>")
       .option("--expected <sha256>", "Reject a task changed since inspection")
-      .action(async (value: string, options: { expected?: string }, command: Command) => {
+      .option("--reason <text>", "Reason for canceling work")
+      .action(async (value: string, options: { expected?: string; reason?: string }, command: Command) => {
         const id = reference(value, command);
         const guarded = readConfig(root).review?.task_approvals === true && ["Approved", "Accepted"].includes(status);
         let expected = options.expected;
@@ -169,10 +171,52 @@ export function registerTaskCommands(program: Command, root: string): void {
             prompt.close();
           }
         }
-        changeTaskStatus(root, id, status, expected, guarded);
+        changeTaskStatus(root, id, status, expected, guarded, options.reason);
         if (command.optsWithGlobals<TaskOptions>().json) console.log(JSON.stringify({ reference: id, status }));
         else console.log(`${id}: ${status}`);
       });
+  for (const kind of ["delete", "revert"] as const)
+    tasks
+      .command(kind)
+      .description(
+        kind === "delete"
+          ? "Preview removal of an unpublished task's unmixed commit suffix"
+          : "Preview an inverse change retaining the original task history",
+      )
+      .argument("<reference>")
+      .option("--reason <text>", "Reason for reverting the task")
+      .option("--apply", "Confirm the inspected operation")
+      .option("--expected <digest>", "Digest from the operation preview")
+      .action((value: string, options: { apply?: boolean; expected?: string; reason?: string }, command: Command) => {
+        const selected = reference(value, command);
+        if (options.apply) {
+          if (!options.expected) throw new InvalidInput("Inspect the operation, then supply --expected");
+          const recovery = applyTaskDisposition(root, {
+            reference: selected,
+            kind,
+            reason: options.reason ?? "",
+            expected: options.expected,
+          });
+          console.log(
+            command.optsWithGlobals<TaskOptions>().json
+              ? JSON.stringify({ reference: selected, kind, recovery })
+              : `${kind === "delete" ? "Removed unpublished task commits" : "Staged inverse changes; verify and accept the revised outcome"}. Recovery: ${recovery}`,
+          );
+        } else {
+          const plan = taskDisposition(root, selected, kind, options.reason);
+          console.log(
+            command.optsWithGlobals<TaskOptions>().json
+              ? JSON.stringify(plan, null, 2)
+              : `${plan.reference}: ${kind}\n${plan.commits.map((revision) => revision.slice(0, 12)).join("\n")}\n\n${plan.updates.map((file) => file.path).join("\n")}\n\n${plan.problems.join("\n\n")}\n\nOperation digest: ${plan.digest}`,
+          );
+        }
+      });
+  tasks
+    .command("recover")
+    .description("Resume a prepared task deletion or inverse change")
+    .action(() => {
+      console.log(`Task operation recovered. Recovery: ${applyTaskDisposition(root, { recover: true })}`);
+    });
   registerTaskPlanCommands(tasks, root);
   for (const command of tasks.commands) {
     command.option("--project <id>", "Resolve short references in this project scope");
@@ -221,7 +265,7 @@ export function registerTaskCommands(program: Command, root: string): void {
   queue
     .command("add")
     .argument("<references...>")
-    .description("Select approved tasks for local execution")
+    .description("Select tasks or order future plans; selection does not approve them")
     .action((values: string[], _options: unknown, command: Command) => {
       return mutate({ action: "add", references: values.map((value) => queueReference(value, command)) }, command);
     });

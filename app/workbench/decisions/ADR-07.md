@@ -22,6 +22,14 @@ an explicit checkpoint or approval; neither publishes them. Named plans receive 
 starts. Transfer the selected plan and its necessary context without starting unrelated work, preserving approval,
 relationships, and supporting material. Retire saved copies only after verifying their first implementation commit.
 
+Planning history stays outside implementation ancestry. Only its explicitly configured publication destination receives
+planning-only history without implementation publication gates. Empty planning storage may be pruned only while
+preserving drafts, queued work, unfinished transfers, and checkpoints awaiting manual publication.
+
+Cancellation retains its reason. Deletion protects published history, incoming relationships, and unrelated work;
+reversion preserves the original work and adds an inverse change. Consequential operations provide an inspectable plan
+and recoverable results.
+
 Local execution queues retain order, active work, and progress. Keep that state separate from tracked task records and
 human decisions, preserving it across cache cleanup and service restarts. CLI and browser operations use the same queue,
 readiness rules, and human decisions. Queue operations coordinate work without launching agents or creating commits.

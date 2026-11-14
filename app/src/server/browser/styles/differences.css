@@ -130,6 +130,24 @@
   text-decoration: underline;
   text-decoration-thickness: 2px;
 }
+.code-difference ins,
+.code-comparison ins {
+  background: var(--diff-add);
+  color: var(--green);
+  text-decoration: none;
+}
+.code-difference del,
+.code-comparison del {
+  background: var(--diff-remove);
+  color: var(--red);
+}
+.code-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.code-comparison > :first-child {
+  border-right: 1px solid var(--line);
+}
 .document-diff del {
   color: var(--red);
   background: var(--diff-remove);

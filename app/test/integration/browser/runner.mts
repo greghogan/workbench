@@ -352,11 +352,13 @@ artifacts:
         );
       }
     }
-    // Browser workflows start with a valid consuming project, not partial presentation-only record stubs.
-    for (const args of [["format", "--all", "--write"], ["sync"], ["validate"]]) {
+    const workbench = (...args: string[]): string => {
       const prepared = spawnSync(node, [join(repo, "bundle/main.cjs"), ...args], { cwd: root, env, encoding: "utf8" });
       assert.equal(prepared.status, 0, prepared.stdout + prepared.stderr);
-    }
+      return prepared.stdout;
+    };
+    // Browser workflows start with a valid consuming project, not partial presentation-only record stubs.
+    for (const args of [["format", "--all", "--write"], ["sync"], ["validate"]]) workbench(...args);
     const adr = join(root, "workbench/decisions/ADR-00.md");
     const staged = readFileSync(adr, "utf8") + "\nStaged exact phrase.\n";
     writeFileSync(adr, staged);
@@ -502,6 +504,7 @@ artifacts:
         directory,
         base,
         git,
+        workbench,
       }).filter((scenario) => scenario.name === values.scenario)) {
         try {
           await scenario.run();

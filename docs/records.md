@@ -214,12 +214,20 @@ parents in another phase; the selected execution queue retains its explicit run 
 `--project <id>` for a scope, and `--json` for structured output. `workbench task show <reference>` reads the full
 record; `task show <reference> --diff` compares it with the retained approved plan. Human decisions use
 `workbench task approve`, `accept`, `replan`, or `cancel` followed by the task reference. `--expected <sha256>` binds a
-decision to the digest returned by `task show --json`.
+decision to the digest returned by `task show --json`. Cancellation requires `--reason "Why work stopped"`.
 
 Future plans can remain outside implementation history. `workbench task plan configure --branch workbench/plans` enables
 an independent planning branch; the branch name is configurable and storage is disabled by default. An optional
 `--remote <remote> --destination <branch>` records the exact destination for manual pushes. Saving or approving never
-pushes it.
+pushes it. Only that exact remote, push URL, and destination branch receive the planning exception; every retained
+checkpoint must contain planning material only. Push manually with Git. Provisional implementation remains unpublished,
+and planning history cannot be rebased or merged into application ancestry.
+
+Local auto-pruning is enabled by default; `configure --no-auto-prune --branch NAME` retains empty planning history.
+Pruning waits for empty planning and execution queues, no drafts or unfinished transfers, and no saves awaiting manual
+publication. Use `task plan configure --disable` after preserving and emptying planning storage. Remote branches are
+never removed automatically. A missing local planning branch is recreated from new checkpoints; unresolved references to
+missing plans remain errors instead of empty results.
 
 Create a named draft with `workbench task plan create service --file plan.md`. `task plan show service --json` returns
 its inspected version. Use that digest with `task plan save service --file plan.md --expected <digest>` to retain an
@@ -243,8 +251,30 @@ approving that context or starting siblings. The numeric task becomes authoritat
 commit is verified, Workbench retires the saved plan and updates remaining references. `task plan recover` resumes
 interrupted transfers, renames, and checkpoints while preserving intervening edits.
 
-The planning branch can also be edited with Git and an ordinary editor. A separate worktree is optional. CLI and browser
-checkpoints preserve editor changes and stop on conflicting edits rather than replacing them.
+Create future plans and checkpoint drafts through the CLI. The browser supports editing, approval, cancellation, and
+deletion of existing plans. Approval checkpoints the approved version when planning storage is enabled.
+
+The planning branch can also be edited with Git and an ordinary editor. A separate worktree is optional. Checkpoints
+preserve editor changes and stop on conflicting edits rather than replacing them.
+
+`task plan cancel NAME --expected DIGEST [--reason TEXT]` retains the canceled plan and any supplied reason. Preview
+deletion with `task plan delete NAME`; apply its deletion digest with `--apply --expected DIGEST`. Incoming
+relationships and queue selections must be resolved first. The deletion stays a durable draft until checkpointed, and
+its output identifies a recovery reference.
+
+`task delete REFERENCE` previews removal of an unmixed unpublished task suffix. Apply the inspected operation with
+`--apply --expected DIGEST`; deletion refreshes configured remotes before verifying that those commits are unpublished.
+`task revert REFERENCE --reason TEXT` instead prepares an inverse change, retaining the task account and later unrelated
+work. Applying it stages files without committing and returns the outcome to verification: review and commit normally,
+then obtain human acceptance of the revised result. Mixed task commits must be separated first. Both operations retain
+recovery references; `task recover` resumes an interrupted application. The browser offers the same previews and
+explicit confirmations. Cancellation preserves existing work; accepted work must be reopened or explicitly reverted.
+Active queued work must be released or blocked before cancellation.
+
+Use `workbench commit history --branches` to list local branches, or `commit history BRANCH` to read its retained
+first-parent history. `--from REVISION` continues an older page; `--diff` and optional `--file PATH` show one commit's
+patch. The browser History page provides immutable commit and file views without switching branches; historical links
+stay in that version. Completed commits are read-only rather than new requests for human approval.
 
 `workbench queue` shows the selected local execution order and the next eligible task. Add approved work with
 `workbench queue add <references...>` and reorder it with `queue move <reference> --before <other>` or
@@ -662,3 +692,10 @@ Fold accepted task-state changes into their owning delivery before finalizing, r
 For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that
 revision in a disposable checkout. Integration preserves accepted comparison authority without inventing private review
 receipts.
+
+### Git recovery references
+
+`workbench commit recovery` lists retained backups from integration, finalization, and deletion. Inspect a reference
+with Git before releasing it. `workbench commit recovery --delete REFERENCE --expected OBJECT --yes` removes that exact
+reference without changing project branches. Cleanup refuses unfinished repository operations and changed references.
+Removing the last reference can make its contents eligible for Git garbage collection; cleanup is explicit.

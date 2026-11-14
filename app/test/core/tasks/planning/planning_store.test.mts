@@ -1,10 +1,10 @@
-import { changeTaskQueue, readTaskQueue } from "../../../../src/core/tasks/task-queue.ts";
 import { gitRevision } from "../../../../src/core/git/refs.ts";
+import { changeTaskQueue, readTaskQueue } from "../../../../src/core/tasks/task-queue.ts";
 import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { git } from "../../../fixtures/adoption.mjs";
+import { git, distribution } from "../../../fixtures/adoption.mjs";
 import {
   gitBytes,
   readGitObjects,
@@ -34,6 +34,7 @@ const first = planIdentity("demo", "service"),
   second = planIdentity("demo", "artifacts");
 const plan = (text: string) => `---\nstatus: Planned\n---\n\n# Service installation\n\n${text}\n`;
 function fixture() {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   const root = mkdtempSync(join(tmpdir(), "workbench-planning-"));
   roots.push(root);
   git(root, "init", "-qb", "main");

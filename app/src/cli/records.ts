@@ -52,7 +52,24 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
     .option("--json", "Print matching record metadata as JSON")
     .action(async (query: string, options: { project?: string; type?: string; json?: boolean }) => {
       const { workspaceRecords, recordBytes } = await import("../core/records/record-service.js");
-      const records = workspaceRecords(root),
+      const source = workspaceRecords(root),
+        { readPlanningRecords, planningBrowserRecord } = await import("../core/tasks/planning/planning-read-model.js"),
+        { taskRepositoryDirectory } = await import("../core/tasks/task-project-state.js"),
+        plans = new Map(
+          (taskRepositoryDirectory(root) ? readPlanningRecords(root) : [])
+            .filter((plan) => !plan.implementation || !source.some((record) => record.id === plan.implementation?.task))
+            .map((plan) => [plan.reference, plan]),
+        ),
+        records = [
+          ...source,
+          ...[...plans.values()].map((plan) =>
+            planningBrowserRecord(
+              root,
+              plan,
+              plan.status === "Approved" && !plan.approval?.current ? "Planned" : plan.status,
+            ),
+          ),
+        ],
         type = options.type?.toUpperCase(),
         scope = options.project?.toLowerCase();
       if (scope && !records.some((record) => record.scope === scope))
@@ -63,7 +80,13 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
       const found = records
         .filter((record) => (!scope || record.scope === scope) && (!type || record.type === type))
         .filter((record) =>
-          [record.id, record.title, record.summary, record.status, recordBytes(record).toString()]
+          [
+            record.id,
+            record.title,
+            record.summary,
+            record.status,
+            plans.get(record.id)?.contents ?? recordBytes(record).toString(),
+          ]
             .join("\n")
             .toLowerCase()
             .includes(normalized),
@@ -73,6 +96,7 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
           title: record.title,
           status: record.status,
           archived: !!record.archive,
+          ...(plans.has(record.id) ? { planning: true } : {}),
         }));
       console.log(
         options.json
@@ -83,7 +107,7 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
                 record.reference,
                 record.title,
                 record.status,
-                record.archived ? "Archive" : "Live",
+                record.planning ? "Planning" : record.archived ? "Archive" : "Live",
               ]),
             ),
       );
@@ -94,8 +118,19 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
     .argument("<reference>", "Scoped record reference, or a short reference in the current scope")
     .option("--project <id>", "Scope for a short record reference")
     .option("--json", "Print the resolved reference and contents as JSON")
-    .action((value: string, options: { project?: string; json?: boolean }) => {
+    .action(async (value: string, options: { project?: string; json?: boolean }) => {
       const scoped = value.includes(":") ? value : `${currentProject(root, options.project)}:${value}`;
+      if (scoped.includes(":plan/")) {
+        const { parsePlanReference } = await import("../core/tasks/planning/plan-model.js"),
+          { readPlan } = await import("../core/tasks/planning/planning-store.js"),
+          identity = parsePlanReference(scoped);
+        if (options.project && identity.scope !== options.project.toLowerCase())
+          throw new InvalidInput("Plan conflicts with --project");
+        const plan = readPlan(root, identity);
+        if (options.json) console.log(JSON.stringify({ reference: plan.reference, contents: plan.contents }, null, 2));
+        else process.stdout.write(process.stdout.isTTY ? safeText(plan.contents) : plan.contents);
+        return;
+      }
       const selected = resolveRecordReference(root, scoped);
       if (options.project && selected.project.id !== options.project.toLowerCase())
         throw new Error(`record ${value} conflicts with --project ${options.project}`);

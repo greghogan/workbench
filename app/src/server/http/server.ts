@@ -1,8 +1,11 @@
+import { taskOperationPage } from "../views/task-operation-page.js";
+import { historyFile } from "../../core/git/history.js";
 import { historyPage } from "../views/history-page.js";
+import { taskHistoryPage } from "../views/task-history.js";
 import { parsePlanReference, planningPaths } from "../../core/tasks/planning/plan-model.js";
 import { readPlan } from "../../core/tasks/planning/planning-store.js";
 import { readGitObjects, gitBytes } from "../../core/git/git-snapshot.js";
-import { planPage, planFilePage, newPlanPage } from "../views/plan-pages.js";
+import { planPage, planFilePage } from "../views/plan-pages.js";
 import { PreparationState } from "../review/review-state.js";
 import { decodeReviewTarget, type ReviewTarget } from "../review/review-request.js";
 import { performance } from "node:perf_hooks";
@@ -330,8 +333,21 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         const renderStarted = performance.now();
         let page: string;
         switch (route) {
+          case Route.TaskOperation:
+            page = taskOperationPage(selected, query);
+            break;
+          case Route.HistoryFile: {
+            const file = historyFile(root, query.commit ?? "", query.path ?? ""),
+              entry = query.side === "before" ? file.before : file.after;
+            if (!entry) throw new WebError(404, "Historical file version not found");
+            sendGitDownload(response, root, entry.oid, file.path);
+            return;
+          }
           case Route.History:
             page = historyPage(selected, query, actions.reviews);
+            break;
+          case Route.TaskHistory:
+            page = taskHistoryPage(selected, query, actions.reviews);
             break;
           case Route.NewCharter:
             page = newCharterPage(selected, query.project ?? "");
@@ -364,9 +380,6 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           }
           case Route.Plan:
             page = planPage(selected, query);
-            break;
-          case Route.PlanNew:
-            page = newPlanPage(selected);
             break;
           case Route.TaskQueue:
             page = taskQueuePage(selected, query);
@@ -443,11 +456,12 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             page = collectionProposalPage(selected, token, saved.request, saved.plan);
             break;
           }
-          case Route.PlanCreate:
+          case Route.PlanCancel:
+          case Route.PlanDelete:
+          case Route.TaskDisposition:
           case Route.PlanRename:
           case Route.PlanSave:
           case Route.PlanApprove:
-          case Route.PlanCheckpoint:
           case Route.TaskState:
           case Route.QueueChange:
           case Route.Approve:
@@ -670,19 +684,6 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             status,
             "text/html; charset=utf-8",
             newCharterPage(context(), form.get("project") ?? "", {
-              contents: form.get("contents") ?? "",
-              error: publicMessage,
-            }),
-          );
-          return;
-        }
-        if (url?.pathname === Route.PlanCreate && form) {
-          send(
-            response,
-            status,
-            "text/html; charset=utf-8",
-            newPlanPage(context(), {
-              name: form.get("name") ?? "",
               contents: form.get("contents") ?? "",
               error: publicMessage,
             }),

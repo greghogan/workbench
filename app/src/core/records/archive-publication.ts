@@ -9,13 +9,7 @@ import { InvalidInput } from "../runtime/input-errors.js";
 import { record } from "../runtime/values.mjs";
 import { readArchiveTree } from "./archive-index.js";
 
-interface PushUpdate {
-  localRef: string;
-  tip: string;
-  remoteRef: string;
-  previous: string;
-}
-const zero = (id: string) => /^0+$/.test(id);
+import { pushUpdates, zeroRevision as zero, type PushUpdate } from "../git/push-updates.js";
 function ancestor(root: string, previous: string, tip: string): boolean {
   const result = spawnSync("git", ["-C", root, "merge-base", "--is-ancestor", previous, tip], { encoding: "utf8" });
   if (result.error || (result.status !== 0 && result.status !== 1))
@@ -62,24 +56,7 @@ function restorationPublished(
 
 /** Check every proposed ref together, before project gates or registry requests. */
 export function checkArchivePublication(root: string, input: string, remote: string): string[] {
-  const updates: PushUpdate[] = input
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      const fields = line.split(/\s+/),
-        [localRef, tip, remoteRef, previous] = fields;
-      if (
-        fields.length !== 4 ||
-        !localRef ||
-        !remoteRef ||
-        !tip ||
-        !previous ||
-        ![tip, previous].every((oid) => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(oid))
-      )
-        throw new InvalidInput("Invalid pre-push ref update");
-      return { localRef, tip, remoteRef, previous };
-    });
+  const updates = pushUpdates(input);
   const archives: string[] = [],
     checked = new Set<string>();
   const destinations = new Map<string, string | undefined>();

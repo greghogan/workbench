@@ -1,3 +1,4 @@
+import { maintainPlanning } from "./planning-retention.js";
 import { realpathSync } from "node:fs";
 import { gitRevision } from "../../git/refs.js";
 import { gitBytes, readGitTree, readGitObjects } from "../../git/git-snapshot.js";
@@ -179,6 +180,7 @@ export function finishPlanTransfers(
     );
     finished.push(...data.plans.map((plan) => plan.task));
   }
+  maintainPlanning(root);
   if (blocked.length) throw new StateConflict(blocked.join("\n"));
   return finished;
 }

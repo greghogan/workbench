@@ -141,6 +141,7 @@ export function recordTitle(kind: Kind, number: string, contents: string): strin
     throw new Error(`invalid title for ${kind}-${number}`);
   return first.slice(prefix.length);
 }
+
 /** Preserve frontmatter comments and the document body while changing a workflow state. */
 export function replaceRecordStatus(contents: string, status: string): string {
   return editRecordMetadata(contents, { status });

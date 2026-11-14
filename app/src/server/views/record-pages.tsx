@@ -22,6 +22,7 @@ import { sourceURL } from "../routes/sources.js";
 import { experimentControls } from "./experiment-pages.js";
 import { taskControls, taskChildren, taskNavigation, tasksPage } from "./task-pages.js";
 import { recordPane, recordNeighbors } from "./record-pane.js";
+import { taskHistoryPanel } from "./task-history.js";
 
 export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof Route.Records>): string {
   const { type, scope, query } = recordSearch(parameters);
@@ -274,8 +275,8 @@ export function recordPage(
             value: draft?.contents ?? contents,
           })}
           <div class="actions">
-            {submitButton("Save draft")}
             {linkButton("Cancel", recordURL(record.id), true)}
+            {submitButton("Save draft")}
           </div>
         </>
       ),
@@ -402,6 +403,7 @@ export function recordPage(
         recordNeighbors(context, record),
       )}
       {record.type === "CIT" && citationDocumentsPanel(context, record.id)}
+      {taskHistoryPanel(context, record)}
       {taskControls(context, record)}
       {attachments.length > 0 && (
         <section class="panel">

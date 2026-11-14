@@ -313,6 +313,7 @@ interface SnapshotTask {
   status: string;
   digest: string;
   workDigest: string;
+  mode: string;
 }
 export function treeTasks(root: string, tree: string): Map<string, SnapshotTask> {
   const entries = logicalRecordEntries(root, readGitTree(root, tree));
@@ -357,6 +358,7 @@ export function treeTasks(root: string, tree: string): Map<string, SnapshotTask>
         status: recordDocument("TSK", contents, path).metadata.status,
         digest: taskDigest(contents),
         workDigest,
+        mode: entries.get(path)?.mode ?? "",
       });
     }
   }
@@ -590,6 +592,21 @@ export function remapAgentTasks(root: string, mapping: ReadonlyMap<string, strin
     if (!selected) return;
     selected.tasks = [...new Set(selected.tasks.map((reference) => mapping.get(reference) ?? reference))];
     selected.tip = tip;
+    store(root).write(state);
+  });
+}
+
+/** Discard only associations owned by this checkout branch after verified removal of its unpublished task history. */
+export function discardAgentTasks(root: string, references: ReadonlySet<string>): void {
+  const scope = workScope(root),
+    tip = git(root, ["rev-parse", "HEAD"]);
+  withCacheLocksSync([receiptPath(root)], () => {
+    const state = store(root).read();
+    state.pending = state.pending.flatMap((entry) => {
+      if (entry.scope !== scope) return [entry];
+      const tasks = entry.tasks.filter((reference) => !references.has(reference));
+      return tasks.length ? [{ ...entry, tip, tasks }] : [];
+    });
     store(root).write(state);
   });
 }

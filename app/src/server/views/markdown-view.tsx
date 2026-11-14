@@ -22,6 +22,7 @@ export type MarkdownRecord = Pick<BrowserRecord, "directory" | "path"> & {
   title?: string;
   scope?: string;
   type?: BrowserRecord["type"];
+  history?: { commit: string; paths: ReadonlySet<string>; location?: (path: string) => string };
   planFiles?: { reference: string; names: readonly string[]; version?: "approved"; base?: string };
 };
 export function markdownParser(
@@ -30,6 +31,11 @@ export function markdownParser(
   prefix = documentPrefix,
   headings = new Map<string, number>(),
 ): MarkdownParser {
+  const destination = (target: BrowserRecord): string =>
+    record?.history
+      ? (record.history.location?.(target.path) ??
+        routeURL(Route.History, { commit: record.history.commit, path: target.path }))
+      : recordURL(target.id);
   const parser = new MarkdownIt({ html: false, linkify: false, typographer: false });
   const owner = record
     ? (records.path(resolve(record.directory, record.path)) ?? records.owner(resolve(record.directory, record.path)))
@@ -63,7 +69,7 @@ export function markdownParser(
           };
           if (match.index > offset) output.push(text(token.content.slice(offset, match.index)));
           const open = new state.Token("link_open", "a", 1);
-          open.attrSet("href", recordURL(target.id));
+          open.attrSet("href", destination(target));
           for (const [key, value] of Object.entries(referenceAttributes(target))) open.attrSet(key, value);
           output.push(open, text(match[0]), new state.Token("link_close", "a", -1));
           offset = match.index + match[0].length;
@@ -103,10 +109,22 @@ export function markdownParser(
       };
     }
     const target = resolve(record.directory, dirname(record.path), decoded);
+    if (record.history) {
+      const path = relative(record.directory, target).replaceAll("\\", "/");
+      const linked = records.path(target);
+      return record.history.paths.has(path)
+        ? {
+            href:
+              (record.history.location?.(path) ?? routeURL(Route.History, { commit: record.history.commit, path })) +
+              fragment,
+            ...(linked ? { target: linked } : {}),
+          }
+        : undefined;
+    }
     const linked = records.path(target);
     if (linked)
       return {
-        href: recordURL(linked.id) + fragment,
+        href: destination(linked) + fragment,
         target: linked,
       };
     const owner = records.owner(target);
@@ -132,7 +150,7 @@ export function markdownParser(
     if (token) {
       const reference = String(token.attrGet("data-record-reference") ?? "");
       const target = reference ? records.record(reference) : undefined;
-      const link = target ? { href: recordURL(target.id), target } : safeLink(String(token.attrGet("href") ?? ""));
+      const link = target ? { href: destination(target), target } : safeLink(String(token.attrGet("href") ?? ""));
       token.attrSet("href", link?.href ?? "#unavailable-link");
       if (link?.target)
         for (const [key, value] of Object.entries(referenceAttributes(link.target))) token.attrSet(key, value);

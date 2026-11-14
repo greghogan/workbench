@@ -1,59 +1,18 @@
+import { planDeletion } from "../../core/tasks/planning/plan-disposition.js";
 import type { ComponentChildren } from "preact";
-import { planningPaths } from "../../core/tasks/planning/plan-model.js";
+import { planningPaths, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
 import { WebError } from "../http/errors.js";
 import { Route, type RouteQuery } from "../routes/routes.js";
 import { routeURL } from "../routes/locations.js";
 import { DifferenceLayout } from "../routes/navigation-state.js";
 import { shell } from "./page-frame.js";
-import { badge, panel, submitButton } from "./components.js";
+import { badge, panel, submitButton, confirmationActions } from "./components.js";
 import { mutationForm } from "./action-forms.js";
 import { tabs, linkButton, diffLayout } from "./render-links.js";
 import { markdown } from "./markdown-view.js";
 import { sourceDiffView } from "./diff-view.js";
 import type { ViewContext } from "../workspace/view-context.js";
 
-export function newPlanPage(context: ViewContext, draft?: { name: string; contents: string; error: string }): string {
-  if (context.selection) throw new WebError(400, "Create plans in a project scope");
-  return shell(
-    context,
-    "New plan",
-    "queue",
-    mutationForm({
-      action: Route.PlanCreate,
-      context,
-      csrf: context.csrf,
-      fields: { scope: context.scope },
-      class: "form-grid",
-      children: (controls) => (
-        <>
-          {draft && (
-            <p class="notice error" role="alert">
-              {draft.error}
-            </p>
-          )}
-          {controls.text("name", {
-            id: "plan-name",
-            label: "Plan name",
-            value: draft?.name ?? "",
-            pattern: "[a-z][a-z0-9_-]{0,119}",
-            required: true,
-            maxLength: 120,
-          })}
-          {controls.area("contents", {
-            id: "plan-editor",
-            label: "Plan",
-            value: draft?.contents ?? "---\nstatus: Planned\n---\n\n# Plan title\n",
-          })}
-          <div class="actions">
-            {submitButton("Create draft")}
-            {linkButton("Cancel", routeURL(Route.TaskQueue, { scope: context.scope }), true)}
-          </div>
-        </>
-      ),
-    }),
-    { parents: [{ label: "Workflow", href: routeURL(Route.TaskQueue, { scope: context.scope }) }] },
-  );
-}
 export function planPage(
   context: ViewContext,
   parameters: RouteQuery<typeof Route.Plan>,
@@ -63,6 +22,73 @@ export function planPage(
   if (!plan) throw new WebError(404, "Plan not found");
   if (plan.implementation && parameters.view === "edit")
     throw new WebError(409, "Edit the implementation task; this saved plan is read only");
+  const back = routeURL(Route.Plan, { id: plan.reference, scope: plan.scope });
+  if (parameters.view === "cancel") {
+    if (plan.implementation || plan.status === "Canceled" || plan.problem || plan.conflict)
+      throw new WebError(409, "This plan cannot be canceled in its current state");
+    return shell(
+      context,
+      "Cancel plan",
+      "queue",
+      <>
+        <p>{plan.title}</p>
+        {mutationForm({
+          action: Route.PlanCancel,
+          context,
+          csrf: context.csrf,
+          class: "form-grid task-cancel",
+          fields: { reference: plan.reference, expected: plan.digest },
+          children: (controls) => (
+            <>
+              {controls.area("reason", {
+                id: "plan-cancellation",
+                label: "Reason (optional)",
+                value: "",
+                required: false,
+                maxLength: 16384,
+              })}
+              {confirmationActions("Confirm cancellation", back)}
+            </>
+          ),
+        })}
+      </>,
+    );
+  }
+  if (parameters.view === "delete") {
+    const proposal = planDeletion(context.root, parsePlanReference(plan.reference));
+    return shell(
+      context,
+      "Delete plan",
+      "queue",
+      <>
+        <p>{proposal.title}</p>
+        <ul>
+          {proposal.files
+            .filter((path) => path === planningPaths.document || path.startsWith(planningPaths.files))
+            .map((path) => (
+              <li key={path}>{path}</li>
+            ))}
+        </ul>
+        {proposal.problems.length ? (
+          <ul>
+            {proposal.problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        ) : (
+          mutationForm({
+            action: Route.PlanDelete,
+            context,
+            csrf: context.csrf,
+            class: "task-cancel",
+            fields: { reference: plan.reference, expected: proposal.digest },
+            children: () => confirmationActions("Confirm deletion", back),
+          })
+        )}
+        {proposal.problems.length > 0 && linkButton("Back", back, true)}
+      </>,
+    );
+  }
   const view = parameters.view ?? "read",
     split = parameters.layout === DifferenceLayout.Split,
     url = (view: "read" | "changes" | "edit") =>
@@ -97,8 +123,8 @@ export function planPage(
           )}
           {controls.area("contents", { id: "plan-editor", label: "Plan", value: draft?.contents ?? plan.contents })}
           <div class="actions">
-            {submitButton("Save draft")}
             {linkButton("Cancel", url("read"), true)}
+            {submitButton("Save draft")}
           </div>
         </>
       ),
@@ -146,7 +172,7 @@ export function planPage(
       )}
       {plan.conflict && (
         <p class="notice error" role="alert">
-          The draft and planning branch changed independently. Reconcile both versions before checkpointing or approval.
+          The draft and planning branch changed independently. Reconcile both versions before approval.
         </p>
       )}
       {panel(body, {
@@ -208,31 +234,37 @@ export function planPage(
           </ul>
         </section>
       )}
-      <div class="task-actions">
-        {!plan.implementation &&
-          !plan.problem &&
-          !plan.conflict &&
-          plan.status !== "Canceled" &&
-          !plan.approval?.current &&
-          mutationForm({
-            action: Route.PlanApprove,
-            context,
-            csrf: context.csrf,
-            fields: { reference: plan.reference, expected: plan.digest },
-            children: () => submitButton(plan.approval ? "Approve revised plan" : "Approve plan"),
-          })}
-        {plan.draft &&
-          !plan.implementation &&
-          !plan.problem &&
-          !plan.conflict &&
-          mutationForm({
-            action: Route.PlanCheckpoint,
-            context,
-            csrf: context.csrf,
-            fields: { reference: plan.reference, expected: plan.digest },
-            children: () => submitButton("Checkpoint plan", { secondary: true }),
-          })}
-      </div>
+      {view !== "edit" && (
+        <div class="task-actions">
+          {!plan.implementation &&
+            linkButton(
+              "Delete plan",
+              routeURL(Route.Plan, { id: plan.reference, view: "delete", scope: plan.scope }),
+              true,
+            )}
+          {!plan.implementation &&
+            !plan.problem &&
+            !plan.conflict &&
+            plan.status !== "Canceled" &&
+            linkButton(
+              "Cancel plan",
+              routeURL(Route.Plan, { id: plan.reference, view: "cancel", scope: plan.scope }),
+              true,
+            )}
+          {!plan.implementation &&
+            !plan.problem &&
+            !plan.conflict &&
+            plan.status !== "Canceled" &&
+            !plan.approval?.current &&
+            mutationForm({
+              action: Route.PlanApprove,
+              context,
+              csrf: context.csrf,
+              fields: { reference: plan.reference, expected: plan.digest },
+              children: () => submitButton(plan.approval ? "Approve revised plan" : "Approve plan"),
+            })}
+        </div>
+      )}
     </>,
     { parents: [{ label: "Workflow", href: routeURL(Route.TaskQueue, { scope: plan.scope }) }] },
   );

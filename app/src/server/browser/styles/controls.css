@@ -61,11 +61,15 @@ textarea {
   background: var(--paper);
   color: var(--ink);
   max-width: 100%;
+  font-weight: 400;
 }
 textarea {
   width: 100%;
-  min-height: 55vh;
+  min-height: 5rem;
   resize: vertical;
+}
+[data-editor] textarea {
+  min-height: 55vh;
   font: 0.8125rem/1.65 var(--font-mono);
 }
 a:focus-visible,
