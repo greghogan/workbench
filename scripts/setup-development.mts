@@ -1,6 +1,6 @@
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync, mkdtempSync, rmSync, lstatSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync, lstatSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 import { createHash } from "node:crypto";
@@ -26,7 +26,7 @@ export function preparedDependenciesMatch(root: string): boolean {
   const manifest = record(JSON.parse(readFileSync(join(root, "package.json"), "utf8")), "Invalid package metadata");
   const modules = pnpmDocument(metadata);
   if (modules.packageManager !== manifest.packageManager || typeof modules.virtualStoreDir !== "string") return false;
-  const installed = join(resolve(root, "node_modules", modules.virtualStoreDir), "lock.yaml");
+  const installed = join(resolve(dirname(realpathSync.native(metadata)), modules.virtualStoreDir), "lock.yaml");
   if (!existsSync(installed)) return false;
   const expected = pnpmDocument(join(root, "pnpm-lock.yaml"));
   if (!isDeepStrictEqual(expected, pnpmDocument(installed))) return false;
@@ -122,6 +122,16 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       const { linkDependencies } = await import("./link-dependencies.mts");
       linkDependencies(join(provider, "node_modules"), join(root, "node_modules"));
     }
+    const prepared = preparedDependenciesMatch(root);
+    if (
+      !prepared &&
+      ["node_modules", "node_modules/.modules.yaml"].some((path) =>
+        lstatSync(join(root, path), { throwIfNoEntry: false })?.isSymbolicLink(),
+      )
+    )
+      throw new Error(
+        "The linked dependency provider no longer matches its source pins; repair the provider before running source setup",
+      );
     if (!lifecycle && !values["build-only"] && existsSync(join(root, "bundle/main.cjs"))) {
       await run(process.execPath, [
         join(root, "bin/workbench.mjs"),
@@ -131,7 +141,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         "--frozen-lockfile",
         "--ignore-scripts",
       ]);
-    } else if (!preparedDependenciesMatch(root)) {
+    } else if (!prepared) {
       if (process.env.WORKBENCH_OFFLINE === "1")
         throw new Error(
           "Source dependencies are not prepared; run source setup online or supply matching prepared dependencies",
@@ -191,7 +201,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         join(root, "node_modules/.pnpm"),
       ]);
     }
-    if (!preparedDependenciesMatch(root))
+    if (!prepared && !preparedDependenciesMatch(root))
       throw new Error("Prepared source dependencies do not match the declared pins");
     await run(process.execPath, [join(root, "scripts/build-tooling.mts"), "--maintainers-only"]);
     const { reuseBundles } = await import("./bundle-cache.mts");
@@ -222,7 +232,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       if (
         initialLocalStore &&
         modules.virtualStoreDir &&
-        resolve(root, "node_modules", modules.virtualStoreDir) !== local &&
+        resolve(realpathSync.native(join(root, "node_modules")), modules.virtualStoreDir) !== local &&
         existsSync(local) &&
         !lstatSync(local).isSymbolicLink()
       )

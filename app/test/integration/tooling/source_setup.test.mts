@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { createHash } from "node:crypto";
 import { preparedDependenciesMatch, setupDevelopment } from "../../../../scripts/setup-development.mts";
 
@@ -75,4 +75,22 @@ test("source snapshots reject a stale dependency provider before linking or exec
     /dependency provider does not match its source pins/,
   );
   expect(existsSync(join(target, "node_modules"))).toBe(false);
+});
+
+test("a relocated source snapshot resolves relative store metadata at its physical provider and never installs into it", async () => {
+  const { root: provider, write, manifest } = fixture();
+  write(
+    "node_modules/.modules.yaml",
+    JSON.stringify({
+      packageManager: manifest.packageManager,
+      virtualStoreDir: relative(join(provider, "node_modules"), join(provider, "external-store")),
+    }),
+  );
+  const { root: target } = fixture();
+  rmSync(join(target, "node_modules"), { recursive: true });
+  symlinkSync(join(provider, "node_modules"), join(target, "node_modules"), "junction");
+  expect(preparedDependenciesMatch(target)).toBe(true);
+  write("external-store/lock.yaml", "{}");
+  await expect(setupDevelopment(target, ["--build-only"])).rejects.toThrow(/linked dependency provider/);
+  expect(readFileSync(join(provider, "external-store/lock.yaml"), "utf8")).toBe("{}");
 });

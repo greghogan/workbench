@@ -539,3 +539,14 @@ private Git index and preserves the real index. Publishing associated implementa
 decisions covering the final project snapshot. Further changes require renewed acceptance. Planning records can be
 published before implementation approval. Review receipts attest the reviewer's assessment; they do not authenticate a
 human identity or prove review quality.
+
+## Archived-record storage
+
+Archive configuration is optional. `[records]` selects `archive_branch` and a positive integer `archive_group_size`
+(default 1296). `[integration]` selects `branch` and optionally `remote`; discovery proposes the remote default, then an
+existing `main` or `master`, and requires an explicit choice when remotes are ambiguous.
+
+The root `workbench/state.toml` records `archive.revision`. Reads use that immutable commit, independently of the moving
+archive branch tip. Archive trees contain tasks, experiments, and their owned supporting files. They have independent
+Git history and do not require a checkout. Identical live copies appear once; differing contents or file modes require
+explicit reconciliation. Missing objects require fetching the archive history rather than treating records as absent.

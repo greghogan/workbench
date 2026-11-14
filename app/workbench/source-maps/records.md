@@ -68,3 +68,8 @@
 
 - `src/core/review/review-preparation-state.ts`, `src/core/records/record-outputs.ts`: Track outstanding
   generated-output repair across interruption and update only outputs affected by prepared records.
+
+- `src/core/records/archive-store.ts`: Reads pinned archive inventories and supporting blobs directly from Git and
+  reconciles live copies without restoring them.
+- `src/core/git/integration-target.ts`, `src/core/projects/project-state.ts`: Resolve the integration destination and
+  coordinate archive metadata with record allocation.
