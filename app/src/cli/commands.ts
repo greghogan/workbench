@@ -134,6 +134,10 @@ const commands: Record<string, Admission> = {
 
   project: { explicitRoot: true },
 
+  rebase: { project: true, registration: true, policy: true },
+
+  merge: { project: true, registration: true, policy: true },
+
   record: { project: true, registration: true },
   task: { project: true, registration: true },
   experiment: { project: true, registration: true, policy: true, children: { show: { policy: false } } },
@@ -242,6 +246,11 @@ export function commandPath(command: Command): string {
   const names: string[] = [];
   for (let current: Command | null = command; current.parent; current = current.parent) names.unshift(current.name());
   return names.join(" ");
+}
+
+/** Recovery must remain reachable when conflicted project configuration cannot be parsed. */
+export function integrationRecovery(path: string, options: { abort?: unknown; status?: unknown }): boolean {
+  return (path === "rebase" || path === "merge") && (options.abort === true || options.status === true);
 }
 
 /** Commander accumulator for repeatable options. */

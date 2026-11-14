@@ -50,7 +50,13 @@ import { registerAgentReviewCommands } from "./agent-review.js";
 import { registerCacheCommands } from "./cache.js";
 import { registerCheckCommands } from "./checks.js";
 import { registerCollectionCommands } from "./collections.js";
-import { commandAdmission, commandPath, registerCommand, validateCommandAdmissions } from "./commands.js";
+import {
+  commandAdmission,
+  commandPath,
+  integrationRecovery,
+  registerCommand,
+  validateCommandAdmissions,
+} from "./commands.js";
 import { registerCommitCommands } from "./commits.js";
 import { completionCandidates, completionScript, installCompletion } from "./completion.js";
 import { registerConfigurationCommands } from "./configuration.js";
@@ -65,6 +71,7 @@ import { pageHelp } from "./pager.js";
 import { requireProjectRegistration } from "./project-admission.js";
 import { setupProject } from "./project-setup.js";
 import { registerProjectCommands } from "./projects.js";
+import { registerIntegrationCommands } from "./branch-integration.js";
 import { registerRecordCommands } from "./records.js";
 import { registerReleaseCommands } from "./releases.js";
 import { reviewInteractively } from "./review.js";
@@ -128,7 +135,8 @@ export function createCLI(root: string = projectRoot()) {
   program.hook("preAction", async (_program, action) => {
     activeCommand = commandPath(action) || program.name();
     // Snapshot checks validate their explicit tree, not the launcher's working checkout.
-    const suppliedRoot = commandAdmission(commandPath(action)).explicitRoot;
+    const suppliedRoot =
+      commandAdmission(commandPath(action)).explicitRoot || integrationRecovery(commandPath(action), action.opts());
     for (let ancestor = action.parent; ancestor; ancestor = ancestor.parent) {
       for (const option of ancestor.options) {
         const key = option.attributeName();
@@ -263,6 +271,7 @@ export function createCLI(root: string = projectRoot()) {
   registerInstallationCommands(program, root);
   registerSetupCommands(program, root, sync);
   registerRecordCommands(program, root, sync);
+  registerIntegrationCommands(program, root);
   registerTaskCommands(program, root);
   registerExperimentCommands(program, root);
   registerReleaseCommands(program, root);
@@ -388,6 +397,7 @@ export function createCLI(root: string = projectRoot()) {
   program.hook("preAction", async (_program, action) => {
     activeCommand = commandPath(action) || program.name();
     const path = commandPath(action);
+    if (integrationRecovery(path, action.opts())) return;
     const explicitTree = action.name() === "validate" || isGateCommand(action) ? action.args[0] : undefined;
     if (!hasCollectionProject(explicitTree ? resolve(explicitTree) : root) && commandAdmission(path).project)
       throw new Error(
