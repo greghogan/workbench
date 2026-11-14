@@ -12,7 +12,7 @@ import { ownsStartupRuntime } from "../core/distribution/launcher-runtime.js";
 import { projectRegistration, Registration } from "../core/projects/project-registry.js";
 import { enableRuntimeCompileCache } from "../core/storage/node-compile-cache.js";
 import { sameToolPin, specificationPin, toolSpecification, type ToolPin } from "../core/toolchains/tool-pin.js";
-import { commandAdmission } from "./commands.js";
+import { commandAdmission, integrationRecovery } from "./commands.js";
 import { approveProjectRegistration, registrationInstruction } from "./project-admission.js";
 
 export function formatFailure(error: unknown): string {
@@ -54,8 +54,12 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
       : root;
   const command = launcherCommand(args);
   const child = command ? launcherCommand(args.slice(args.indexOf(command) + 1)) : undefined;
+  const recovery = integrationRecovery(command ?? "", {
+    abort: args.includes("--abort"),
+    status: args.includes("--status"),
+  });
   const admission = commandAdmission([command, child].filter(Boolean).join(" "));
-  const canSelectProject = root;
+  const canSelectProject = !recovery && root;
   const pin =
     command === "install" || command === "project" || command === "update"
       ? defaultPin
@@ -80,7 +84,7 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
   }
   if (!distribution) throw new Error("No project or default Workbench revision is configured");
   // The selected application owns registration state; an outer launcher must not write another release's schema.
-  if (root && existsSync(join(root, projectPaths.projects))) {
+  if (!recovery && root && existsSync(join(root, projectPaths.projects))) {
     const inspection = args.some((argument) => ["--help", "-h", "--help-all"].includes(argument));
     if (command && admission.registration && !inspection && !(command === "serve" && args.includes("--demo")))
       await approveProjectRegistration(original ?? root);

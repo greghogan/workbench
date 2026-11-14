@@ -542,7 +542,7 @@ human identity or prove review quality.
 
 ## Archived-record storage
 
-Archive configuration is optional. `[records]` selects `archive_branch` and a positive integer `archive_group_size`
+Archive configuration is optional and requires Git 2.45 or newer for offline object access. `[records]` selects `archive_branch` and a positive integer `archive_group_size`
 (default 1296). `[integration]` selects `branch` and optionally `remote`; discovery proposes the remote default, then an
 existing `main` or `master`, and requires an explicit choice when remotes are ambiguous.
 
@@ -568,7 +568,9 @@ then retires those copies from the archive tip. Earlier archive versions remain 
 records this way before editing or changing their workflow state; changing the archive destination also requires
 restoration first.
 
-`workbench record archive fetch` explicitly acquires archive history from the integration remote. Ordinary reads use
+`workbench record archive fetch` explicitly acquires archive history from the integration remote. Use
+`--from <revision>` to acquire the archive referenced by another branch before integrating it; this leaves the current
+checkout's configuration unchanged. `--remote <name>` selects an acquisition remote explicitly. Ordinary reads use
 local Git objects and do not contact the network. `workbench record archive publish` requests publication of both
 branches, atomically when supported. Its fallback verifies each published counterpart before continuing: archive copies
 precede removals, while restored project records precede retirement of archive copies.
@@ -581,3 +583,22 @@ Archived records remain available in the browser and through `workbench record s
 text with `workbench record search QUERY`, optionally selecting `--project ID` or `--type TSK`. Archive views are
 read-only; disabling archival restores records for editing. Supporting-file previews and downloads read Git objects
 without creating working-tree copies.
+
+
+## Rebase and merge
+
+Use `workbench rebase [target]` or `workbench merge <source>` to combine development histories while preserving logical
+record access. Rebase defaults to the configured integration target; an explicit remote branch is fetched before its
+revision is captured. Both commands require an attached branch and a clean index and working tree, including untracked
+files. Ignored build artifacts may remain.
+
+The operation retains recovery references and checks live and archived records even when Git reports no textual
+conflict. It repairs archive references when an existing pinned revision contains the required records. Conflicting
+record versions or divergent archive inventories require explicit reconciliation; the archive history is preserved.
+Missing archive objects require explicit acquisition before retrying.
+
+After resolving and staging conflicts, run `workbench rebase --continue` or `workbench merge --continue`. Use the matching
+`--status` to inspect recovery state or `--abort` to return to the original branch. Status and abort remain available
+when conflicted project configuration cannot be parsed. An abort after Git has completed
+requires a clean checkout and retains the abandoned result for recovery. Do not start another Git operation while one is
+awaiting recovery. Successful integration does not replace semantic review, configured checks, or human approval.
