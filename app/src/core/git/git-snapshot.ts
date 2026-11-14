@@ -13,7 +13,7 @@ export interface GitEntry {
 export function gitBytes(root: string, args: string[], input?: string): Buffer {
   const result = spawnSync("git", ["-C", root, ...args], {
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1" },
     ...(input === undefined ? {} : { input }),
   });
   if (result.error || result.status !== 0)
@@ -57,13 +57,25 @@ export function readGitObjects(
     identities.set(request, oid);
     sizes.set(oid, size);
   }
-  if ([...sizes.values()].reduce((sum, size) => sum + size, 0) > 64 * 1024 * 1024)
-    throw new Error("Git object batch exceeds 64 MiB");
+  const batches: Map<string, number>[] = [];
+  let batch = new Map<string, number>(),
+    allocated = 0;
+  for (const [oid, size] of sizes) {
+    if (size + 128 > 64 * 1024 * 1024) throw new Error("Git object exceeds the buffered read limit");
+    if (batch.size && allocated + size + 128 > 32 * 1024 * 1024) {
+      batches.push(batch);
+      batch = new Map();
+      allocated = 0;
+    }
+    batch.set(oid, size);
+    allocated += size + 128;
+  }
+  if (batch.size) batches.push(batch);
   const objects = new Map<string, Buffer>();
-  if (sizes.size) {
-    const bytes = gitBytes(root, ["cat-file", "--batch"], [...sizes.keys()].join("\n") + "\n");
+  for (const batch of batches) {
+    const bytes = gitBytes(root, ["cat-file", "--batch"], [...batch.keys()].join("\n") + "\n");
     let offset = 0;
-    for (const [oid, size] of sizes) {
+    for (const [oid, size] of batch) {
       const end = bytes.indexOf(10, offset);
       if (
         end < offset ||
@@ -83,7 +95,7 @@ function headAt(root: string): string {
   if (result.error || (result.status !== 0 && result.status !== 1)) throw new Error("cannot inspect committed records");
   return result.stdout.trim();
 }
-function entries(root: string, tree: string): Map<string, GitEntry> {
+export function readGitTree(root: string, tree: string): Map<string, GitEntry> {
   const result = new Map<string, GitEntry>();
   for (const row of gitBytes(root, ["ls-tree", "-r", "-z", "--full-tree", tree]).toString().split("\0")) {
     if (!row) continue;
@@ -109,7 +121,7 @@ export class GitSnapshot {
   ) {
     const head = headAt(root);
     this.head = options.review ? reviewedCommit(root, head) : head;
-    this.committed = this.head ? entries(root, this.head) : new Map<string, GitEntry>();
+    this.committed = this.head ? readGitTree(root, this.head) : new Map<string, GitEntry>();
     this.staged = new Map(this.committed);
     this.changes =
       options.staged === false

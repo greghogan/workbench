@@ -8,6 +8,49 @@ const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
+
+test.each(["pre-commit", "commit-msg", "post-commit"])(
+  "%s prepares captured source without tracked bundles or checkout leakage",
+  (name) => {
+    const root = mkdtempSync(join(tmpdir(), "workbench-source-hook-"));
+    roots.push(root);
+    const git = (args: string[]) => gitBytes(root, args).toString().trim();
+    git(["init"]);
+    git(["config", "user.name", "Test"]);
+    git(["config", "user.email", "test@example.invalid"]);
+    for (const directory of ["bin", ".githooks", "workbench", "scripts"]) mkdirSync(join(root, directory));
+    const hook = join(root, ".githooks", name);
+    writeFileSync(hook, readFileSync(join(import.meta.dirname, "../../../../.githooks", name)));
+    writeFileSync(join(root, "workbench/config.toml"), "schema_version=1\n");
+    writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="fixture"\npath="."\n');
+    writeFileSync(join(root, "source-version"), "captured source\n");
+    writeFileSync(join(root, "scripts/setup-development.mjs"), "// Source preparation entry point\n");
+    writeFileSync(
+      join(root, ".githooks/prepare-source"),
+      '#!/usr/bin/env bash\nset -eu\nmkdir "$2/bundle"\ncp "$2/source-version" "$2/bundle/value"\n',
+    );
+    writeFileSync(
+      join(root, "bin/workbench.mjs"),
+      'import {readFileSync} from "node:fs"; process.stdout.write(readFileSync(new URL("../bundle/value", import.meta.url)));\n',
+    );
+    git(["add", "."]);
+    git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "baseline"]);
+    writeFileSync(join(root, "source-version"), "unstaged checkout\n");
+    const message = join(root, ".git/COMMIT_EDITMSG");
+    writeFileSync(message, "chore: verify source hooks\n");
+    const tree = git(["write-tree"]);
+    const result = spawnSync("bash", [hook, ...(name === "commit-msg" ? [message] : [])], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout).toContain("captured source");
+    expect(result.stdout).not.toContain("unstaged checkout");
+    expect(git(["write-tree"])).toBe(tree);
+    expect(readFileSync(join(root, "source-version"), "utf8")).toBe("unstaged checkout\n");
+    expect(git(["ls-files", "bundle"])).toBe("");
+  },
+);
 test.each([
   { hook: "pre-commit", status: 0 },
   { hook: "pre-commit", status: 7 },

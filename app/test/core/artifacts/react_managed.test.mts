@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { expect, test } from "vitest";
+import { linkDependencies } from "../../../../scripts/link-dependencies.mjs";
 
 const repository = resolve(import.meta.dirname, "../../../..");
 test.skipIf(process.platform !== "linux")(
@@ -21,7 +22,9 @@ test.skipIf(process.platform !== "linux")(
         "export function jsx(type, props) { return { type, props }; }",
       );
       cpSync(join(source, "index.html"), join(root, "index.html"));
-      const env = { ...process.env, PATH: [join(repository, "node_modules/.bin"), process.env.PATH].join(delimiter) };
+      mkdirSync(join(root, "tools"));
+      linkDependencies(join(repository, "node_modules"), join(root, "tools/node_modules"));
+      const env = { ...process.env, PATH: [join(root, "tools/node_modules/.bin"), process.env.PATH].join(delimiter) };
       const build = spawnSync(process.execPath, [join(source, "scripts/build-managed.mjs")], {
         cwd: root,
         env,

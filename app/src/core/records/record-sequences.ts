@@ -1,6 +1,5 @@
+import { withProjectStateLock } from "../projects/project-state.js";
 import { projectPaths } from "../projects/project-paths.js";
-import { acquireProcessLock } from "../storage/process-lock.js";
-import { withCacheLockSync, releaseAfterFailure } from "../storage/cache-lock.js";
 import { required } from "../runtime/invariants.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -43,32 +42,9 @@ function currentSequences(directory: string): Sequences {
   return document;
 }
 
-function withAllocationLock<T>(directory: string, action: () => T): T {
-  const path = join(directory, "workbench/.record-allocation.lock");
-  const owner = withCacheLockSync(`${path}.admission`, () => acquireProcessLock(path, true), 0);
-  if (!owner)
-    throw new Error(
-      `${path}: another record allocation may be running; confirm no writer is active before recovering an uncertain lock`,
-    );
-  let result: T;
-  try {
-    result = action();
-  } catch (failure) {
-    releaseAfterFailure(
-      () => {
-        owner.release();
-      },
-      failure,
-      "Record allocation and lock release failed",
-    );
-  }
-  owner.release();
-  return result;
-}
-
 /** Reserve before publishing a record; failed writes leave an intentional gap, never a reusable ID. */
 export function reserveRecordNumber(directory: string, kind: Kind): string {
-  return withAllocationLock(directory, () => {
+  return withProjectStateLock(directory, () => {
     const document = currentSequences(directory);
     const number = required(document.next[kind], "expected document.next[kind]");
     document.next[kind] = nextNumber(number);
@@ -92,7 +68,7 @@ export function syncRecordSequences(root: string, checkOnly = false): string[] {
       changed.push(path);
     };
     if (checkOnly) synchronize();
-    else withAllocationLock(directory, synchronize);
+    else withProjectStateLock(directory, synchronize);
   }
   return changed;
 }

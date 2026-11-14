@@ -17,6 +17,9 @@ for required_path in workbench/config.toml workbench/projects.toml; do
         exit 1
     fi
 done
+if [[ -f "$staged_snapshot/scripts/setup-development.mjs" ]]; then
+    bash "$staged_snapshot/.githooks/prepare-source" "$repository_root" "$staged_snapshot"
+fi
 if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
     snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
 else

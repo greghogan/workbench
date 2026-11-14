@@ -2,7 +2,12 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { createHash } from "node:crypto";
-import { GitSnapshot, writeRawReviewObjects } from "../../../src/core/git/git-snapshot.ts";
+import {
+  GitSnapshot,
+  writeRawReviewObjects,
+  readGitObjects,
+  writeReviewBlobs,
+} from "../../../src/core/git/git-snapshot.ts";
 import {
   reviewStatus,
   ReviewSource,
@@ -118,4 +123,15 @@ test("batch blob reads preserve exact bytes, deduplicate immutable objects, and 
   expect(() => readGitObjects(root, [tree])).toThrow(/blob/);
   expect(() => readGitObjects(root, [first], 4)).toThrow(/oversized/);
   expect(() => readGitObjects(root, [first + "\nHEAD"])).toThrow(/Invalid/);
+});
+
+test("a large logical record inventory reads all objects across bounded Git output batches", () => {
+  const root = fixtures.project(),
+    bodies = Array.from({ length: 35 }, (_, index) =>
+      Buffer.from(String(index).padStart(2, "0") + "x".repeat(2 * 1024 * 1024 - 2)),
+    );
+  const ids = writeReviewBlobs(root, bodies),
+    result = readGitObjects(root, [...ids, ids[0] ?? ""]);
+  expect(result.size).toBe(bodies.length);
+  for (const [index, id] of ids.entries()) expect(result.get(id)?.equals(bodies[index] ?? Buffer.alloc(0))).toBe(true);
 });

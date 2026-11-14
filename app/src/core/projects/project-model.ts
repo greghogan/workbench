@@ -48,6 +48,8 @@ export interface CheckOrderDefinition {
   phase: "setup" | "complete";
 }
 export type Config = Record<string, unknown> & {
+  integration?: { branch?: string; remote?: string };
+  records?: { archive_branch?: string; archive_group_size?: number };
   collections?: { sources?: CollectionPin[] };
   development?: { default?: string; profiles?: DevelopmentProfile[] };
   toolchains?: { profiles?: ToolProfile[] };
