@@ -14,8 +14,8 @@ import { readProjects, selectProject } from "../projects/project-configuration.j
 import { rootOf } from "../projects/project-context.js";
 import { publicationTarget } from "../runtime/file-publication.mjs";
 import type { Project } from "../projects/project-model.js";
-export function scan(projectDirectory: string, kind: Kind): RecordFile[] {
-  return scanRecordDirectory(ownedPath(projectDirectory, "workbench"), kind);
+export function scan(projectDirectory: string, kind: Kind, committedRecords?: ReadonlySet<string>): RecordFile[] {
+  return scanRecordDirectory(ownedPath(projectDirectory, "workbench"), kind, committedRecords);
 }
 
 /** Collections own records directories without acquiring a project charter. */

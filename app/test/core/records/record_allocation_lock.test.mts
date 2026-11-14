@@ -4,7 +4,8 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { reserveRecordNumber } from "../../../src/core/records/record-sequences.ts";
-import { createExperiment, requiredExperimentProtocol } from "../../../src/core/records/records.ts";
+import { createExperiment } from "../../../src/core/records/records.ts";
+import { requiredExperimentProtocol } from "../../../src/core/records/record-content.ts";
 import { scan } from "../../../src/core/records/record-files.ts";
 import { parse } from "smol-toml";
 test("record allocation preserves uncertain or live owners and recovers a proven abandoned owner", () => {

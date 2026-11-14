@@ -1,58 +1,23 @@
+import { relative } from "node:path";
+import { recordInventory, readInventoryRecords, projectRecordFileExists } from "./archive-store.js";
 import { existsSync } from "node:fs";
 import { parseDocument, stringify as yamlStringify } from "yaml";
 import { citationValidationErrors, readCitation } from "../citations/citation-record.js";
 import { readText } from "../runtime/files.js";
 import { required } from "../runtime/invariants.js";
 import { readProjects } from "../projects/project-configuration.js";
-import { rootOf } from "../projects/project-context.js";
 import { createRecord } from "./record-creation.js";
 import {
   parseProseRecord,
   recordDocument,
-  recordTitle,
   renderProseRecord,
   splitFrontmatter,
   terminalTask,
 } from "./record-document.js";
-import { parseReference, scan } from "./record-files.js";
+import { parseReference } from "./record-files.js";
 import { kinds, type Kind } from "./record-identity.js";
 import { parseRelease } from "./releases.js";
-import MarkdownIt from "markdown-it";
-const parser = new MarkdownIt({ html: true });
-
-export const requiredExperimentProtocol = [
-  "Hypothesis",
-  "Candidate and baseline",
-  "Independent variable",
-  "Controls and correctness",
-  "Workload",
-  "Evaluation rule",
-];
-export function section(contents: string, heading: string): boolean {
-  const tokens = parser.parse(contents, {});
-  const index = tokens.findIndex(
-    (token, index) =>
-      token.type === "heading_open" &&
-      token.tag === "h2" &&
-      token.level === 0 &&
-      tokens[index + 1]?.content === heading,
-  );
-  if (index < 0) return false;
-  for (let position = index + 3; position < tokens.length; position++) {
-    const token = tokens[position];
-    if (!token) continue;
-    if (token.type === "heading_open") {
-      if (token.level === 0 && Number(token.tag.slice(1)) <= 2) return false;
-      position += 2;
-    } else if (
-      (token.type === "html_block" ? token.content.split(/<!--[\s\S]*?-->/g) : [token.content]).some(
-        (fragment) => fragment.trim().length > 0,
-      )
-    )
-      return true;
-  }
-  return false;
-}
+import { requiredExperimentProtocol, section, proseRecordErrors } from "./record-content.js";
 
 function title(value: string | undefined): string {
   if (!value?.trim() || /[\r\n]/.test(value)) throw new Error("record title must be one nonempty line");
@@ -79,7 +44,7 @@ export async function addRecord(
     for (const reference of [...(parent ? [parent] : []), ...dependencies]) {
       const parsed = parseReference(root, reference);
       if (parsed.kind !== "TSK") throw new Error(`expected a task reference: ${reference}`);
-      if (!existsSync(parsed.path)) throw new Error(`task not found: ${reference}`);
+      if (!projectRecordFileExists(root, parsed.path)) throw new Error(`task not found: ${reference}`);
     }
   const recordTitle = title(titleInput);
   if (bodyInput !== undefined && /^---(?:\r?\n|$)/.test(bodyInput))
@@ -162,29 +127,25 @@ function validateContent(
     parseRelease(contents, path, number, projectId);
     return;
   }
-  const { metadata, body } = recordDocument(kind, contents, path);
-  recordTitle(kind, number, contents);
-  if (kind === "EXP") {
-    for (const heading of requiredExperimentProtocol) {
-      if (!section(body, heading)) errors.push(`${path}: missing or empty ## ${heading}`);
-    }
-    if (["Accepted", "Rejected", "Inconclusive"].includes(metadata.status ?? "")) {
-      for (const heading of ["Execution provenance", "Evidence", "Decision"]) {
-        if (!section(body, heading)) errors.push(`${path}: completed experiment needs ## ${heading}`);
-      }
-    }
-  }
-  if (kind === "ENV" && !section(body, "Hardware configuration"))
-    errors.push(`${path}: missing or empty ## Hardware configuration`);
+  errors.push(...proseRecordErrors(kind, number, path, contents));
 }
 
-export function validateRecords(projectDirectory: string, projectId?: string): string[] {
+export function validateRecords(projectDirectory: string, projectId?: string, root = projectDirectory): string[] {
   const errors: string[] = [];
   for (const kind of kinds) {
     try {
-      for (const record of scan(projectDirectory, kind)) {
+      const inventory = recordInventory(root, relative(root, projectDirectory).replaceAll("\\", "/") || ".", kind);
+      const contents = readInventoryRecords(root, inventory);
+      for (const record of inventory) {
         try {
-          validateContent(kind, record.number, record.path, readText(record.path), errors, projectId);
+          validateContent(
+            kind,
+            record.number,
+            record.path,
+            required(contents.get(record.path), "Missing record contents").toString(),
+            errors,
+            projectId,
+          );
         } catch (error) {
           errors.push(String(error));
         }
@@ -225,12 +186,18 @@ export function validateRelationships(root: string): string[] {
   }
   const tasks = new Map<string, Task>();
   const environments = new Set<string>();
-  const experiments: string[] = [];
+  const experiments = new Map<string, Buffer>();
   for (const project of readProjects(root)) {
-    const projectDirectory = rootOf(root, project);
-    for (const record of scan(projectDirectory, "ENV")) environments.add(`${project.id}:ENV-${record.number}`);
-    for (const record of scan(projectDirectory, "TSK")) {
-      const { metadata } = recordDocument("TSK", readText(record.path), record.path);
+    for (const record of recordInventory(root, project.path, "ENV"))
+      environments.add(`${project.id}:ENV-${record.number}`);
+    const taskRecords = recordInventory(root, project.path, "TSK"),
+      taskBodies = readInventoryRecords(root, taskRecords);
+    for (const record of taskRecords) {
+      const { metadata } = recordDocument(
+        "TSK",
+        required(taskBodies.get(record.path), "Missing task contents").toString(),
+        record.path,
+      );
       tasks.set(`${project.id}:TSK-${record.number}`, {
         path: record.path,
         status: required(metadata.status, "expected metadata.status"),
@@ -240,7 +207,16 @@ export function validateRelationships(root: string): string[] {
           .filter((value): value is string => !!value),
       });
     }
-    experiments.push(...scan(projectDirectory, "EXP").map((record) => record.path));
+    for (const [path, bytes] of readInventoryRecords(root, recordInventory(root, project.path, "EXP")))
+      experiments.set(path, bytes);
+  }
+  const children = new Map<string, [string, Task][]>();
+  for (const entry of tasks) {
+    const parent = entry[1].parent;
+    if (!parent) continue;
+    const siblings = children.get(parent) ?? [];
+    siblings.push(entry);
+    children.set(parent, siblings);
   }
   for (const [reference, task] of tasks) {
     const dependencies = new Set<string>();
@@ -258,8 +234,8 @@ export function validateRelationships(root: string): string[] {
           errors.push(`${task.path}: accepted task has unaccepted dependency ${dependency}`);
     }
     if (terminalTask.has(task.status)) {
-      for (const [childRef, child] of tasks) {
-        if (child.parent === reference && !terminalTask.has(child.status)) {
+      for (const [childRef, child] of children.get(reference) ?? []) {
+        if (!terminalTask.has(child.status)) {
           errors.push(`${task.path}: completed task has unfinished child ${childRef}`);
         }
       }
@@ -299,10 +275,10 @@ export function validateRelationships(root: string): string[] {
     finished.add(reference);
   };
   for (const reference of tasks.keys()) visitCompletion(reference);
-  for (const path of experiments) {
+  for (const [path, contents] of experiments) {
     const environment = canonical(
       root,
-      recordDocument("EXP", readText(path), path).metadata.environment,
+      recordDocument("EXP", contents.toString(), path).metadata.environment,
       "ENV",
       path,
       "environment",

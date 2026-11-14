@@ -18,7 +18,7 @@ import { afterEach, test, vi } from "vitest";
 
 import { setupProject } from "../../src/cli/project-setup.js";
 import { synchronize } from "../../src/core/records/sync.ts";
-import { requiredExperimentProtocol } from "../../src/core/records/records.ts";
+import { requiredExperimentProtocol } from "../../src/core/records/record-content.ts";
 
 interface Feedback {
   id: string;
@@ -355,11 +355,8 @@ test("read-only defaults and invalid write requests are explicit", () =>
     assert.deepEqual(snapshot(root), before);
   }));
 
-test("removed record browsing is rejected and creation preserves literal titles", () =>
+test("record creation preserves literal titles and rejects malformed requests", () =>
   fixture(({ root, run, fail }) => {
-    for (const command of ["search", "task", "decision", "experiment", "environment"])
-      assert.match(fail(command, "parser"), /unknown command|too many arguments/);
-    assert.match(fail("record", "show", "0"), /unknown command|too many arguments/);
     run("record", "add", "task", "--", "--help");
     assert.match(readFileSync(join(root, "workbench/tasks/TSK-00.md"), "utf8"), /# TSK-0: --help/);
     assert.match(fail("record", "add", "task", "--typo"), /unknown option/);

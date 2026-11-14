@@ -1,3 +1,4 @@
+import { recordInventory, readInventoryRecords } from "./archive-store.js";
 import { existsSync } from "node:fs";
 import { renderCollectionMap } from "../collections/collection-maps.js";
 import { required } from "../runtime/invariants.js";
@@ -7,7 +8,6 @@ import { detail, kinds, type Kind } from "./record-identity.js";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
 import { readText } from "../runtime/files.js";
 import { rootOf } from "../projects/project-context.js";
-import { scan } from "./record-files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { type Project } from "../projects/project-model.js";
 import { recordTitle, recordDocument, terminalTask } from "./record-document.js";
@@ -15,7 +15,8 @@ import { decisionScopes } from "./decisions.js";
 import { readDecision } from "./decision-record.js";
 import { wrap } from "./formatting.js";
 import { appliesWithin } from "../collections/collections.js";
-import { readTaskGraph } from "../tasks/task-model.js";
+import { readTaskGraph, type TaskGraph } from "../tasks/task-model.js";
+import type { InventoryRecord } from "./archive-store.js";
 import { markdownLabel, markdownPath, relocateMarkdownLinks } from "./markdown-links.js";
 
 function renderEntry(
@@ -25,12 +26,14 @@ function renderEntry(
   number: string,
   path: string,
   width: number,
+  captured?: string,
+  archived = false,
 ): string | undefined {
-  const contents = readText(path);
+  const contents = captured ?? readText(path);
   const title = recordTitle(kind, number, contents);
   const map = join(rootOf(root, project), "workbench", detail(kind).map);
   const destination = markdownPath(relative(join(rootOf(root, project), "workbench"), path));
-  const link = `[${project.id}:${kind}-${number}](${destination})`;
+  const link = archived ? `${project.id}:${kind}-${number}` : `[${project.id}:${kind}-${number}](${destination})`;
   if (kind === "ADR") {
     const decision = readDecision(project, number, path);
     return wrap(
@@ -45,7 +48,11 @@ function renderEntry(
     return wrap(`${link}: ${title} (${status}${parent ? `, parent ${parent}` : ""})`, width, 2);
   }
   if (kind === "EXP")
-    return wrap(`${link}: ${title} (${recordDocument("EXP", contents, path).metadata.status})`, width, 2);
+    return wrap(
+      `${link}: ${title} (${recordDocument("EXP", contents, path).metadata.status}${archived ? "; archived" : ""})`,
+      width,
+      2,
+    );
   if (kind === "REL") {
     const parsed = yamlParse(contents) as { yanked?: boolean };
     return wrap(`${link}: ${title}${parsed.yanked ? " (yanked)" : ""}`, width, 2);
@@ -53,7 +60,12 @@ function renderEntry(
   return wrap(`${link}: ${title}`, width, 2);
 }
 
-export function renderMap(root: string, project: Project, kind: Kind): string {
+export interface MapRecordView {
+  records: InventoryRecord[];
+  contents: ReadonlyMap<string, Buffer>;
+  tasks: TaskGraph;
+}
+export function renderMap(root: string, project: Project, kind: Kind, captured?: MapRecordView): string {
   const projects = readProjects(root);
   const width = required(
     required(readConfig(root).markdown, "expected readConfig(root).markdown").wrap_width,
@@ -63,7 +75,7 @@ export function renderMap(root: string, project: Project, kind: Kind): string {
   if (kind === "ADR") output += "\nScope charter: [CHARTER.md](CHARTER.md).\n";
   let count = 0;
   if (kind === "TSK") {
-    const graph = readTaskGraph(root);
+    const graph = captured?.tasks ?? readTaskGraph(root);
     const nodes = graph.forest(
       graph.tasks.filter(
         (task) => task.reference.startsWith(project.id + ":") && !terminalTask.has(task.metadata.status),
@@ -72,7 +84,15 @@ export function renderMap(root: string, project: Project, kind: Kind): string {
     const append = (items: typeof nodes, depth = 0) => {
       for (const { task, children } of items) {
         const number = task.reference.split("TSK-")[1] ?? "";
-        const entry = renderEntry(root, project, kind, number, task.path, Math.max(20, width - depth * 2));
+        const entry = renderEntry(
+          root,
+          project,
+          kind,
+          number,
+          task.path,
+          Math.max(20, width - depth * 2),
+          task.contents,
+        );
         if (entry) {
           output += `\n${"  ".repeat(depth)}- ${entry.replaceAll("\n", "\n" + "  ".repeat(depth))}`;
           count++;
@@ -81,14 +101,28 @@ export function renderMap(root: string, project: Project, kind: Kind): string {
       }
     };
     append(nodes);
-  } else
-    for (const record of scan(rootOf(root, project), kind)) {
-      const entry = renderEntry(root, project, kind, record.number, record.path, width);
+  } else {
+    const records = captured?.records ?? recordInventory(root, project.path, kind),
+      bodies = captured?.contents ?? readInventoryRecords(root, records);
+    for (const record of records) {
+      const entry = renderEntry(
+        root,
+        project,
+        kind,
+        record.number,
+        record.path,
+        width,
+        bodies.get(record.path)?.toString(),
+        record.archive !== undefined,
+      );
       if (entry) {
         output += `\n- ${entry}`;
         count++;
       }
     }
+    if (records.some((record) => record.archive))
+      output += "\n\nRead archived records with `workbench record show REFERENCE`.\n";
+  }
   output += count ? "\n" : kind === "TSK" ? "\nNo unfinished tasks.\n" : "\nNo records.\n";
   if (kind === "ADR") {
     const sources = decisionScopes(root, false).filter(

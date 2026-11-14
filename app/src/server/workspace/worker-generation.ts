@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { distributionRoot } from "../../core/projects/project-context.js";
-import { readBoundedFile } from "../../core/runtime/file-reads.js";
+import { copyFileToDescriptor, readBoundedFile, readFilePrefix } from "../../core/runtime/file-reads.js";
+import { writeNew } from "../../core/runtime/file-publication.mjs";
 import {
   decodeBundle,
   bundleFormats,
@@ -18,23 +19,36 @@ export class WorkerGeneration {
     const distribution = distributionRoot(root);
     const capture = (name: string) => {
       const file = join(distribution, `bundle/${name}.cjs`);
-      const loader = readBoundedFile(file, 16 * 1024 * 1024, "worker bundle");
+      const loader = readFilePrefix(file, 512);
       const compression =
-        /^require\("\.\.\/bin\/bundle-runtime\.cjs"\)\(module, __filename, "(brotli|zlib|zstd)", require\);\s*$/.exec(
-          loader.toString(),
-        )?.[1] as BundleCompression | undefined;
-      return compression
-        ? decodeBundle(
+        loader.length < 512
+          ? (/^require\("\.\.\/bin\/bundle-runtime\.cjs"\)\(module, __filename, "(brotli|zlib|zstd)", require\);\s*$/.exec(
+              loader.toString(),
+            )?.[1] as BundleCompression | undefined)
+          : undefined;
+      const destination = join(this.directory, `${name}.cjs`);
+      if (compression)
+        writeNew(
+          destination,
+          decodeBundle(
             readBoundedFile(`${file}.${bundleFormats[compression]}`, 16 * 1024 * 1024, "worker payload"),
             compression,
-          )
-        : loader;
+          ),
+          0o600,
+        );
+      else
+        writeNew(
+          destination,
+          (descriptor) => {
+            copyFileToDescriptor(file, descriptor);
+          },
+          0o600,
+        );
     };
     this.directory = mkdtempSync(join(tmpdir(), "workbench-workers-"));
     this.path = join(this.directory, "main.cjs");
     try {
-      for (const name of ["main", ...lazyBundles])
-        writeFileSync(join(this.directory, `${name}.cjs`), capture(name), { mode: 0o600, flag: "wx" });
+      for (const name of ["main", ...lazyBundles]) capture(name);
     } catch (error) {
       this.close();
       throw error;

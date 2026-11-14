@@ -1,3 +1,5 @@
+import { readArchivedFile } from "./archive-store.js";
+import { relative } from "node:path";
 import { normalizedNumber } from "./record-identity.js";
 import { parseReference } from "./record-files.js";
 import { decisionScopes } from "./decisions.js";
@@ -14,7 +16,12 @@ export function resolveRecordReference(
   installation?: "local" | "project";
 } {
   const match = /^([a-z][a-z0-9_-]*):ADR-([0-9a-z_]+)$/i.exec(reference);
-  if (!match?.[1] || !match[2]) return parseReference(root, reference);
+  if (!match?.[1] || !match[2]) {
+    const parsed = parseReference(root, reference);
+    if (parsed.kind !== "TSK" && parsed.kind !== "EXP") return parsed;
+    const contents = readArchivedFile(root, relative(root, parsed.path).replaceAll("\\", "/"));
+    return { ...parsed, ...(contents ? { contents: contents.toString() } : {}) };
+  }
   const id = match[1].toLowerCase();
   const number = normalizedNumber(match[2]);
   const scope = decisionScopes(root).find((entry) => entry.project.id === id);

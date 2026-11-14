@@ -1,32 +1,88 @@
 import { WeightedCache } from "../storage/weighted-cache.js";
-import { readBoundedFile } from "../runtime/file-reads.js";
-import { join, posix, relative } from "node:path";
+import {
+  ArchiveUnavailable,
+  archivedKinds,
+  readArchiveTree,
+  type ArchiveIndex,
+  type ArchivedKind,
+  type ArchivedRecord,
+} from "./archive-index.js";
+import { proseRecordErrors } from "./record-content.js";
+import { recordDocument } from "./record-document.js";
+import { readBoundedFile, hashFile } from "../runtime/file-reads.js";
+import { join, posix, relative, resolve } from "node:path";
 import { lstatSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { gitBytes, readGitObjects, type GitEntry } from "../git/git-snapshot.js";
 import { readProjectState } from "../projects/project-state.js";
+import { parse } from "smol-toml";
+import { projectPaths } from "../projects/project-paths.js";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
 import { rootOf } from "../projects/project-context.js";
 import { record } from "../runtime/values.mjs";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
-import { compareRecordNumbers, normalizedNumber, relativeRecordPath, type Kind } from "./record-identity.js";
+import { compareRecordNumbers, type Kind } from "./record-identity.js";
 import { scan } from "./record-files.js";
 
-export const archivedKinds = ["TSK", "EXP"] as const;
-export type ArchivedKind = (typeof archivedKinds)[number];
-export interface ArchivedRecord {
-  scopePath: string;
-  kind: ArchivedKind;
-  number: string;
-  path: string;
-  entry: GitEntry;
+const validatedIndexes = new WeakSet<ArchiveIndex>();
+const validatedDocuments = new WeightedCache<boolean>(32 * 1024 * 1024);
+const blobCache = new Map<string, Buffer>();
+let cachedBytes = 0;
+const blobCacheLimit = 32 * 1024 * 1024;
+const recordBatchSize = 16;
+
+function archiveRepository(root: string): string {
+  return process.env.WORKBENCH_EPHEMERAL_CHECKOUT === "1" &&
+    process.env.WORKBENCH_PROJECT_ROOT &&
+    resolve(root) === resolve(process.env.WORKBENCH_PROJECT_ROOT) &&
+    process.env.WORKBENCH_LOCAL_CONFIG_ROOT
+    ? process.env.WORKBENCH_LOCAL_CONFIG_ROOT
+    : root;
 }
-export interface ArchiveIndex {
-  revision: string;
-  files: ReadonlyMap<string, GitEntry>;
-  records: readonly ArchivedRecord[];
+
+function prefetchBlobs(repository: string, ids: readonly string[]): void {
+  const missing = [...new Set(ids)].filter((oid) => !blobCache.has(`${repository}:${oid}`));
+  for (let offset = 0; offset < missing.length; offset += recordBatchSize) {
+    for (const [oid, body] of readGitObjects(repository, missing.slice(offset, offset + recordBatchSize))) {
+      if (!body)
+        throw new ArchiveUnavailable(
+          `Archive object ${oid} is unavailable locally; run 'workbench record archive fetch'.`,
+        );
+      const key = `${repository}:${oid}`;
+      blobCache.set(key, body);
+      cachedBytes += body.length;
+      while (cachedBytes > blobCacheLimit) {
+        const oldest = blobCache.entries().next().value;
+        if (!oldest) break;
+        cachedBytes -= oldest[1].length;
+        blobCache.delete(oldest[0]);
+      }
+    }
+  }
 }
-const indexes = new WeightedCache<ArchiveIndex>(32 * 1024 * 1024);
+
+export function readArchiveFileAt(
+  root: string,
+  revision: string,
+  path: string,
+  maximum = 2 * 1024 * 1024,
+): Buffer | undefined {
+  const archive = readArchiveIndex(root, revision),
+    entry = archive.files.get(path);
+  if (!entry) return undefined;
+  if ((archive.sizes.get(path) ?? Infinity) > maximum)
+    throw new InvalidInput(`Archived file exceeds its byte limit: ${path}`);
+  if (maximum <= 2 * 1024 * 1024) {
+    prefetchBlobs(archive.repository, [entry.oid]);
+    const key = `${archive.repository}:${entry.oid}`,
+      cached = blobCache.get(key);
+    if (cached) {
+      blobCache.delete(key);
+      blobCache.set(key, cached);
+      return Buffer.from(cached);
+    }
+  }
+  return readGitObjects(archive.repository, [entry.oid], maximum).get(entry.oid);
+}
 
 export function archiveRevision(root: string): string | undefined {
   const state = readProjectState(root);
@@ -40,69 +96,34 @@ export function archiveRevision(root: string): string | undefined {
 }
 
 export function readArchiveIndex(root: string, revision: string): ArchiveIndex {
-  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(revision)) throw new InvalidInput("Invalid archive revision");
-  const available = spawnSync("git", ["-C", root, "cat-file", "-t", revision], { encoding: "utf8" });
-  if (available.error || available.status !== 0 || available.stdout.trim() !== "commit")
-    throw new InvalidInput(
-      `Archive ${revision} is unavailable locally. Fetch the configured archive branch and its required history with 'workbench record archive fetch'.`,
-    );
-  const repository = gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).toString().trim();
-  const key = repository + ":" + revision;
-  const cached = indexes.get(key);
-  if (cached) return cached;
-  const files = new Map<string, GitEntry>();
-  const records: ArchivedRecord[] = [];
-  const identities = new Set<string>();
-  for (const row of gitBytes(root, ["ls-tree", "-r", "-z", revision]).toString().split("\0")) {
-    if (!row) continue;
-    const tab = row.indexOf("\t");
-    const [mode, type, oid] = row.slice(0, tab).split(" ");
-    const path = row.slice(tab + 1);
-    if (
-      tab < 0 ||
-      !mode ||
-      !oid ||
-      type !== "blob" ||
-      !["100644", "100755"].includes(mode) ||
-      /[\0\r\n\\]/.test(path) ||
-      path.split("/").some((part) => !part || part === "." || part === ".." || part === ".git")
-    )
-      throw new InvalidInput(`Unsafe archive entry: ${path}`);
-    const match = /^(?:(.+)\/)?workbench\/(tasks|experiments)\/(.*)$/.exec(path);
-    if (!match?.[2] || !match[3]) throw new InvalidInput(`Archive contains a non-record file: ${path}`);
-    files.set(path, { mode, oid });
-    const name = /^(?:[0-9A-Z]{2}\/)*(TSK|EXP)-([0-9A-Z]+)\.md$/.exec(match[3]);
-    if (!name?.[1] || !name[2]) continue;
-    const kind = name[1] as ArchivedKind;
-    const number = normalizedNumber(name[2]);
-    if (`${match[2]}/${match[3]}` !== relativeRecordPath(kind, number).split("\\").join("/"))
-      throw new InvalidInput(`Noncanonical archived record: ${path}`);
-    const scopePath = match[1] ?? ".";
-    const identity = `${scopePath}:${kind}-${number}`;
-    if (identities.has(identity)) throw new InvalidInput(`Duplicate archived record: ${identity}`);
-    identities.add(identity);
-    records.push({ scopePath, kind, number, path, entry: { mode, oid } });
+  root = archiveRepository(root);
+  const result = readArchiveTree(root, revision);
+  if (validatedIndexes.has(result)) return result;
+  const validationKey = (item: ArchivedRecord) => `${resolve(root)}:${item.path}:${item.entry.oid}`;
+  const records = result.records.filter((item) => !validatedDocuments.get(validationKey(item)));
+  for (let offset = 0; offset < records.length; offset += recordBatchSize) {
+    const chunk = records.slice(offset, offset + recordBatchSize),
+      bodies = readGitObjects(
+        root,
+        chunk.map((item) => item.entry.oid),
+      );
+    for (const item of chunk) {
+      const body = bodies.get(item.entry.oid);
+      if (!body)
+        throw new ArchiveUnavailable(
+          `Missing archived record: ${item.path}. Run 'workbench record archive fetch' to acquire its objects.`,
+        );
+      const contents = body.toString(),
+        issues = proseRecordErrors(item.kind, item.number, item.path, contents);
+      const status = recordDocument(item.kind, contents, item.path).metadata.status;
+      if (!(item.kind === "TSK" ? ["Accepted", "Canceled"] : ["Accepted", "Rejected", "Inconclusive"]).includes(status))
+        issues.push(`${item.path}: only completed records may be archived`);
+      if (issues.length) throw new InvalidInput(`Invalid archive record: ${issues.join("\n")}`);
+      const key = validationKey(item);
+      validatedDocuments.set(key, true, key.length * 2 + 128);
+    }
   }
-  const recordPaths = new Set(records.map((item) => item.path));
-  const owners = new Set(records.map((item) => item.path.slice(0, -3)));
-  for (const path of files.keys()) {
-    if (recordPaths.has(path)) continue;
-    const parts = path.split("/");
-    if (!parts.some((_, i) => owners.has(parts.slice(0, i + 1).join("/"))))
-      throw new InvalidInput(`Archived supporting file has no owner: ${path}`);
-  }
-  records.sort(
-    (a, b) =>
-      a.scopePath.localeCompare(b.scopePath) ||
-      a.kind.localeCompare(b.kind) ||
-      compareRecordNumbers(a.number, b.number),
-  );
-  const result = { revision, files, records };
-  indexes.set(
-    key,
-    result,
-    [...files.keys()].reduce((size, path) => size + path.length * 4 + 512, 1),
-  );
+  validatedIndexes.add(result);
   return result;
 }
 
@@ -116,9 +137,34 @@ export function projectArchive(root: string): ArchiveIndex | undefined {
   return readArchiveIndex(root, revision);
 }
 
+/** Adoption validates the independent history once; ordinary reads inspect only the pinned tree. */
+export function verifyArchiveHistory(root: string, tip: string): void {
+  for (const revision of gitBytes(root, ["rev-list", tip]).toString().trim().split("\n"))
+    readArchiveIndex(root, revision);
+}
+
+/** A Git snapshot retains the same record identities whether bytes are live or pinned in its archive. */
+export function logicalRecordEntries(root: string, live: ReadonlyMap<string, GitEntry>): Map<string, GitEntry> {
+  const result = new Map(live),
+    state = live.get(projectPaths.state);
+  if (!state) return result;
+  const bytes = readGitObjects(root, [state.oid]).get(state.oid);
+  if (!bytes) throw new InvalidInput("Missing committed project state");
+  const revision = record(parse(bytes.toString()).archive ?? {}, "Invalid archive state").revision;
+  if (revision === undefined) return result;
+  if (typeof revision !== "string") throw new InvalidInput("Invalid archive revision");
+  for (const [path, entry] of readArchiveIndex(root, revision).files) {
+    const existing = result.get(path);
+    if (existing && (existing.oid !== entry.oid || existing.mode !== entry.mode))
+      throw new StateConflict(`Live and archived contents differ: ${path}`);
+    result.set(path, entry);
+  }
+  return result;
+}
+
 export function readArchivedFile(root: string, path: string, maximum = 2 * 1024 * 1024): Buffer | undefined {
-  const entry = projectArchive(root)?.files.get(path.split("\\").join("/"));
-  return entry ? readGitObjects(root, [entry.oid], maximum).get(entry.oid) : undefined;
+  const archive = projectArchive(root);
+  return archive ? readArchiveFileAt(root, archive.revision, path.split("\\").join("/"), maximum) : undefined;
 }
 
 export interface InventoryRecord {
@@ -127,57 +173,87 @@ export interface InventoryRecord {
   archive?: { revision: string; entry: GitEntry };
 }
 
-export function recordInventory(root: string, scopePath: string, kind: Kind): InventoryRecord[] {
+function verifyLiveCopy(path: string, entry: GitEntry, maximum: number): void {
+  const stat = lstatSync(path, { throwIfNoEntry: false });
+  if (!stat) return;
+  const oid = hashFile(path, maximum, "record copy", {
+    algorithm: entry.oid.length === 64 ? "sha256" : "sha1",
+    prefix: (size) => `blob ${String(size)}\0`,
+  });
+  const mode = process.platform === "win32" ? entry.mode : stat.mode & 0o111 ? "100755" : "100644";
+  if (oid !== entry.oid || mode !== entry.mode)
+    throw new StateConflict(`Live and archived contents differ: ${path}. Restore or reconcile the record explicitly.`);
+}
+
+export function readProjectRecordFile(root: string, path: string, maximum = 2 * 1024 * 1024): Buffer {
+  const key = relative(root, path).split("\\").join("/"),
+    archive = projectArchive(root),
+    entry = archive?.files.get(key);
+  if (entry && archive) {
+    verifyLiveCopy(path, entry, maximum);
+    const body = readArchiveFileAt(root, archive.revision, key, maximum);
+    if (body) return body;
+  }
+  return readBoundedFile(path, maximum, "record file");
+}
+
+export function projectRecordFileExists(root: string, path: string): boolean {
+  const info = lstatSync(path, { throwIfNoEntry: false });
+  return (
+    info?.isFile() === true || projectArchive(root)?.files.has(relative(root, path).split("\\").join("/")) === true
+  );
+}
+
+export function recordInventory(
+  root: string,
+  scopePath: string,
+  kind: Kind,
+  committedRecords?: ReadonlySet<string>,
+): InventoryRecord[] {
   const directory = scopePath === "." ? root : join(root, scopePath);
-  const live = scan(directory, kind);
+  const live = scan(directory, kind, committedRecords);
   if (!archivedKinds.includes(kind as ArchivedKind)) return live;
   const archive = projectArchive(root);
   if (!archive) return live;
-  const result: InventoryRecord[] = [...live];
   const byNumber = new Map(live.map((item) => [item.number, item]));
   const archived = archive.records.filter((item) => item.scopePath === scopePath && item.kind === kind);
-  const duplicates = archived.filter((item) => byNumber.has(item.number));
-  const bytes = readGitObjects(
-    root,
-    duplicates.map((item) => item.entry.oid),
-  );
+  const archivedNumbers = new Set(archived.map((item) => item.number));
+  const result: InventoryRecord[] = live.filter((item) => !archivedNumbers.has(item.number));
   for (const item of archived) {
     const existing = byNumber.get(item.number);
     if (existing) {
-      const stat = lstatSync(existing.path);
-      const mode = process.platform === "win32" ? item.entry.mode : stat.mode & 0o111 ? "100755" : "100644";
-      if (
-        mode !== item.entry.mode ||
-        !readBoundedFile(existing.path, 2 * 1024 * 1024, "record").equals(bytes.get(item.entry.oid) ?? Buffer.alloc(0))
-      )
-        throw new StateConflict(
-          `Live and archived contents differ: ${item.path}. Restore or reconcile the record explicitly.`,
-        );
-    } else
-      result.push({
-        number: item.number,
-        path: join(root, item.path),
-        archive: { revision: archive.revision, entry: item.entry },
-      });
+      verifyLiveCopy(existing.path, item.entry, 2 * 1024 * 1024);
+      for (const [path, entry] of archive.files)
+        if (path.startsWith(item.path.slice(0, -3) + "/"))
+          verifyLiveCopy(join(root, path), entry, Number.MAX_SAFE_INTEGER);
+    }
+    result.push({
+      number: item.number,
+      path: join(root, item.path),
+      archive: { revision: archive.revision, entry: item.entry },
+    });
   }
   return result.sort((a, b) => compareRecordNumbers(a.number, b.number));
 }
 
 export function readInventoryRecords(root: string, items: readonly InventoryRecord[]): Map<string, Buffer> {
-  const objects = readGitObjects(
-    root,
-    items.flatMap((item) => (item.archive ? [item.archive.entry.oid] : [])),
-  );
-  return new Map(
-    items.map((item) => {
+  const repository = archiveRepository(root);
+  const result = new Map<string, Buffer>();
+  for (let offset = 0; offset < items.length; offset += recordBatchSize) {
+    const chunk = items.slice(offset, offset + recordBatchSize);
+    prefetchBlobs(
+      repository,
+      chunk.flatMap((item) => (item.archive ? [item.archive.entry.oid] : [])),
+    );
+    for (const item of chunk) {
       const body = item.archive
-        ? objects.get(item.archive.entry.oid)
+        ? readArchiveFileAt(root, item.archive.revision, relative(root, item.path).split("\\").join("/"))
         : readBoundedFile(item.path, 2 * 1024 * 1024, "record");
       if (!body) throw new InvalidInput(`Missing record: ${relative(root, item.path)}`);
-      if (body.length > 2 * 1024 * 1024) throw new InvalidInput(`Record exceeds 2 MiB: ${item.path}`);
-      return [item.path, body];
-    }),
-  );
+      result.set(item.path, body);
+    }
+  }
+  return result;
 }
 
 export function archivedScopeRecords(root: string): ArchivedRecord[] {

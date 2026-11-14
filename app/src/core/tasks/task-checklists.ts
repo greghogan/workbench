@@ -1,7 +1,7 @@
-import { parseReference, scan } from "../records/record-files.js";
+import { recordInventory, readInventoryRecords } from "../records/archive-store.js";
+import { parseReference } from "../records/record-files.js";
 import { readProjects } from "../projects/project-configuration.js";
 import { readText } from "../runtime/files.js";
-import { rootOf } from "../projects/project-context.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { recordDocument, terminalTask } from "../records/record-document.js";
 import { InvalidInput } from "../runtime/input-errors.js";
@@ -12,10 +12,13 @@ export function taskChecklistChanges(
   root: string,
   overrides: ReadonlyMap<string, string> = new Map(),
 ): { path: string; original: string; contents: string }[] {
-  const tasks = readProjects(root).flatMap((project) =>
-    scan(rootOf(root, project), "TSK").map((record) => {
-      const original = readText(record.path),
-        contents = overrides.get(record.path) ?? original;
+  const tasks = readProjects(root).flatMap((project) => {
+    const records = recordInventory(root, project.path, "TSK"),
+      bodies = readInventoryRecords(root, records);
+    return records.map((record) => {
+      const original = bodies.get(record.path)?.toString();
+      if (original === undefined) throw new InvalidInput(`Missing task: ${record.path}`);
+      const contents = overrides.get(record.path) ?? original;
       return {
         ...record,
         project,
@@ -23,11 +26,12 @@ export function taskChecklistChanges(
         contents,
         metadata: recordDocument("TSK", contents, record.path).metadata,
       };
-    }),
-  );
+    });
+  });
   const byPath = new Map(tasks.map((task) => [task.path, task]));
   const replacements: { path: string; original: string; contents: string }[] = [];
   for (const task of tasks) {
+    if (task.archive) continue;
     const literal = markdownLiteralLines(task.contents);
     const contents = task.contents
       .split("\n")

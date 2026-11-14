@@ -73,3 +73,16 @@
   reconciles live copies without restoring them.
 - `src/core/git/integration-target.ts`, `src/core/projects/project-state.ts`: Resolve the integration destination and
   coordinate archive metadata with record allocation.
+- `src/core/records/archive-workflow.ts`, `src/core/records/archive-transfer-proof.ts`,
+  `src/core/records/archive-publication.ts`: Coordinate recoverable transfers and verify storage-only commits and their
+  publication dependencies.
+- `src/core/git/archive-protection.ts`, `src/core/git/repository-state.ts`: Route existing hooks through durable
+  repository-owned guards and coordinate writers across worktrees.
+- `src/cli/record-archive.ts`: Presents archive previews, explicit transfers, recovery, and publication.
+- `src/core/records/record-content.ts`, `src/core/records/record-projection.ts`: Share prose contracts and render maps
+  from proposed live and archived Git contents without changing the checkout.
+
+- `src/core/records/archive-index.ts`, `src/core/records/archive-hook.ts`: Validate record-only Git trees and retain
+  publication checks independently of an application checkout.
+- `src/core/git/tree-publication.ts`, `src/core/git/refs.ts`: Verify exact tree transitions while preserving unrelated
+  work and validate branch names.
