@@ -16,22 +16,26 @@ export function repositoryStatePath(root: string, ...parts: string[]): string {
 export function withRepositoryOperation<T>(
   root: string,
   action: () => T,
-  kind: "archive" | "integration" | "acquire" = "archive",
+  kind: "archive" | "integration" | "acquire" | "planning" = "archive",
 ): T {
   return withCacheLockSync(
     repositoryStatePath(root, "record-operation"),
     () => {
-      const other = kind === "archive" ? "integration" : "archive";
-      const path = repositoryStatePath(root, `${other}-operation.json`);
-      if (kind !== "acquire" && existsSync(path)) {
-        const pending = record(
-          JSON.parse(readBoundedFile(path, 16 * 1024 * 1024, "repository operation").toString()) as unknown,
-          "Invalid repository operation",
-        );
-        if (pending.version !== 1 || typeof pending.completed !== "boolean")
-          throw new InvalidInput("Invalid repository operation");
-        if (!pending.completed)
-          throw new StateConflict(`The ${other} operation requires recovery in ${String(pending.checkout)}`);
+      for (const other of ["archive", "integration", "planning"] as const) {
+        if (other === kind || kind === "acquire") continue;
+        const path = repositoryStatePath(root, `${other}-operation.json`);
+        if (existsSync(path)) {
+          const pending = record(
+            JSON.parse(readBoundedFile(path, 16 * 1024 * 1024, "repository operation").toString()) as unknown,
+            "Invalid repository operation",
+          );
+          if (pending.version !== 1 || typeof pending.completed !== "boolean")
+            throw new InvalidInput("Invalid repository operation");
+          if (!pending.completed)
+            throw new StateConflict(
+              `The ${other} operation requires recovery${typeof pending.checkout === "string" ? ` in ${pending.checkout}` : " in this repository"}`,
+            );
+        }
       }
       return action();
     },

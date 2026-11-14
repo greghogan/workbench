@@ -7,8 +7,7 @@ import { InvalidInput } from "../runtime/input-errors.js";
 import { ownedPath, registeredRootPath } from "../runtime/paths.js";
 import { rootOf } from "./project-context.js";
 import { projectIdPattern as validName } from "./project-identity.js";
-import type { Config, LanguageRoot, Project } from "./project-model.js";
-export const workspaceSchemaVersion = 1;
+import { workspaceSchemaVersion, type Config, type LanguageRoot, type Project } from "./project-model.js";
 
 export function readConfig(root: string): Config {
   return configurationValue(`project-config:${root}`, () => loadConfig(root));
