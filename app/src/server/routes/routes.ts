@@ -26,6 +26,14 @@ export const Route = {
   Record: "/records/:id",
   Records: "/records",
   TaskQueue: "/queue",
+  Plan: "/plans/:id",
+  PlanNew: "/plan/new",
+  PlanFile: "/plans/:id/files",
+  PlanCreate: "/actions/plan-create",
+  PlanSave: "/actions/plan-save",
+  PlanRename: "/actions/plan-rename",
+  PlanApprove: "/actions/plan-approve",
+  PlanCheckpoint: "/actions/plan-checkpoint",
   TaskState: "/actions/task-state",
   QueueChange: "/actions/task-queue",
   Review: "/review",
@@ -54,6 +62,8 @@ export type Route = (typeof Route)[keyof typeof Route];
 
 const recordTemplates = {
   [Route.Record]: Route.Record,
+  [Route.Plan]: Route.Plan,
+  [Route.PlanFile]: Route.PlanFile,
   [Route.Review]: Route.Record + Route.Review,
   [Route.File]: Route.File,
   [Route.CitationDocument]: Route.CitationDocument,
@@ -109,7 +119,17 @@ export interface RouteQueries {
   [Route.Client]: { v?: string };
   [Route.Diagrams]: { v?: string };
   [Route.Events]: Record<string, never>;
-  [Route.TaskQueue]: SourceQuery;
+  [Route.TaskQueue]: SourceQuery & {
+    phase?: "plans" | "work" | "available" | "outcomes";
+    after?: string;
+    before?: string;
+    through?: string;
+    cursor_revision?: string;
+    task_windows?: string;
+  };
+  [Route.Plan]: SourceQuery & { id: string; view?: "read" | "changes" | "edit"; layout?: DifferenceLayout };
+  [Route.PlanNew]: SourceQuery;
+  [Route.PlanFile]: { id: string; path: string; version?: "approved"; download?: "1" | "0" };
   [Route.Overview]: SourceQuery;
   [Route.Projects]: { refresh?: "1"; "refresh-sizes"?: "1" };
   [Route.Inventory]: { view?: "projects" | "caches"; project?: string; owner?: string };
@@ -166,6 +186,11 @@ export interface MutationFields {
     decision: "approve" | "dismiss";
     reviewed: "yes";
   };
+  [Route.PlanCreate]: { scope: string };
+  [Route.PlanSave]: { reference: string; expected: string };
+  [Route.PlanRename]: { reference: string; expected: string };
+  [Route.PlanApprove]: { reference: string; expected: string };
+  [Route.PlanCheckpoint]: { reference: string; expected: string };
   [Route.TaskState]: { reference: string; expected: string; state: TaskStatus };
   [Route.QueueChange]: { operation: QueueOperation; reference: string; target: string; expected: string };
   [Route.WorkspaceRetry]: EmptyFields;
@@ -231,10 +256,72 @@ export const routeContracts: RouteContracts = {
     query: {},
     action: { operation: WebAction.PolicyResolution, effect: ActionEffect.Applied },
   },
-  [Route.TaskQueue]: {
+  [Route.Plan]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      id: bounded(1024),
+      view: oneOf(["read", "changes", "edit"]),
+      layout: oneOf(["unified", "split"]),
+      collection: bounded(1024),
+      scope: bounded(1024),
+      all: oneOf(["1"]),
+    },
+  },
+  [Route.PlanFile]: {
+    scope: "project",
+    methods: ["GET"],
+    query: { id: bounded(1024), path: bounded(4096), version: oneOf(["approved"]), download: oneOf(["1", "0"]) },
+  },
+  [Route.PlanNew]: {
     scope: "project",
     methods: ["GET"],
     query: { collection: bounded(1024), scope: bounded(1024), all: oneOf(["1"]) },
+  },
+  [Route.PlanCreate]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
+  [Route.PlanSave]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Save, effect: ActionEffect.Applied },
+  },
+  [Route.PlanRename]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Save, effect: ActionEffect.Applied },
+  },
+  [Route.PlanApprove]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
+  [Route.PlanCheckpoint]: {
+    scope: "project",
+    methods: ["POST"],
+    query: {},
+    action: { operation: WebAction.Task, effect: ActionEffect.Applied },
+  },
+  [Route.TaskQueue]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      collection: bounded(1024),
+      scope: bounded(1024),
+      all: oneOf(["1"]),
+      phase: oneOf(["plans", "work", "available", "outcomes"]),
+      after: bounded(1024),
+      before: bounded(1024),
+      through: bounded(1024),
+      cursor_revision: bounded(1024),
+      task_windows: bounded(65536),
+    },
   },
   [Route.TaskState]: {
     scope: "project",

@@ -39,13 +39,13 @@ export function renderScopeContext(
       const charterPath = join(scope.directory, projectPaths.charter);
       output += `\n### Charter\n\n`;
       output += existsSync(charterPath)
-        ? `${relocateMarkdownLinks(readText(charterPath), charterPath, join(root, "AGENTS.md"), absoluteLinks).trimEnd()}\n`
+        ? `${relocateMarkdownLinks(readText(charterPath), charterPath, join(root, "AGENTS.md"), { absolute: absoluteLinks }).trimEnd()}\n`
         : `Charter not yet provided: \`${relative(root, charterPath).split(sep).join("/")}\`.\n`;
     }
     if (scope.decisions.some((decision) => !!decision.instruction)) output += "\n### Agent instructions\n";
     for (const decision of scope.decisions) {
       if (!decision.instruction) continue;
-      output += `\n- ${wrap(`${link(decision.reference, decision.path)}: ${relocateMarkdownLinks(decision.instruction, decision.path, join(root, "AGENTS.md"), absoluteLinks)}`, width, 2)}\n`;
+      output += `\n- ${wrap(`${link(decision.reference, decision.path)}: ${relocateMarkdownLinks(decision.instruction, decision.path, join(root, "AGENTS.md"), { absolute: absoluteLinks })}`, width, 2)}\n`;
     }
   }
   // Keep discovery portable: installed policies and machine-specific paths stay out of shared context.

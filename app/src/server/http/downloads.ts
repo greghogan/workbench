@@ -46,7 +46,18 @@ export function sendArchivedDownload(
   const archive = readArchiveIndex(source.repository, source.revision),
     entry = archive.files.get(path);
   if (!entry) throw new WebError(404, "archived supporting file not found");
-  const child = spawn("git", ["-C", archive.repository, "cat-file", "blob", entry.oid], {
+  sendGitDownload(response, archive.repository, entry.oid, path, archive.sizes.get(path));
+}
+
+export function sendGitDownload(
+  response: ServerResponse,
+  repository: string,
+  oid: string,
+  path: string,
+  size?: number,
+): void {
+  if (response.destroyed) return;
+  const child = spawn("git", ["-C", repository, "cat-file", "blob", oid], {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, GIT_NO_LAZY_FETCH: "1" },
   });
@@ -71,6 +82,9 @@ export function sendArchivedDownload(
       streamFailure(response, DiagnosticOperation.SupportingFile, new Error(`Git blob download failed: ${errorText}`));
   });
   response.setHeader("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(basename(path))}`);
-  response.writeHead(200, { "content-type": "application/octet-stream", "content-length": archive.sizes.get(path) });
+  response.writeHead(200, {
+    "content-type": "application/octet-stream",
+    ...(size === undefined ? {} : { "content-length": size }),
+  });
   child.stdout.pipe(response, { end: false });
 }

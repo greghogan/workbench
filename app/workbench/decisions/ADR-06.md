@@ -23,8 +23,8 @@ Protected-document reviews and flagged policy incompatibilities share a unified 
 policy resolution authorizes that resolution; it neither applies the edits nor acknowledges their resulting contents.
 Policy changes and compatibility reassessment retain their separate requirements under workbench:ADR-L.
 
-Browser content editing is limited to charters and ADRs; saves reject conflicting on-disk changes and preserve unsaved
-input on failure. Other record types remain read-only in the browser except for explicit workflow actions.
+Browser content editing supports charters, ADRs, and future plans; saves reject conflicting on-disk changes and preserve
+unsaved input on failure. Other record types remain read-only in the browser except for explicit workflow actions.
 
 Rationale: Exact independent acknowledgments preserve human control. Meaningful comparisons and continuity reduce the
 attention required for review without confusing a changed file with what was actually presented.

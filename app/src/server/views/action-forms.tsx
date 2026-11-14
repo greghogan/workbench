@@ -7,6 +7,8 @@ import type { ViewContext } from "../workspace/view-context.js";
 const protectedForms = {
   [Route.PolicyResolution]: "resolution",
   [Route.Save]: "editor",
+  [Route.PlanSave]: "editor",
+  [Route.PlanCreate]: "editor",
   [Route.CreateCharter]: "editor",
   [Route.Approve]: "review",
   [Route.Apply]: "proposal",
@@ -16,9 +18,15 @@ type ScopedAction =
   | typeof Route.Preview
   | typeof Route.WorkspaceRetry
   | typeof Route.ReviewPrepare
+  | typeof Route.PlanRename
+  | typeof Route.PlanApprove
+  | typeof Route.PlanCheckpoint
   | typeof Route.TaskState
   | typeof Route.QueueChange;
 interface EditableFields {
+  [Route.PlanCreate]: { name: "text"; contents: "area" };
+  [Route.PlanSave]: { contents: "area" };
+  [Route.PlanRename]: { name: "text" };
   [Route.QueueChange]: { detail: "text" };
   [Route.Save]: { contents: "area" };
   [Route.CreateCharter]: { contents: "area"; human_written: "confirmation" };

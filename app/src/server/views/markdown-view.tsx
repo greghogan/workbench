@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { renderToString } from "preact-render-to-string";
 import MarkdownIt, { type Token, type MarkdownIt as MarkdownParser } from "markdown-it";
-import { dirname, resolve, relative } from "node:path";
+import { dirname, resolve, relative, posix } from "node:path";
 import { splitFrontmatter } from "../../core/records/record-document.js";
 import { yamlMetadata } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
@@ -14,22 +14,15 @@ import { normalizedNumber } from "../../core/records/record-identity.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
 import { required } from "../../core/runtime/invariants.js";
 import { diagramView, diagramComparisonView } from "./diagram-view.js";
+import { markdownHeadingId } from "../../core/records/markdown-links.js";
 const documentPrefix = "document-";
 
-/** Kept headings and a suppressed document title use identical fragment identifiers. */
-function headingId(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/`/g, "")
-    .replace(/[^\p{L}\p{N}_\s-]/gu, "")
-    .replace(/\s+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 /** Raw HTML remains visible text; local links resolve only to registered records or their owned files. */
 export type MarkdownRecord = Pick<BrowserRecord, "directory" | "path"> & {
   title?: string;
+  scope?: string;
   type?: BrowserRecord["type"];
+  planFiles?: { reference: string; names: readonly string[]; version?: "approved"; base?: string };
 };
 export function markdownParser(
   record: MarkdownRecord | undefined,
@@ -52,11 +45,16 @@ export function markdownParser(
         const output: Token[] = [];
         let offset = 0;
         const pattern =
-          /(?<![\p{L}\p{N}_:/-])(?:([a-z][a-z0-9_-]*):)?(ADR|TSK|EXP|ENV|CIT|REL)-([0-9a-z][0-9a-z_]*)(?![\p{L}\p{N}_/-])/giu;
+          /(?<![\p{L}\p{N}_:/-])(?:([a-z][a-z0-9_-]*):)?(?:(ADR|TSK|EXP|ENV|CIT|REL)-([0-9a-z][0-9a-z_]*)|plan\/([a-z][a-z0-9_-]{0,119}))(?![\p{L}\p{N}_/-])/giu;
         for (const match of token.content.matchAll(pattern)) {
-          const scope = match[1]?.toLowerCase() ?? owner?.scope;
-          if (!scope || !match[2] || !match[3]) continue;
-          const target = records.record(`${scope}:${match[2].toUpperCase()}-${normalizedNumber(match[3])}`);
+          const scope = match[1]?.toLowerCase() ?? record?.scope ?? owner?.scope;
+          if (!scope) continue;
+          const reference = match[4]
+            ? `${scope}:plan/${match[4]}`
+            : match[2] && match[3]
+              ? `${scope}:${match[2].toUpperCase()}-${normalizedNumber(match[3])}`
+              : undefined;
+          const target = reference ? records.record(reference) : undefined;
           if (!target) continue;
           const text = (value: string) => {
             const part = new state.Token("text", "", 0);
@@ -90,25 +88,40 @@ export function markdownParser(
     } catch {
       return undefined;
     }
+    const fragment = href.includes("#") ? "#" + documentPrefix + href.slice(href.indexOf("#") + 1) : "";
+    if (record.planFiles) {
+      const resolved = posix.normalize(posix.join(record.planFiles.base ?? "", decoded));
+      const name = record.planFiles.base === undefined ? resolved.replace(/^files\//, "") : resolved;
+      if (!record.planFiles.names.includes(name)) return undefined;
+      return {
+        href:
+          routeURL(Route.PlanFile, {
+            id: record.planFiles.reference,
+            path: name,
+            ...(record.planFiles.version ? { version: record.planFiles.version } : {}),
+          }) + fragment,
+      };
+    }
     const target = resolve(record.directory, dirname(record.path), decoded);
     const linked = records.path(target);
     if (linked)
       return {
-        href:
-          recordURL(linked.id) + (href.includes("#") ? `#${documentPrefix}${href.split("#").slice(1).join("#")}` : ""),
+        href: recordURL(linked.id) + fragment,
         target: linked,
       };
     const owner = records.owner(target);
     if (owner)
       return {
-        href: routeURL(Route.File, { id: owner.id, path: relative(owner.directory, target).replaceAll("\\", "/") }),
+        href:
+          routeURL(Route.File, { id: owner.id, path: relative(owner.directory, target).replaceAll("\\", "/") }) +
+          fragment,
       };
     return undefined;
   };
   parser.renderer.rules.heading_open = (tokens, index, options, _environment: unknown, renderer) => {
     const token = tokens[index];
     const text = tokens[index + 1]?.content ?? "";
-    const base = headingId(text);
+    const base = markdownHeadingId(text);
     const count = headings.get(base) ?? 0;
     headings.set(base, count + 1);
     token?.attrSet("id", prefix + (count ? `${base}-${String(count)}` : base));
@@ -213,7 +226,7 @@ export function markdown(
   const tokens = parser.parse(parts?.body ?? contents, {});
   let anchor = "";
   if (tokens[0]?.type === "heading_open" && tokens[0].tag === "h1" && tokens[1]?.content === pageTitle) {
-    const id = headingId(tokens[1]?.content ?? "");
+    const id = markdownHeadingId(tokens[1]?.content ?? "");
     anchor = renderToString(<span id={prefix + id} />);
     headings.set(id, 1);
     tokens.splice(0, 3);

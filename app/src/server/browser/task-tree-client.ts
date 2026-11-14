@@ -64,6 +64,7 @@ export function startTaskTreeLoading(session: BrowserSession) {
         destination.append(copy);
         first ??= copy.querySelector<HTMLElement>("[data-record-id]");
       }
+      if (next.dataset.taskThrough) target.dataset.taskThrough = next.dataset.taskThrough;
       remember();
       const loader = next.querySelector(":scope > [data-task-loader]");
       if (loader) target.querySelector(":scope > [data-task-loader]")?.replaceWith(document.importNode(loader, true));
@@ -82,6 +83,19 @@ export function startTaskTreeLoading(session: BrowserSession) {
   const remember = () => {
     const url = new URL(browser.location.href),
       windows: Record<string, string | false> = {};
+    const workflow = [...document.querySelectorAll<HTMLElement>("[data-task-window]")].filter((node) =>
+      node.dataset.taskWindow?.startsWith("workflow-"),
+    );
+    for (const node of workflow) {
+      const last = node.dataset.taskThrough;
+      if (node.dataset.taskWindow && last) windows[node.dataset.taskWindow] = last;
+    }
+    if (workflow.length) {
+      url.searchParams.delete("phase");
+      url.searchParams.delete("after");
+      url.searchParams.delete("before");
+      url.searchParams.delete("through");
+    }
     for (const branch of document.querySelectorAll<HTMLDetailsElement>("details[data-task-branch]")) {
       const window = branch.querySelector<HTMLElement>(":scope > [data-task-window]"),
         last = window?.querySelector<HTMLElement>(":scope > [data-task-items] > [data-task-node]:last-child")?.dataset

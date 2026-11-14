@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { normalizedNumber } from "../../core/records/record-identity.js";
+import { recordKey, compareRecordKeys } from "../routes/record-listing.js";
 import type { ViewContext } from "../workspace/view-context.js";
 import { recordURL } from "../routes/locations.js";
 
@@ -16,9 +16,9 @@ export function recordNeighbors(context: ViewContext, record: Pick<BrowserRecord
   const ordered = candidates
     .map((item) => ({
       item,
-      number: item.type === "CHARTER" ? "" : normalizedNumber(item.id.split("-").at(-1) ?? "0"),
+      key: recordKey(item.id),
     }))
-    .sort((a, b) => a.number.length - b.number.length || a.number.localeCompare(b.number));
+    .sort((a, b) => compareRecordKeys(a.key, b.key));
   const index = ordered.findIndex(({ item }) => item.id === record.id);
   const step = (item: Pick<BrowserRecord, "id" | "title"> | undefined): PaneStep | undefined =>
     item ? { href: recordURL(item.id), title: item.title } : undefined;

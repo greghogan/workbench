@@ -11,7 +11,7 @@ export function routeURL<R extends keyof RouteQueries>(route: R, values: RouteQu
   return projectPath(path + (parameters.size ? "?" + parameters.toString() : ""));
 }
 export const recordURL = (id: string, state: Omit<RouteQueries[typeof Route.Record], "id"> = {}): string =>
-  routeURL(Route.Record, { id, ...state });
+  id.includes(":plan/") ? routeURL(Route.Plan, { id, ...state }) : routeURL(Route.Record, { id, ...state });
 
 export function withView(location: string, state: ViewState): string {
   const url = new URL(location, "http://workbench.invalid");

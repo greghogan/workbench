@@ -50,13 +50,14 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
     (hasReviewBaseline(document.baseline) && comparisonChanged(document.reviewed)) ||
     !!document.modeChange;
   const upstream = record.collection && (context.comparison?.state !== "compared" || compared?.status !== "unchanged");
-  if (record.type === "ADR" && !record.local && (reviewed || upstream))
-    views.push({ value: "changes", label: "Changes" });
+  const taskApproval = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id)?.approval : undefined;
+  if ((record.type === "ADR" || taskApproval) && !record.local && (reviewed || upstream))
+    views.push({ value: "changes", label: record.type === "TSK" ? "Diff" : "Changes" });
   if (record.editable) views.push({ value: "edit", label: "Edit" });
   const requested = parameters.view ?? "read";
   if (requested === "edit" && !record.editable) throw new WebError(400, "this record is read only");
-  if (requested === "changes" && (record.type !== "ADR" || record.local))
-    throw new WebError(400, "source differences are available for project-owned ADRs");
+  if (requested === "changes" && ((record.type !== "ADR" && !taskApproval) || record.local))
+    throw new WebError(400, "source differences are available for project-owned ADRs and task approvals");
   const view = requested === "changes" ? "changes" : views.find((choice) => choice.value === requested)?.value;
   if (!view) throw new WebError(400, "unknown record view");
   const state = recordViewState(record, view, parameters, upstream);
