@@ -1,3 +1,4 @@
+import { workspaceSchemaVersion } from "./project-model.js";
 import { projectPaths } from "./project-paths.js";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
@@ -12,7 +13,7 @@ import { readText } from "../runtime/files.js";
 import { required } from "../runtime/invariants.js";
 import { ownedPath } from "../runtime/paths.js";
 import { detected } from "../toolchains/languages.js";
-import { readConfig, readProjects, workspaceSchemaVersion } from "./project-configuration.js";
+import { readConfig, readProjects } from "./project-configuration.js";
 import { distributionRoot } from "./project-context.js";
 import { ProjectEdits } from "./project-edits.js";
 import { projectIdPattern as validId } from "./project-identity.js";

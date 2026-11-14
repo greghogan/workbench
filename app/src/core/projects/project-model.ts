@@ -4,6 +4,8 @@ import type { CollectionPin } from "../collections/collection-schema.js";
 import type { TargetDefinition } from "../execution/checks/check-targets.js";
 import type { CIDestination } from "../execution/ci/ci-hosting.js";
 import type { CompilerFamily } from "../toolchains/compiler-catalog.mjs";
+export const workspaceSchemaVersion = 1;
+
 export interface Project {
   id: string;
   name?: string;
