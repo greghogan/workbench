@@ -6,7 +6,7 @@ import { decodeCompatibilityAssessment } from "../../core/collections/policy-fin
 import { LocalCollectionScope } from "../../core/collections/collections.js";
 import { decodeQueue } from "../../core/tasks/task-queue.js";
 import { decodeApplicableTaskImplementation } from "../../core/tasks/task-implementations.js";
-import { taskStatuses } from "../../core/records/record-document.js";
+import { taskStatuses, recordTimestamp } from "../../core/records/record-document.js";
 import { recordTypes } from "../../core/records/record-metadata.js";
 import type { WorkspaceSnapshot } from "./workspace-service.js";
 
@@ -104,6 +104,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
   list(data.records, (value) => {
     const record = object(value);
     strings(record, ["id", "scope", "title", "summary", "status", "path", "directory"]);
+    check(record.addedAt === undefined || recordTimestamp(record.addedAt));
     check(
       recordTypes.some((type) => type === record.type) &&
         bool(record.editable) &&
@@ -140,6 +141,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
   list(tasks.plans, (value) => {
     const plan = object(value);
     strings(plan, ["reference", "scope", "name", "title", "summary", "contents", "digest", "status"]);
+    check(plan.addedAt === undefined || recordTimestamp(plan.addedAt));
     check(bool(plan.draft) && bool(plan.conflict));
     if (plan.implementation !== undefined) {
       const implementation = object(plan.implementation);

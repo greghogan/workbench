@@ -33,6 +33,7 @@ export function workGraph(tasks: TaskRecord[], plans: PlanningRecord[]): TaskGra
       contents: plan.contents,
       metadata: {
         status: plan.status === "Approved" && !plan.approval?.current ? "Planned" : plan.status,
+        ...(plan.addedAt ? { added_at: plan.addedAt } : {}),
         ...(plan.parent ? { parent: mapped(plan.parent) } : {}),
         depends_on: plan.dependencies.map(mapped),
       },

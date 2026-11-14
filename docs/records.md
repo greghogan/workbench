@@ -233,7 +233,9 @@ Create a named draft with `workbench task plan create service --file plan.md`. `
 its inspected version. Use that digest with `task plan save service --file plan.md --expected <digest>` to retain an
 edit. Incomplete drafts remain available. Supporting files use
 `task plan attach service requirements.md --expected <digest>` and `detach`; `--name <path>` selects their path within
-the plan. These saves do not create commits.
+the plan. These saves do not create commits. Valid new plans receive `added_at`, a UTC timestamp shown as an Added date
+in the CLI and browser. Editing, renaming, and starting work preserve it. It does not select execution order or change
+plan approval. Existing records without a recoverable date can omit it.
 
 Use `task plan checkpoint service` to commit selected drafts together, or omit names for all drafts. Human approval
 through `task plan approve service --expected <digest>` or the browser also checkpoints the approved plan when storage
@@ -244,12 +246,13 @@ saves exact bytes to a new file and refuses to replace an existing file. Later c
 `task plan rename service background-service --expected <digest>` updates saved relationships and queue references
 together. Related edits checkpoint together; unrelated drafts remain uncommitted.
 
-Queue a named plan with `workbench queue add plan/service`. Selection can order unapproved future plans, but starting
-requires approval and satisfied prerequisites. `queue start plan/service` assigns a numeric task ID and copies the plan,
-its supporting files, and approval into implementation. Starting a child also preserves its ancestor context without
-approving that context or starting siblings. The numeric task becomes authoritative. After its first implementation
-commit is verified, Workbench retires the saved plan and updates remaining references. `task plan recover` resumes
-interrupted transfers, renames, and checkpoints while preserving intervening edits.
+Unapproved plans appear by Added date, oldest first. Approval appends the plan to the local work queue; revised approval
+preserves its position and progress. There is no separate plan-selection step. Starting requires approval and satisfied
+prerequisites. `queue start plan/service` assigns a numeric task ID and copies the plan, its supporting files, and
+approval into implementation. Starting a child also preserves its ancestor context without approving that context or
+starting siblings. The numeric task becomes authoritative. After its first implementation commit is verified, Workbench
+retires the saved plan and updates remaining references. `task plan recover` resumes interrupted transfers, renames, and
+checkpoints while preserving intervening edits.
 
 Create future plans and checkpoint drafts through the CLI. The browser supports editing, approval, cancellation, and
 deletion of existing plans. Approval checkpoints the approved version when planning storage is enabled.
@@ -276,12 +279,13 @@ first-parent history. `--from REVISION` continues an older page; `--diff` and op
 patch. The browser History page provides immutable commit and file views without switching branches; historical links
 stay in that version. Completed commits are read-only rather than new requests for human approval.
 
-`workbench queue` shows the selected local execution order and the next eligible task. Add approved work with
-`workbench queue add <references...>` and reorder it with `queue move <reference> --before <other>` or
-`--after <other>`. The queue records ordering, readiness, and progress; it does not schedule agents or select serial or
-parallel execution. The developer initiates work in agent chat and may authorize a particular batch to run in parallel;
-that permission applies only to the requested batch. `queue --ready --json` shows approved tasks with satisfied
-prerequisites. There is no separate `next` command or command abbreviation.
+`workbench queue` shows the local execution order and the next eligible task. Approval appends work automatically.
+Restore previously removed approved work with `workbench queue add <references...>` and reorder it with
+`queue move <reference> --before <other>` or `--after <other>`. The queue records ordering, readiness, and progress; it
+does not schedule agents or select serial or parallel execution. The developer initiates work in agent chat and may
+authorize a particular batch to run in parallel; that permission applies only to the requested batch.
+`queue --ready --json` shows approved tasks with satisfied prerequisites. There is no separate `next` command or command
+abbreviation.
 
 The web task workflow presents Plans, Work, and Outcomes on one page. Plans await human approval; Work shows approved
 tasks and their local execution progress; Outcomes await human acceptance. Document reviews and the task record browser
@@ -290,9 +294,11 @@ remain separate from this workflow.
 Use `queue start <reference>` to claim work; `queue implemented <reference> --evidence "Checks and outcome"` records a
 verified result pending acceptance. `queue block <reference> "Reason"` suspends work; `queue release <reference>`
 returns it to queued and discards its local evidence. `queue remove <reference>` removes inactive work from the
-selection. Shared-state changes retain a bounded recovery record while publishing record files, regenerated maps, queue
-progress, and human decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer
-human decisions stop recovery with a diagnostic rather than overwriting them.
+selection. Agents maintain this execution progress through the CLI. The browser shows progress and blockers and provides
+human approval, ordering, and acceptance; it does not dispatch agents or change their execution progress. Shared-state
+changes retain a bounded recovery record while publishing record files, regenerated maps, queue progress, and human
+decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer human decisions stop
+recovery with a diagnostic rather than overwriting them.
 
 The queue persists under the native Workbench state directory, is never committed, and survives cache cleanup. These
 commands coordinate work; they do not launch agents or commit, squash, or push changes. Publication restrictions are

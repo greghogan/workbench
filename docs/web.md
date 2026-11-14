@@ -102,6 +102,10 @@ stages or approves the file. Run `workbench sync` after saving to refresh maps a
 
 ## Browse and follow records
 
+Interface text is English. Visible timestamps use minute precision and an explicit time zone: browsers use their locale
+and time zone, while pages without JavaScript use English and UTC. Stored timestamps and machine-readable responses
+retain their exact ISO values.
+
 **Tasks** under **Records** counts and shows numeric task records in all states as a hierarchy, with nested subtasks.
 The generated task map is an index, not an execution queue. All four shared states (Planned, Approved, Accepted, and
 Canceled) have separate history views with automatic loading and a **Load more** fallback. Global search includes every

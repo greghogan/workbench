@@ -64,28 +64,6 @@ function fixture() {
   };
   return { root, git, base, review };
 }
-test("staged review preserves partial staging and another writer's index lock", () => {
-  const f = fixture();
-  writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
-  f.git(["add", "source.ts"]);
-  const expected = f.git(["write-tree"]);
-  writeFileSync(join(f.root, "source.ts"), "export const value=3;\n");
-  writeFileSync(join(f.root, "future.ts"), "not staged\n");
-  f.git(["add", "--intent-to-add", "future.ts"]);
-  const indexPath = join(f.root, ".git/index"),
-    index = readFileSync(indexPath),
-    lockPath = `${indexPath}.lock`,
-    owner = "another index writer\n";
-  writeFileSync(lockPath, owner, { flag: "wx" });
-  expect(proposedAgentReview(f.root, AgentReviewKind.Task, { staged: true, base: f.base }).tree).toBe(expected);
-  expect(f.review().tree).toBe(expected);
-  checkAgentCommit(f.root);
-  expect(readFileSync(indexPath)).toEqual(index);
-  expect(readFileSync(lockPath, "utf8")).toBe(owner);
-  expect(readFileSync(join(f.root, "source.ts"), "utf8")).toBe("export const value=3;\n");
-  expect(readFileSync(join(f.root, "future.ts"), "utf8")).toBe("not staged\n");
-});
-
 test("change receipts bind the complete staged tree while preserving unstaged work", () => {
   const f = fixture();
   writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
@@ -106,6 +84,28 @@ test("change receipts bind the complete staged tree while preserving unstaged wo
   expect(() => {
     recordAgentReview(f.root, { ...reviewed, summary: "old", verification: "old" }, reviewIdentity(reviewed), true);
   }).toThrow(/Review contents changed/);
+});
+
+test("staged review preserves partial staging and another writer's index lock", () => {
+  const f = fixture();
+  writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
+  f.git(["add", "source.ts"]);
+  const expected = f.git(["write-tree"]);
+  writeFileSync(join(f.root, "source.ts"), "export const value=3;\n");
+  writeFileSync(join(f.root, "future.ts"), "not staged\n");
+  f.git(["add", "--intent-to-add", "future.ts"]);
+  const indexPath = join(f.root, ".git/index"),
+    index = readFileSync(indexPath),
+    lockPath = `${indexPath}.lock`,
+    owner = "another index writer\n";
+  writeFileSync(lockPath, owner, { flag: "wx" });
+  expect(proposedAgentReview(f.root, AgentReviewKind.Task, { staged: true, base: f.base }).tree).toBe(expected);
+  expect(f.review().tree).toBe(expected);
+  checkAgentCommit(f.root);
+  expect(readFileSync(indexPath)).toEqual(index);
+  expect(readFileSync(lockPath, "utf8")).toBe(owner);
+  expect(readFileSync(join(f.root, "source.ts"), "utf8")).toBe("export const value=3;\n");
+  expect(readFileSync(join(f.root, "future.ts"), "utf8")).toBe("not staged\n");
 });
 
 test("reviewing retained history preserves current staged and working review evidence", () => {

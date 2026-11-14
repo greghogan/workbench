@@ -1,4 +1,3 @@
-import type { QueueChange } from "../../core/tasks/task-queue.js";
 import { recordTypes } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import { taskStatuses, type TaskStatus } from "../../core/records/record-document.js";
@@ -189,17 +188,8 @@ export interface RouteQueries {
   [Route.ReviewFile]: { path: string; digest: string; side?: "before" | "after" };
   [Route.Caches]: { project?: string; owner?: string; refresh?: "1"; "refresh-sizes"?: "1" };
 }
-export const queueOperations = [
-  "add",
-  "remove",
-  "start",
-  "implemented",
-  "block",
-  "release",
-  "move-before",
-  "move-after",
-] as const satisfies readonly QueueOperation[];
-export type QueueOperation = Exclude<QueueChange["action"], "move"> | "move-before" | "move-after";
+export const queueOperations = ["add", "remove", "move-before", "move-after"] as const;
+export type QueueOperation = (typeof queueOperations)[number];
 type EmptyFields = Record<string, never>;
 type CacheTarget = { project: string; unlisted?: never } | { unlisted: string; project?: never };
 export interface MutationFields {

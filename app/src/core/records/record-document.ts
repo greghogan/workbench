@@ -15,12 +15,13 @@ interface MetadataFields {
   parent?: never;
   depends_on?: never;
   environment?: never;
+  added_at?: never;
   extensions?: Record<string, unknown>;
 }
 type Fields<T> = Omit<MetadataFields, keyof T> & T;
 export interface MetadataByKind {
   ADR: Fields<{ summary: string; agent_instruction?: string }>;
-  TSK: Fields<{ status: TaskStatus; parent?: string | null; depends_on?: string[] }>;
+  TSK: Fields<{ status: TaskStatus; parent?: string | null; depends_on?: string[]; added_at?: string }>;
   EXP: Fields<{ status: ExperimentStatus; environment: string | null }>;
   ENV: MetadataFields;
 }
@@ -33,11 +34,15 @@ export interface MetadataDraft {
   parent?: string | null;
   depends_on?: string[];
   environment?: string | null;
+  added_at?: string;
   extensions?: Record<string, unknown>;
 }
 
 function oneLine(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && !/[\r\n]/.test(value);
+}
+export function recordTimestamp(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 function reference(value: unknown, kind: Kind): boolean {
   return typeof value === "string" && new RegExp(`^[a-z][a-z0-9_-]*:${kind}-[0-9a-z_]+$`, "i").test(value);
@@ -57,6 +62,7 @@ const fields: Record<ProseKind, Record<string, Field>> = {
     agent_instruction: { valid: oneLine, description: "one nonempty logical line" },
   },
   TSK: {
+    added_at: { valid: recordTimestamp, description: "a UTC ISO timestamp" },
     status: {
       required: true,
       valid: (value) => typeof value === "string" && new Set<string>(taskStatuses).has(value),

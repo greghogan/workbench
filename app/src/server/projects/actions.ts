@@ -167,14 +167,7 @@ export class WebActions {
         if (operation === "add") change = { action: "add", references: [reference] };
         else if (operation === "move-before") change = { action: "move", reference, before: target };
         else if (operation === "move-after") change = { action: "move", reference, after: target };
-        else if (
-          operation === "remove" ||
-          operation === "start" ||
-          operation === "implemented" ||
-          operation === "block" ||
-          operation === "release"
-        )
-          change = { action: operation, reference, detail: form.get("detail") ?? "" };
+        else if (operation === "remove") change = { action: "remove", reference };
         else throw new WebError(400, "Unknown queue operation");
         if (!form.get("expected")) throw new WebError(400, "Supply the queue version");
         await changeWorkQueue(this.root, change, form.get("expected") ?? "");

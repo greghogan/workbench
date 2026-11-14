@@ -1,6 +1,11 @@
 import { normalizedNumber } from "../../records/record-identity.js";
 import { createHash } from "node:crypto";
-import { parseProseRecord, type MetadataByKind } from "../../records/record-document.js";
+import {
+  parseProseRecord,
+  editRecordMetadata,
+  recordTimestamp,
+  type MetadataByKind,
+} from "../../records/record-document.js";
 import type { GitEntry } from "../../git/git-snapshot.js";
 import { InvalidInput } from "../../runtime/input-errors.js";
 import { isRecord } from "../../runtime/values.mjs";
@@ -44,7 +49,7 @@ export function workReference(value: unknown): value is string {
 }
 export function parsePlan(contents: string, reference: string): PlanDocument {
   const { metadata, body } = parseProseRecord(contents, reference);
-  if (Object.keys(metadata).some((key) => !["status", "parent", "depends_on", "extensions"].includes(key)))
+  if (Object.keys(metadata).some((key) => !["status", "parent", "depends_on", "added_at", "extensions"].includes(key)))
     throw new InvalidInput(`${reference}: unknown plan metadata; custom fields belong in extensions`);
   if (!["Planned", "Approved", "Canceled"].includes(String(metadata.status)))
     throw new InvalidInput(`${reference}: a future plan must be Planned, Approved, or Canceled`);
@@ -66,9 +71,33 @@ export function parsePlan(contents: string, reference: string): PlanDocument {
   }
   if (metadata.extensions !== undefined && !isRecord(metadata.extensions))
     throw new InvalidInput(`${reference}: extensions must be a mapping`);
+  if (metadata.added_at !== undefined && !recordTimestamp(metadata.added_at))
+    throw new InvalidInput(`${reference}: added_at must be a UTC ISO timestamp`);
   const title = /^# ([^\r\n]+)(?:\r?\n|$)/.exec(body)?.[1]?.trim();
   if (!title) throw new InvalidInput(`${reference}: begin the plan with a nonempty level-one title`);
   return { title, metadata: metadata as MetadataByKind["TSK"], body };
+}
+/** Bookkeeping survives ordinary edits; incomplete drafts remain editable verbatim. */
+export function withPlanAddedAt(contents: string, previous?: string): string {
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = parseProseRecord(contents, "plan").metadata;
+  } catch {
+    return contents;
+  }
+  let added: unknown;
+  if (previous) {
+    try {
+      added = parseProseRecord(previous, "previous plan").metadata.added_at;
+    } catch {
+      /* Incomplete draft. */
+    }
+  }
+  if (recordTimestamp(added))
+    return metadata.added_at === added ? contents : editRecordMetadata(contents, { added_at: added });
+  return metadata.added_at === undefined
+    ? editRecordMetadata(contents, { added_at: new Date().toISOString() })
+    : contents;
 }
 export function safePlanFile(path: string): boolean {
   return (

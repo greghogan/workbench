@@ -60,7 +60,7 @@ export function taskPlanDigest(
   return createHash("sha256")
     .update(
       JSON.stringify([
-        Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "status")),
+        Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "status" && key !== "added_at")),
         plan,
         ...(files.length ? [[...files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))] : []),
       ]),

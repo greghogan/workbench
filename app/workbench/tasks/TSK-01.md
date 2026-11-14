@@ -99,7 +99,7 @@ separation before deletion.
 - [x] Integrate named plans with CLI/browser editing, approval diffs, queue ordering, and transfer into implementation.
 - [x] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
 - [x] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
-- [ ] Record and display Added at metadata, preserving it across plan and task transitions.
+- [x] Record and display Added at metadata, preserving it across plan and task transitions.
 
 ## Implementation account
 
@@ -126,6 +126,10 @@ review.
 The planning-only push exception applies to the configured destination. Cleanup preserves unpushed checkpoints and
 unfinished work. Existing plans moved into named storage with their order and supporting material intact. Tests
 exercised publication boundaries, pruning, and interrupted deletion.
+
+Plans awaiting approval are sorted by date added. Approval appends work to the local queue, and reapproval preserves
+position and progress. Renaming and transfer preserve the recorded creation date. The browser shows readiness and
+progress. The CLI handles claiming work and recording implementation.
 
 ## Implementing-agent detail
 
