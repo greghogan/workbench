@@ -10,20 +10,18 @@ description:
 Example: `$fetch-and-rebase-onto origin/main`. The request authorizes fetching, replaying local commits, staging
 resolutions, and continuing the rebase. Publication and mandatory human review remain separate.
 
-Before fetching or changing refs, require an attached branch, exclusive use of the checkout, and empty
-`git status --porcelain=v1 --untracked-files=all`. Refuse staged, unstaged, or untracked work, or an existing rebase,
-merge, cherry-pick, or revert. Ignored artifacts are allowed. Resolve metadata paths through Git for linked worktrees.
-Report blockers without stashing, temporary commits, cleaning, resetting, or aborting another operation.
+Use `workbench rebase <remote/branch>` for fetching, target capture, archive reconciliation, and recovery. It requires
+an attached branch and a clean index and working tree, including untracked files; ignored artifacts are allowed. It
+refuses existing Git operations and preserves a recovery reference. If the CLI is unavailable, stop for setup rather
+than bypassing its archive coordination. Do not stash, clean, reset, or abort unrelated work.
 
-Record the original branch, HEAD, and intended range. Resolve the configured remote, fetch it once, and pin the target
-commit for this operation. Retain a named recovery ref for the original HEAD. Rebase with
-`--no-autostash --no-update-refs`; preserve commit boundaries and merge intent; use Git's distinct `--onto` transplant
-only when the requested range requires it. Do not rewrite other branches.
+Use `workbench rebase --continue` after staging resolved files, or `--abort` when abandoning this requested rebase.
+Archive-content conflicts require explicit resolution or restoration; never edit the protected archive branch directly.
 
 Resolve each stopped commit against upstream intent, callers, and tests. Rebase `ours` is the rebased series; `theirs`
 is the replayed commit. Avoid wholesale side selection. Follow behavior through renames/deletions; resolve manifests and
 sources before regenerating lockfiles or derived output with pinned tools. Inspect reused resolutions, stage only the
-resolution, and continue without bypassing gates or skipping unresolved commits.
+resolution, and continue through the CLI without bypassing gates or skipping unresolved commits.
 
 Stop for incompatible requirements, required human approvals, concurrent edits, or verification failures without a clear
 in-scope repair. Preserve resumable state and report the precise decision or failure; never manufacture acknowledgments.

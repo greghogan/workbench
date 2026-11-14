@@ -69,7 +69,7 @@
 - `src/core/review/review-preparation-state.ts`, `src/core/records/record-outputs.ts`: Track outstanding
   generated-output repair across interruption and update only outputs affected by prepared records.
 
-- `src/core/records/archive-store.ts`: Reads pinned archive inventories and supporting blobs directly from Git and
+- `src/core/records/archive-index.ts`, `src/core/records/archive-store.ts`: Reads pinned archive inventories and supporting blobs directly from Git and
   reconciles live copies without restoring them.
 - `src/core/git/integration-target.ts`, `src/core/projects/project-state.ts`: Resolve the integration destination and
   coordinate archive metadata with record allocation.
@@ -82,7 +82,9 @@
 - `src/core/records/record-content.ts`, `src/core/records/record-projection.ts`: Share prose contracts and render maps
   from proposed live and archived Git contents without changing the checkout.
 
-- `src/core/records/archive-index.ts`, `src/core/records/archive-hook.ts`: Validate record-only Git trees and retain
-  publication checks independently of an application checkout.
-- `src/core/git/tree-publication.ts`, `src/core/git/refs.ts`: Verify exact tree transitions while preserving unrelated
-  work and validate branch names.
+- `src/core/records/archive-hook.ts`: Supplies the bootstrap-compatible archive publication guard independently of an
+  application checkout.
+- `src/core/git/branch-integration.ts`, `src/cli/branch-integration.ts`: Capture rebase/merge targets, retain recovery
+  references, and reconcile pinned inventories through explicit continuation or abortion.
+- `src/core/git/tree-publication.ts`, `src/core/git/refs.ts`: Apply verified Git-tree transitions while preserving
+  unrelated edits and centralize branch-name validation.

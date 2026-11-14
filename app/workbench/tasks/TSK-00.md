@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: Accepted
 ---
 
 # TSK-0: Optional Git-backed archives for completed records
@@ -98,25 +98,27 @@ semantic review or grant human approval.
 - [x] Establish shared integration-target configuration and Git-backed archived-record access.
 - [x] Implement the archive CLI's resumable enable, transfer, recovery, and restore workflows.
 - [x] Integrate archived history, search, references, and supporting files into CLI, agent context, and browser views.
-- [ ] Add archive-aware CLI rebase/integration operations and update the supplied rebase skill to use them.
+- [x] Add archive-aware CLI rebase/integration operations and update the supplied rebase skill to use them.
 
 ## Implementation account
 
-The configured integration branch owns archival. Each checkout reads its recorded archive revision, so later transfers
-cannot change the records it sees. The combined inventory detects conflicting live copies and preserves record identity,
-allocation state, contents, and file modes. Hooks check a prepared source snapshot and preserve unstaged files.
+Workbench starts archival only from the configured integration branch. Each checkout reads the archive commit recorded
+in its state file, so later transfers leave older checkouts readable. Workbench looks up live and archived records
+together, reports conflicting copies, and preserves IDs, contents, and file permissions. The CLI and browser can search
+records and open supporting files without restoring them to disk.
 
-Real repositories exercised independent archive history, missing objects, and access to older pins after Git garbage
-collection. Large archives remain readable when they exceed the metadata cache budget.
+Workbench verifies the destination before removing source copies during archival or restoration. It keeps both commits
+recoverable until the transfer finishes and preserves unrelated edits and reviews of unchanged records. The archive
+branch stays protected after archival is disabled.
 
-Archive and restore operations can resume safely after interruption. Both record stores are verified, unrelated changes
-stay intact, and recovery references protect prepared commits until both phases finish. Archive-only checkouts keep
-their publication guards, including after archival is disabled. Verified storage-only transfers preserve existing review
-evidence. Tests exercised intervening edits, restricted clones, and large supporting files.
+The rebase and merge commands check for record conflicts that Git's text merge can miss. They retain archive history and
+can update an outdated archive pointer when an existing archive commit contains the required records. The rebase skill
+uses these commands.
 
-CLI search and browser navigation use the combined record inventory. Archived records and supporting files can be read
-without restoring them to disk. CLI and browser checks exercised body search, linked prerequisites, and supporting-file
-previews and downloads.
+Tests covered older archive commits after Git garbage collection, restricted clones, large archives and supporting
+files, interruptions during transfer or push, and concurrent edits. Browser and CLI checks covered search,
+prerequisites, and supporting files. Integration checks covered conflicts, resuming and aborting, and rebasing across
+upstream renames and deletions.
 
 ## Implementing-agent detail
 

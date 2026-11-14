@@ -6,7 +6,10 @@ type Groups = readonly (readonly [string, readonly string[]])[];
 const layouts: Readonly<Record<string, Groups>> = {
   "": [
     ["Projects:", ["init", "project", "subproject", "collection", "language", "serve"]],
-    ["Records and context:", ["record", "task", "queue", "experiment", "citation", "sync", "feedback"]],
+    [
+      "Records and context:",
+      ["record", "task", "queue", "experiment", "citation", "sync", "feedback", "rebase", "merge"],
+    ],
     ["Development:", ["development", "shell", "tools", "paths", "release"]],
     [
       "Checks and review:",

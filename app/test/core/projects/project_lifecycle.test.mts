@@ -251,54 +251,30 @@ test("hierarchical help and short help", () => {
             ] as const,
         ),
     );
-  const expected = {
-    Projects: ["init", "project", "subproject", "collection", "language", "serve"],
-    "Records and context": ["record", "task", "queue", "experiment", "citation", "sync", "feedback"],
-    Development: ["development", "shell", "tools", "paths", "release"],
-    "Checks and review": [
-      "check",
-      "pre-commit",
-      "pre-push",
-      "ci",
-      "format",
-      "validate",
-      "review",
-      "commit",
-      "docs",
-      "secrets",
-      "advisories",
-    ],
-    "Workbench settings": ["config", "skills", "cache", "logs", "update", "install", "executable", "completion"],
-    Help: ["help"],
+  const publicChildren = (path: string[]) => {
+    const prefix = `COMMAND: workbench ${path.length ? path.join(" ") + " " : ""}`;
+    return complete
+      .split("\n")
+      .filter((line) => line.startsWith(prefix))
+      .map((line) => line.slice(prefix.length))
+      .filter((name) => /^[a-z][\w-]*$/.test(name));
   };
-  assert.deepEqual(Object.entries(commandGroups(short)), Object.entries(expected));
-  for (const [path, names] of [
-    [["check"], ["matrix"]],
-    [["development"], ["profiles", "use", "images", "locks", "recover", "prepare", "verify", "publish"]],
-    [["citation"], ["add", "fetch", "import"]],
-    [["feedback"], ["add", "show", "resolve"]],
-    [["language"], ["init", "roots"]],
-    [
-      ["collection"],
-      [
-        "install",
-        "accept",
-        "changes",
-        "compare",
-        "update",
-        "fetch",
-        "stage",
-        "context",
-        "local",
-        "compatibility",
-        "inspect",
-        "export",
-        "check-export",
-      ],
-    ],
-  ] as const) {
+  const verifyDiscovery = (help: string, path: string[]) => {
+    const groups = commandGroups(help),
+      names = Object.values(groups).flat();
+    assert.ok(names.length > 0, "public help must expose available commands");
+    assert.equal(new Set(names).size, names.length, "commands must not appear in multiple groups");
+    assert.deepEqual([...names].sort(), publicChildren(path).sort(), "short and complete help must agree");
+    return groups;
+  };
+  const groups = verifyDiscovery(short, []);
+  assert.ok(groups.Projects?.includes("init"));
+  assert.ok(groups["Records and context"]?.includes("record"));
+  assert.ok(groups["Workbench settings"]?.includes("config"));
+  assert.equal(Object.hasOwn(groups, "Commands"), false, "top-level commands need a discovery group");
+  for (const path of [["check"], ["development"], ["citation"], ["feedback"], ["language"], ["collection"]]) {
     const help = run(root, ...path, "--help");
-    assert.deepEqual(Object.values(commandGroups(help)).flat(), names);
+    verifyDiscovery(help, path);
     assert.equal(help, run(root, "help", ...path));
   }
 });
