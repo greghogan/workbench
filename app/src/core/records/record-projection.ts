@@ -83,7 +83,10 @@ export function projectedRecordMaps(root: string, tree: string): Map<string, Buf
         const project = projects.find((project) => project.path === item.scope),
           body = contents.get(item.file.path);
         if (!project || !body) throw new InvalidInput("Missing projected task scope or contents");
-        return parseTask(root, `${project.id}:TSK-${item.file.number}`, item.file.path, body.toString());
+        return {
+          ...parseTask(root, `${project.id}:TSK-${item.file.number}`, item.file.path, body.toString()),
+          ...(item.file.archive ? { archived: true } : {}),
+        };
       }),
   ).validate();
   const maps = new Map<string, Buffer>();

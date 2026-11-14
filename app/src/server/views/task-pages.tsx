@@ -296,6 +296,7 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
     record.type !== "TSK" ||
     record.local ||
     record.collection ||
+    !!record.archive ||
     !taskStatuses.some((state) => state === record.status)
   )
     return null;

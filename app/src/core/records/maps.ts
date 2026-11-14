@@ -101,6 +101,9 @@ export function renderMap(root: string, project: Project, kind: Kind, captured?:
       }
     };
     append(nodes);
+    const archived = graph.tasks.filter((task) => task.reference.startsWith(project.id + ":") && task.archived).length;
+    if (archived)
+      output += `\n\n${wrap(`Archived tasks: ${String(archived)}. Read with \`workbench record show REFERENCE\` or search with \`workbench record search QUERY --project ${project.id}\`.`, width)}`;
   } else {
     const records = captured?.records ?? recordInventory(root, project.path, kind),
       bodies = captured?.contents ?? readInventoryRecords(root, records);
