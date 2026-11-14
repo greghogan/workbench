@@ -141,3 +141,18 @@ export function recordTitle(kind: Kind, number: string, contents: string): strin
     throw new Error(`invalid title for ${kind}-${number}`);
   return first.slice(prefix.length);
 }
+/** Preserve frontmatter comments and the document body while changing a workflow state. */
+export function replaceRecordStatus(contents: string, status: string): string {
+  return editRecordMetadata(contents, { status });
+}
+
+export function editRecordMetadata(contents: string, changes: Readonly<Record<string, unknown>>): string {
+  const parts = splitFrontmatter(contents),
+    header = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(contents)?.[0];
+  if (!parts || !header) throw new Error("Record frontmatter is missing or incomplete");
+  const document = parseDocument(parts.yaml),
+    ending = contents.includes("\r\n") ? "\r\n" : "\n";
+  if (document.errors.length) throw new Error(document.errors.map((error) => error.message).join("; "));
+  for (const [key, value] of Object.entries(changes)) document.set(key, value);
+  return `---${ending}${document.toString().replaceAll("\n", ending)}---${ending}${contents.slice(header.length)}`;
+}

@@ -64,13 +64,18 @@
 
 - `src/core/tasks`: Tracks task relationships, human decisions, local queues, and implementation evidence.
 
+- `src/core/tasks/planning/plan-model.ts`, `src/core/tasks/planning/planning-index.ts`: Define scoped named plans and
+  index independent planning history without checking it out.
+- `src/core/tasks/planning/planning-store.ts`, `src/core/tasks/planning/planning-operations.ts`: Retain durable drafts
+  and exact approvals, and coordinate recoverable grouped checkpoints with concurrent editors.
+
 - `src/core/experiments`: Tracks experiment execution and completed evidence independently of candidate verdicts.
 
 - `src/core/review/review-preparation-state.ts`, `src/core/records/record-outputs.ts`: Track outstanding
   generated-output repair across interruption and update only outputs affected by prepared records.
 
-- `src/core/records/archive-index.ts`, `src/core/records/archive-store.ts`: Reads pinned archive inventories and supporting blobs directly from Git and
-  reconciles live copies without restoring them.
+- `src/core/records/archive-index.ts`, `src/core/records/archive-store.ts`: Reads pinned archive inventories and
+  supporting blobs directly from Git and reconciles live copies without restoring them.
 - `src/core/git/integration-target.ts`, `src/core/projects/project-state.ts`: Resolve the integration destination and
   coordinate archive metadata with record allocation.
 - `src/core/records/archive-workflow.ts`, `src/core/records/archive-transfer-proof.ts`,
