@@ -1,3 +1,8 @@
+import { readPlanOperations } from "../../core/tasks/planning/plan-operation-store.js";
+import { workGraph } from "../../core/tasks/planning/work-plans.js";
+import { planningInputs } from "../../core/tasks/planning/planning-inputs.js";
+import { readPlanningRecords, type PlanningRecord } from "../../core/tasks/planning/planning-read-model.js";
+import { attachTaskPlanApprovals } from "../../core/tasks/task-approvals.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
 import { pendingRecordOutputs, reviewPreparationPath } from "../../core/review/review-preparation-state.js";
 import type { ReviewPreparation } from "../review/review-state.js";
@@ -82,6 +87,7 @@ export interface ReviewDocument {
   error: string;
 }
 export interface WorkspaceTasks {
+  plans: PlanningRecord[];
   decisionsRequired: boolean;
   records: TaskRecord[];
   errors: Map<string, string>;
@@ -146,7 +152,7 @@ export class WorkspaceIndex {
         }
       }
     this.hierarchy = new ProjectHierarchy(snapshot.projects);
-    this.taskGraph = new TaskGraph(snapshot.tasks.records);
+    this.taskGraph = workGraph(snapshot.tasks.records, snapshot.tasks.plans);
     this.taskReadiness = new TaskReadiness(this.taskGraph, snapshot.tasks.queue);
     this.taskQueue = inspectQueue(this.taskReadiness);
     const adaptations = new Map(
@@ -162,6 +168,23 @@ export class WorkspaceIndex {
         return [current.id, current];
       }),
     );
+    for (const plan of snapshot.tasks.plans.filter(
+      (plan) => !plan.implementation || !this.taskGraph.byReference.has(plan.implementation.task),
+    ))
+      this.byId.set(plan.reference, {
+        id: plan.reference,
+        type: "TSK",
+        scope: plan.scope,
+        title: plan.title,
+        summary: plan.summary,
+        status: this.taskGraph.byReference.get(plan.reference)?.metadata.status ?? plan.status,
+        path: `plans/${plan.scope}/${plan.name}/plan.md`,
+        directory: snapshot.root,
+        editable: true,
+        local: false,
+        collection: false,
+        ...(plan.problem ? { previewError: plan.problem } : {}),
+      });
     this.byPath = new Map(
       [...this.byId.values()].filter((record) => !record.local).map((record) => [record.path, record]),
     );
@@ -242,6 +265,7 @@ export class WorkspaceIndex {
 export class WorkspaceView {
   readonly records: BrowserRecord[];
   readonly selectedRecords: BrowserRecord[];
+  private readonly searchableRecords: BrowserRecord[];
   readonly reviewGroups: ReviewGroup[];
   readonly comparison: CollectionComparison | undefined;
   private readonly workflowScopes: ReadonlySet<string>;
@@ -252,11 +276,12 @@ export class WorkspaceView {
     readonly all: boolean,
   ) {
     this.records = [...index.byId.values()];
-    this.selectedRecords = this.records.filter(
+    this.searchableRecords = this.records.filter(
       (record) =>
         (all && !record.collection) ||
         (selection ? record.collection && record.scope === selection : !record.collection && record.scope === scope),
     );
+    this.selectedRecords = this.searchableRecords.filter((record) => !record.id.includes(":plan/"));
     this.workflowScopes = new Set(
       index.snapshot.projects
         .filter((project) => all || index.hierarchy.lineage(project).some((ancestor) => ancestor.id === scope))
@@ -367,14 +392,21 @@ export class WorkspaceView {
   get taskReviews() {
     const prepared = this.index.snapshot.tasks;
     const entries = new Map(prepared.queue.entries.map((entry) => [entry.reference, entry]));
-    const tasks = (prepared.problem ? [] : prepared.records).flatMap<{
+    const tasks = (prepared.problem ? [] : this.index.taskGraph.tasks).flatMap<{
       record: BrowserRecord;
       decision: "plan" | "outcome";
     }>((task) => {
       const record = this.index.byId.get(task.reference);
       if (!record || record.collection || record.local || !this.includesWorkflow(record.scope)) return [];
-      if (task.metadata.status === "Planned") return [{ record, decision: "plan" as const }];
       const entry = entries.get(task.reference);
+      if (
+        task.metadata.status === "Planned" ||
+        (task.metadata.status === "Approved" &&
+          task.approval &&
+          !task.approval.current &&
+          (!entry || entry.state === TaskExecution.Queued))
+      )
+        return [{ record, decision: "plan" as const }];
       if (
         task.metadata.status === "Approved" &&
         ((entry?.state === TaskExecution.Implemented && entry.planDigest === task.planDigest) ||
@@ -396,7 +428,7 @@ export class WorkspaceView {
 
   searchRecords({ type, scope, query }: { type: string; scope: string; query: string }): BrowserRecord[] {
     const normalized = query.toLowerCase();
-    return this.selectedRecords.filter(
+    return (normalized ? this.searchableRecords : this.selectedRecords).filter(
       (record) =>
         (!type || type === record.type) &&
         (!scope || scope === record.scope) &&
@@ -459,6 +491,12 @@ export class WorkspaceCollector {
     observe(policyReceipt);
     observe(compatibilityFindingsPath(policyReceipt));
     observe(taskQueuePath(this.root));
+    for (const path of planningInputs(this.root)) observe(path);
+    const pendingPlan = readPlanOperations(this.root).find((operation) => !operation.operation.completed);
+    if (pendingPlan)
+      throw new StateConflict(
+        `Planning ${pendingPlan.operation.kind} requires recovery in ${pendingPlan.operation.checkout}; retaining the last complete workspace`,
+      );
     observe(taskDecisionPath(this.root));
     observe(reviewPreparationPath(this.root));
     const implementationPath = taskImplementationPath(this.root);
@@ -674,7 +712,10 @@ export class WorkspaceCollector {
       compatibility = { report: null, error: error instanceof Error ? error.message : String(error) };
     }
     this.diffs = nextDiffs;
+    const plans = readPlanningRecords(this.root);
+    for (const plan of plans) charge(plan.contents, plan.approval?.contents);
     const tasks: WorkspaceTasks = {
+      plans,
       decisionsRequired: readConfig(this.root).review?.task_approvals === true,
       records: [],
       errors: new Map(),
@@ -685,12 +726,30 @@ export class WorkspaceCollector {
       try {
         const document = documents.get(record.id);
         if (!document || document.error) throw new Error(document?.error ?? "Task document unavailable");
-        tasks.records.push(parseTask(this.root, record.id, join(record.directory, record.path), document.contents));
+        tasks.records.push({
+          ...parseTask(this.root, record.id, join(record.directory, record.path), document.contents),
+          ...(record.archive ? { archived: true } : {}),
+        });
       } catch (error) {
         tasks.errors.set(record.id, error instanceof Error ? error.message : String(error));
       }
     }
     try {
+      attachTaskPlanApprovals(this.root, tasks.records);
+      for (const task of tasks.records) {
+        if (!task.approval) continue;
+        const document = documents.get(task.reference);
+        if (!document) continue;
+        charge(task.approval.contents);
+        document.reviewed = acquireComparison(() =>
+          cachedDiff(
+            `plan:${task.reference}`,
+            contentDigest(JSON.stringify([task.approval?.contents, task.contents])),
+            () => sourceDifference(task.approval?.contents ?? "", task.contents, task.path),
+          ),
+        );
+        document.baseline = { kind: "review", approvedAt: task.approval.at };
+      }
       new TaskGraph(tasks.records).validate();
       attachTaskImplementations(this.root, tasks.records);
     } catch (error) {
@@ -744,7 +803,7 @@ export class WorkspaceCollector {
                 ])
               : comparison.message,
           ]),
-          tasks: [tasks.queue, [...tasks.errors], tasks.problem],
+          tasks: [tasks.queue, [...tasks.errors], tasks.problem, plans],
           removed: [...removedReviews].map(([id, comparison]) => [id, comparison]),
         }),
       ),

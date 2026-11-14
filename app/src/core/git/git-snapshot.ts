@@ -25,7 +25,13 @@ export function readGitObjects(
   root: string,
   requests: readonly string[],
   maximum = 2 * 1024 * 1024,
+  options: { retainedBytes?: number } = {},
 ): Map<string, Buffer | undefined> {
+  if (
+    options.retainedBytes !== undefined &&
+    (!Number.isSafeInteger(options.retainedBytes) || options.retainedBytes < 0)
+  )
+    throw new Error("Invalid retained Git read limit");
   const selected = [...new Set(requests)];
   if (selected.some((value) => !value || /[\0\r\n]/.test(value) || value.startsWith("-")))
     throw new Error("Invalid Git object request");
@@ -57,6 +63,11 @@ export function readGitObjects(
     identities.set(request, oid);
     sizes.set(oid, size);
   }
+  if (
+    options.retainedBytes !== undefined &&
+    [...sizes.values()].reduce((sum, size) => sum + size, 0) > options.retainedBytes
+  )
+    throw new Error("Requested Git blobs exceed the retained read limit");
   const batches: Map<string, number>[] = [];
   let batch = new Map<string, number>(),
     allocated = 0;

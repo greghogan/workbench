@@ -2,6 +2,16 @@ import MarkdownIt from "markdown-it";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 const parser = new MarkdownIt({ html: true });
 
+export function markdownHeadingId(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/`/g, "")
+    .replace(/[^\p{L}\p{N}_\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 /** Encode a filesystem path as one Markdown link destination, without inventing a fragment or query. */
 export function markdownPath(path: string): string {
   return encodeURI(path.split(sep).join("/"))
@@ -36,7 +46,15 @@ export function markdownLiteralLines(contents: string): ReadonlySet<number> {
 }
 
 /** Relocate link destinations without reserializing human-authored Markdown or touching code examples. */
-export function relocateMarkdownLinks(contents: string, source: string, destination: string, absolute = false): string {
+export function relocateMarkdownLinks(
+  contents: string,
+  source: string,
+  destination: string,
+  options: {
+    absolute?: boolean;
+    mapTarget?: (path: string, suffix: string) => { path: string; suffix?: string } | undefined;
+  } = {},
+): string {
   const lines = contents.split(/(?<=\n)/);
   const code = markdownLiteralLines(contents);
   const target = (href: string): string => {
@@ -49,9 +67,12 @@ export function relocateMarkdownLinks(contents: string, source: string, destinat
     } catch {
       return href;
     }
-    const resolved = path ? resolve(dirname(source), path) : source;
-    const relocated = absolute ? resolved : relative(dirname(destination), resolved);
-    return markdownPath(relocated) + (match[2] ?? "");
+    const original = path ? resolve(dirname(source), path) : source;
+    const mapped = options.mapTarget ? options.mapTarget(original, match[2] ?? "") : { path: original };
+    const resolved = mapped?.path;
+    if (resolved === undefined) return href;
+    const relocated = options.absolute ? resolved : relative(dirname(destination), resolved);
+    return markdownPath(relocated) + (mapped?.suffix ?? match[2] ?? "");
   };
   return lines
     .map((line, lineNumber) => {

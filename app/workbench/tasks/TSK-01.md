@@ -96,7 +96,7 @@ separation before deletion.
 ### Delivery checklist
 
 - [x] Add optional planning storage, durable drafts, explicit checkpoints, and approval checkpoints.
-- [ ] Integrate named plans with CLI/browser editing, approval diffs, queue ordering, and transfer into implementation.
+- [x] Integrate named plans with CLI/browser editing, approval diffs, queue ordering, and transfer into implementation.
 - [ ] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
 - [ ] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
 - [ ] Record and display Added at metadata, preserving it across plan and task transitions.
@@ -106,6 +106,11 @@ separation before deletion.
 Repository-local settings keep named plans in independent Git history. Git references protect draft saves through cache
 cleanup and garbage collection. Explicit checkpoints group related edits, detect concurrent changes, and recover after
 interruption. Plan approval retains the exact record and supporting files before implementation.
+
+The CLI and browser expose named plans and their supporting files. Starting work assigns a numeric ID and transfers the
+plan's approval and relationships. The planning copy stays in place until the first implementation commit is verified.
+Renaming preserves approval and updates related plans and queue entries. Tests exercised transfers, interruption
+recovery, and linked checkouts.
 
 ## Implementing-agent detail
 

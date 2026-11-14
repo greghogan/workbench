@@ -1,4 +1,6 @@
-import { afterEach, expect, test } from "vitest";
+import { changeTaskQueue, readTaskQueue } from "../../../../src/core/tasks/task-queue.ts";
+import { gitRevision } from "../../../../src/core/git/refs.ts";
+import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,14 +13,10 @@ import {
 } from "../../../../src/core/git/git-snapshot.ts";
 import { integrateBranch } from "../../../../src/core/git/branch-integration.ts";
 import { planIdentity, planDraftRef } from "../../../../src/core/tasks/planning/plan-model.ts";
-import {
-  readPlan,
-  readPlans,
-  planningRevision,
-  planningSettings,
-} from "../../../../src/core/tasks/planning/planning-store.ts";
+import { readPlan, readPlans, planningSettings } from "../../../../src/core/tasks/planning/planning-store.ts";
 import {
   savePlanDraft,
+  publishPlanDraftUpdates,
   configurePlanning,
   checkpointPlans,
   approvePlanDraft,
@@ -29,6 +27,7 @@ import {
 
 const roots: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 const first = planIdentity("demo", "service"),
@@ -102,7 +101,7 @@ test("explicit grouped checkpoints retain independent save history and preserve 
   if (!checkpoint) throw new Error("Expected a grouped checkpoint");
   expect(git(root, "rev-list", "--parents", "-n", "1", "future")).toBe(checkpoint);
   expect(readPlans(root)).toHaveLength(2);
-  expect(planningRevision(root, planDraftRef(first))).toBeUndefined();
+  expect(gitRevision(root, planDraftRef(first))).toBeUndefined();
   expect(git(root, "write-tree")).toBe(index);
   expect(git(root, "rev-parse", "HEAD")).toBe(source);
   expect(readFileSync(join(root, "notes.txt"), "utf8")).toBe("Untracked developer notes.\n");
@@ -150,6 +149,27 @@ test("approval survives edits and Git collection before any planning commit, and
   expect(git(root, "rev-list", "--count", "future")).toBe("1");
   expect(approvePlanDraft(root, first, confirmed.digest, true).approval?.at).toBe(confirmed.approval?.at);
   expect(git(root, "rev-list", "--count", "future")).toBe("1");
+});
+
+test("approval appends work in approval order while reapproval preserves its execution position", () => {
+  const root = fixture();
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, ".git/private-state"));
+  const one = savePlanDraft(root, first, plan("Earlier draft.")),
+    two = savePlanDraft(root, second, plan("Later draft."));
+  expect(() => changeTaskQueue(root, { action: "add", references: [first.reference] })).toThrow(/approve/);
+  expect(readTaskQueue(root).entries).toEqual([]);
+  approvePlanDraft(root, second, two.digest, true);
+  approvePlanDraft(root, first, one.digest, true);
+  expect(readTaskQueue(root).entries.map((entry) => entry.reference)).toEqual([second.reference, first.reference]);
+  const current = readPlan(root, second),
+    changed = savePlanDraft(root, second, current.contents.replace("Later draft.", "Revised plan."), {
+      expected: current.digest,
+    });
+  approvePlanDraft(root, second, changed.digest, true);
+  expect(readTaskQueue(root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
+    [second.reference, "Queued"],
+    [first.reference, "Queued"],
+  ]);
 });
 
 test("concurrent saved and draft edits require explicit resolution and retain both histories", () => {
@@ -268,4 +288,47 @@ test("plans for a removed scope remain available while another scope checkpoints
   checkpointPlans(root);
   expect(readPlan(root, component).contents).toContain("component's future work");
   expect(readPlans(root)).toHaveLength(2);
+});
+
+test("identity changes stay grouped through a selected checkpoint and interrupted cleanup without publishing unrelated drafts", () => {
+  const root = fixture(),
+    renamed = planIdentity("demo", "daemon");
+  enable(root);
+  const draft = savePlanDraft(root, first, plan("The retained service plan."));
+  approvePlanDraft(root, first, draft.digest, true);
+  const initial = readPlan(root, first),
+    before = git(root, "rev-parse", "future");
+  savePlanDraft(root, second, plan("Leave this draft uncommitted."));
+  publishPlanDraftUpdates(root, [
+    { identity: first, expected: initial.digest },
+    { identity: renamed, entries: initial.entries },
+  ]);
+  expect(readPlans(root).map((view) => view.name)).toEqual(["artifacts", "daemon"]);
+  expect(readPlan(root, renamed).approval?.at).toBe(initial.approval?.at);
+  expect(git(root, "rev-parse", "future")).toBe(before);
+  expect(() =>
+    checkpointPlans(root, [renamed], {
+      onRecorded: () => {
+        throw new Error("Interrupted grouped rename");
+      },
+    }),
+  ).toThrow(/Interrupted grouped/);
+  git(root, "gc", "--prune=now");
+  recoverPlanningCheckpoint(root);
+  const paths = git(root, "ls-tree", "-r", "--name-only", "future");
+  expect(paths).toContain("plans/demo/daemon/plan.md");
+  expect(paths).not.toContain("plans/demo/service/");
+  expect(paths).not.toContain("plans/demo/artifacts/");
+  expect(readPlan(root, second).draft).toBe(true);
+  expect(readPlan(root, renamed).draft).toBe(false);
+  expect(git(root, "show", `${before}:plans/demo/service/plan.md`)).toContain("retained service plan");
+  expect(
+    git(
+      root,
+      "for-each-ref",
+      "--format=%(refname)",
+      "refs/workbench/plan-removals",
+      "refs/workbench/plan-draft-groups",
+    ),
+  ).toBe("");
 });

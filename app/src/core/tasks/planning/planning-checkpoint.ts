@@ -1,3 +1,13 @@
+import { gitRevision, validateBranch } from "../../git/refs.js";
+
+import {
+  readDraftGroups,
+  expandDraftSelection,
+  prepareDraftGroups,
+  draftGroupCommands,
+  decodeDraftGroups,
+  type DraftGroups,
+} from "./planning-draft-groups.js";
 import { indexPlanningRevision, decodePlanScopes } from "./planning-index.js";
 import { workspaceSchemaVersion } from "../../projects/project-model.js";
 import { combineFailures } from "../../diagnostics/diagnostic-errors.mjs";
@@ -6,7 +16,6 @@ import { randomUUID } from "node:crypto";
 
 import { gitBytes, readGitTree, readGitObjects, writeReviewBlobs, type GitEntry } from "../../git/git-snapshot.js";
 
-import { validateBranch } from "../../git/refs.js";
 import { repositoryStatePath, withRepositoryOperation } from "../../git/repository-state.js";
 import { publishGitTree, sameGitEntry, type TreeUpdate } from "../../git/tree-publication.js";
 
@@ -19,18 +28,12 @@ import {
   planPrefix,
   planDraftRef,
   planBaseRef,
+  planRemovalRef,
   planningPaths,
   safePlanFile,
   type PlanIdentity,
 } from "./plan-model.js";
-import {
-  planningSettings,
-  planningRevision,
-  planningScopes,
-  readPlan,
-  savedPlanTrees,
-  draftPlanIdentities,
-} from "./planning-store.js";
+import { planningSettings, planningScopes, readPlan, savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
 
 import { oid, treeFromEntries, transaction } from "./plan-git.js";
 interface PlanningOperation {
@@ -42,6 +45,8 @@ interface PlanningOperation {
   checkout?: string;
   updates: TreeUpdate[];
   drafts: { reference: string; tree: string; base?: string }[];
+  removals: { reference: string; tree: string }[];
+  groups: DraftGroups;
   completed: boolean;
 }
 function operationStore(root: string) {
@@ -86,6 +91,21 @@ function operationStore(root: string) {
           planIdentity(identity[1], identity[2]);
           return { reference, tree: oid(draft.tree), ...(draft.base === undefined ? {} : { base: oid(draft.base) }) };
         }),
+        groups: (() => {
+          const groups = record(data.groups, "Invalid planning edit-group recovery");
+          return {
+            ...(groups.before === undefined ? {} : { before: oid(groups.before) }),
+            ...(groups.after === undefined ? {} : { after: oid(groups.after) }),
+            groups: decodeDraftGroups(groups.groups),
+          };
+        })(),
+        removals: records(data.removals, "Invalid planning removals").map((removed) => {
+          const reference = string(removed.reference, "Missing removed plan reference");
+          const match = /^([^:]+):plan\/(.+)$/.exec(reference);
+          if (!match?.[1] || !match[2]) throw new InvalidInput("Invalid removed plan reference");
+          planIdentity(match[1], match[2]);
+          return { reference, tree: oid(removed.tree) };
+        }),
         completed: data.completed,
       };
     },
@@ -104,7 +124,7 @@ function checkedOutPlanning(root: string, branch: string): string | undefined {
 }
 function resumeCheckpoint(root: string, operation: PlanningOperation): string {
   const ref = `refs/heads/${operation.branch}`,
-    actual = planningRevision(root, ref);
+    actual = gitRevision(root, ref);
   if (planningSettings(root).branch !== operation.branch)
     throw new StateConflict("Restore the selected planning branch before recovering its checkpoint");
   const parents = gitBytes(root, ["rev-list", "--parents", "-n", "1", operation.after])
@@ -152,8 +172,8 @@ function resumeCheckpoint(root: string, operation: PlanningOperation): string {
     const identity = /^([^:]+):plan\/(.+)$/.exec(draft.reference);
     if (!identity?.[1] || !identity[2]) throw new InvalidInput("Invalid saved draft reference");
     const plan = planIdentity(identity[1], identity[2]);
-    const current = planningRevision(root, planDraftRef(plan)),
-      base = planningRevision(root, planBaseRef(plan));
+    const current = gitRevision(root, planDraftRef(plan)),
+      base = gitRevision(root, planBaseRef(plan));
     if (current !== undefined && current !== draft.tree)
       throw new StateConflict("A draft changed during checkpoint recovery; preserve the newer edit");
     if (base !== undefined && base !== draft.base)
@@ -161,7 +181,16 @@ function resumeCheckpoint(root: string, operation: PlanningOperation): string {
     if (current) cleanup.push(`delete ${planDraftRef(plan)} ${current}`);
     if (base) cleanup.push(`delete ${planBaseRef(plan)} ${base}`);
   }
-  transaction(root, cleanup);
+  for (const removed of operation.removals) {
+    const match = /^([^:]+):plan\/(.+)$/.exec(removed.reference);
+    if (!match?.[1] || !match[2]) throw new InvalidInput("Invalid removed plan reference");
+    const marker = planRemovalRef(planIdentity(match[1], match[2])),
+      current = gitRevision(root, marker);
+    if (current && current !== removed.tree)
+      throw new StateConflict("The removed plan changed during checkpoint recovery");
+    if (current) cleanup.push(`delete ${marker} ${current}`);
+  }
+  transaction(root, [...cleanup, ...draftGroupCommands(root, operation.groups)]);
   operation.completed = true;
   operationStore(root).write(operation);
   releaseCheckpoint(root, operation);
@@ -169,7 +198,7 @@ function resumeCheckpoint(root: string, operation: PlanningOperation): string {
 }
 function releaseCheckpoint(root: string, operation: PlanningOperation): void {
   const anchor = planningPaths.checkpoints + operation.id;
-  if (planningRevision(root, anchor)) gitBytes(root, ["update-ref", "-d", anchor, operation.after]);
+  if (gitRevision(root, anchor)) gitBytes(root, ["update-ref", "-d", anchor, operation.after]);
 }
 export function recoverPlanningCheckpoint(root: string): string {
   return withRepositoryOperation(
@@ -205,13 +234,53 @@ export function checkpointPlans(
         throw new StateConflict(
           "The planning checkout has uncommitted editor changes; commit or reconcile them with Git before checkpointing CLI/browser drafts",
         );
-      const before = planningRevision(root, `refs/heads/${settings.branch}`),
+      const before = gitRevision(root, `refs/heads/${settings.branch}`),
         saved = savedPlanTrees(root),
-        selected = references ?? draftPlanIdentities(root),
-        views = selected.map((identity) => readPlan(root, identity, saved)).filter((view) => view.draft);
-      if (new Set(selected.map((identity) => identity.reference)).size !== selected.length)
+        requested = references ?? [...draftPlanIdentities(root), ...draftPlanIdentities(root, planningPaths.removals)],
+        selected = [...expandDraftSelection(root, new Set(requested.map((identity) => identity.reference)))].map(
+          (reference) => {
+            const match = /^([^:]+):plan\/(.+)$/.exec(reference);
+            if (!match?.[1] || !match[2]) throw new InvalidInput("Invalid selected plan");
+            return planIdentity(match[1], match[2]);
+          },
+        ),
+        removals = selected.flatMap((identity) => {
+          const tree = gitRevision(root, planRemovalRef(identity));
+          if (!tree) return [];
+          if (saved.get(identity.reference)?.tree !== tree)
+            throw new StateConflict(
+              `${identity.reference}: the removed plan changed on the planning branch; reconcile its current contents before checkpointing`,
+            );
+          return [{ reference: identity.reference, tree, identity }];
+        }),
+        removed = new Set(removals.map((item) => item.reference)),
+        draftIds = new Set(draftPlanIdentities(root).map((identity) => identity.reference)),
+        grouped = new Set(readDraftGroups(root).groups.flat()),
+        views = selected
+          .filter((identity) => {
+            if (removed.has(identity.reference)) return false;
+            if (saved.has(identity.reference) || draftIds.has(identity.reference)) return true;
+            if (!grouped.has(identity.reference)) throw new InvalidInput(`Plan not found: ${identity.reference}`);
+            return false;
+          })
+          .map((identity) => readPlan(root, identity, saved))
+          .filter((view) => view.draft);
+      if (new Set(requested.map((identity) => identity.reference)).size !== requested.length)
         throw new InvalidInput("Select each plan only once");
-      if (!views.length) return before;
+      if (!views.length && !removals.length) {
+        transaction(
+          root,
+          draftGroupCommands(
+            root,
+            prepareDraftGroups(
+              root,
+              selected.map((identity) => identity.reference),
+              true,
+            ),
+          ),
+        );
+        return before;
+      }
       if (views.some((view) => view.problem !== undefined || view.conflict))
         throw new StateConflict(
           views
@@ -225,6 +294,10 @@ export function checkpointPlans(
       const original = before ? readGitTree(root, before) : new Map<string, GitEntry>(),
         files = new Map(original);
 
+      for (const removal of removals) {
+        const prefix = planPrefix(removal.identity);
+        for (const path of files.keys()) if (path.startsWith(prefix)) files.delete(path);
+      }
       for (const view of views) {
         const prefix = planPrefix(view);
         for (const path of files.keys()) if (path.startsWith(prefix)) files.delete(path);
@@ -276,6 +349,12 @@ export function checkpointPlans(
           tree: view.tree,
           ...(view.baseTree ? { base: view.baseTree } : {}),
         })),
+        removals: removals.map(({ reference, tree }) => ({ reference, tree })),
+        groups: prepareDraftGroups(
+          root,
+          selected.map((identity) => identity.reference),
+          true,
+        ),
         completed: false,
       };
       const anchor = planningPaths.checkpoints + operation.id;

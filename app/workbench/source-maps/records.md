@@ -68,6 +68,16 @@
   index independent planning history without checking it out.
 - `src/core/tasks/planning/planning-store.ts`, `src/core/tasks/planning/planning-operations.ts`: Retain durable drafts
   and exact approvals, and coordinate recoverable grouped checkpoints with concurrent editors.
+- `src/core/tasks/planning/plan-transfer.ts`, `src/core/tasks/planning/plan-retirement.ts`: Transfer approved plans into
+  implementation and retire saved copies after verifying their first source commit.
+- `src/core/tasks/planning/plan-rename.ts`, `src/core/tasks/planning/plan-operation-store.ts`: Retain recoverable
+  identity changes, exact inputs, and implementation claims across interruption and Git collection.
+- `src/core/tasks/planning/work-plans.ts`, `src/core/tasks/planning/planning-read-model.ts`: Join personal plans and
+  source tasks for workflow discovery, hierarchy, and readiness without adding drafts to committed record maps.
+- `src/core/tasks/task-approvals.ts`, `src/core/tasks/task-approval-store.ts`, `src/core/tasks/task-plan.ts`: Retain
+  exact human-approved plans and supporting files, separating approved scope from implementation accounts and progress.
+- `src/cli/task-plans.ts`, `src/server/views/plan-pages.tsx`: Present named-plan editing, approval comparisons,
+  checkpoints, and recovery through the shared planning operations.
 
 - `src/core/experiments`: Tracks experiment execution and completed evidence independently of candidate verdicts.
 

@@ -8,6 +8,7 @@ import {
   reviewIdentity,
 } from "../core/review/agent-review.js";
 import { taskReference } from "../core/tasks/task-model.js";
+import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../core/diagnostics/diagnostics.mjs";
 
 export function registerAgentReviewCommands(review: Command, root: string): void {
   for (const kind of Object.values(AgentReviewKind))
@@ -65,8 +66,21 @@ export function registerAgentReviewCommands(review: Command, root: string): void
             );
         },
       );
-  review.command("finish-commit", { hidden: true }).action(() => {
+  review.command("finish-commit", { hidden: true }).action(async () => {
     finishAgentCommit(root);
+    try {
+      const { finishPlanTransfers } = await import("../core/tasks/planning/plan-retirement.js");
+      finishPlanTransfers(root);
+    } catch (error) {
+      diagnostic(
+        LogLevel.Warn,
+        DiagnosticOperation.Command,
+        DiagnosticOutcome.Degraded,
+        {},
+        error,
+        "Commit saved; finish the planning handoff with workbench task plan recover",
+      );
+    }
   });
   review
     .command("check-push", { hidden: true })

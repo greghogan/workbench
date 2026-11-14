@@ -26,7 +26,7 @@ test("subproject links, fragments, balanced paths and local absolute context are
   expect(result).toContain("(packages/api/workbench/CHARTER.md#purpose)");
   expect(result).toContain("(packages/api/workbench/notes/a%28b%29.md)");
   expect(result).toContain("(https://example.org/x)");
-  expect(relocateMarkdownLinks("[read](../README.md)", source, join(root, "AGENTS.md"), true)).toContain(
+  expect(relocateMarkdownLinks("[read](../README.md)", source, join(root, "AGENTS.md"), { absolute: true })).toContain(
     root.replaceAll("\\", "/"),
   );
 });

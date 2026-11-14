@@ -1,10 +1,14 @@
-import { indexPlanningRevision } from "./planning-index.js";
+import { changeTaskQueue } from "../task-queue.js";
+import { gitRevision, validateBranch } from "../../git/refs.js";
+import { planClaim } from "./plan-operation-store.js";
+import { prepareDraftGroups, draftGroupCommands } from "./planning-draft-groups.js";
+import { indexPlanningRevision, validatePlanEntries } from "./planning-index.js";
 
 import { existsSync } from "node:fs";
 
 import { gitBytes, writeReviewBlobs, type GitEntry } from "../../git/git-snapshot.js";
 import { integrationTarget } from "../../git/integration-target.js";
-import { validateBranch } from "../../git/refs.js";
+
 import { repositoryStatePath, withRepositoryOperation } from "../../git/repository-state.js";
 
 import { editToml } from "../../configuration/toml-edit.js";
@@ -20,13 +24,13 @@ import {
   planContent,
   planDraftRef,
   planBaseRef,
+  planRemovalRef,
   planningPaths,
   safePlanFile,
   type PlanIdentity,
 } from "./plan-model.js";
 import {
   planningSettings,
-  planningRevision,
   planningScopes,
   readPlan,
   savedPlanTrees,
@@ -39,29 +43,94 @@ import { treeFromEntries, transaction } from "./plan-git.js";
 import { replaceRecordStatus } from "../../records/record-document.js";
 import { planningOperation, checkpointPlans } from "./planning-checkpoint.js";
 export { planningOperation, checkpointPlans, recoverPlanningCheckpoint } from "./planning-checkpoint.js";
+function draftCommands(
+  root: string,
+  identity: PlanIdentity,
+  entries: ReadonlyMap<string, GitEntry> | undefined,
+  current: PlanView | undefined,
+): string[] {
+  if (!entries) {
+    if (!current) throw new InvalidInput("Plan not found");
+    return [
+      ...(current.draft ? [`delete ${planDraftRef(identity)} ${current.tree}`] : []),
+      ...(current.baseTree ? [`delete ${planBaseRef(identity)} ${current.baseTree}`] : []),
+      ...(current.branchTree ? [`create ${planRemovalRef(identity)} ${current.branchTree}`] : []),
+    ];
+  }
+  validatePlanEntries(entries);
+  const tree = treeFromEntries(root, entries),
+    before = current?.draft ? current.tree : undefined,
+    updates = [`update ${planDraftRef(identity)} ${tree} ${before ?? "0".repeat(tree.length)}`];
+  if (!before && current?.branchTree) updates.push(`create ${planBaseRef(identity)} ${current.branchTree}`);
+  return updates;
+}
 function setDraft(
   root: string,
   identity: PlanIdentity,
   entries: ReadonlyMap<string, GitEntry>,
   current: PlanView | undefined,
 ): PlanView {
-  const tree = treeFromEntries(root, entries),
-    ref = planDraftRef(identity),
-    before = current?.draft ? current.tree : undefined;
-  const updates = [`update ${ref} ${tree} ${before ?? "0".repeat(tree.length)}`];
-  if (!before && current?.branchTree) updates.push(`create ${planBaseRef(identity)} ${current.branchTree}`);
-  transaction(root, updates);
+  transaction(root, draftCommands(root, identity, entries, current));
   return readPlan(root, identity);
 }
-function currentPlan(root: string, identity: PlanIdentity, expected: string | undefined): PlanView | undefined {
+export interface PlanDraftUpdate {
+  identity: PlanIdentity;
+  expected?: string;
+  entries?: ReadonlyMap<string, GitEntry>;
+}
+/** The caller holds the repository-operation lock until the prepared reference transaction is applied. */
+export function preparePlanDraftUpdates(
+  root: string,
+  changes: readonly PlanDraftUpdate[],
+  operation?: string,
+): string[] {
+  if (new Set(changes.map((change) => change.identity.reference)).size !== changes.length)
+    throw new InvalidInput("Change each plan only once");
+  const scopes = new Set(planningScopes(root).map((scope) => scope.id));
+  const commands = changes.flatMap((change) => {
+    const identity = planIdentity(change.identity.scope, change.identity.name);
+    if (!scopes.has(identity.scope)) throw new InvalidInput("Unknown plan scope");
+    const current = currentPlan(root, identity, change.expected, operation);
+    if (current?.conflict)
+      throw new StateConflict("Resolve concurrent planning edits before changing their identities");
+    return draftCommands(root, identity, change.entries, current);
+  });
+  return [
+    ...commands,
+    ...draftGroupCommands(
+      root,
+      prepareDraftGroups(
+        root,
+        changes.map((change) => change.identity.reference),
+        false,
+      ),
+    ),
+  ];
+}
+export function publishPlanDraftUpdates(root: string, changes: readonly PlanDraftUpdate[], operation?: string): void {
+  mutable(root, () => {
+    transaction(root, preparePlanDraftUpdates(root, changes, operation));
+  });
+}
+function currentPlan(
+  root: string,
+  identity: PlanIdentity,
+  expected: string | undefined,
+  operation?: string,
+): PlanView | undefined {
+  const claim = planClaim(root, identity.reference);
+  if (claim && claim.operation.ref !== operation)
+    throw new StateConflict(
+      `The implementation copy is authoritative: ${claim.task} in ${claim.operation.operation.checkout}`,
+    );
   const saved = savedPlanTrees(root),
-    exists = saved.has(identity.reference) || !!planningRevision(root, planDraftRef(identity));
+    exists = saved.has(identity.reference) || !!gitRevision(root, planDraftRef(identity));
   const view = exists ? readPlan(root, identity, saved) : undefined;
   if (view ? expected !== view.digest : expected !== undefined)
     throw new StateConflict("Plan changed; inspect its current version before saving");
   return view;
 }
-function mutable(root: string, action: () => PlanView): PlanView {
+function mutable<T>(root: string, action: () => T): T {
   return withRepositoryOperation(
     root,
     () => {
@@ -101,7 +170,9 @@ export function configurePlanning(root: string, settings: PlanningSettings): voi
       if (
         previous.branch &&
         previous.branch !== settings.branch &&
-        (draftPlanIdentities(root).length || savedPlanTrees(root).size)
+        (draftPlanIdentities(root).length ||
+          draftPlanIdentities(root, planningPaths.removals).length ||
+          savedPlanTrees(root).size)
       )
         throw new StateConflict("Preserve or transfer existing plans before changing their branch");
       const path = repositoryStatePath(root, planningPaths.settings),
@@ -111,7 +182,7 @@ export function configurePlanning(root: string, settings: PlanningSettings): voi
         branch: settings.branch,
         ...(settings.remote ? { remote: settings.remote, remote_branch: settings.remote_branch } : {}),
       };
-      const prior = planningRevision(root, `refs/heads/${settings.branch}`);
+      const prior = gitRevision(root, `refs/heads/${settings.branch}`);
       if (prior) {
         for (const revision of gitBytes(root, ["rev-list", prior]).toString().trim().split("\n").filter(Boolean))
           indexPlanningRevision(root, revision);
@@ -228,5 +299,6 @@ export function approvePlanDraft(
     return setDraft(root, identity, approvedEntries(root, current), current);
   });
   if (planningSettings(root).branch) checkpointPlans(root, [identity]);
+  changeTaskQueue(root, { action: "add", references: [identity.reference] });
   return readPlan(root, identity);
 }

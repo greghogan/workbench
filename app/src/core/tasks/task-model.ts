@@ -1,3 +1,5 @@
+import { taskPlanDigest } from "./task-plan.js";
+import { attachTaskPlanApprovals, type TaskApprovalView } from "./task-approvals.js";
 import { recordInventory, readInventoryRecords } from "../records/archive-store.js";
 import { createHash } from "node:crypto";
 import { readProjects, selectProject } from "../projects/project-configuration.js";
@@ -18,6 +20,9 @@ export interface TaskRecord {
   parent?: string;
   dependencies: string[];
   digest: string;
+  reviewDigest?: string;
+  approval?: TaskApprovalView;
+  planning?: { name: string; approved: boolean; problem?: string };
   planDigest: string;
 }
 export const taskDigest = (contents: string): string => createHash("sha256").update(contents).digest("hex");
@@ -34,8 +39,7 @@ export function taskReference(root: string, value: string, project?: string): st
 }
 
 export function parseTask(root: string, reference: string, path: string, contents: string): TaskRecord {
-  const { metadata, body } = recordDocument("TSK", contents, path);
-  const plan = Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "status"));
+  const { metadata } = recordDocument("TSK", contents, path);
   return {
     reference,
     title: recordTitle("TSK", reference.split("TSK-")[1] ?? "", contents),
@@ -45,15 +49,7 @@ export function parseTask(root: string, reference: string, path: string, content
     ...(metadata.parent ? { parent: taskReference(root, metadata.parent) } : {}),
     dependencies: (metadata.depends_on ?? []).map((value) => taskReference(root, value)),
     digest: taskDigest(contents),
-    planDigest: taskDigest(
-      JSON.stringify([
-        plan,
-        body.replace(
-          /^(\s*- \[)[ xX](\] [a-z][a-z0-9_-]*:TSK-[0-9A-Z]+)(?: \((?:Planned|Approved|Accepted|Canceled)\))?/gim,
-          "$1 $2",
-        ),
-      ]),
-    ),
+    planDigest: taskPlanDigest(contents),
   };
 }
 
@@ -137,6 +133,7 @@ export function readTaskGraph(root: string): TaskGraph {
       };
     });
   });
+  attachTaskPlanApprovals(root, tasks);
   const graph = new TaskGraph(tasks).validate();
   attachTaskImplementations(root, tasks);
   return graph;

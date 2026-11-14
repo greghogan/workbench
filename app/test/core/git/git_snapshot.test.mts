@@ -135,3 +135,22 @@ test("a large logical record inventory reads all objects across bounded Git outp
   expect(result.size).toBe(bodies.length);
   for (const [index, id] of ids.entries()) expect(result.get(id)?.equals(bodies[index] ?? Buffer.alloc(0))).toBe(true);
 });
+
+test("retained blob limits count unique bytes across aliases and reject larger captures before acquisition", () => {
+  const root = fixtures.project(),
+    one = Buffer.from("first snapshot"),
+    two = Buffer.from("second snapshot"),
+    objects = writeReviewBlobs(root, [one, two]);
+  const first = objects[0],
+    second = objects[1];
+  if (!first || !second) throw new Error("Missing fixture blobs");
+  git(root, "update-ref", "refs/workbench/read-alias", first);
+  expect(
+    readGitObjects(root, [first, "refs/workbench/read-alias"], one.length, { retainedBytes: one.length }).get(first),
+  ).toEqual(one);
+  expect(() =>
+    readGitObjects(root, [first, second], Math.max(one.length, two.length), {
+      retainedBytes: one.length + two.length - 1,
+    }),
+  ).toThrow(/retained read limit/);
+});

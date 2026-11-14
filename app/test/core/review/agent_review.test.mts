@@ -284,7 +284,9 @@ test("delegated work can use uncommitted project approval without inheriting exe
     staged = f.git(["write-tree"]);
   changeTaskStatus(f.root, "TSK-0", "Approved", undefined, true);
   expect(f.git(["write-tree"])).toBe(staged);
-  expect(existsSync(taskQueuePath(f.root))).toBe(false);
+  expect(readTaskQueue(f.root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
+    ["demo:TSK-0", "Queued"],
+  ]);
   changeTaskQueue(f.root, { action: "add", references: ["TSK-0"] });
   changeTaskQueue(f.root, { action: "start", reference: "TSK-0" });
   const checkout = mkdtempSync(join(tmpdir(), "workbench-delegated-"));
@@ -402,7 +404,7 @@ test("explicit task associations survive consumed receipts and branch rebases un
   expect(() => {
     checkAgentPush(f.root, "HEAD", "upstream");
   }).toThrow(/human acceptance/i);
-  expect(readTaskQueue(f.root).entries).toHaveLength(0);
+  expect(readTaskQueue(f.root).entries.map((entry) => entry.state)).toEqual(["Queued"]);
   // A remote that now contains this work retires its associations without needing an outgoing row.
   checkAgentPush(f.root, "HEAD", "HEAD");
   expect(f.review(AgentReviewKind.Task, { base: "HEAD" }).tasks).not.toContain("demo:TSK-0");

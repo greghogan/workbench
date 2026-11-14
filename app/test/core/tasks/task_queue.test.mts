@@ -43,7 +43,7 @@ function task(
 }
 const queue = (action: Parameters<typeof changeTaskQueue>[1]) => changeTaskQueue(root, action);
 
-test("human approval is available without a queue or a Git checkout", () => {
+test("human approval appends ready work even without a Git checkout", () => {
   vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "private-state"));
   task(0, "Planned");
   const config = join(root, "workbench/config.toml");
@@ -52,7 +52,9 @@ test("human approval is available without a queue or a Git checkout", () => {
   changeTaskStatus(root, "TSK-0", "Approved", undefined, true);
   expect(readTaskGraph(root).require("demo:TSK-0").metadata.status).toBe("Approved");
   expect(readTaskDecisions(root)).toMatchObject([{ reference: "demo:TSK-0", status: "Approved" }]);
-  expect(existsSync(taskQueuePath(root))).toBe(false);
+  expect(readTaskQueue(root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
+    ["demo:TSK-0", "Queued"],
+  ]);
 });
 
 test("queue selection, ordering and execution survive restart without changing task files", () => {
@@ -143,6 +145,8 @@ test("human transitions preserve comments and body, reject stale approval and in
   }).toThrow(/changed/);
   task(0, "Approved", "", "- [ ] Still unverified.\n");
   const unverified = readFileSync(path, "utf8");
+  queue({ action: "start", reference: "TSK-0" });
+  queue({ action: "implemented", reference: "TSK-0", detail: "Implementation checked; checklist remains incomplete." });
   expect(() => {
     changeTaskStatus(root, "TSK-0", "Accepted");
   }).toThrow(/unchecked/);
@@ -162,7 +166,7 @@ test("acceptance rejects an implementation changed since its verification", () =
   expect(inspectTaskQueue(root).entries[0]?.blockers.join(" ")).toMatch(/changed after verification/);
   changeTaskStatus(root, "TSK-0", "Planned");
   expect(readTaskQueue(root).entries[0]?.evidence).toBeUndefined();
-  expect(readTaskQueue(root).entries[0]?.state).toBe("Queued");
+  expect(readTaskQueue(root).entries).toEqual([]);
 });
 
 test("parents aggregate children without inventing execution dependencies or flattening maps", () => {
@@ -248,7 +252,7 @@ test("shared transitions retain CRLF body bytes and active work must be released
   }).toThrow(/Block or release/);
   queue({ action: "block", reference: "TSK-0", detail: "Plan needs revision." });
   changeTaskStatus(root, "TSK-0", "Planned");
-  expect(readTaskQueue(root).entries[0]?.state).toBe("Queued");
+  expect(readTaskQueue(root).entries).toEqual([]);
 });
 
 test("acceptance validates CRLF checklists and synchronization retains their original line endings", () => {
@@ -316,7 +320,7 @@ test("a failed map publication preserves queue evidence and is recovered before 
   rmSync(map, { recursive: true });
   withTaskLock(root, () => undefined);
   expect(readTaskGraph(root).tasks[0]?.metadata.status).toBe("Planned");
-  expect(readTaskQueue(root).entries[0]?.state).toBe("Queued");
+  expect(readTaskQueue(root).entries).toEqual([]);
   expect(readTaskQueue(root).entries[0]?.evidence).toBeUndefined();
   expect(existsSync(taskQueuePath(root) + ".transition.json")).toBe(false);
 });
@@ -335,4 +339,30 @@ test("recovery refuses to overwrite edits made after an interrupted transition",
   }).toThrow(/recovery conflicts/);
   expect(readFileSync(path, "utf8")).toContain("New human notes.");
   expect(existsSync(taskQueuePath(root) + ".transition.json")).toBe(true);
+});
+
+test("changed supporting requirements need renewed approval and verification before dependent work can start", () => {
+  task(0, "Planned");
+  task(1, "Planned", "depends_on: [demo:TSK-0]\n");
+  mkdirSync(join(root, "workbench/tasks/TSK-00"));
+  const support = join(root, "workbench/tasks/TSK-00/requirements.md");
+  writeFileSync(support, "Install for one user.\n");
+  changeTaskStatus(root, "TSK-0", "Approved", undefined, true);
+  changeTaskStatus(root, "TSK-1", "Approved", undefined, true);
+  queue({ action: "add", references: ["TSK-0", "TSK-1"] });
+  queue({ action: "start", reference: "TSK-0" });
+  queue({ action: "implemented", reference: "TSK-0", detail: "Verified user service." });
+  writeFileSync(support, "Install for all users.\n");
+  expect(() => queue({ action: "start", reference: "TSK-1" })).toThrow(/Waiting/);
+  expect(() => {
+    changeTaskStatus(root, "TSK-0", "Accepted", undefined, true);
+  }).toThrow(/approve the current plan/);
+  changeTaskStatus(root, "TSK-0", "Approved", undefined, true);
+  expect(() => queue({ action: "start", reference: "TSK-1" })).toThrow(/Waiting/);
+  expect(inspectTaskQueue(root).entries[0]?.blockers.join(" ")).toMatch(/changed after verification/);
+  queue({ action: "release", reference: "TSK-0" });
+  queue({ action: "start", reference: "TSK-0" });
+  queue({ action: "implemented", reference: "TSK-0", detail: "Verified revised service." });
+  queue({ action: "start", reference: "TSK-1" });
+  expect(readTaskQueue(root).entries[1]?.state).toBe("Active");
 });

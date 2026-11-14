@@ -99,8 +99,11 @@ export function planVersion(entries: ReadonlyMap<string, GitEntry>): string {
 export const planningPaths = {
   settings: "planning.toml",
   operation: "planning-operation.json",
+  operations: "refs/workbench/plan-operations/",
   drafts: "refs/workbench/plan-drafts/",
   bases: "refs/workbench/plan-draft-bases/",
+  removals: "refs/workbench/plan-removals/",
+  groups: "refs/workbench/plan-draft-groups",
   scopes: ".workbench/scopes.json",
   records: "plans/",
   document: "plan.md",
@@ -115,3 +118,6 @@ export const planDraftRef = (identity: PlanIdentity): string =>
   planningPaths.drafts + identity.scope + "/" + identity.name;
 export const planBaseRef = (identity: PlanIdentity): string =>
   planningPaths.bases + identity.scope + "/" + identity.name;
+
+export const planRemovalRef = (identity: PlanIdentity): string =>
+  planningPaths.removals + identity.scope + "/" + identity.name;
