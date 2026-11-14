@@ -11,7 +11,7 @@ import { relativeRecordPath, type Kind } from "./record-identity.js";
 import { reserveRecordNumber } from "./record-sequences.js";
 import { parseTask, readTaskGraph, TaskGraph } from "../tasks/task-model.js";
 import { withTaskLock } from "../tasks/task-queue.js";
-import { terminalTask } from "./record-document.js";
+import { terminalTask, editRecordMetadata, parseProseRecord } from "./record-document.js";
 import { InvalidInput } from "../runtime/input-errors.js";
 
 export async function createRecord(
@@ -27,8 +27,11 @@ export async function createRecord(
   const number = reserveRecordNumber(rootOf(root, project), kind, root);
   const path = join(rootOf(root, project), "workbench", relativeRecordPath(kind, number));
   const prepared = contents(number, project);
+  const document = typeof prepared === "string" ? prepared : prepared.record;
   const formatted = await formatDocument(
-    typeof prepared === "string" ? prepared : prepared.record,
+    kind === "TSK" && parseProseRecord(document, path).metadata.added_at === undefined
+      ? editRecordMetadata(document, { added_at: new Date().toISOString() })
+      : document,
     path,
     required(
       required(readConfig(root).markdown, "expected readConfig(root).markdown").wrap_width,

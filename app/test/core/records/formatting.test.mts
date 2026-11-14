@@ -1,3 +1,4 @@
+import { recordDocument } from "../../../src/core/records/record-document.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -101,9 +102,9 @@ test("task creation formats file and stdin bodies and scopes batch formatting", 
     const localTask = join(root, "api/workbench/tasks/TSK-00.md");
     assert.match(readFileSync(rootTask, "utf8"), /# TSK-0: From file/);
     assert.match(readFileSync(localTask, "utf8"), /# TSK-0: From stdin/);
-    assert.deepEqual(metadata(readFileSync(rootTask, "utf8")), {
-      status: "Planned",
-    });
+    const { added_at, ...fields } = recordDocument("TSK", readFileSync(rootTask, "utf8"), rootTask).metadata;
+    assert.equal(typeof added_at, "string");
+    assert.deepEqual(fields, { status: "Planned" });
     assert.equal(readFileSync(source, "utf8"), body);
     run("format", "--all", "--check");
     const untouched = ["workbench/CHARTER.md", "api/workbench/CHARTER.md", "AGENTS.md", "workbench/task-map.md"].map(
@@ -164,7 +165,7 @@ test("draft completeness and formatting are separate and checks never rewrite re
     run("record", "add", "task", "Draft task");
     const path = join(root, "workbench/tasks/TSK-00.md");
     const original = readFileSync(path, "utf8");
-    writeFileSync(path, original.replace("status: Planned\n", "{}\n"));
+    writeFileSync(path, original.replace(/^---\n[\s\S]*?\n---/, "---\n{}\n---"));
     run("format", path, "--write");
     run("format", "--all", "--check");
     assert.match(fail("validate"), /'status' must be/);

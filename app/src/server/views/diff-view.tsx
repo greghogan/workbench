@@ -1,3 +1,4 @@
+import { isTimestamp } from "../presentation/date-time.js";
 import { prepareDocumentComparison } from "../review/document-comparison-model.js";
 import type { ComponentChildren, JSX } from "preact";
 import { parsePatch } from "diff";
@@ -78,7 +79,7 @@ export function sourceDiffView(
       if (!present) return null;
       let content: ComponentChildren;
       if (same) content = metadataValue(after, context.records);
-      else if (parts)
+      else if (parts && !isTimestamp(before) && !isTimestamp(after))
         content = (
           <span class="metadata-text">
             {separated(

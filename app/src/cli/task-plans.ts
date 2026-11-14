@@ -68,6 +68,7 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
             title: view.document?.title ?? view.name,
             contents: view.contents,
             status: view.document?.metadata.status,
+            added_at: view.document?.metadata.added_at,
             draft: view.draft,
             conflict: view.conflict,
             problem: view.problem,
@@ -101,6 +102,7 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
             reference: plan.reference,
             title: plan.document?.title ?? plan.name,
             status: plan.document?.metadata.status,
+            added_at: plan.document?.metadata.added_at,
             digest: plan.digest,
             draft: plan.draft,
             conflict: plan.conflict,
@@ -113,11 +115,12 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
     else
       console.log(
         terminalTable(
-          ["PLAN", "STATE", "TITLE", "STATUS"],
+          ["PLAN", "STATE", "TITLE", "ADDED", "STATUS"],
           views.map((view) => [
             view.reference,
             view.document?.metadata.status ?? "Draft",
             view.document?.title ?? view.name,
+            view.document?.metadata.added_at?.slice(0, 10) ?? "Unknown",
             view.problem ??
               (view.conflict ? "Concurrent edits need resolution" : view.draft ? "Local draft" : "Checkpointed"),
           ]),

@@ -5,9 +5,9 @@ import { WebError } from "../http/errors.js";
 import type { JSX } from "preact";
 import { taskStatuses, terminalTask, type TaskStatus } from "../../core/records/record-document.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { queueDigest, TaskExecution } from "../../core/tasks/task-queue.js";
+import { queueDigest, TaskBlockerKind, TaskExecution } from "../../core/tasks/task-queue.js";
 import type { ViewContext } from "../workspace/view-context.js";
-import { recordList } from "./record-content.js";
+import { recordList, timeTag } from "./record-content.js";
 import { shell } from "./page-frame.js";
 import { tabs, linkButton } from "./render-links.js";
 import { sourceURL } from "../routes/sources.js";
@@ -339,7 +339,8 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
       {!entry && task.implementation && (
         <p>
           Implementation evidence at <code>{task.implementation.baseline.slice(0, 12)}</code> from{" "}
-          <code>{task.implementation.checkout}</code> ({task.implementation.verified}): {task.implementation.evidence}
+          <code>{task.implementation.checkout}</code> ({timeTag(task.implementation.verified)}):{" "}
+          {task.implementation.evidence}
         </p>
       )}
       {task.approval && task.approval.files.length > 0 && (
@@ -418,7 +419,7 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
                   class="button secondary"
                   href={routeURL(Route.TaskOperation, { id: record.id, kind: "revert", scope: context.scope })}
                 >
-                  Revert work…
+                  Revert work
                 </a>
               </>
             )}
@@ -469,9 +470,8 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
       entry.status !== "Planned" &&
       (!entry.status || !terminalTask.has(entry.status)),
   );
-  const order = new Map(queue.entries.map((entry, index) => [entry.reference, index]));
   plans.sort(
-    (left, right) => (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+    (left, right) => (left.addedAt ?? "").localeCompare(right.addedAt ?? "") || left.id.localeCompare(right.id),
   );
   const planWindow = window("plans", plans, (record) => record.id),
     workWindow = window("work", work, (entry) => entry.reference),
@@ -555,25 +555,7 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
         >
           {planWindow.previous}
           {plans.length ? (
-            taskList(context, [...planWindow.visible], (record) => {
-              const position = plans.findIndex((item) => item.id === record.id),
-                queued = selected.has(record.id);
-              if (!queued && !record.id.includes(":plan/")) return recordList([record], context, 3);
-              return (
-                <div class="task-queue-row">
-                  {orderControls(
-                    record.id,
-                    record.title,
-                    queued && selected.has(plans[position - 1]?.id ?? "") ? plans[position - 1]?.id : undefined,
-                    queued && selected.has(plans[position + 1]?.id ?? "") ? plans[position + 1]?.id : undefined,
-                    queued &&
-                      queue.entries.find((entry) => entry.reference === record.id)?.state !== TaskExecution.Active,
-                  )}
-                  <div class="task-queue-content">{recordList([record], context, 3)}</div>
-                  {!queued && <div class="task-queue-selection">{action("add", record.id, "Select plan")}</div>}
-                </div>
-              );
-            })
+            taskList(context, [...planWindow.visible], (record) => recordList([record], context, 3))
           ) : (
             <p>No plans awaiting approval.</p>
           )}
@@ -592,6 +574,13 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
           <ol class="task-queue" data-task-items="">
             {workWindow.visible.map((entry) => {
               const index = work.findIndex((item) => item.reference === entry.reference);
+              const task = context.index.taskGraph.byReference.get(entry.reference),
+                blockers = task
+                  ? context.index.taskReadiness
+                      .blockers(task)
+                      .filter((blocker) => blocker.kind !== TaskBlockerKind.Active)
+                      .map((blocker) => blocker.message)
+                  : entry.blockers;
               return (
                 <li key={entry.reference} data-task-node={entry.reference} class="task-queue-row">
                   {orderControls(
@@ -610,64 +599,17 @@ export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeo
                       {badge(entry.state === TaskExecution.Implemented ? "Awaiting acceptance" : entry.state)}{" "}
                       {queue.ready.includes(entry.reference) && badge("Ready")}
                     </p>
-                    {entry.blockers.length > 0 && (
+                    {blockers.length > 0 && (
                       <ul>
-                        {entry.blockers.map((reason) => (
+                        {blockers.map((reason) => (
                           <li>{reason}</li>
                         ))}
                       </ul>
                     )}
                     {entry.evidence && <p>{entry.evidence}</p>}
-                    <div class="task-actions">
-                      {queue.ready.includes(entry.reference) && action("start", entry.reference, "Start task")}
-                      {entry.state !== TaskExecution.Queued && action("release", entry.reference, "Return to queue")}
-                      {entry.state === TaskExecution.Implemented &&
-                        entry.status !== "Accepted" &&
-                        linkButton("Review outcome", recordURL(entry.reference), true)}
-                    </div>
-                    {(entry.state === TaskExecution.Active || entry.state === TaskExecution.Queued) &&
-                      mutationForm({
-                        action: Route.QueueChange,
-                        context,
-                        csrf: context.csrf,
-                        class: "form-grid queue-work-form",
-                        fields: { operation: "block", reference: entry.reference, target: "", expected: queue.digest },
-                        children: (fields) => (
-                          <>
-                            {fields.text("detail", {
-                              id: `block-${entry.reference}`,
-                              label: "Blocking reason",
-                              required: true,
-                              maxLength: 16384,
-                            })}
-                            <div class="task-actions">{submitButton("Mark blocked", { secondary: true })}</div>
-                          </>
-                        ),
-                      })}
-                    {entry.state === TaskExecution.Active &&
-                      mutationForm({
-                        action: Route.QueueChange,
-                        context,
-                        csrf: context.csrf,
-                        class: "form-grid queue-work-form",
-                        fields: {
-                          operation: "implemented",
-                          reference: entry.reference,
-                          target: "",
-                          expected: queue.digest,
-                        },
-                        children: (fields) => (
-                          <>
-                            {fields.text("detail", {
-                              id: `evidence-${entry.reference}`,
-                              label: "Verification and outcome",
-                              required: true,
-                              maxLength: 16384,
-                            })}
-                            <div class="task-actions">{submitButton("Report implemented")}</div>
-                          </>
-                        ),
-                      })}
+                    {entry.state === TaskExecution.Implemented && entry.status !== "Accepted" && (
+                      <div class="task-actions">{linkButton("Review outcome", recordURL(entry.reference), true)}</div>
+                    )}
                   </div>
                 </li>
               );

@@ -110,13 +110,14 @@ test("workflow source changes retain the view and include only the selected scop
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ redirect: "/queue?scope=graphmp" });
   const work = await read("/queue?scope=graphmp");
-  const add = work.querySelector<HTMLInputElement>('form input[name="operation"][value="add"]')?.form;
-  if (!add) throw new Error("Missing queue action");
-  const queued = await postWebForm(web, add.getAttribute("action") ?? "", formValues(add));
-  expect(queued.status).toBe(200);
-  expect(await queued.json()).toMatchObject({ redirect: "/queue?scope=graphmp" });
+  expect(work.querySelectorAll(".task-queue > li")).toHaveLength(1);
+  const remove = work.querySelector<HTMLInputElement>('form input[name="operation"][value="remove"]')?.form;
+  if (!remove) throw new Error("Missing queue removal action");
+  const removed = await postWebForm(web, remove.getAttribute("action") ?? "", formValues(remove));
+  expect(removed.status).toBe(200);
+  expect(await removed.json()).toMatchObject({ redirect: "/queue?scope=graphmp" });
   expect((await read("/queue?scope=solver")).querySelectorAll(".task-queue > li")).toHaveLength(0);
-  expect((await read("/queue?scope=graphmp")).querySelectorAll(".task-queue > li")).toHaveLength(1);
+  expect((await read("/queue?scope=graphmp")).querySelectorAll(".task-queue > li")).toHaveLength(0);
 });
 
 test("review navigation, confirmation, and counts stay within the selected source", async () => {

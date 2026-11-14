@@ -1,6 +1,6 @@
 import type { BrowserRecord } from "./record-service.js";
 import { markdownExcerpt } from "./markdown-excerpt.js";
-import { parseProseRecord } from "./record-document.js";
+import { parseProseRecord, recordTimestamp } from "./record-document.js";
 import { citationDateFields as dateFields, citationDateText } from "../citations/citation-dates.js";
 import type { Kind } from "./record-identity.js";
 
@@ -152,6 +152,7 @@ export function describeRecord(record: BrowserRecord, contents: string): void {
     if (typeof metadata.summary === "string") record.summary = markdownExcerpt(metadata.summary);
     else record.summary = markdownExcerpt(body);
     if (typeof metadata.status === "string") record.status = metadata.status;
+    if (recordTimestamp(metadata.added_at)) record.addedAt = metadata.added_at;
   }
   record.title = record.title.slice(0, 512);
   record.summary = record.summary.slice(0, 512);

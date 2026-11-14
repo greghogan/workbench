@@ -1,3 +1,4 @@
+import { formatTimestamp, isTimestamp } from "../presentation/date-time.js";
 import type { ComponentChildren, JSX } from "preact";
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import { metadataLabel } from "../../core/records/record-metadata.js";
@@ -17,6 +18,16 @@ export function recordStatus(record: BrowserRecord): JSX.Element | null {
       : record.status,
   );
 }
+export function timeTag(value: string): JSX.Element {
+  return (
+    <time dateTime={value} data-local-time="" title={formatTimestamp(value)}>
+      {formatTimestamp(value)}
+    </time>
+  );
+}
+export function addedAtTag(value?: string): JSX.Element | null {
+  return value ? <span class="badge">Added {timeTag(value)}</span> : null;
+}
 export function recordList(records: BrowserRecord[], context: WorkspaceView, headingLevel: 2 | 3 = 2): JSX.Element {
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return records.length ? (
@@ -27,6 +38,7 @@ export function recordList(records: BrowserRecord[], context: WorkspaceView, hea
           {record.type === "CHARTER" && record.collection && badge("Collection charter · context")}
           {record.local && badge("Local collection · read only")}
           {recordStatus(record)}
+          {addedAtTag(record.addedAt)}
           {!record.local && context.hasPendingReview(record.path) && (
             <a class="badge pending" aria-label={record.id + ": Needs review"} href={reviewLocation(context, record)}>
               Needs review
@@ -92,6 +104,7 @@ export function metadataValue(value: unknown, records: RecordLookup, depth = 0):
         : typeof value === "number" || typeof value === "boolean" || typeof value === "bigint"
           ? String(value)
           : "Not provided";
+  if (isTimestamp(text)) return timeTag(text);
   const referenced = records.record(text);
   if (referenced) return referenceLink(referenced, text);
   if (/^https?:\/\//i.test(text) && URL.canParse(text))

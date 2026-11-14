@@ -299,9 +299,6 @@ label {
   height: 100%;
   margin-bottom: 0;
 }
-.task-queue-selection {
-  grid-column: 2;
-}
 .task-actions {
   display: flex;
   flex-wrap: wrap;
@@ -329,8 +326,4 @@ label {
   background: var(--paper);
   color: var(--red);
   border-color: var(--red);
-}
-
-.queue-work-form {
-  margin-block: var(--space-4);
 }

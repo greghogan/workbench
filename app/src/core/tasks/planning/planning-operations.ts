@@ -19,9 +19,10 @@ import { writeAtomic } from "../../runtime/file-publication.mjs";
 import { InvalidInput, StateConflict } from "../../runtime/input-errors.js";
 
 import { readConfig } from "../../projects/project-configuration.js";
-
+import { replaceRecordStatus } from "../../records/record-document.js";
 import {
   parsePlan,
+  withPlanAddedAt,
   planIdentity,
   planContent,
   planDraftRef,
@@ -42,7 +43,6 @@ import {
 } from "./planning-store.js";
 
 import { treeFromEntries, transaction } from "./plan-git.js";
-import { replaceRecordStatus } from "../../records/record-document.js";
 import { planningOperation, checkpointPlans } from "./planning-checkpoint.js";
 export { planningOperation, checkpointPlans, recoverPlanningCheckpoint } from "./planning-checkpoint.js";
 function draftCommands(
@@ -237,7 +237,12 @@ export function savePlanDraft(
     return setDraft(
       root,
       identity,
-      editedPlanEntries(root, current?.entries ?? new Map(), contents, options.files),
+      editedPlanEntries(
+        root,
+        current?.entries ?? new Map(),
+        withPlanAddedAt(contents, current?.contents),
+        options.files,
+      ),
       current,
     );
   });
@@ -252,7 +257,7 @@ export function resolvePlanDraft(
   return mutable(root, () => {
     const current = currentPlan(root, identity, expected);
     if (!current?.draft || !current.conflict) throw new InvalidInput("No conflicting draft needs resolution");
-    const entries = editedPlanEntries(root, current.entries, contents, files);
+    const entries = editedPlanEntries(root, current.entries, withPlanAddedAt(contents, current.contents), files);
     const tree = treeFromEntries(root, entries),
       updates = [`update ${planDraftRef(identity)} ${tree} ${current.tree}`],
       baseRef = planBaseRef(identity);

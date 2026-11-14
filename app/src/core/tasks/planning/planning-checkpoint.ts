@@ -14,7 +14,6 @@ import { workspaceSchemaVersion } from "../../projects/project-model.js";
 import { combineFailures } from "../../diagnostics/diagnostic-errors.mjs";
 
 import { randomUUID } from "node:crypto";
-
 import { gitBytes, readGitTree, readGitObjects, writeReviewBlobs, type GitEntry } from "../../git/git-snapshot.js";
 
 import { repositoryStatePath, withRepositoryOperation } from "../../git/repository-state.js";

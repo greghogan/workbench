@@ -51,7 +51,7 @@ test("manual planning pushes use the exact destination, preserve source gates, a
   git(root, "config", "core.hooksPath", hooks);
   git(root, "remote", "add", "backup", remote);
   configurePlanning(root, { branch: "future", remote: "backup", remote_branch: "plans", auto_prune: true });
-  savePlanDraft(root, identity, contents);
+  const savedContents = savePlanDraft(root, identity, contents).contents;
   checkpointPlans(root);
   const tip = git(root, "rev-parse", "future"),
     zero = "0".repeat(tip.length),
@@ -91,7 +91,7 @@ test("manual planning pushes use the exact destination, preserve source gates, a
   git(root, "worktree", "add", "-q", checkout, "future");
   const fromPlanning = invoke(checkout, "push", "backup", "future:plans");
   expect(fromPlanning.status, fromPlanning.stderr).toBe(0);
-  expect(readFileSync(join(checkout, "plans/demo/service/plan.md"), "utf8")).toBe(contents);
+  expect(readFileSync(join(checkout, "plans/demo/service/plan.md"), "utf8")).toBe(savedContents);
   const shown = spawnSync(
     process.execPath,
     [join(distribution, "bin/workbench.mjs"), "task", "plan", "show", identity.reference, "--json"],
@@ -102,7 +102,7 @@ test("manual planning pushes use the exact destination, preserve source gates, a
     },
   );
   expect(shown.status, shown.stderr).toBe(0);
-  expect(JSON.parse(shown.stdout) as { contents: string }).toMatchObject({ contents });
+  expect(JSON.parse(shown.stdout) as { contents: string }).toMatchObject({ contents: savedContents });
   git(root, "worktree", "remove", "--force", checkout);
 });
 
@@ -138,7 +138,7 @@ test("empty planning retention protects local queues and unpushed saves, then re
   const fresh = savePlanDraft(root, identity, contents);
   expect(fresh.draft).toBe(true);
   checkpointPlans(root);
-  expect(readPlan(root, identity).contents).toBe(contents);
+  expect(readPlan(root, identity).contents).toBe(fresh.contents);
   git(root, "commit", "--allow-empty", "-qm", "Local checkpoint\n\nWorkbench-Provisional: true");
   const blocked = invoke(root, "push", "backup", "HEAD:application");
   expect(blocked.status).not.toBe(0);
