@@ -265,7 +265,7 @@ export function registerTaskCommands(program: Command, root: string): void {
   queue
     .command("add")
     .argument("<references...>")
-    .description("Select tasks or order future plans; selection does not approve them")
+    .description("Restore approved work to the local execution queue")
     .action((values: string[], _options: unknown, command: Command) => {
       return mutate({ action: "add", references: values.map((value) => queueReference(value, command)) }, command);
     });

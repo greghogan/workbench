@@ -14,6 +14,7 @@ export interface PlanningRecord {
   contents: string;
   digest: string;
   status: TaskStatus;
+  addedAt?: string;
   parent?: string;
   dependencies: string[];
   problem?: string;
@@ -67,6 +68,7 @@ export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecor
     contents: view.contents,
     digest: view.digest,
     status: view.document?.metadata.status ?? "Planned",
+    ...(view.document?.metadata.added_at ? { addedAt: view.document.metadata.added_at } : {}),
     ...(view.document?.metadata.parent ? { parent: view.document.metadata.parent } : {}),
     dependencies: view.document?.metadata.depends_on ?? [],
     ...(view.problem ? { problem: view.problem } : {}),
@@ -94,6 +96,7 @@ export function planningBrowserRecord(root: string, plan: PlanningRecord, status
     summary: plan.summary,
     status,
     path: planPrefix(plan) + planningPaths.document,
+    ...(plan.addedAt ? { addedAt: plan.addedAt } : {}),
     directory: root,
     editable: true,
     local: false,

@@ -75,14 +75,22 @@ test("task hierarchy and duplicate dependencies are validated", () => {
     run(root, true, "validate");
     const parent = join(root, "workbench/tasks/TSK-00.md");
     const child = join(root, "workbench/tasks/TSK-01.md");
-    assert.deepEqual(recordDocument("TSK", readFileSync(parent, "utf8"), parent).metadata, { status: "Planned" });
-    assert.deepEqual(recordDocument("TSK", readFileSync(child, "utf8"), child).metadata, {
+    const parentMetadata = recordDocument("TSK", readFileSync(parent, "utf8"), parent).metadata;
+    assert.equal(typeof parentMetadata.added_at, "string");
+    assert.deepEqual(parentMetadata, { status: "Planned", added_at: parentMetadata.added_at });
+    const childMetadata = recordDocument("TSK", readFileSync(child, "utf8"), child).metadata;
+    assert.equal(typeof childMetadata.added_at, "string");
+    assert.deepEqual(childMetadata, {
+      added_at: childMetadata.added_at,
       status: "Planned",
       parent: "demo:TSK-0",
     });
     run(root, true, "record", "add", "task", "Dependent", "--depends-on", "demo:TSK-1");
     const dependent = join(root, "workbench/tasks/TSK-02.md");
-    assert.deepEqual(recordDocument("TSK", readFileSync(dependent, "utf8"), dependent).metadata, {
+    const dependentMetadata = recordDocument("TSK", readFileSync(dependent, "utf8"), dependent).metadata;
+    assert.equal(typeof dependentMetadata.added_at, "string");
+    assert.deepEqual(dependentMetadata, {
+      added_at: dependentMetadata.added_at,
       status: "Planned",
       depends_on: ["demo:TSK-1"],
     });

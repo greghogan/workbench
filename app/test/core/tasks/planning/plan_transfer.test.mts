@@ -71,6 +71,7 @@ test("starting an approved plan creates its numeric task, preserves exact approv
   expect(reference).toBe("demo:TSK-0");
   expect(task.contents).toContain("# TSK-0: Background service");
   expect(task.metadata.status).toBe("Approved");
+  expect(task.metadata.added_at).toBe(original.document?.metadata.added_at);
   expect(task.contents).toContain("[Notes](TSK-00/notes.md)");
   expect(task.contents).toContain("[Multiline](TSK-00/notes.md#details)");
   expect(task.contents).toContain("[Self](TSK-00.md#tsk-0-background-service)");
@@ -270,4 +271,28 @@ test("an unstaged handoff preserves Git executable intent when the filesystem do
   git(root, "commit", "--amend", "--no-edit", "-q");
   expect(finishPlanTransfers(root)).toEqual(["demo:TSK-0"]);
   expect(readPlanOperations(root)).toEqual([]);
+});
+
+test("Added at survives saves, renaming, approval and task transfer without becoming execution order", async () => {
+  const root = fixture(),
+    added = "2026-11-10T12:34:56.000Z";
+  const initial = savePlanDraft(
+    root,
+    service,
+    `---\nstatus: Planned\nadded_at: ${added}\n---\n\n# Service\n\nUseful work.\n`,
+  );
+  const saved = savePlanDraft(root, service, initial.contents.replace(`added_at: ${added}\n`, ""), {
+    expected: initial.digest,
+  });
+  expect(saved.document?.metadata.added_at).toBe(added);
+  const accepted = approvePlanDraft(root, service, saved.digest, true),
+    renamed = planIdentity("demo", "daemon");
+  const moved = renamePlan(root, service, renamed, accepted.digest);
+  expect(moved.document?.metadata.added_at).toBe(added);
+  expect(moved.approval?.current).toBe(true);
+  changeTaskQueue(root, { action: "add", references: [renamed.reference] });
+  const reference = await startPlan(root, renamed.reference);
+  const task = readTaskGraph(root).require(reference);
+  expect(task.metadata.added_at).toBe(added);
+  expect(task.approval?.current).toBe(true);
 });

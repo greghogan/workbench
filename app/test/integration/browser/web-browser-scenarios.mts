@@ -1147,7 +1147,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.equal(await page.getByRole("checkbox", { name: "Approve plan", exact: true }).count(), 0);
         assert.equal(await page.locator('main textarea[name="reason"]').count(), 0);
         await page.getByText("More task actions", { exact: true }).click();
-        assert.equal(await page.getByRole("link", { name: "Revert work…", exact: true }).count(), 0);
+        assert.equal(await page.getByRole("link", { name: "Revert work", exact: true }).count(), 0);
         await page.getByRole("link", { name: "Cancel task", exact: true }).click();
         assert.equal(await page.getByRole("button", { name: "Approve plan", exact: true }).count(), 0);
         for (const width of [1440, 390]) {
@@ -1171,12 +1171,9 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.getByRole("button", { name: "Approve plan", exact: true }).click();
         await page.getByRole("heading", { name: "Plans", exact: true }).waitFor();
         const work = page.getByRole("region", { name: "Work", exact: true });
-        await work
-          .locator("article")
-          .filter({ has: page.getByRole("link", { name: /Deliver the task workflow/ }) })
-          .getByRole("button", { name: "Add to local queue", exact: true })
-          .click();
-        await page.getByRole("button", { name: "Start task", exact: true }).click();
+        assert.equal(await page.getByRole("button", { name: "Start task", exact: true }).count(), 0);
+        workbench("queue", "start", "demo:TSK-ZZ");
+        await work.getByText("Active", { exact: true }).waitFor();
         writeFileSync(join(root, "task-delivery.ts"), 'export const outcome = "Initial browser result";\n');
         git(root, "add", "workbench/tasks/TSK-ZZ.md", "task-delivery.ts");
         git(root, "commit", "-qm", "Start the task workflow\n\nWorkbench-Provisional: true");
@@ -1186,12 +1183,20 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           readFileSync(path, "utf8") + "\n## Implementation account\n\nDelivered the browser workflow.\n",
         );
         git(root, "add", "workbench/tasks/TSK-ZZ.md", "task-delivery.ts");
-        git(root, "commit", "-qm", "Deliver the task workflow\n\nWorkbench-Provisional: true");
+        git(
+          root,
+          "commit",
+          "-qm",
+          "Deliver the task workflow\n\nVerify human approval and task acceptance in the browser.\n\nWorkbench-Provisional: true",
+        );
+        workbench(
+          "queue",
+          "implemented",
+          "demo:TSK-ZZ",
+          "--evidence",
+          "Verified the human approval and queue workflow in Chromium.",
+        );
         await page.reload();
-        await page
-          .getByLabel("Verification and outcome", { exact: true })
-          .fill("Verified the human approval and queue workflow in Chromium.");
-        await page.getByRole("button", { name: "Report implemented", exact: true }).click();
         await page
           .getByRole("region", { name: "Outcomes", exact: true })
           .getByRole("link", { name: /Deliver the task workflow/ })
@@ -1201,6 +1206,9 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           .getByRole("region", { name: "Task commits", exact: true })
           .getByRole("link", { name: /Deliver the task workflow/ })
           .click();
+        const commitMessage = page.locator('pre[aria-label="Commit message"]');
+        assert(await commitMessage.isVisible(), "Commit messages are visible without opening a disclosure");
+        assert.match(await commitMessage.innerText(), /Verify human approval and task acceptance in the browser/);
         await page.getByRole("link", { name: "task-delivery.ts", exact: true }).click();
         await page.getByText('export const outcome = "Verified in Chromium";', { exact: true }).waitFor();
         assert.match(await page.locator(".code-difference del").innerText(), /Initial browser result/);
@@ -1238,7 +1246,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.screenshot({ path: join(directory, "task-queue.png"), fullPage: true });
         await page.goto(base + "/records/demo:TSK-ZZ");
         assert.equal(await page.getByRole("link", { name: "Cancel task", exact: true }).count(), 0);
-        const planText = "---\nstatus: Planned\n---\n\n# Disposable browser plan\n",
+        const planText = "---\nstatus: Planned\nadded_at: 2026-11-12T12:39:15.000Z\n---\n\n# Disposable browser plan\n",
           input = join(root, "browser-plan.md");
         writeFileSync(input, planText);
         workbench("task", "plan", "create", "discarded", "--file", input);
@@ -1247,16 +1255,21 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.getByRole("link", { name: "Disposable browser plan", exact: true }).click();
         await page.getByRole("heading", { name: "Disposable browser plan", exact: true }).waitFor();
         assert.deepEqual(await page.locator("main .task-actions").locator("a, button").allTextContents(), [
+          "Approve plan",
           "Delete plan",
           "Cancel plan",
-          "Approve plan",
         ]);
+        assert.equal(await page.getByRole("link", { name: "Delete plan", exact: true }).isVisible(), false);
+        assert.equal(await page.getByRole("link", { name: "Cancel plan", exact: true }).isVisible(), false);
         assert.equal(
           await page
             .getByRole("button", { name: "Approve plan", exact: true })
             .evaluate((button) => button.classList.contains("secondary")),
           false,
         );
+        const added = page.locator(".record-location time");
+        assert.equal(await added.getAttribute("datetime"), "2026-11-12T12:39:15.000Z");
+        assert.doesNotMatch(await added.innerText(), /T12:39:15/);
         const planAddress = page.url(),
           shortHeights = new Map<number, number>();
         for (const profile of ["short", "long"]) {
@@ -1277,18 +1290,23 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await page.getByText("A shared service keeps project activity available", { exact: false }).waitFor();
           }
           await page.goto(base + "/queue");
-          const row = page.locator('[data-task-node="demo:plan/discarded"] > .task-queue-row');
+          const row = page.locator('[data-task-node="demo:plan/discarded"]');
           for (const width of [1440, 390, 320]) {
             await page.setViewportSize({ width, height: 1000 });
-            const height = await alignedControls(row, row.locator(".panel"));
+            assert.equal(await row.getByRole("group").count(), 0, "Unapproved plans have no execution-order controls");
+            const bounds = await row.boundingBox();
+            assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width);
+            const height = bounds.height;
             if (profile === "short") shortHeights.set(width, height);
             else assert(height > (shortHeights.get(width) ?? Infinity), "The fixture exercises a taller pane");
-            await row.screenshot({ path: join(directory, `plan-controls-${profile}-${String(width)}.png`) });
+            await row.screenshot({ path: join(directory, `plan-list-${profile}-${String(width)}.png`) });
           }
           await page.goto(planAddress);
         }
+        await page.getByText("Plan actions", { exact: true }).click();
         await page.getByRole("link", { name: "Cancel plan", exact: true }).click();
         await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+        await page.getByText("Plan actions", { exact: true }).click();
         await page.getByRole("link", { name: "Delete plan", exact: true }).click();
         assert.equal(await page.getByLabel("Reason (optional)").count(), 0);
         assert.equal(await page.getByRole("button", { name: "Approve plan", exact: true }).count(), 0);

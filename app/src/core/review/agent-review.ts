@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { commitVersion } from "./review-units.js";
 import { checkProvisionalPush, retainedProvisionalCommits } from "../git/commit-history.js";
-import { gitBytes, readGitObjects, readGitTree, workingReviewTree, stagedReviewTree } from "../git/git-snapshot.js";
+import { gitBytes, readGitObjects, readGitTree, stagedReviewTree, workingReviewTree } from "../git/git-snapshot.js";
 import { projectsFromData } from "../projects/project-configuration.js";
 import { recordDocument, parseProseRecord } from "../records/record-document.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";

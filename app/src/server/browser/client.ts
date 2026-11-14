@@ -1,3 +1,4 @@
+import { startLocalTimes } from "./date-time-client.js";
 import { startTaskTreeLoading } from "./task-tree-client.js";
 import { BrowserSession, type Browser } from "./browser-session.js";
 import { startFormActions } from "./form-client.js";
@@ -16,7 +17,14 @@ interface DraftState {
   staleDraft: boolean;
 }
 function startPage(browser: Browser, state: { draft?: DraftState }): () => void {
-  if (browser.document.body.hasAttribute("data-project-hub")) return startHubUpdates(browser);
+  const closeTimes = startLocalTimes(browser);
+  if (browser.document.body.hasAttribute("data-project-hub")) {
+    const closeHub = startHubUpdates(browser);
+    return () => {
+      closeHub();
+      closeTimes();
+    };
+  }
   const session = new BrowserSession(browser);
   if (state.draft) {
     Object.assign(session, state.draft);
@@ -38,6 +46,7 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
   return () => {
     state.draft = { dirty: session.dirty, formDraft: session.formDraft, staleDraft: session.staleDraft };
     session.close();
+    closeTimes();
     closeLive();
     sources.close();
     records.close();

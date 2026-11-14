@@ -11,6 +11,7 @@ import { mutationForm } from "./action-forms.js";
 import { tabs, linkButton, diffLayout } from "./render-links.js";
 import { markdown } from "./markdown-view.js";
 import { sourceDiffView } from "./diff-view.js";
+import { addedAtTag } from "./record-content.js";
 import type { ViewContext } from "../workspace/view-context.js";
 
 export function planPage(
@@ -152,6 +153,7 @@ export function planPage(
       <p class="record-location">
         <span class="file-path">{plan.name}</span>
         {badge(plan.status)}
+        {addedAtTag(plan.addedAt)}
         {plan.draft && badge("Draft")}
       </p>
       {plan.implementation && (
@@ -234,36 +236,38 @@ export function planPage(
           </ul>
         </section>
       )}
-      {view !== "edit" && (
-        <div class="task-actions">
-          {!plan.implementation &&
-            linkButton(
-              "Delete plan",
-              routeURL(Route.Plan, { id: plan.reference, view: "delete", scope: plan.scope }),
-              true,
-            )}
-          {!plan.implementation &&
-            !plan.problem &&
-            !plan.conflict &&
-            plan.status !== "Canceled" &&
-            linkButton(
-              "Cancel plan",
-              routeURL(Route.Plan, { id: plan.reference, view: "cancel", scope: plan.scope }),
-              true,
-            )}
-          {!plan.implementation &&
-            !plan.problem &&
-            !plan.conflict &&
-            plan.status !== "Canceled" &&
-            !plan.approval?.current &&
-            mutationForm({
-              action: Route.PlanApprove,
-              context,
-              csrf: context.csrf,
-              fields: { reference: plan.reference, expected: plan.digest },
-              children: () => submitButton(plan.approval ? "Approve revised plan" : "Approve plan"),
-            })}
-        </div>
+      {view !== "edit" && !plan.implementation && (
+        <section aria-label="Plan actions" class="task-workflow">
+          {!plan.problem && !plan.conflict && plan.status !== "Canceled" && !plan.approval?.current && (
+            <div class="task-actions">
+              {mutationForm({
+                action: Route.PlanApprove,
+                context,
+                csrf: context.csrf,
+                fields: { reference: plan.reference, expected: plan.digest },
+                children: () => submitButton(plan.approval ? "Approve revised plan" : "Approve plan"),
+              })}
+            </div>
+          )}
+          <details>
+            <summary>Plan actions</summary>
+            <div class="task-actions">
+              {linkButton(
+                "Delete plan",
+                routeURL(Route.Plan, { id: plan.reference, view: "delete", scope: plan.scope }),
+                true,
+              )}
+              {!plan.problem &&
+                !plan.conflict &&
+                plan.status !== "Canceled" &&
+                linkButton(
+                  "Cancel plan",
+                  routeURL(Route.Plan, { id: plan.reference, view: "cancel", scope: plan.scope }),
+                  true,
+                )}
+            </div>
+          </details>
+        </section>
       )}
     </>,
     { parents: [{ label: "Workflow", href: routeURL(Route.TaskQueue, { scope: plan.scope }) }] },

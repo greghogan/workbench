@@ -24,6 +24,7 @@ export interface BrowserRecord {
   title: string;
   summary: string;
   status: string;
+  addedAt?: string;
   path: string;
   directory: string;
   editable: boolean;
@@ -54,6 +55,7 @@ interface CachedMetadata {
   title: string;
   summary: string;
   status: string;
+  addedAt?: string;
   previewError?: string;
 }
 /** A disposable metadata index; authoritative document bytes remain on disk. */
@@ -131,6 +133,7 @@ export function workspaceRecords(
         title: cached.title,
         summary: cached.summary,
         status: cached.status,
+        ...(cached.addedAt ? { addedAt: cached.addedAt } : {}),
         ...(cached.previewError ? { previewError: cached.previewError } : {}),
       });
       return;
@@ -149,6 +152,7 @@ export function workspaceRecords(
       title: record.title,
       summary: record.summary,
       status: record.status,
+      ...(record.addedAt ? { addedAt: record.addedAt } : {}),
       ...(record.previewError ? { previewError: record.previewError } : {}),
     });
     records.push(record);

@@ -1,7 +1,9 @@
+import { formatTimestamp } from "../../../src/server/presentation/date-time.ts";
 import { parseProseRecord } from "../../../src/core/records/record-document.ts";
 import { git, distribution } from "../../fixtures/adoption.mjs";
 import {
   configurePlanning,
+  approvePlanDraft,
   checkpointPlans,
   savePlanDraft,
 } from "../../../src/core/tasks/planning/planning-operations.ts";
@@ -15,6 +17,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { changeTaskQueue, readTaskQueue } from "../../../src/core/tasks/task-queue.ts";
+import { changeWorkQueue } from "../../../src/core/tasks/planning/plan-transfer.ts";
 import { readTaskDecisions } from "../../../src/core/tasks/task-decisions.ts";
 
 const servers = webServers();
@@ -119,9 +122,9 @@ test("browser decisions bind approval to exact task versions and acceptance to v
   expect(approval.status, await approval.text()).toBe(200);
   expect(readFileSync(path, "utf8")).toContain("status: Approved");
   expect((await postWebForm(web, approve.path, approve.values)).status).toBe(409);
-  const approved = await readWebPage(web, "/records/demo:TSK-0");
-  const add = form(approved.html, 'form[action$="/actions/task-queue"]');
-  expect((await postWebForm(web, add.path, add.values)).status).toBe(200);
+  expect(readTaskQueue(root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
+    ["demo:TSK-0", "Queued"],
+  ]);
   changeTaskQueue(root, { action: "start", reference: "TSK-0" });
   changeTaskQueue(root, { action: "implemented", reference: "TSK-0", detail: "Unit and browser checks passed." });
   const implemented = await readWebPage(web, "/records/demo:TSK-0");
@@ -153,6 +156,19 @@ test("queue view reorders accessibly, rejects stale actions, and observes extern
   const before = readFileSync(join(root, "workbench/tasks/TSK-01.md"), "utf8");
   const page = await readWebPage(web, "/queue");
   const document = parseDOM(page.html).window.document;
+  const queueForm = form(page.html, 'form:has(input[name="operation"][value="remove"])'),
+    snapshot = readTaskQueue(root);
+  for (const operation of ["start", "block", "implemented", "release"])
+    expect(
+      (
+        await postWebForm(web, queueForm.path, {
+          ...queueForm.values,
+          operation,
+          detail: "Browser must not claim agent progress.",
+        })
+      ).status,
+    ).toBe(400);
+  expect(readTaskQueue(root)).toEqual(snapshot);
   expect(document.querySelector('nav[aria-label="Task views"]')).toBeNull();
   const navigation = document.querySelector('nav[aria-label="Main navigation"]');
   expect(navigation?.querySelector('[aria-current="page"] > span:first-child')?.textContent).toBe("Task queue");
@@ -205,23 +221,29 @@ test("queue view reorders accessibly, rejects stale actions, and observes extern
   expect(readFileSync(third, "utf8")).toContain("status: Approved");
 });
 
-test("selecting and removing an unapproved future plan changes order without granting approval or deleting it", async () => {
+test("unapproved plans appear by Added date without execution queue controls or implicit approval", async () => {
   const identity = planIdentity("demo", "service");
-  savePlanDraft(root, identity, "---\nstatus: Planned\n---\n\n# Background service\n\nInstall for the current user.\n");
+  savePlanDraft(
+    root,
+    identity,
+    "---\nstatus: Planned\nadded_at: 2026-01-02T00:00:00.000Z\n---\n\n# Background service\n\nInstall for the current user.\n",
+  );
+  savePlanDraft(
+    root,
+    planIdentity("demo", "earlier"),
+    "---\nstatus: Planned\nadded_at: 2026-01-01T00:00:00.000Z\n---\n\n# Earlier idea\n\nConsider this first.\n",
+  );
   const web = await servers.start(root);
   const page = await readWebPage(web, "/queue"),
-    select = form(page.html, 'form:has(input[name="operation"][value="add"])');
-  expect((await postWebForm(web, select.path, select.values)).status).toBe(200);
-  const selected = await readWebPage(web, "/queue"),
-    document = parseDOM(selected.html).window.document;
+    document = parseDOM(page.html).window.document;
   expect(document.querySelector('[aria-label="Plans"]')?.textContent).toContain("Background service");
+  expect(
+    [...document.querySelectorAll('[aria-label="Plans"] [data-task-node]')].map((node) =>
+      node.getAttribute("data-task-node"),
+    ),
+  ).toEqual(["demo:plan/earlier", identity.reference]);
   expect(document.querySelector('[aria-label="Work"]')?.textContent).not.toContain("Background service");
-  expect(document.querySelector('input[name="operation"][value="start"]')).toBeNull();
-  expect(readPlan(root, identity).approval).toBeUndefined();
-  const remove = form(selected.html, 'form:has(input[name="operation"][value="remove"])');
-  expect((await postWebForm(web, remove.path, { ...remove.values, operation: "start" })).status).toBe(409);
-  expect(readTaskQueue(root).entries).toHaveLength(1);
-  expect((await postWebForm(web, remove.path, remove.values)).status).toBe(200);
+  expect(document.querySelector('[aria-label="Plans"] form')).toBeNull();
   expect(readTaskQueue(root).entries).toEqual([]);
   const plan = readPlan(root, identity);
   expect(plan.document?.metadata.status).toBe("Planned");
@@ -400,6 +422,8 @@ test("named plans remain durable drafts through browser editing, approval diffs,
   expect((await readWebPage(web, "/plan/new")).response.status).toBe(404);
   let saved = readPlan(root, planIdentity("demo", "service"));
   expect(parseProseRecord(saved.contents, "saved plan").body).toBe(parseProseRecord(contents, "input plan").body);
+  const added = saved.document?.metadata.added_at;
+  expect(added).toBeDefined();
   savePlanDraft(
     root,
     planIdentity("demo", "service"),
@@ -414,11 +438,19 @@ test("named plans remain durable drafts through browser editing, approval diffs,
   let viewed = await readWebPage(web, page);
   const decisions = parseDOM(viewed.html).window.document.querySelector(".task-actions");
   expect([...(decisions?.querySelectorAll("a, button") ?? [])].map((control) => control.textContent)).toEqual([
-    "Delete plan",
-    "Cancel plan",
     "Approve plan",
   ]);
+  const secondary = parseDOM(viewed.html).window.document.querySelector('[aria-label="Plan actions"] details');
+  expect(secondary?.hasAttribute("open")).toBe(false);
+  expect(secondary?.querySelector("summary")?.textContent).toBe("Plan actions");
+  expect([...(secondary?.querySelectorAll("a") ?? [])].map((control) => control.textContent)).toEqual([
+    "Delete plan",
+    "Cancel plan",
+  ]);
   expect(decisions?.querySelector("button")?.classList.contains("secondary")).toBe(false);
+  const addedTag = parseDOM(viewed.html).window.document.querySelector(".record-location time");
+  expect(addedTag?.getAttribute("datetime")).toBe(added);
+  expect(addedTag?.textContent).toBe(formatTimestamp(String(added)));
   let approve = form(viewed.html, 'form[action$="/actions/plan-approve"]');
   for (const retired of ["/actions/plan-create", "/actions/plan-checkpoint"])
     expect((await postWebForm(web, retired, approve.values)).status).toBe(404);
@@ -428,11 +460,6 @@ test("named plans remain durable drafts through browser editing, approval diffs,
   let queue = parseDOM((await readWebPage(web, "/queue")).html).window.document;
   expect(queue.querySelector('[aria-label="Plans"]')?.textContent).not.toContain("Background service");
   expect(queue.querySelector('[aria-label="Work"]')?.textContent).toContain("Background service");
-  const add = form(
-    (await readWebPage(web, "/queue")).html,
-    'form[action$="/actions/task-queue"]:has(input[name="reference"][value="demo:plan/service"])',
-  );
-  expect((await postWebForm(web, add.path, add.values)).status).toBe(200);
   expect(readTaskQueue(root).entries[0]?.reference).toBe("demo:plan/service");
   viewed = await readWebPage(web, page + "?view=edit");
   const edit = form(viewed.html, 'form[action$="/actions/plan-save"]');
@@ -459,9 +486,7 @@ test("named plans remain durable drafts through browser editing, approval diffs,
     '.document a[href*="requirements.md"]',
   );
   expect(supportingLink?.getAttribute("href")).toContain("/files?path=requirements.md");
-  const queuePage = (await readWebPage(web, "/queue")).html,
-    start = form(queuePage, 'form[action$="/actions/task-queue"]:has(input[name="operation"][value="start"])');
-  expect((await postWebForm(web, start.path, start.values)).status).toBe(200);
+  await changeWorkQueue(root, { action: "start", reference: "demo:plan/background" });
   expect(readTaskQueue(root).entries[0]?.reference).toBe("demo:TSK-0");
   expect(readFileSync(join(root, "workbench/tasks/TSK-00/requirements.md"), "utf8")).toContain("Preserve user data");
   const implemented = parseDOM((await readWebPage(web, "/records/demo:TSK-0")).html).window.document;
@@ -475,13 +500,17 @@ test("named plans remain durable drafts through browser editing, approval diffs,
   expect(git(root, "rev-parse", "HEAD")).toBe(initial);
 });
 
-test("workflow continuation includes named plans in local order and rejects stale cursors", async () => {
+test("workflow continuation preserves named-plan date order and rejects stale cursors", async () => {
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   configurePlanning(root, { branch: "future", auto_prune: true });
   const identities = Array.from({ length: 82 }, (_, index) =>
       planIdentity("demo", "plan-" + String(index).padStart(3, "0")),
     ),
-    contents = identities.map((_, index) => Buffer.from(`---\nstatus: Planned\n---\n\n# Plan ${String(index)}\n`)),
+    contents = identities.map((_, index) =>
+      Buffer.from(
+        `---\nstatus: Planned\nadded_at: ${new Date(Date.UTC(2026, 0, 1, 0, 0, 81 - index)).toISOString()}\n---\n\n# Plan ${String(index)}\n`,
+      ),
+    ),
     objects = writeReviewBlobs(root, [
       ...contents,
       Buffer.from(JSON.stringify({ schema_version: workspaceSchemaVersion, scopes: [{ id: "demo", path: "." }] })),
@@ -498,7 +527,6 @@ test("workflow continuation includes named plans in local order and rejects stal
     ]),
     tip = git(root, "commit-tree", tree, "-m", "Plan fixture");
   gitBytes(root, ["update-ref", "refs/heads/future", tip]);
-  changeTaskQueue(root, { action: "add", references: ["demo:plan/plan-081", "demo:plan/plan-000"] });
   const web = await servers.start(root),
     page = parseDOM((await readWebPage(web, "/queue")).html).window.document;
   const plans = page.querySelector('[data-task-window="workflow-plans"]');
@@ -527,6 +555,8 @@ test("browser cancellation retains its reason and deletion remains a durable dra
   const identity = planIdentity("demo", "discarded");
   savePlanDraft(root, identity, "---\nstatus: Planned\n---\n\n# An optional idea\n\nKeep the design available.\n");
   checkpointPlans(root);
+  approvePlanDraft(root, identity, readPlan(root, identity).digest, true);
+  expect(readTaskQueue(root).entries.map((entry) => entry.reference)).toEqual([identity.reference]);
   const web = await servers.start(root),
     url = "/plans/demo:plan%2Fdiscarded";
   let page = await readWebPage(web, url);
@@ -544,6 +574,7 @@ test("browser cancellation retains its reason and deletion remains a durable dra
     (await postWebForm(web, cancel.path, { ...cancel.values, reason: "The idea is no longer needed." })).status,
   ).toBe(200);
   expect(readPlan(root, identity).contents).toContain("The idea is no longer needed.");
+  expect(readTaskQueue(root).entries).toEqual([]);
   page = await readWebPage(web, url + "?view=delete");
   expect(parseDOM(page.html).window.document.querySelector('textarea[name="reason"]')).toBeNull();
   expect(parseDOM(page.html).window.document.querySelector('form[action$="/actions/plan-approve"]')).toBeNull();
@@ -581,7 +612,7 @@ test("browser reversion previews the affected work and stages an outcome requiri
     web = await servers.start(root),
     record = parseDOM((await readWebPage(web, "/records/demo:TSK-0")).html).window.document,
     link = [...record.querySelectorAll<HTMLAnchorElement>("a")]
-      .find((candidate) => candidate.textContent === "Revert work…")
+      .find((candidate) => candidate.textContent === "Revert work")
       ?.getAttribute("href");
   if (!link) throw new Error("Reversion is not discoverable from the task");
   const reasonForm = form((await readWebPage(web, link)).html, 'form[method="get"]:has(textarea[name="reason"])'),
