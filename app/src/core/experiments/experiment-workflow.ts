@@ -1,3 +1,4 @@
+import { readProjectRecordFile, projectArchive } from "../records/archive-store.js";
 import { relative } from "node:path";
 import { parseDocument } from "yaml";
 import {
@@ -8,12 +9,11 @@ import {
 } from "../records/record-document.js";
 import { parseReference } from "../records/record-files.js";
 import { selectProject } from "../projects/project-configuration.js";
-import { readBoundedFile } from "../runtime/file-reads.js";
 import { taskDigest } from "../tasks/task-model.js";
 import { ProjectEdits } from "../projects/project-edits.js";
 import { withTaskLock, readTaskQueue, publishTaskTransition } from "../tasks/task-queue.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
-import { section, requiredExperimentProtocol } from "../records/records.js";
+import { section, requiredExperimentProtocol } from "../records/record-content.js";
 
 export const experimentResults = ["Accepted", "Rejected", "Inconclusive"] as const;
 export type ExperimentResult = (typeof experimentResults)[number];
@@ -32,10 +32,11 @@ export function experimentReference(root: string, value: string, project?: strin
 export function readExperiment(root: string, value: string, project?: string) {
   const reference = experimentReference(root, value, project),
     parsed = parseReference(root, reference);
-  const contents = readBoundedFile(parsed.path, 2 * 1024 * 1024, "experiment record").toString("utf8");
+  const contents = readProjectRecordFile(root, parsed.path).toString("utf8");
   return {
     reference,
     path: parsed.path,
+    archived: projectArchive(root)?.files.has(relative(root, parsed.path).replaceAll("\\", "/")) === true,
     contents,
     digest: taskDigest(contents),
     ...recordDocument("EXP", contents, parsed.path),
@@ -50,6 +51,7 @@ export function changeExperimentStatus(root: string, value: string, status: Expe
   withTaskLock(root, () => {
     if (!experimentStatuses.includes(status)) throw new InvalidInput("Unknown experiment transition");
     const experiment = readExperiment(root, value);
+    if (experiment.archived) throw new InvalidInput("Restore archived records before changing their workflow state");
     if (expected !== undefined && expected !== experiment.digest)
       throw new StateConflict("Experiment changed; refresh its current contents");
     if (experimentIsResult(status) && experiment.metadata.status !== "Running")

@@ -15,6 +15,11 @@ contents and supporting material, retain the correspondence between old and new 
 without silently changing policy meaning or review requirements. Adopted records may be removed through collection
 updates with explicit human approval of the reconciliation.
 
+Projects may archive completed task and experiment records through verified transfers that preserve their contents,
+identities, supporting material, and access. Other record types remain live. Archived records remain part of the
+project's logical inventory, and each branch retains the archive version it uses. Unavailable archive storage must not
+be treated as missing records.
+
 Store records under each scope's `workbench/<record-type>/`. Pad the base-36 ID to an even number of digits. Use every
 pair except the final pair as nested directories, and the entire padded ID in `<TYPE-CODE>-<padded-id>.<extension>`.
 Omit leading `00` directory levels; preserve interior `00` pairs. For example:

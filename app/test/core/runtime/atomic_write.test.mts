@@ -318,3 +318,20 @@ test("checked batches report completed members and preserve a later concurrent e
   expect(readFileSync(second, "utf8")).toBe("concurrent edit");
   expect(readdirSync(root).sort()).toEqual(["record.md", "second.md"]);
 });
+
+test("streamed candidates remain invisible until complete and discard partial writes on failure", () => {
+  const { root, path } = fixture();
+  expect(() => {
+    writeAtomic(path, (descriptor) => {
+      writeFileSync(descriptor, "partial");
+      expect(readFileSync(path, "utf8")).toBe("original\n");
+      throw new Error("source interrupted");
+    });
+  }).toThrow("source interrupted");
+  expect(readFileSync(path, "utf8")).toBe("original\n");
+  expect(readdirSync(root)).toEqual(["record.md"]);
+  writeAtomic(path, (descriptor) => {
+    writeFileSync(descriptor, "complete\n");
+  });
+  expect(readFileSync(path, "utf8")).toBe("complete\n");
+});

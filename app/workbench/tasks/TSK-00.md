@@ -96,11 +96,11 @@ semantic review or grant human approval.
 ### Delivery checklist
 
 - [x] Establish shared integration-target configuration and Git-backed archived-record access.
-- [ ] Implement the archive CLI's resumable enable, transfer, recovery, and restore workflows.
+- [x] Implement the archive CLI's resumable enable, transfer, recovery, and restore workflows.
 - [ ] Integrate archived history, search, references, and supporting files into CLI, agent context, and browser views.
 - [ ] Add archive-aware CLI rebase/integration operations and update the supplied rebase skill to use them.
 
-### Implementation account
+## Implementation account
 
 The configured integration branch owns archival. Each checkout reads its recorded archive revision, so later transfers
 cannot change the records it sees. The combined inventory detects conflicting live copies and preserves record identity,
@@ -108,6 +108,11 @@ allocation state, contents, and file modes. Hooks check a prepared source snapsh
 
 Real repositories exercised independent archive history, missing objects, and access to older pins after Git garbage
 collection. Large archives remain readable when they exceed the metadata cache budget.
+
+Archive and restore operations can resume safely after interruption. Both record stores are verified, unrelated changes
+stay intact, and recovery references protect prepared commits until both phases finish. Archive-only checkouts keep
+their publication guards, including after archival is disabled. Verified storage-only transfers preserve existing review
+evidence. Tests exercised intervening edits, restricted clones, and large supporting files.
 
 ## Implementing-agent detail
 

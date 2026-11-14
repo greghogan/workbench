@@ -1,3 +1,4 @@
+import { validateBranch } from "./refs.js";
 import { spawnSync } from "node:child_process";
 import { InvalidInput } from "../runtime/input-errors.js";
 import { readConfig } from "../projects/project-configuration.js";
@@ -8,15 +9,8 @@ export interface IntegrationTarget {
   remote?: string;
 }
 
-export function validateBranch(root: string, branch: string): void {
-  const result = spawnSync("git", ["-C", root, "check-ref-format", "refs/heads/" + branch], { encoding: "utf8" });
-  if (result.error || result.status !== 0 || branch === "HEAD")
-    throw new InvalidInput(`Invalid branch name: ${branch}`);
-}
-
 /** Discovery is a proposal; callers persist it before depending on it. */
-export function integrationTarget(root: string): IntegrationTarget {
-  const configured = readConfig(root).integration;
+export function integrationTarget(root: string, configured = readConfig(root).integration): IntegrationTarget {
   const remotes = gitBytes(root, ["remote"]).toString().trim().split("\n").filter(Boolean);
   if (configured?.remote && !remotes.includes(configured.remote))
     throw new InvalidInput(`Integration remote not found: ${configured.remote}`);

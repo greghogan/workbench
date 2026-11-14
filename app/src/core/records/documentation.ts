@@ -1,8 +1,7 @@
+import { projectRecordFileExists, readProjectRecordFile } from "./archive-store.js";
 import { required } from "../runtime/invariants.js";
-import { existsSync, lstatSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
-import { readText } from "../runtime/files.js";
 import { rootOf } from "../projects/project-context.js";
 import { splitFrontmatter } from "./record-document.js";
 import { decisionScopes } from "./decisions.js";
@@ -59,7 +58,7 @@ function linkErrors(root: string, markdownFiles: string[]): string[] {
   );
   const cache = new Map<string, Set<string>>();
   for (const source of markdownFiles) {
-    const contents = readText(source);
+    const contents = readProjectRecordFile(root, source).toString();
     for (const target of markdownLinks(contents)) {
       if (!target || target.includes("://") || /^(mailto|data):/.test(target)) continue;
       const [pathText, fragment] = target.split("#", 2);
@@ -84,12 +83,12 @@ function linkErrors(root: string, markdownFiles: string[]): string[] {
           continue;
         }
       }
-      if (!existsSync(candidate) || !lstatSync(candidate).isFile()) {
+      if (!projectRecordFileExists(root, candidate)) {
         errors.push(`${label}: missing link target '${target}'`);
         continue;
       }
       if (fragment && extname(candidate).toLowerCase() === ".md") {
-        if (!cache.has(candidate)) cache.set(candidate, anchors(readText(candidate)));
+        if (!cache.has(candidate)) cache.set(candidate, anchors(readProjectRecordFile(root, candidate).toString()));
         if (!required(cache.get(candidate), "expected cache.get(candidate)").has(anchor ?? "")) {
           errors.push(`${label}: missing Markdown anchor '${target}'`);
         }

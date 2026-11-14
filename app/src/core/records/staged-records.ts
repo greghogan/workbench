@@ -1,5 +1,6 @@
 import { projectPaths } from "../projects/project-paths.js";
 import { GitSnapshot, type GitEntry } from "../git/git-snapshot.js";
+import { logicalRecordEntries } from "./archive-store.js";
 import { parse } from "smol-toml";
 import { detail, kinds, relativeRecordPath, type Kind } from "./record-identity.js";
 import { projectsFromData } from "../projects/project-configuration.js";
@@ -20,7 +21,7 @@ export class RecordTree {
     private readonly snapshot = new GitSnapshot(root),
   ) {
     if (tree !== undefined && tree !== snapshot.head) throw new Error("record tree must belong to its Git snapshot");
-    for (const [path, entry] of tree === undefined ? snapshot.staged : snapshot.committed)
+    for (const [path, entry] of logicalRecordEntries(root, tree === undefined ? snapshot.staged : snapshot.committed))
       this.entries.set(path, entry);
     const registry = this.text(projectPaths.projects);
     this.scopes =

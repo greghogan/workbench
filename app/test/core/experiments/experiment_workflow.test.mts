@@ -6,7 +6,7 @@ import { git } from "../../fixtures/adoption.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { changeExperimentStatus, readExperiment } from "../../../src/core/experiments/experiment-workflow.ts";
 import { readTaskQueue } from "../../../src/core/tasks/task-queue.ts";
-import { requiredExperimentProtocol } from "../../../src/core/records/records.ts";
+import { requiredExperimentProtocol } from "../../../src/core/records/record-content.ts";
 import { reviewStatus, ReviewSource } from "../../../src/core/review/review-service.ts";
 import { checkReview } from "../../../src/core/review/review-check.js";
 import { syncMaps } from "../../../src/core/records/maps.ts";

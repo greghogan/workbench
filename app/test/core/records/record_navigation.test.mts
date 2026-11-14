@@ -8,7 +8,7 @@ import { renderAgentContext } from "../../../src/core/records/agents.ts";
 import { readDecision } from "../../../src/core/records/decision-record.ts";
 import { decisionScopes } from "../../../src/core/records/decisions.ts";
 import { documentationErrors } from "../../../src/core/records/documentation.ts";
-import { section } from "../../../src/core/records/records.ts";
+import { section } from "../../../src/core/records/record-content.ts";
 
 const roots: string[] = [];
 afterEach(() => {

@@ -1,10 +1,13 @@
+import { logicalRecordEntries } from "../records/archive-store.js";
+import { relativeRecordPath, normalizedNumber } from "../records/record-identity.js";
+import { storageReviewContext } from "../records/archive-transfer-proof.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { checkProvisionalPush } from "../git/commit-history.js";
-import { gitBytes, readGitObjects, workingReviewTree, stagedReviewTree } from "../git/git-snapshot.js";
+import { gitBytes, readGitObjects, readGitTree, workingReviewTree, stagedReviewTree } from "../git/git-snapshot.js";
 import { projectsFromData } from "../projects/project-configuration.js";
 import { recordDocument } from "../records/record-document.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
@@ -275,25 +278,31 @@ interface SnapshotTask {
   digest: string;
 }
 export function treeTasks(root: string, tree: string): Map<string, SnapshotTask> {
-  const paths = gitBytes(root, ["ls-tree", "-rz", "--name-only", tree]).toString().split("\0").filter(Boolean);
+  const entries = logicalRecordEntries(root, readGitTree(root, tree));
+  const paths = [...entries.keys()];
   if (!paths.includes(projectPaths.projects)) return new Map();
   const projects = projectsFromData(
     parseToml(git(root, ["show", `${tree}:${projectPaths.projects}`])),
     projectPaths.projects,
   );
-  const taskPaths = paths.filter((path) => /(?:^|\/)workbench\/tasks\/TSK-[0-9A-Z]+\.md$/.test(path));
+  const taskPaths = paths.filter((path) => /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(path));
   const blobs = readGitObjects(
     root,
-    taskPaths.map((path) => `${tree}:${path}`),
+    taskPaths.map((path) => entries.get(path)?.oid ?? ""),
   );
   const result = new Map<string, SnapshotTask>();
   for (const project of projects) {
-    const prefix = `${project.path === "." ? "" : project.path + "/"}workbench/tasks/`;
     for (const path of taskPaths) {
-      if (!path.startsWith(prefix) || !/^TSK-[0-9A-Z]+\.md$/.test(path.slice(prefix.length))) continue;
-      const contents = blobs.get(`${tree}:${path}`)?.toString();
+      const digits = /TSK-([0-9A-Z]+)\.md$/.exec(path)?.[1];
+      if (
+        !digits ||
+        `${project.path === "." ? "" : project.path + "/"}workbench/${relativeRecordPath("TSK", digits).replaceAll("\\", "/")}` !==
+          path
+      )
+        continue;
+      const contents = blobs.get(entries.get(path)?.oid ?? "")?.toString();
       if (contents === undefined) throw new InvalidInput(`Missing task: ${path}`);
-      const number = path.slice(prefix.length + 4, -3).replace(/^0+(?=.)/, "");
+      const number = normalizedNumber(digits);
       result.set(`${project.id}:TSK-${number}`, {
         path,
         status: recordDocument("TSK", contents, path).metadata.status,
@@ -329,6 +338,7 @@ function checkTaskDecisions(
   publishing: boolean,
   associated: string[] = [],
   baseline?: string,
+  commit?: string,
 ): void {
   const previous = baseline ? treeTasks(root, baseline) : new Map<string, SnapshotTask>();
   const tasks = treeTasks(root, tree),
@@ -363,7 +373,11 @@ function checkTaskDecisions(
             decision.reference === reference &&
             decision.status === "Accepted" &&
             decision.digest === task.digest &&
-            (!publishing || decision.tree === tree),
+            (!publishing ||
+              decision.tree === tree ||
+              (decision.tree !== undefined &&
+                commit !== undefined &&
+                storageReviewContext(root, decision.tree, commit))),
         )
       )
         throw new InvalidInput(
@@ -452,5 +466,5 @@ export function checkAgentPush(root: string, tip: string, remote: string): void 
       "Accumulated work review is required for the outgoing snapshot. Record 'workbench review task --base <remote-or-start-revision> --record' after reviewing the combined work; task records are optional.",
     );
   for (const receipt of taskReviews) for (const task of receipt.tasks) associated.add(task);
-  if (policy.task_approvals) checkTaskDecisions(root, tree, true, [...associated], base);
+  if (policy.task_approvals) checkTaskDecisions(root, tree, true, [...associated], base, tip);
 }

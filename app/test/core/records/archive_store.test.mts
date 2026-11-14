@@ -73,7 +73,7 @@ test("pinned orphan archives preserve bytes and modes through later tips, disabl
 
 test("one inventory deduplicates identical copies but refuses different content or executable modes", () => {
   const root = repository(),
-    body = "# TSK-0: Existing\n";
+    body = "---\nstatus: Accepted\n---\n\n# TSK-0: Existing\n";
   const revision = archive(root, { [task]: { body } });
   updateProjectState(root, (state) => {
     state.archive = { revision };
@@ -117,12 +117,13 @@ test.each([
 test("archive updates and record allocation preserve each other's fields and comments", () => {
   const root = repository();
   writeFileSync(join(root, "workbench/state.toml"), '# Keep this\n[next]\nTSK="A"\n');
+  const revision = archive(root, { [task]: { body: "---\nstatus: Accepted\n---\n\n# TSK-0: Completed\n" } });
   updateProjectState(root, (state) => {
-    state.archive = { revision: "a".repeat(40) };
+    state.archive = { revision };
   });
   expect(reserveRecordNumber(root, "TSK")).toBe("A");
   const state = parse(readFileSync(join(root, "workbench/state.toml"), "utf8"));
-  expect(state.archive).toEqual({ revision: "a".repeat(40) });
+  expect(state.archive).toEqual({ revision });
   expect(state.next).toMatchObject({ TSK: "B" });
   expect(readFileSync(join(root, "workbench/state.toml"), "utf8")).toContain("# Keep this");
 });
