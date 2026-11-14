@@ -108,6 +108,32 @@ test("change receipts bind the complete staged tree while preserving unstaged wo
   }).toThrow(/Review contents changed/);
 });
 
+test("reviewing retained history preserves current staged and working review evidence", () => {
+  const f = fixture();
+  writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
+  f.git(["add", "source.ts"]);
+  f.review();
+  writeFileSync(join(f.root, "source.ts"), "export const value=3;\n");
+  const working = proposedAgentReview(f.root, AgentReviewKind.Changes);
+  recordAgentReview(
+    f.root,
+    { ...working, summary: "Reviewed current working changes", verification: "Fixture assertions" },
+    reviewIdentity(working),
+  );
+  const historical = proposedAgentReview(f.root, AgentReviewKind.Task, { commit: f.base, base: f.base });
+  recordAgentReview(
+    f.root,
+    { ...historical, summary: "Reviewed retained history", verification: "Fixture assertions" },
+    reviewIdentity(historical),
+    false,
+    f.base,
+  );
+  checkAgentCommit(f.root);
+  checkAgentCommit(f.root, workingReviewTree(f.root));
+  expect(f.git(["show", ":source.ts"])).toBe("export const value=2;");
+  expect(readFileSync(join(f.root, "source.ts"), "utf8")).toBe("export const value=3;\n");
+});
+
 test("snapshot gates allow experiment execution and refinement without a protocol approval receipt", () => {
   const f = fixture(),
     path = join(f.root, "workbench/experiments/EXP-00.md");
@@ -268,10 +294,60 @@ test("human task decisions gate publication while allowing implementation commit
   f.git(["add", "."]);
   f.review();
   f.review(AgentReviewKind.Task, { base: f.base });
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "unrelated later work"]);
+  checkAgentPush(f.root, "HEAD", f.base);
+  writeFileSync(
+    path,
+    readFileSync(path, "utf8") + "\n## Implementation account\n\nFurther changes to the delivered outcome.\n",
+  );
+  f.git(["add", "."]);
+  f.review();
+  f.review(AgentReviewKind.Task, { base: f.base });
   f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "changed outcome"]);
   expect(() => {
     checkAgentPush(f.root, "HEAD", f.base);
   }).toThrow(/acceptance does not cover/);
+});
+
+test("a squash preserves reviewed outcomes and requires fresh agent review of the replacement tree", () => {
+  const f = fixture(),
+    path = "workbench/tasks/TSK-00.md",
+    sidecar = "workbench/tasks/TSK-00/results.txt";
+  mkdirSync(join(f.root, "workbench/tasks/TSK-00"));
+  writeFileSync(join(f.root, sidecar), "Observed the expected result.\n");
+  writeFileSync(join(f.root, path), "---\nstatus: Planned\n---\n\n# TSK-0: Verify the result\n");
+  changeTaskStatus(f.root, "TSK-0", "Approved", undefined, true);
+  changeTaskQueue(f.root, { action: "start", reference: "TSK-0" });
+  changeTaskQueue(f.root, { action: "implemented", reference: "TSK-0", detail: "Verified behavior." });
+  changeTaskStatus(f.root, "TSK-0", "Accepted", undefined, true);
+  f.git(["add", "."]);
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "Accepted result"]);
+  const tree = f.git(["rev-parse", "HEAD^{tree}"]);
+  f.review(AgentReviewKind.Task, { base: f.base });
+  checkAgentPush(f.root, "HEAD", f.base);
+
+  writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
+  f.git(["add", "source.ts"]);
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "--amend", "--no-edit"]);
+  expect(f.git(["log", "--format=%T"]).split("\n")).not.toContain(tree);
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/Accumulated work review is required/);
+  f.review(AgentReviewKind.Task, { base: f.base });
+  checkAgentPush(f.root, "HEAD", f.base);
+  expect(readTaskDecisions(f.root).find((decision) => decision.status === "Accepted")?.tree).toBe(tree);
+
+  // Supporting material is part of the human decision even when the Markdown record is unchanged.
+  f.git(["update-index", "--chmod=+x", sidecar]);
+  f.review();
+  expect(() => {
+    checkAgentCommit(f.root);
+  }).toThrow(/acceptance does not cover.*supporting files/);
+  f.review(AgentReviewKind.Task, { base: f.base });
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "--amend", "--no-edit"]);
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/acceptance does not cover.*supporting files/);
 });
 
 test("delegated work can use uncommitted project approval without inheriting execution state or accepting other source", () => {
@@ -315,11 +391,16 @@ test("delegated work can use uncommitted project approval without inheriting exe
 
   changeTaskQueue(f.root, { action: "implemented", reference: "TSK-0", detail: "Verified the parent checkout" });
   changeTaskStatus(f.root, "TSK-0", "Accepted", undefined, true);
-  writeFileSync(join(checkout, task), readFileSync(join(f.root, task)));
+  writeFileSync(
+    join(checkout, task),
+    readFileSync(join(f.root, task), "utf8") + "\n## Implementation account\n\nDelivered a different result.\n",
+  );
   syncMaps(checkout);
   command(["add", "."]);
   review();
-  checkAgentCommit(checkout);
+  expect(() => {
+    checkAgentCommit(checkout);
+  }).toThrow(/acceptance does not cover/);
   command(["-c", "core.hooksPath=/dev/null", "commit", "-m", "delegated implementation"]);
   review(AgentReviewKind.Task);
   expect(() => {
@@ -329,7 +410,7 @@ test("delegated work can use uncommitted project approval without inheriting exe
   checkAgentPush(checkout, "HEAD", baseline);
   expect(existsSync(taskQueuePath(checkout))).toBe(false);
 
-  // Accepting delegated work must not erase the earlier acceptance of the parent's distinct source snapshot.
+  // Accepting the delegated outcome preserves the parent's previously accepted version.
   f.git(["add", "."]);
   f.review();
   checkAgentCommit(f.root);

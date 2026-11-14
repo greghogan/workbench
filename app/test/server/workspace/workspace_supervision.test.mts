@@ -135,6 +135,34 @@ test("concurrent readers share one refresh and fresh callers share one follow-up
   }
 });
 
+test("mutation reconciliation waits past an older capture before publishing the changed workspace", async () => {
+  const snapshot = new WorkspaceCollector(fixtures.project()).collect(),
+    worker = new ControlledWorker();
+  const monitor = new WorkspaceMonitor(snapshot.root, 100000, undefined, () => worker as unknown as Worker);
+  try {
+    const ready = monitor.ready();
+    worker.emit("message", { ok: true, snapshot });
+    await ready;
+    const reading = monitor.reconcile(),
+      changed = monitor.reconcileAfterChange();
+    const requested = new Promise<void>((resolve) => {
+      worker.postMessage.mockImplementationOnce(() => {
+        resolve();
+      });
+    });
+    worker.emit("message", { ok: true, snapshot });
+    await reading;
+    await requested;
+    expect(monitor.index?.snapshot.revision).toBe(snapshot.revision);
+    worker.emit("message", { ok: true, snapshot: { ...snapshot, revision: "changed-after-approval" } });
+    await changed;
+    expect(monitor.index?.snapshot.revision).toBe("changed-after-approval");
+    expect(worker.postMessage).toHaveBeenLastCalledWith(WorkspaceRequest.Refresh);
+  } finally {
+    await monitor.close();
+  }
+});
+
 test("a mutation during a queued fresh scan receives a further fresh boundary", async () => {
   const snapshot = new WorkspaceCollector(fixtures.project()).collect(),
     worker = new ControlledWorker();

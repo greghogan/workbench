@@ -268,14 +268,15 @@ The queue persists under the native Workbench state directory, is never committe
 commands coordinate work; they do not launch agents or commit, squash, or push changes. Publication restrictions are
 workflow policy rather than an automatic inference of task ownership from arbitrary commits. Dependencies can be
 accepted shared tasks or locally verified implementations in the selected batch. Parent acceptance waits for accepted or
-canceled children. Publish implementation only after human acceptance; shared planning records may be published sooner.
+canceled children. Publish implementation only after human acceptance; the exact configured planning destination may
+receive planning-only history.
 
 Human task confirmations live in a project decision store, separately from execution queues. Delegated agents can use
 the recorded approval of their plan without copying queue entries or obtaining approval again. Related local checkouts
 share decisions through repository identity; approval lookup does not require a particular branch or ancestry. Projects
 without Git retain decisions by project directory. Unrelated projects do not share confirmations merely because their
-task IDs match. Outcome acceptance remains bound to the delivered source snapshot; confirmations of distinct snapshots
-are retained independently.
+task IDs match. Outcome acceptance covers the task record and its supporting files. Distinct versions retain their own
+confirmations, which remain valid when Git history is rewritten with the same reviewed material.
 
 Linked Git worktrees keep separate queue order, claims, and local progress. Recording an implementation also retains
 repository-wide evidence bound to the task plan and complete Git-normalized source snapshot. Another worktree
@@ -532,9 +533,9 @@ choose which requirements to enable. Existing protected-record human review rema
 
 `workbench review` presents current protected records, including unstaged and new records, independently of Git staging.
 It acknowledges the captured versions even when files change during confirmation; additional edits remain pending.
-Subsequent review compares against the last acknowledgment made since the last non-provisional commit, or that commit
-itself for previously accepted records. Provisional commits preserve pending review. Staging later requires no repeated
-human review when those exact contents have already been acknowledged.
+Subsequent edits within a review unit compare against its last acknowledgment, or its parent commit. Provisional commits
+preserve pending review. Staging later requires no repeated human review when those exact contents have already been
+acknowledged.
 
 Review automatically prepares canonical record formatting, including paragraph reflow, before presenting the contents.
 Both interfaces save formatting before presenting the file. Confirmation acknowledges the retained version shown; later
@@ -569,10 +570,11 @@ branch work also retires its pending associations. Human file acknowledgments an
 
 With human task decisions enabled, task approval and acceptance require confirmation through the interactive task CLI or
 task page. Local implementation commits may precede acceptance. Acceptance captures the current project files through a
-private Git index and preserves the real index. Publishing associated implementation requires Accepted task records and
-decisions covering the final project snapshot. Further changes require renewed acceptance. Planning records can be
-published before implementation approval. Review receipts attest the reviewer's assessment; they do not authenticate a
-human identity or prove review quality.
+private Git index and preserves the real index. The acceptance applies to the exact task record and supporting files.
+An unchanged outcome remains accepted across commits, squashes, and rebases. Update the task record when the delivered
+outcome changes so the new version receives human acceptance. Agent review still covers the outgoing project snapshot.
+Planning records can be published before implementation approval. Review receipts attest the reviewer's assessment;
+they do not authenticate a human identity or prove review quality.
 
 ## Archived-record storage
 
@@ -636,3 +638,27 @@ matching `--status` to inspect recovery state or `--abort` to return to the orig
 available when conflicted project configuration cannot be parsed. An abort after Git has completed requires a clean
 checkout and retains the abandoned result for recovery. Do not start another Git operation while one is awaiting
 recovery. Successful integration does not replace semantic review, configured checks, or human approval.
+
+### Review retained commits
+
+`workbench commit reviews` lists provisional review units in parent order. Review a unit with
+`workbench review --commit REVISION`, or open it from the browser review queue. Each unit compares immutable contents
+against its own parent. Current files are a separate unit. A later review does not approve an earlier intermediate
+version; amendments that change a reviewed version require another acknowledgment.
+
+Agents inspect a retained unit with `workbench review changes --commit REVISION`. After reviewing it and verifying its
+source snapshot, record its printed digest with `--record --expected DIGEST --summary TEXT --verification TEXT`. Rebased
+units reuse document acknowledgments when both sides of the comparison remain the same. Changed project trees require
+renewed agent review and verification.
+
+`workbench commit finalize` previews pending decisions and a finalization digest. After arranging commit boundaries and
+completing human review, task acceptance, and agent reviews, use `workbench commit finalize --apply --expected DIGEST`.
+It preserves source trees and author metadata, removes provisional markers in parent order, and leaves unrelated index
+and working changes intact. Original and prepared histories remain behind the reported recovery references.
+`workbench commit finalize --recover` resumes an interrupted activation. Published checkpoints and active Git operations
+block finalization; no command here pushes a branch.
+
+Fold accepted task-state changes into their owning delivery before finalizing, rather than adding approval-only commits.
+For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that
+revision in a disposable checkout. Integration preserves accepted comparison authority without inventing private review
+receipts.

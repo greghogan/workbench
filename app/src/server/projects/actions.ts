@@ -1,3 +1,4 @@
+import { committedReview } from "../../core/review/review-units.js";
 import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
 import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
 import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
@@ -188,6 +189,17 @@ export class WebActions {
           form.get("digest") ?? "",
           form.get("review_layout") === "split" ? "split" : "unified",
         );
+        const commit = form.get("review_commit");
+        if (
+          commit &&
+          !committedReview(this.root, commit).changes.some(
+            (change) =>
+              change.path === presented.version.change.path &&
+              change.after === presented.version.change.after &&
+              change.before === presented.version.change.before,
+          )
+        )
+          throw new StateConflict("The selected commit does not contain this reviewed version");
         await this.operation("review", () =>
           this.reviewRunner({
             root: this.root,
@@ -197,6 +209,7 @@ export class WebActions {
             humanWritten: form.get("human_written") === "yes",
           }),
         );
+        if (commit) return result(routeURL(Route.History, { commit }));
         return result(Route.Review);
       }
       case Route.Preview: {

@@ -1,3 +1,4 @@
+import { allCommitReviews, reviewRecordCount } from "../../core/review/review-units.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
 import { existsSync, lstatSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -80,7 +81,7 @@ export class ReviewInventory {
         const path = resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", ref]).trim());
         paths.set(path, inputStamp(path));
       }
-      this.git = { snapshot: new GitSnapshot(this.root, { staged: false, review: true }), inputs: paths };
+      this.git = { snapshot: new GitSnapshot(this.root, { staged: false }), inputs: paths };
     }
     for (const [path, stamp] of this.git.inputs) inputs.set(path, stamp);
     const scopes = readProjects(this.root).map((project) => project.path);
@@ -171,6 +172,16 @@ export class ReviewInventory {
     }
     if (![...inputs].every(([path, stamp]) => inputStamp(path) === stamp))
       throw new Error("Review inputs changed during acquisition; retrying");
-    return { count: pending.size + Number(compatibility), inputs };
+    return {
+      count:
+        pending.size +
+        Number(compatibility) +
+        allCommitReviews(this.root).reduce(
+          (count, unit) =>
+            count + reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path)),
+          0,
+        ),
+      inputs,
+    };
   }
 }

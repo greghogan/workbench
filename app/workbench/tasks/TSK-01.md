@@ -97,7 +97,7 @@ separation before deletion.
 
 - [x] Add optional planning storage, durable drafts, explicit checkpoints, and approval checkpoints.
 - [x] Integrate named plans with CLI/browser editing, approval diffs, queue ordering, and transfer into implementation.
-- [ ] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
+- [x] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
 - [ ] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
 - [ ] Record and display Added at metadata, preserving it across plan and task transitions.
 
@@ -111,6 +111,12 @@ The CLI and browser expose named plans and their supporting files. Starting work
 plan's approval and relationships. The planning copy stays in place until the first implementation commit is verified.
 Renaming preserves approval and updates related plans and queue entries. Tests exercised transfers, interruption
 recovery, and linked checkouts.
+
+Retained commits have independent review units. Finalization preserves source and authorship and keeps the original
+history recoverable. Accepted Git history preserves unchanged comparison authority in clones without private receipts.
+Mechanical renumbering preserves approval when identity and meaning are proven unchanged. Immutable comparisons are
+cached separately from live review decisions. Verification exercised browser progression and review continuity across
+clones and rebases.
 
 ## Implementing-agent detail
 

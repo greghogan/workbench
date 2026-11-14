@@ -1,15 +1,17 @@
+import { gitAncestor, gitRevision } from "../git/refs.js";
+import { acceptedAgentContext } from "./review-authority.js";
 import { logicalRecordEntries } from "../records/archive-store.js";
 import { relativeRecordPath, normalizedNumber } from "../records/record-identity.js";
-import { storageReviewContext } from "../records/archive-transfer-proof.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
-import { checkProvisionalPush } from "../git/commit-history.js";
+import { commitVersion } from "./review-units.js";
+import { checkProvisionalPush, retainedProvisionalCommits } from "../git/commit-history.js";
 import { gitBytes, readGitObjects, readGitTree, workingReviewTree, stagedReviewTree } from "../git/git-snapshot.js";
 import { projectsFromData } from "../projects/project-configuration.js";
-import { recordDocument } from "../records/record-document.js";
+import { recordDocument, parseProseRecord } from "../records/record-document.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { record, records, string, strings } from "../runtime/values.mjs";
 import { BoundedState } from "../storage/bounded-state.js";
@@ -64,25 +66,34 @@ function amendedBase(root: string): string {
 export function proposedAgentReview(
   root: string,
   kind: AgentReviewKind,
-  options: { base?: string; amend?: boolean; staged?: boolean; tasks?: string[] } = {},
+  options: { base?: string; amend?: boolean; staged?: boolean; tasks?: string[]; commit?: string } = {},
 ): AgentReview {
+  if (
+    options.commit !== undefined &&
+    ((kind === AgentReviewKind.Changes && options.base !== undefined) || options.amend || options.staged)
+  )
+    throw new InvalidInput("Select a retained commit or current files, without mixing review boundaries");
+  const unit = options.commit !== undefined ? commitVersion(root, options.commit) : undefined;
   let base: string;
-  if (options.base) base = reviewTree(root, options.base);
+  if (unit && kind === AgentReviewKind.Changes)
+    base = unit.parents[0] ? reviewTree(root, unit.parents[0]) : emptyReviewTree(root);
+  else if (options.base) base = reviewTree(root, options.base);
   else if (!hasHead(root)) base = emptyReviewTree(root);
   else if (options.amend) base = amendedBase(root);
   else if (kind === AgentReviewKind.Task)
     throw new InvalidInput("Task review requires --base naming the start of the accumulated work");
   else base = reviewTree(root, "HEAD");
-  const tree = options.staged ? stagedReviewTree(root) : workingReviewTree(root);
+  const tree = unit?.tree ?? (options.staged ? stagedReviewTree(root) : workingReviewTree(root));
   const tasks = treeTasks(root, tree),
     previous = treeTasks(root, base);
   const inferred = [...tasks]
     .filter(
       ([reference, task]) =>
-        ["Approved", "Accepted"].includes(task.status) && previous.get(reference)?.digest !== task.digest,
+        ["Approved", "Accepted"].includes(task.status) &&
+        (previous.get(reference)?.digest !== task.digest || previous.get(reference)?.workDigest !== task.workDigest),
     )
     .map(([reference]) => reference);
-  for (const entry of readTaskQueue(root).entries)
+  for (const entry of unit ? [] : readTaskQueue(root).entries)
     if (["Active", "Implemented"].includes(entry.state) && tasks.get(entry.reference)?.status === "Approved")
       inferred.push(entry.reference);
   return {
@@ -90,7 +101,11 @@ export function proposedAgentReview(
     base,
     tree,
     tasks: [
-      ...new Set([...(options.tasks ?? []), ...inferred, ...(kind === AgentReviewKind.Task ? pendingTasks(root) : [])]),
+      ...new Set([
+        ...(options.tasks ?? []),
+        ...inferred,
+        ...(kind === AgentReviewKind.Task ? pendingTasks(root, unit?.revision) : []),
+      ]),
     ].sort(),
     summary: "",
     verification: "",
@@ -109,7 +124,7 @@ function decode(input: unknown): ReviewState {
   const value = record(input, "Invalid agent review receipts");
   if (value.version !== 3) throw new InvalidInput("Unsupported agent review receipt version");
   const entries = records(value.reviews, "Invalid agent reviews");
-  if (entries.length > 2) throw new InvalidInput("Agent review receipt limit exceeded");
+  if (entries.length > 4096) throw new InvalidInput("Agent review receipt limit exceeded");
   const reviews = entries.map((entry) => {
     const kind = Object.values(AgentReviewKind).find((kind) => kind === entry.kind);
     if (!kind) throw new InvalidInput("Invalid agent review kind");
@@ -129,7 +144,7 @@ function decode(input: unknown): ReviewState {
       throw new InvalidInput("Invalid review assessment");
     return { kind, base: oid(entry.base), tree: oid(entry.tree), tasks, summary, verification, reviewed };
   });
-  if (new Set(reviews.map((entry) => entry.kind)).size !== reviews.length)
+  if (new Set(reviews.map(reviewIdentity)).size !== reviews.length)
     throw new InvalidInput("Duplicate agent review kind");
   const pending = records(value.pending, "Invalid pending task associations").map((entry) => ({
     scope: string(entry.scope, "Missing work scope"),
@@ -151,7 +166,7 @@ function decode(input: unknown): ReviewState {
 const store = (root: string) =>
   new BoundedState<ReviewState>(
     () => receiptPath(root),
-    256 * 1024,
+    64 * 1024 * 1024,
     decode,
     () => ({ version: 3, reviews: [], pending: [] }),
   );
@@ -162,17 +177,35 @@ function readReviews(root: string): AgentReview[] {
 export function validateAgentReviewState(root: string): void {
   store(root).read();
 }
-export function recordAgentReview(root: string, review: AgentReview, expected: string, staged = false): void {
+export function recordAgentReview(
+  root: string,
+  review: AgentReview,
+  expected: string,
+  staged = false,
+  commit?: string,
+): void {
   if (reviewIdentity(review) !== expected)
     throw new StateConflict("Review snapshot changed; inspect it again before recording review");
-  const current = staged ? stagedReviewTree(root) : workingReviewTree(root);
+  const current =
+    commit !== undefined ? commitVersion(root, commit).tree : staged ? stagedReviewTree(root) : workingReviewTree(root);
   if (current !== review.tree) throw new StateConflict("Review contents changed; review the new snapshot");
   const tasks = treeTasks(root, review.tree);
   for (const task of review.tasks)
     if (!tasks.has(task)) throw new InvalidInput(`Reviewed task not found in the selected snapshot: ${task}`);
+  const retained = retainedChangeContexts(root),
+    committed = new Set(
+      hasHead(root) ? git(root, ["log", "--format=%T", "--max-count=4096", "--branches", "HEAD"]).split("\n") : [],
+    );
   withCacheLocksSync([receiptPath(root)], () => {
-    const state = store(root).read();
-    const entries = state.reviews.filter((entry) => entry.kind !== review.kind);
+    const state = store(root).read(),
+      pending = new Set([review.tree, stagedReviewTree(root), workingReviewTree(root)]);
+    const entries = state.reviews.filter(
+      (entry) =>
+        reviewIdentity(entry) !== expected &&
+        (entry.kind === AgentReviewKind.Task
+          ? committed.has(entry.tree) || pending.has(entry.tree)
+          : retained.has(JSON.stringify([entry.base, entry.tree])) || pending.has(entry.tree)),
+    );
     entries.push(review);
     store(root).write({ ...state, reviews: entries });
   });
@@ -209,6 +242,7 @@ function pendingTasks(root: string, tip?: string): string[] {
 }
 export function finishAgentCommit(root: string): void {
   if (!hasHead(root)) return;
+  const retained = retainedChangeContexts(root);
   const committed = reviewTree(root, "HEAD"),
     tip = git(root, ["rev-parse", "HEAD"]),
     scope = workScope(root);
@@ -228,7 +262,9 @@ export function finishAgentCommit(root: string): void {
       (entry) => entry.scope !== scope && (entry.scope === "detached" || live.has(entry.scope)),
     );
     if (tasks.length) state.pending.push({ scope, tip, tasks });
-    state.reviews = state.reviews.filter((entry) => !consumed.includes(entry));
+    state.reviews = state.reviews.filter(
+      (entry) => entry.kind === AgentReviewKind.Task || retained.has(JSON.stringify([entry.base, entry.tree])),
+    );
     store(root).write(state);
   });
 }
@@ -276,6 +312,7 @@ interface SnapshotTask {
   path: string;
   status: string;
   digest: string;
+  workDigest: string;
 }
 export function treeTasks(root: string, tree: string): Map<string, SnapshotTask> {
   const entries = logicalRecordEntries(root, readGitTree(root, tree));
@@ -303,10 +340,23 @@ export function treeTasks(root: string, tree: string): Map<string, SnapshotTask>
       const contents = blobs.get(entries.get(path)?.oid ?? "")?.toString();
       if (contents === undefined) throw new InvalidInput(`Missing task: ${path}`);
       const number = normalizedNumber(digits);
+      const parsed = parseProseRecord(contents, path),
+        workDigest = createHash("sha256")
+          .update(
+            JSON.stringify([
+              Object.fromEntries(Object.entries(parsed.metadata).filter(([key]) => key !== "status")),
+              parsed.body,
+              [...entries]
+                .filter(([file]) => file.startsWith(path.slice(0, -3) + "/"))
+                .map(([file, entry]) => [file, entry.mode, entry.oid]),
+            ]),
+          )
+          .digest("hex");
       result.set(`${project.id}:TSK-${number}`, {
         path,
         status: recordDocument("TSK", contents, path).metadata.status,
         digest: taskDigest(contents),
+        workDigest,
       });
     }
   }
@@ -338,7 +388,6 @@ function checkTaskDecisions(
   publishing: boolean,
   associated: string[] = [],
   baseline?: string,
-  commit?: string,
 ): void {
   const previous = baseline ? treeTasks(root, baseline) : new Map<string, SnapshotTask>();
   const tasks = treeTasks(root, tree),
@@ -347,9 +396,11 @@ function checkTaskDecisions(
     if (!tasks.has(reference))
       throw new InvalidInput(`${reference}: associated task is missing from the reviewed snapshot.`);
   for (const [reference, task] of tasks) {
+    const prior = previous.get(reference);
     if (
       !associated.includes(reference) &&
-      (previous.get(reference)?.digest === task.digest || !["Approved", "Accepted"].includes(task.status))
+      ((prior?.digest === task.digest && prior.workDigest === task.workDigest) ||
+        !["Approved", "Accepted"].includes(task.status))
     )
       continue;
     if (publishing && associated.includes(reference) && task.status !== "Accepted")
@@ -358,7 +409,7 @@ function checkTaskDecisions(
       throw new InvalidInput(`${reference}: approve the plan before committing associated implementation.`);
     if (task.status === "Planned" || task.status === "Canceled") continue;
     if (
-      !["Approved", "Accepted"].includes(previous.get(reference)?.status ?? "") &&
+      !["Approved", "Accepted"].includes(prior?.status ?? "") &&
       !decisions.some((decision) => decision.reference === reference && decision.status === "Approved")
     )
       throw new InvalidInput(
@@ -373,21 +424,23 @@ function checkTaskDecisions(
             decision.reference === reference &&
             decision.status === "Accepted" &&
             decision.digest === task.digest &&
-            (!publishing ||
-              decision.tree === tree ||
-              (decision.tree !== undefined &&
-                commit !== undefined &&
-                storageReviewContext(root, decision.tree, commit))),
+            decision.tree !== undefined &&
+            acceptedTaskOutcome(root, reference, task, decision.tree),
         )
       )
         throw new InvalidInput(
-          `${reference}: human acceptance does not cover this project snapshot; accept the current result before publishing.`,
+          `${reference}: human acceptance does not cover the current task record and its supporting files.`,
         );
     }
   }
 }
 export function checkAgentPush(root: string, tip: string, remote: string): void {
   checkProvisionalPush(root, tip, remote);
+  prunePublishedReviews(root, remote);
+  checkAgentPublication(root, tip, remote);
+}
+
+export function checkAgentPublication(root: string, tip: string, remote: string): void {
   const policies = new Map<string, ReviewPolicy>();
   const tree = reviewTree(root, tip),
     base = /^0+$/.test(remote) ? emptyReviewTree(root) : reviewTree(root, remote);
@@ -404,27 +457,6 @@ export function checkAgentPush(root: string, tip: string, remote: string): void 
       if (!commit || !contents) throw new InvalidInput("Invalid outgoing Git history");
       return { commit, contents: oid(contents), parent };
     });
-  const liveRefs = new Map(
-    git(root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"])
-      .split("\n")
-      .filter(Boolean)
-      .map((row) => row.split(" ")) as [string, string][],
-  );
-  if (workScope(root) === "detached") liveRefs.set("detached", git(root, ["rev-parse", "HEAD"]));
-  withCacheLocksSync([receiptPath(root)], () => {
-    const state = store(root).read();
-    state.reviews = state.reviews.filter((entry) => entry.kind !== AgentReviewKind.Task || entry.tree !== base);
-    if (!/^0+$/.test(remote))
-      state.pending = state.pending.filter(
-        (entry) =>
-          spawnSync(
-            "git",
-            ["-C", root, "merge-base", "--is-ancestor", liveRefs.get(entry.scope) ?? entry.tip, remote],
-            { stdio: "ignore" },
-          ).status !== 0,
-      );
-    store(root).write(state);
-  });
   if (!rows.length) return;
   const knownTrees = new Map(rows.map((row) => [row.commit, row.contents]));
   const policyTrees = [
@@ -458,13 +490,106 @@ export function checkAgentPush(root: string, tip: string, remote: string): void 
     policy.tasks ||= required.tasks;
     policy.task_approvals ||= required.task_approvals;
   }
-  const taskReviews = receipts.filter(
-    (entry) => entry.kind === AgentReviewKind.Task && entry.tree === tree && entry.base === base,
-  );
-  if (policy.tasks && !taskReviews.length)
+  const taskReviews = receipts.filter((entry) => entry.kind === AgentReviewKind.Task),
+    aggregate = taskReviews.filter((entry) => entry.tree === tree && entry.base === base),
+    ancestors = new Set(git(root, ["log", "--format=%T", "--max-count=1001", tip]).split("\n")),
+    selectedTasks = treeTasks(root, tree),
+    snapshots = new Map<string, ReturnType<typeof treeTasks>>();
+  const covers = (entry: AgentReview, reference: string) => {
+    if (
+      !entry.tasks.includes(reference) ||
+      !ancestors.has(entry.tree) ||
+      (!ancestors.has(entry.base) && entry.base !== base && entry.base !== emptyReviewTree(root))
+    )
+      return false;
+    let snapshot = snapshots.get(entry.tree);
+    if (!snapshot) {
+      snapshot = treeTasks(root, entry.tree);
+      snapshots.set(entry.tree, snapshot);
+    }
+    return snapshot.get(reference)?.workDigest === selectedTasks.get(reference)?.workDigest;
+  };
+  for (const receipt of aggregate) for (const task of receipt.tasks) associated.add(task);
+  const uncovered = [...associated].filter((reference) => !taskReviews.some((entry) => covers(entry, reference)));
+  if (policy.tasks && !aggregate.length && (!associated.size || uncovered.length))
     throw new InvalidInput(
-      "Accumulated work review is required for the outgoing snapshot. Record 'workbench review task --base <remote-or-start-revision> --record' after reviewing the combined work; task records are optional.",
+      uncovered.length
+        ? `Accumulated work review is required for ${uncovered.join(", ")}; review the delivered task and record workbench review task --base <start-revision> --record.`
+        : "Accumulated work review is required for the outgoing snapshot. Record workbench review task --base <remote-or-start-revision> --record after reviewing the combined work; task records are optional.",
     );
-  for (const receipt of taskReviews) for (const task of receipt.tasks) associated.add(task);
-  if (policy.task_approvals) checkTaskDecisions(root, tree, true, [...associated], base, tip);
+  if (policy.task_approvals) checkTaskDecisions(root, tree, true, [...associated], base);
+}
+
+/** Exact parent/tree evidence survives commit-ID rewrites, but never a changed project snapshot. */
+export function checkAgentUnit(root: string, base: string, tree: string): void {
+  const policy = requiredPolicy(root, base, tree);
+  if (
+    policy.changes &&
+    !acceptedAgentContext(root, base, tree) &&
+    !readReviews(root).some(
+      (entry) => entry.kind === AgentReviewKind.Changes && entry.base === base && entry.tree === tree,
+    )
+  )
+    throw new InvalidInput(
+      "Agent change review and verification are required for this commit; use workbench review changes --commit <revision> --record",
+    );
+}
+
+function acceptedTaskOutcome(root: string, reference: string, current: SnapshotTask, tree: string): boolean {
+  if (!gitRevision(root, `${tree}^{tree}`)) return false;
+  const accepted = treeTasks(root, tree).get(reference);
+  return (
+    accepted?.status === "Accepted" && accepted.digest === current.digest && accepted.workDigest === current.workDigest
+  );
+}
+
+function retainedChangeContexts(root: string): Set<string> {
+  return new Set(
+    retainedProvisionalCommits(root).map((revision) => {
+      const unit = commitVersion(root, revision);
+      return JSON.stringify([unit.parents[0] ? reviewTree(root, unit.parents[0]) : emptyReviewTree(root), unit.tree]);
+    }),
+  );
+}
+function prunePublishedReviews(root: string, remote: string): void {
+  if (/^0+$/.test(remote)) return;
+  const published = treeTasks(root, reviewTree(root, remote)),
+    history = new Set(git(root, ["log", "--format=%T", "--max-count=4096", remote]).split("\n"));
+  withCacheLocksSync([receiptPath(root)], () => {
+    const state = store(root).read();
+    state.reviews = state.reviews.filter((entry) => !history.has(entry.tree));
+    const live = new Map(
+      git(root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"])
+        .split("\n")
+        .filter(Boolean)
+        .map((row) => row.split(" ") as [string, string]),
+    );
+    if (workScope(root) === "detached") live.set("detached", git(root, ["rev-parse", "HEAD"]));
+    state.pending = state.pending.filter((entry) => {
+      const tip = live.get(entry.scope);
+      return !!tip && !gitAncestor(root, tip, remote);
+    });
+    for (const pending of state.pending) {
+      const selected = git(root, ["rev-parse", "--verify", `${live.get(pending.scope) ?? pending.tip}^{tree}`]),
+        tasks = treeTasks(root, selected);
+      pending.tasks = pending.tasks.filter(
+        (reference) =>
+          published.get(reference)?.status !== "Accepted" ||
+          published.get(reference)?.workDigest !== tasks.get(reference)?.workDigest,
+      );
+    }
+    state.pending = state.pending.filter((entry) => entry.tasks.length);
+    store(root).write(state);
+  });
+}
+
+export function remapAgentTasks(root: string, mapping: ReadonlyMap<string, string>, tip: string): void {
+  withCacheLocksSync([receiptPath(root)], () => {
+    const state = store(root).read(),
+      selected = state.pending.find((entry) => entry.scope === workScope(root));
+    if (!selected) return;
+    selected.tasks = [...new Set(selected.tasks.map((reference) => mapping.get(reference) ?? reference))];
+    selected.tip = tip;
+    store(root).write(state);
+  });
 }

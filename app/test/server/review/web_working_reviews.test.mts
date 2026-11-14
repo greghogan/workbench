@@ -118,36 +118,40 @@ test("differing staged and working versions retain independent approvals and the
   expect(reviewedBaselines(root).get(path)?.contents).toBe(text("Working version."));
   checkReview(root);
 });
-test("last-review comparisons survive provisional commits and collector restart, and reset after an ordinary commit", () => {
+test("working review resets at each retained commit while prior units keep their acknowledgments", () => {
   const root = fixture.project();
-  const original = readFileSync(join(root, path), "utf8");
   writeFileSync(join(root, path), text("First reviewed sentence."));
+  approveReviewFiles(root, [workingChange(root)], false, ReviewSource.Working);
   git(root, "add", path);
   git(root, "commit", "-qm", "First provisional version\n\nWorkbench-Provisional: true");
+  const first = git(root, "rev-parse", "HEAD");
   let snapshot = new WorkspaceCollector(root).collect();
-  expect(snapshot.documents.get("demo:ADR-0")?.baseline.kind).toBe("commit");
-  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference?.patch).toContain("Keep files authoritative.");
-  approveReviewFiles(root, [workingChange(root)], false, ReviewSource.Working);
+  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference?.patch).toBe("");
+  expect(snapshot.commitReviews.map(({ revision, paths }) => ({ revision, paths }))).toEqual([
+    { revision: first, paths: [] },
+  ]);
   writeFileSync(join(root, path), text("Second revised sentence."));
-  git(root, "add", path);
-  git(root, "commit", "-qm", "Second provisional version\n\nWorkbench-Provisional: true");
   snapshot = new WorkspaceCollector(root).collect();
-  const document = snapshot.documents.get("demo:ADR-0");
-  expect(document?.baseline.kind).toBe("review");
-  expect(document?.reviewed.difference?.patch).toContain("-First reviewed sentence.");
-  expect(document?.reviewed.difference?.patch).toContain("+Second revised sentence.");
-  expect(document?.reviewed.difference?.patch).not.toContain("Keep files authoritative.");
+  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference?.patch).toContain("-First reviewed sentence.");
   approveReviewFiles(root, [workingChange(root)], false, ReviewSource.Working);
   git(root, "add", path);
   checkReview(root);
+  git(root, "commit", "-qm", "Second provisional version\n\nWorkbench-Provisional: true");
+  const second = git(root, "rev-parse", "HEAD");
+  expect(
+    new WorkspaceCollector(root).collect().commitReviews.map(({ revision, paths }) => ({ revision, paths })),
+  ).toEqual([
+    { revision: first, paths: [] },
+    { revision: second, paths: [] },
+  ]);
   git(root, "commit", "--amend", "-qm", "New commit baseline");
   expect(reviewedBaselines(root).has(path)).toBe(false);
   expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-0")?.reviewed.difference?.patch).toBe("");
   const added = "workbench/decisions/ADR-01.md";
   writeFileSync(join(root, added), text("New record."));
-  snapshot = new WorkspaceCollector(root).collect();
-  expect(snapshot.documents.get("demo:ADR-1")?.reviewed.difference?.patch).toContain("+New record.");
-  expect(original).toContain("Keep files authoritative.");
+  expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-1")?.reviewed.difference?.patch).toContain(
+    "+New record.",
+  );
 });
 test("a reviewed baseline does not require another committed comparison", () => {
   const root = fixture.project();

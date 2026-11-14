@@ -5,6 +5,7 @@ import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "..
 import { knownRoute, Route } from "../routes/routes.js";
 
 export const timingPhases = [
+  "action",
   "collect",
   "formatting",
   "workspace",

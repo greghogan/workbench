@@ -22,6 +22,7 @@ export function registerAgentReviewCommands(review: Command, root: string): void
       .option("--base <revision>", "Start of the reviewed accumulated work")
       .option("--staged", "Review the Git index instead, for a partial commit")
       .option("--amend", "Review the proposed amended commit")
+      .option("--commit <revision>", "Review one retained commit against its own parent")
       .option(
         "--task <reference>",
         "Optionally associate a task record with this review (repeatable)",
@@ -34,6 +35,7 @@ export function registerAgentReviewCommands(review: Command, root: string): void
       .option("--verification <text>", "Verification performed and its result")
       .action(
         (options: {
+          commit?: string;
           base?: string;
           amend?: boolean;
           staged?: boolean;
@@ -58,6 +60,7 @@ export function registerAgentReviewCommands(review: Command, root: string): void
               { ...pending, summary: options.summary, verification: options.verification },
               options.expected,
               options.staged,
+              options.commit,
             );
             console.log(`Recorded ${kind} review for ${pending.tree}.`);
           } else

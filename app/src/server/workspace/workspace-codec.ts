@@ -85,6 +85,14 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
       check(text(value));
     });
   }
+  list(data.commitReviews, (value) => {
+    const unit = object(value);
+    strings(unit, ["revision", "subject"]);
+    check(bytes(unit.files));
+    list(unit.paths, (path) => {
+      check(text(path));
+    });
+  });
   list(data.projects, (value) => {
     const project = object(value);
     strings(project, ["id", "path"]);
