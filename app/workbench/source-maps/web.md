@@ -174,3 +174,11 @@ shipped-browser workflows exercise the assembled interface separately from domai
 - `src/server`: Serves documents and actions through HTTP, rendered views, browser controllers, and supervised workers.
 
 - `src/server/views/diagram-view.tsx`: Share isolated diagram and source presentations across records and comparisons.
+- `src/server/views/commit-files.tsx`, `src/server/views/commit-file-diff.tsx`,
+  `src/server/views/commit-file-actions.tsx`, `src/server/views/commit-navigation.tsx`,
+  `src/server/views/diff-icons.tsx`, `src/server/views/history-comparison.tsx`,
+  `src/server/views/code-highlighting.tsx`, `src/server/review/file-comparison.ts`: Present immutable source diffs with
+  numbered, expandable context and escaped syntax; retain complete formatted documents for record acknowledgment.
+- `src/server/browser/commit-files-client.ts`, `src/server/browser/file-diff-client.ts`: Filter the complete
+  changed-file tree and load immutable comparisons near the viewport; preserve keyboard focus, supplied links, and
+  request cleanup.

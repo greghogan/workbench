@@ -1,12 +1,13 @@
+import { RecordLookup } from "../../core/records/record-lookup.js";
 import { isUtf8 } from "node:buffer";
-import { historyFiles, historyFile, historyText } from "../../core/git/history.js";
+import { renderToString } from "preact-render-to-string";
+import { historyFiles, historyFile, historyFilePreviews } from "../../core/git/history.js";
 import { historicalRecords } from "../review/historical-records.js";
 import { recordPane } from "./record-pane.js";
 import { committedReview } from "../../core/review/review-units.js";
 import { presentedReviewDigest, reviewedBaselines } from "../../core/review/review-service.js";
-import { sourceDiffView, fileModeChange } from "./diff-view.js";
+import { fileModeChange } from "./diff-view.js";
 import { panel, submitButton, badge } from "./components.js";
-import { markdown } from "./markdown-view.js";
 import { shell } from "./page-frame.js";
 import { mutationForm } from "./action-forms.js";
 import { routeURL } from "../routes/locations.js";
@@ -17,7 +18,12 @@ import type { ViewContext } from "../workspace/view-context.js";
 import type { ReviewVersions } from "../review/review-versions.js";
 import { commitReviewContext } from "./commit-review-context.js";
 import { WebError } from "../http/errors.js";
-import { codeDifference } from "./code-difference.js";
+import { historyComparison } from "./history-comparison.js";
+import { commitFileDiff } from "./commit-file-diff.js";
+import { commitFileId, commitNavigation } from "./commit-navigation.js";
+import { commitFileActions } from "./commit-file-actions.js";
+import { filePreviewByteLimit } from "../review/file-comparison.js";
+import { inlineCommitFiles } from "./commit-files.js";
 
 interface TaskHistoryContext {
   location: (values: RouteQuery<typeof Route.History>) => string;
@@ -32,14 +38,20 @@ export function historyPage(
 ): string {
   const location =
     task?.location ??
-    ((values: RouteQuery<typeof Route.History>) => sourceURL(context, routeURL(Route.History, values)));
+    ((values: RouteQuery<typeof Route.History>) =>
+      sourceURL(context, routeURL(Route.History, { ...(query.view ? { view: query.view } : {}), ...values })));
   if (!query.commit) throw new WebError(400, "Select a commit from its task or document review");
-  const unit = committedReview(context.root, query.commit),
-    files = historyFiles(context.root, unit.revision),
+  const files = historyFiles(context.root, query.commit);
+  if (query.batch !== undefined) {
+    if (query.path || query.context || query.load) throw new WebError(400, "Invalid file diff continuation");
+    return renderToString(inlineCommitFiles(context, query, files.changes, files.unit.revision, location));
+  }
+  const unit = files.unit,
+    review = task || query.view === "files" ? undefined : committedReview(context.root, unit.revision),
     split = query.layout === "split",
-    pendingPaths = new Set(context.commitReviews.find((item) => item.revision === unit.revision)?.paths),
-    candidates = unit.provisional
-      ? unit.changes.filter((change) => !change.approved && pendingPaths.has(change.path))
+    pendingPaths = new Set(review ? context.commitReviews.find((item) => item.revision === unit.revision)?.paths : []),
+    candidates = review?.provisional
+      ? review.changes.filter((change) => !change.approved && pendingPaths.has(change.path))
       : [],
     selectedPath = query.path ?? (task ? undefined : candidates[0]?.path),
     title = unit.message.split("\n")[0] ?? unit.revision.slice(0, 12),
@@ -47,20 +59,6 @@ export function historyPage(
       .replace(/^.*\n?/, "")
       .replace(/^Workbench-Provisional: true\s*$/m, "")
       .trim(),
-    fileList = (
-      <details open={!selectedPath}>
-        <summary>{String(files.changes.length)} changed files</summary>
-        <ul class="commit-files">
-          {files.changes.map((file) => (
-            <li key={file.path}>
-              <a href={location({ commit: unit.revision, path: file.path, layout: split ? "split" : "unified" })}>
-                {file.path}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </details>
-    ),
     commitHeading = (
       <section class="panel">
         <div class="panel-body">
@@ -74,26 +72,41 @@ export function historyPage(
               {messageBody}
             </pre>
           )}
-          {fileList}
         </div>
       </section>
     );
+  const filesPage = selectedPath
+    ? location({ commit: unit.revision, layout: split ? "split" : "unified", ...(task ? {} : { view: "files" }) })
+    : "";
+  const workspace = (children: import("preact").ComponentChildren) =>
+    commitNavigation(files.changes, selectedPath, (path) => `${filesPage}#${commitFileId(path)}`, children);
   if (!selectedPath)
-    return shell(context, title, task ? "queue" : "review", commitHeading, {
-      parents: task?.parents ?? [{ label: "Review queue", href: sourceURL(context, routeURL(Route.Review, {})) }],
-    });
+    return shell(
+      context,
+      title,
+      task ? "queue" : "review",
+      <>
+        {commitHeading}
+        {workspace(inlineCommitFiles(context, query, files.changes, unit.revision, location))}
+      </>,
+      {
+        parents: task?.parents ?? [{ label: "Review queue", href: sourceURL(context, routeURL(Route.Review, {})) }],
+        current: unit.revision.slice(0, 8),
+      },
+    );
   const file = historyFile(context.root, unit.revision, selectedPath, files),
-    change = unit.changes.find((change) => change.path === selectedPath),
-    before = historyText(context.root, file.before),
-    after = historyText(context.root, file.after),
+    change = review?.changes.find((change) => change.path === selectedPath),
+    protectedReview = !!change,
+    maximum = protectedReview || query.load === "1" ? 2 * 1024 * 1024 : filePreviewByteLimit,
+    { before, after } = historyFilePreviews(context.root, file, maximum),
     tooLarge = (!!file.before && before === undefined) || (!!file.after && after === undefined),
     binary = [before, after].some((bytes) => bytes !== undefined && (bytes.includes(0) || !isUtf8(bytes))),
     markdownFile = selectedPath.endsWith(".md") && !binary && !tooLarge,
-    historical = historicalRecords(
-      context.root,
-      after ? unit.revision : (unit.parents[0] ?? unit.revision),
-      after ? files.logicalAfter : files.logicalBefore,
-    ),
+    historical = protectedReview
+      ? historicalRecords(context.root, after ? unit.revision : (unit.parents[0] ?? unit.revision), () =>
+          after ? files.logicalAfter : files.logicalBefore,
+        )
+      : { paths: new Set<string>(), references: new RecordLookup([]) },
     owner =
       historical.references.path(`${context.root}/${selectedPath}`) ??
       historical.references.owner(`${context.root}/${selectedPath}`),
@@ -107,12 +120,17 @@ export function historyPage(
         ...(task ? { location: (path: string) => location({ commit: unit.revision, path }) } : {}),
       },
     },
-    base = location({ commit: unit.revision, path: selectedPath }),
-    reviewing =
-      !task && !!change && unit.provisional && !change.approved && pendingPaths.has(selectedPath) && !tooLarge,
-    reviewed = !task && change ? reviewedBaselines(context.root, unit.head).get(selectedPath) : undefined;
-  const digest = change ? presentedReviewDigest(change, unit.head) : "";
-  if (reviewing)
+    base = location({
+      commit: unit.revision,
+      path: selectedPath,
+      ...(query.context ? { context: query.context } : {}),
+      ...(query.load ? { load: query.load } : {}),
+    }),
+    reviewing = protectedReview && unit.provisional && !change.approved && pendingPaths.has(selectedPath) && !tooLarge,
+    reviewed =
+      review && change ? reviewedBaselines(context.root, review.head, selectedPath).get(selectedPath) : undefined;
+  const digest = review && change ? presentedReviewDigest(change, review.head) : "";
+  if (reviewing && review)
     versions.retainBatch(
       [
         {
@@ -121,7 +139,7 @@ export function historyPage(
           downloadBefore: !markdownFile,
         },
       ],
-      unit.head,
+      review.head,
     );
   const list = reviewing ? candidates : files.changes,
     selected = list.findIndex((item) => item.path === selectedPath),
@@ -142,52 +160,75 @@ export function historyPage(
             `File ${String(selected + 1)} of ${String(candidates.length)}`,
           )
         : commitHeading}
-      <p class="file-path">
-        {selectedPath}{" "}
-        {!file.before ? badge("New file", "pending") : !file.after ? badge("Deleted file", "pending") : null}
-      </p>
-      {mode && <p>{mode}</p>}
-      {recordPane(
-        panel(
-          markdownFile ? (
-            before && after && !same ? (
-              sourceDiffView(
-                { patch: "", before: reviewed?.contents ?? before.toString(), after: after.toString() },
-                { record, records: historical.references },
-                split,
-              )
-            ) : (
-              markdown((after ?? before)?.toString() ?? "", record, historical.references)
-            )
-          ) : tooLarge || binary ? (
-            <p class="notice">
-              {tooLarge
-                ? "File exceeds the preview limit; download and inspect it."
-                : "Binary file: download and inspect it before review."}
-            </p>
-          ) : (
-            codeDifference(before?.toString(), after?.toString(), split)
-          ),
-          { tools: !tooLarge && !binary && before && after && !same ? diffLayout(base, split) : null },
-        ),
-        {
-          previous: previous
-            ? { href: location({ commit: unit.revision, path: previous.path, layout: split ? "split" : "unified" }) }
-            : undefined,
-          next: next
-            ? { href: location({ commit: unit.revision, path: next.path, layout: split ? "split" : "unified" }) }
-            : undefined,
-          label: reviewing ? "review file" : "changed file",
-        },
+      {protectedReview && (
+        <>
+          <p class="file-path">
+            {selectedPath}{" "}
+            {!file.before ? badge("New file", "pending") : !file.after ? badge("Deleted file", "pending") : null}
+          </p>
+          {mode && <p>{mode}</p>}
+        </>
       )}
-      {!markdownFile && (
+      {protectedReview ? (
+        <>
+          {" "}
+          {recordPane(
+            panel(
+              historyComparison(reviewed ? Buffer.from(reviewed.contents) : before, after, {
+                purpose: "record",
+                path: selectedPath,
+                record,
+                references: historical.references,
+                split,
+                tooLarge,
+              }),
+              { tools: !tooLarge && !binary && before && after && !same ? diffLayout(base, split) : null },
+            ),
+            {
+              previous: previous
+                ? {
+                    href: location({ commit: unit.revision, path: previous.path, layout: split ? "split" : "unified" }),
+                  }
+                : undefined,
+              next: next
+                ? { href: location({ commit: unit.revision, path: next.path, layout: split ? "split" : "unified" }) }
+                : undefined,
+              label: reviewing ? "review file" : "changed file",
+            },
+          )}
+        </>
+      ) : (
+        workspace(
+          <>
+            <div class="actions">{diffLayout(base, split)}</div>
+            <section class="panel commit-file" data-commit-file={selectedPath}>
+              <div class="panel-heading">
+                <h2>{selectedPath}</h2>
+                {!file.before ? badge("New file", "pending") : !file.after ? badge("Deleted file", "pending") : null}
+              </div>
+              {commitFileActions(file, unit.revision)}
+              {mode && <p class="file-path">{mode}</p>}
+              <div class="commit-file-body">
+                {commitFileDiff(file, before, after, {
+                  commit: unit.revision,
+                  split,
+                  ...(query.context ? { context: query.context } : {}),
+                  loaded: query.load === "1",
+                  location,
+                })}
+              </div>
+            </section>
+          </>,
+        )
+      )}
+      {protectedReview && !markdownFile && (
         <div class="actions">
-          {file.before && (
+          {file.before && file.before.mode !== "160000" && (
             <a href={routeURL(Route.HistoryFile, { commit: unit.revision, path: selectedPath, side: "before" })}>
               Download previous file
             </a>
           )}
-          {file.after && (
+          {file.after && file.after.mode !== "160000" && (
             <a href={routeURL(Route.HistoryFile, { commit: unit.revision, path: selectedPath, side: "after" })}>
               Download current file
             </a>
@@ -215,6 +256,7 @@ export function historyPage(
         })}
     </>,
     {
+      current: unit.revision.slice(0, 8),
       parents: task
         ? task.parents
         : reviewing

@@ -6,7 +6,8 @@ import { withRepositoryOperation } from "../../git/repository-state.js";
 import { StateConflict } from "../../runtime/input-errors.js";
 import { taskPlanDigest } from "../task-plan.js";
 import { parsePlanReference, planRemovalRef, planDraftRef } from "./plan-model.js";
-import { readPlans, savedPlanTrees, planningSettings } from "./planning-store.js";
+import { readPlans, savedPlanTrees } from "./planning-store.js";
+import { planningSettings } from "./planning-settings.js";
 import {
   readPlanOperations,
   planClaim,

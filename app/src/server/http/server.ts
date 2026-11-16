@@ -44,6 +44,7 @@ import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
 import { recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
+import { isDocumentationSvg } from "../documents/document-image.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
@@ -243,6 +244,25 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         if (route === Route.Favicon) {
           response.writeHead(204);
           response.end();
+          return;
+        }
+        if (route === Route.DocumentImage) {
+          const path = query.path ?? "";
+          if (!isDocumentationSvg(path)) throw new WebError(404, "Documentation image not found");
+          let bytes: Buffer;
+          try {
+            bytes = recordBytes({ directory: root, path });
+          } catch (cause) {
+            if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")
+              throw new WebError(404, "Documentation image not found", { cause });
+            throw cause;
+          }
+          response.setHeader(
+            "content-security-policy",
+            "sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+          );
+          response.setHeader("cross-origin-resource-policy", "same-origin");
+          send(response, 200, "image/svg+xml", bytes);
           return;
         }
         if (route === Route.ReviewFile) {

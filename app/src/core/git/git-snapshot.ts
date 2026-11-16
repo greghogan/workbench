@@ -7,11 +7,12 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { retainedBytes } from "../runtime/retained-bytes.js";
+import { MissingResource } from "../runtime/input-errors.js";
 export interface GitEntry {
   mode: string;
   oid: string;
 }
-export function gitBytes(root: string, args: string[], input?: string, env?: NodeJS.ProcessEnv): Buffer {
+export function gitBytes(root: string, args: string[], input?: string | Buffer, env?: NodeJS.ProcessEnv): Buffer {
   const result = spawnSync("git", ["-C", root, ...args], {
     maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, ...env, GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
@@ -26,7 +27,7 @@ export function readGitObjects(
   root: string,
   requests: readonly string[],
   maximum = 2 * 1024 * 1024,
-  options: { retainedBytes?: number } = {},
+  options: { retainedBytes?: number; omitOversized?: boolean; requirePresent?: boolean } = {},
 ): Map<string, Buffer | undefined> {
   if (
     options.retainedBytes !== undefined &&
@@ -47,6 +48,7 @@ export function readGitObjects(
   for (const [index, row] of rows.entries()) {
     const request = required(selected[index], "Missing Git object request");
     if (row === `${request} missing`) {
+      if (options.requirePresent) throw new MissingResource("Requested Git blob is unavailable locally");
       identities.set(request, undefined);
       continue;
     }
@@ -57,10 +59,14 @@ export function readGitObjects(
       !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(oid) ||
       type !== "blob" ||
       !Number.isSafeInteger(size) ||
-      size < 0 ||
-      size > maximum
+      size < 0
     )
       throw new Error("Invalid or oversized Git blob");
+    if (size > maximum) {
+      if (!options.omitOversized) throw new Error("Invalid or oversized Git blob");
+      identities.set(request, undefined);
+      continue;
+    }
     identities.set(request, oid);
     sizes.set(oid, size);
   }

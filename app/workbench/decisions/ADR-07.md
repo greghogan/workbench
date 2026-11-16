@@ -34,6 +34,20 @@ Local execution queues retain order, active work, and progress. Keep that state 
 human decisions, preserving it across cache cleanup and service restarts. CLI and browser operations use the same queue,
 readiness rules, and human decisions. Queue operations coordinate work without launching agents or creating commits.
 
+```mermaid
+stateDiagram-v2
+  direction TB
+  [*] --> Queued: Schedule
+  Queued --> Active: Start ready work
+  Active --> Blocked: Report blocker
+  Blocked --> Queued: Release
+  Active --> Queued: Release
+  Active --> Implemented: Verify outcome
+  Implemented --> Queued: Return for more work
+```
+
+Execution states remain local; acceptance and cancellation follow the shared task lifecycle.
+
 A queued task is ready only when its plan is approved and its prerequisites are satisfied. Implementation evidence
 applies to the plan and source version actually verified. It establishes implementation at that version, without
 verifying later edits or granting human acceptance.
@@ -43,8 +57,12 @@ may use that approval within its authorized scope. Execution assignments and pro
 approval and acceptance.
 
 Retain the approved plan and supporting files so revised plans can be compared and approved without discarding active
-work. Implementation accounts and checklist progress do not by themselves change the approved scope. Renaming a future
-plan preserves its meaning, approval, relationships, and queue position.
+work. Formatting, implementation accounts, and checklist progress do not by themselves change the approved scope.
+Renaming a future plan preserves its meaning, approval, relationships, and queue position.
+
+Outcome review compares the complete task record with its most recently approved plan, including checklist completion
+and implementation-account updates. Approving a revised plan advances that comparison baseline without accepting the
+outcome.
 
 Reconcile record identities during integration without transferring approval to unrelated work. Preserve mechanical
 renumbering only when meaning and relationships remain unchanged; changed implementation contexts require renewed

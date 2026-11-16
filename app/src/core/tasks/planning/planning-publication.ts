@@ -5,7 +5,7 @@ import { pushUpdates, zeroRevision } from "../../git/push-updates.js";
 import { InvalidInput } from "../../runtime/input-errors.js";
 import { record, string } from "../../runtime/values.mjs";
 import { indexPlanningRevision } from "./planning-index.js";
-import { planningSettings } from "./planning-store.js";
+import { planningSettings } from "./planning-settings.js";
 import { parsePlan, planningPaths } from "./plan-model.js";
 
 const verifiedPlans = new WeightedCache<boolean>(32 * 1024 * 1024);

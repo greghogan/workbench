@@ -8,7 +8,7 @@ import { DifferenceLayout } from "../routes/navigation-state.js";
 import { shell } from "./page-frame.js";
 import { badge, panel, submitButton, confirmationActions } from "./components.js";
 import { mutationForm } from "./action-forms.js";
-import { tabs, linkButton, diffLayout } from "./render-links.js";
+import { linkButton, diffLayout } from "./render-links.js";
 import { markdown } from "./markdown-view.js";
 import { sourceDiffView } from "./diff-view.js";
 import { addedAtTag } from "./record-content.js";
@@ -90,9 +90,10 @@ export function planPage(
       </>,
     );
   }
-  const view = parameters.view ?? "read",
+  const changed = !!plan.approval && (plan.approval.contents !== plan.contents || plan.changedFiles.length > 0);
+  const view = parameters.view ?? (changed ? "changes" : "read"),
     split = parameters.layout === DifferenceLayout.Split,
-    url = (view: "read" | "changes" | "edit") =>
+    url = (view: "changes" | "edit") =>
       routeURL(Route.Plan, {
         id: plan.reference,
         view,
@@ -124,7 +125,7 @@ export function planPage(
           )}
           {controls.area("contents", { id: "plan-editor", label: "Plan", value: draft?.contents ?? plan.contents })}
           <div class="actions">
-            {linkButton("Cancel", url("read"), true)}
+            {linkButton("Cancel", back, true)}
             {submitButton("Save draft")}
           </div>
         </>
@@ -138,13 +139,6 @@ export function planPage(
       split,
     );
   } else body = markdown(plan.contents, record, context.index.references, plan.title);
-  const choices = [
-    { label: "Read", href: url("read"), current: view === "read" },
-    ...(plan.approval && (plan.approval.contents !== plan.contents || plan.changedFiles.length)
-      ? [{ label: "Diff", href: url("changes"), current: view === "changes" }]
-      : []),
-    ...(!plan.implementation ? [{ label: "Edit", href: url("edit"), current: view === "edit" }] : []),
-  ];
   return shell(
     context,
     plan.title,
@@ -178,8 +172,13 @@ export function planPage(
         </p>
       )}
       {panel(body, {
-        tabs: tabs(choices, "Plan views"),
-        tools: view === "changes" ? diffLayout(url("changes"), split) : null,
+        tools:
+          view !== "edit" ? (
+            <>
+              {view === "changes" && diffLayout(url("changes"), split)}
+              {!plan.implementation && linkButton("Edit", url("edit"), true)}
+            </>
+          ) : null,
       })}
       {plan.changedFiles.length > 0 && plan.approval && (
         <ul aria-label="Supporting file changes">

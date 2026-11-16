@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 756" role="img" aria-labelledby="title description">
+  <title id="title">Commit inspection for feat: compare task commits inline</title>
+  <desc id="description">The commit subject and visible message sit above the file tree and full diff list. Unified and Side-by-side sit at the upper right of the diffs. The selected file is highlighted in the tree and identified by the URL anchor.</desc>
+
+  <defs>
+    <path id="folder" d="M0 3V1h5l2 2h8v10H0zm0 2h15" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+    <path id="file" d="M1 0h7l4 4v10H1zm7 0v4h4" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+    <path id="disclosure" d="M0 0l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    <clipPath id="source-lines"><rect x="284" y="477" width="670" height="88"/></clipPath>
+  </defs>
+
+  <rect width="1000" height="756" rx="16" fill="#f2f4f7"/>
+  <rect x="28" y="24" width="944" height="708" rx="12" fill="#f6f8fb" stroke="#9aa6b6"/>
+  <path d="M28 72h944" stroke="#bdc7d4"/>
+  <g fill="#62748a">
+    <circle cx="49" cy="48" r="4"/>
+    <circle cx="63" cy="48" r="4"/>
+    <circle cx="77" cy="48" r="4"/>
+  </g>
+  <rect x="102" y="34" width="850" height="28" rx="5" fill="#e9eef5"/>
+  <g font-family="system-ui, sans-serif" fill="#26384f">
+    <text x="115" y="52" font-size="12" font-family="ui-monospace, monospace">…/history?commit=53737d9f…&amp;layout=unified<tspan fill="#1f54a1">#commit-file-YXBwL3NyYy9jbGkvdGFzay1wbGFucy50cw</tspan></text>
+    <text x="44" y="98" font-size="13" fill="#315a91">workbench / app / TSK-1: Git-backed future plans and serialized task delivery / Commits / 53737d9f</text>
+    <text x="44" y="127" font-size="22" font-weight="700">feat: compare task commits inline</text>
+
+    <g aria-label="Commit message">
+      <rect x="44" y="146" width="910" height="210" rx="8" fill="#fff" stroke="#bdc7d4"/>
+      <text x="61" y="173" font-size="13" fill="#52647c"><tspan font-family="ui-monospace, monospace">53737d9ffd40</tspan> · Bobby Tables</text>
+      <rect x="61" y="188" width="876" height="150" rx="5" fill="#f1f3f7"/>
+      <text x="73" y="207" font-size="12" font-family="ui-monospace, monospace">
+        <tspan x="73">Inspect task deliveries using numbered source diffs for every file type,</tspan>
+        <tspan x="73" dy="14">including Markdown. Keep messages visible, expand unchanged context,</tspan>
+        <tspan x="73" dy="14">filter changed files, and load large comparisons on demand.</tspan>
+        <tspan x="73" dy="23">Preserve plan approval across formatting and prepare task reviews</tspan>
+        <tspan x="73" dy="14">canonically. Keep full formatted record comparisons separate from</tspan>
+        <tspan x="73" dy="14">commit-file inspection.</tspan>
+        <tspan x="73" dy="23">Reuse bounded immutable blob previews and syntax highlighting.</tspan>
+        <tspan x="73" dy="14">Read paired file versions and limit historical metadata reads.</tspan>
+      </text>
+    </g>
+
+    <g aria-label="Changed files">
+      <rect x="44" y="374" width="222" height="338" rx="6" fill="#fff" stroke="#bdc7d4"/>
+      <path d="M44 408h222" stroke="#bdc7d4"/>
+      <rect x="58" y="385" width="12" height="11" fill="none" stroke="#52647c"/>
+      <path d="M62 385v11" stroke="#52647c"/>
+      <text x="79" y="396" font-size="14" font-weight="650">Files (62)</text>
+      <text x="57" y="428" font-size="12" font-weight="650">Filter files</text>
+      <rect x="57" y="437" width="192" height="29" rx="5" fill="#fff" stroke="#a5b3c5"/>
+      <rect x="251" y="482" width="4" height="208" rx="2" fill="#e0e6ee"/>
+      <rect x="251" y="482" width="4" height="73" rx="2" fill="#8295af"/>
+      <rect x="100" y="546" width="145" height="23" rx="5" fill="#e9edfa"/>
+      <g font-size="13" color="#52647c">
+        <use href="#disclosure" x="59" y="486"/><use href="#folder" x="73" y="481"/><text x="97" y="493">app</text>
+        <use href="#disclosure" x="72" y="508"/><use href="#folder" x="86" y="503"/><text x="110" y="515">src</text>
+        <use href="#disclosure" x="85" y="530"/><use href="#folder" x="99" y="525"/><text x="123" y="537">cli</text>
+        <use href="#file" x="112" y="550"/><text x="132" y="562" font-weight="700">task-plans.ts</text>
+        <use href="#file" x="112" y="575"/><text x="132" y="587">tasks.ts</text>
+        <use href="#disclosure" x="85" y="609"/><use href="#folder" x="99" y="604"/><text x="123" y="616">core</text>
+        <use href="#disclosure" x="98" y="632"/><use href="#folder" x="112" y="627"/><text x="136" y="639">git</text>
+        <use href="#file" x="126" y="651"/><text x="146" y="663">git-snapshot.ts</text>
+      </g>
+    </g>
+
+    <g aria-label="Difference layout">
+      <rect x="791" y="374" width="163" height="32" rx="6" fill="#f3f5f8" stroke="#bdc7d4"/>
+      <rect x="795" y="378" width="61" height="24" rx="5" fill="#e9edfa" stroke="#5072b2"/>
+      <text x="826" y="394" font-size="12" font-weight="650" text-anchor="middle" fill="#244b8f">Unified</text>
+      <text x="903" y="394" font-size="12" text-anchor="middle" fill="#52647c">Side-by-side</text>
+    </g>
+
+    <rect x="284" y="418" width="670" height="183" rx="6" fill="#fff" stroke="#bdc7d4"/>
+    <path d="M284 453h670m-670 24h670" stroke="#bdc7d4"/>
+    <use href="#disclosure" x="298" y="433"/>
+    <text x="313" y="440" font-size="13" font-family="ui-monospace, monospace">app/src/cli/task-plans.ts</text>
+    <text x="879" y="440" font-size="12" fill="#256439">+5</text>
+    <text x="903" y="440" font-size="12" fill="#812c27">−10</text>
+    <text x="929" y="440" font-size="14">···</text>
+    <text x="939" y="469" font-size="12" text-anchor="end" fill="#1f54a1">Expand all lines</text>
+    <rect x="285" y="499" width="668" height="22" fill="#e6f4eb"/>
+    <g clip-path="url(#source-lines)" font-size="11" font-family="ui-monospace, monospace" xml:space="preserve">
+      <text x="297" y="493">1   1     import { cancelPlan, deletePlan, planDeletion } from "../core/tasks/planning/plan-disposition.js";</text>
+      <text x="297" y="515" fill="#245634">    2   + import { prepareTaskReview } from "../core/tasks/task-formatting.js";</text>
+      <text x="297" y="537">2   3     import type { Command } from "commander";</text>
+    </g>
+    <rect x="285" y="547" width="668" height="25" fill="#e9edfa"/>
+    <text x="298" y="565" font-size="13" fill="#315a91">↑　↓</text>
+    <text x="356" y="565" font-size="12" font-family="ui-monospace, monospace" fill="#52647c">15 unchanged lines</text>
+
+    <rect x="284" y="612" width="670" height="60" rx="6" fill="#fff" stroke="#bdc7d4"/>
+    <use href="#disclosure" x="298" y="627"/>
+    <text x="313" y="634" font-size="13" font-family="ui-monospace, monospace">app/src/cli/tasks.ts</text>
+    <text x="873" y="634" font-size="12" fill="#256439">+11</text>
+    <text x="903" y="634" font-size="12" fill="#812c27">−5</text>
+    <text x="929" y="634" font-size="14">···</text>
+    <path d="M284 644h670" stroke="#bdc7d4"/>
+    <text x="297" y="663" font-size="11" font-family="ui-monospace, monospace" fill="#52647c">1   1     import { taskDisposition, applyTaskDisposition } from "../core/tasks/task-disposition.js";</text>
+
+    <rect x="284" y="683" width="670" height="29" rx="6" fill="#fff" stroke="#bdc7d4"/>
+    <use href="#disclosure" x="298" y="695"/>
+    <text x="313" y="703" font-size="13" font-family="ui-monospace, monospace">app/src/core/git/git-snapshot.ts</text>
+  </g>
+</svg>

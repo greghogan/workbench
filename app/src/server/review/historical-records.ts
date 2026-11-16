@@ -14,12 +14,13 @@ const inventories = new WeightedCache<{ references: RecordLookup; paths: Readonl
 export function historicalRecords(
   root: string,
   revision: string,
-  suppliedEntries?: ReadonlyMap<string, GitEntry>,
+  suppliedEntries?: () => ReadonlyMap<string, GitEntry>,
+  selectedPaths?: readonly string[],
 ): { references: RecordLookup; paths: ReadonlySet<string> } {
-  const key = `${resolve(root)}:${revision}`;
+  const key = JSON.stringify([resolve(root), revision, selectedPaths]);
   const cached = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision) ? inventories.get(key) : undefined;
   if (cached) return cached;
-  const entries = suppliedEntries ?? logicalRecordEntries(root, readGitTree(root, revision)),
+  const entries = suppliedEntries?.() ?? logicalRecordEntries(root, readGitTree(root, revision)),
     registry = entries.get(projectPaths.projects),
     config = entries.get(projectPaths.config),
     objects = readGitObjects(
@@ -35,7 +36,8 @@ export function historicalRecords(
     scopes = projects.map((project) => project.path),
     records: BrowserRecord[] = [];
   const ordered = [...projects].sort((a, b) => b.path.length - a.path.length);
-  for (const path of entries.keys()) {
+  for (const path of selectedPaths ?? entries.keys()) {
+    if (!entries.has(path)) continue;
     const kind = classifyRecordPath(path, scopes, collections),
       type = kind.charter
         ? "CHARTER"
@@ -81,12 +83,12 @@ export function historicalRecords(
       }
     }
   }
-  const result = { references: new RecordLookup(records), paths: new Set(entries.keys()) };
+  const result = { references: new RecordLookup(records), paths: new Set(selectedPaths ?? entries.keys()) };
   if (/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision))
     inventories.set(
       key,
       result,
-      [...entries.keys()].reduce((size, path) => size + path.length * 2 + 64, 1) +
+      [...result.paths].reduce((size, path) => size + path.length * 2 + 64, 1) +
         records.reduce((size, record) => size + JSON.stringify(record).length * 2 + 256, 0),
     );
   return result;

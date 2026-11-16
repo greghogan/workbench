@@ -35,6 +35,19 @@ evidence; preserve enough of the original intent and decisions to explain how th
 Shared states are Planned, Approved, Accepted, and Canceled. Approval authorizes the current plan; acceptance records
 human satisfaction with the delivered outcome and evidence. Agent claims and passing checks do not establish acceptance.
 
+```mermaid
+stateDiagram-v2
+  direction TB
+  [*] --> Planned
+  Planned --> Approved: Approve plan
+  Approved --> Accepted: Accept outcome
+  Approved --> Planned: Return to planning
+  Planned --> Canceled: Cancel
+  Approved --> Canceled: Cancel
+  Accepted --> Planned: Reopen
+  Canceled --> Planned: Reopen
+```
+
 Group coherent work without imposing a linear history. Create related or child tasks when work needs independent
 planning, evidence, or scheduling. Nesting expresses ownership, dependencies express prerequisites, and queue order
 expresses preference; none grants approval. Preserve those relationships in discovery views. Parent completion requires

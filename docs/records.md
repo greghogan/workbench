@@ -276,8 +276,11 @@ Active queued work must be released or blocked before cancellation.
 
 Use `workbench commit history --branches` to list local branches, or `commit history BRANCH` to read its retained
 first-parent history. `--from REVISION` continues an older page; `--diff` and optional `--file PATH` show one commit's
-patch. The browser History page provides immutable commit and file views without switching branches; historical links
-stay in that version. Completed commits are read-only rather than new requests for human approval.
+patch. A task's Commits section opens each delivery with its message and file comparisons. Code uses syntax
+highlighting; Markdown retains formatted document comparisons. Unified and side-by-side views preserve the selected
+commit. Larger deliveries load more file comparisons as needed, with ordinary links available without JavaScript.
+Individual file links provide the full preview or download when an inline comparison is unavailable. Commit inspection
+neither switches branches nor approves records.
 
 `workbench queue` shows the local execution order and the next eligible task. Approval appends work automatically.
 Restore previously removed approved work with `workbench queue add <references...>` and reorder it with

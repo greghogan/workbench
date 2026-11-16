@@ -285,16 +285,17 @@ export function recordPage(
     const { baseline, baselines } = state;
     const base = recordURL(record.id, { collection: context.selection, view: "changes" });
     tools = diffLayout(withView(base, { baseline }), split);
-    const controls = (
-      <div class="actions">
-        {baselines
-          .filter(({ value }) => value !== baseline)
-          .map(({ value, label }) =>
-            linkButton(label, viewLocation(context, base, parameters, { baseline: value }), true),
-          )}
-        {record.type !== "TSK" && <a href={projectPath("/review")}>Review files</a>}
-      </div>
-    );
+    const controls =
+      baselines.length > 1 || record.type !== "TSK" ? (
+        <div class="actions">
+          {baselines
+            .filter(({ value }) => value !== baseline)
+            .map(({ value, label }) =>
+              linkButton(label, viewLocation(context, base, parameters, { baseline: value }), true),
+            )}
+          {record.type !== "TSK" && <a href={projectPath("/review")}>Review files</a>}
+        </div>
+      ) : null;
     body =
       baseline === "upstream" ? (
         context.comparison?.state === "compared" && compared ? (

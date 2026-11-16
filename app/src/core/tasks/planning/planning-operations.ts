@@ -32,15 +32,8 @@ import {
   safePlanFile,
   type PlanIdentity,
 } from "./plan-model.js";
-import {
-  planningSettings,
-  planningScopes,
-  readPlan,
-  savedPlanTrees,
-  draftPlanIdentities,
-  type PlanningSettings,
-  type PlanView,
-} from "./planning-store.js";
+import { planningScopes, readPlan, savedPlanTrees, draftPlanIdentities, type PlanView } from "./planning-store.js";
+import { planningSettings, type PlanningSettings } from "./planning-settings.js";
 
 import { treeFromEntries, transaction } from "./plan-git.js";
 import { planningOperation, checkpointPlans } from "./planning-checkpoint.js";

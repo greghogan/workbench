@@ -12,6 +12,7 @@ import { metadataSections } from "./record-content.js";
 import { referenceAttributes } from "./record-links.js";
 import { normalizedNumber } from "../../core/records/record-identity.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
+import { isDocumentationSvg } from "../documents/document-image.js";
 import { required } from "../../core/runtime/invariants.js";
 import { diagramView, diagramComparisonView } from "./diagram-view.js";
 import { markdownHeadingId } from "../../core/records/markdown-links.js";
@@ -165,8 +166,27 @@ export function markdownParser(
     renderer.renderToken(tokens, index, options);
   parser.renderer.rules.table_close = (tokens, index, options, _environment: unknown, renderer) =>
     renderer.renderToken(tokens, index, options) + "</div>";
-  parser.renderer.rules.image = (tokens, index) =>
-    renderToString(<span class="muted">[Image: {tokens[index]?.content ?? ""}]</span>);
+  parser.renderer.rules.image = (tokens, index) => {
+    const token = tokens[index],
+      alt = token?.content ?? "",
+      source = String(token?.attrGet("src") ?? "");
+    if (record && owner && !record.history && !owner.archive && !owner.collection && !owner.local && source) {
+      let path = "";
+      try {
+        const target = decodeURIComponent(source);
+        if (!/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(target))
+          path = relative(record.directory, resolve(record.directory, dirname(record.path), target)).replaceAll(
+            "\\",
+            "/",
+          );
+      } catch {
+        // Preserve readable image text for malformed destinations.
+      }
+      if (isDocumentationSvg(path))
+        return renderToString(<img src={routeURL(Route.DocumentImage, { path })} alt={alt} loading="lazy" />);
+    }
+    return renderToString(<span class="muted">[Image: {alt}]</span>);
+  };
   const fence = required(parser.renderer.rules.fence, "Markdown code renderer is unavailable");
   parser.renderer.rules.fence = (tokens, index, options, environment, renderer) => {
     const token = tokens[index];
