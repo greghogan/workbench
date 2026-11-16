@@ -1,3 +1,5 @@
+import { startFileDifferences } from "./file-diff-client.js";
+import { startCommitFiles } from "./commit-files-client.js";
 import { startLocalTimes } from "./date-time-client.js";
 import { startTaskTreeLoading } from "./task-tree-client.js";
 import { BrowserSession, type Browser } from "./browser-session.js";
@@ -32,11 +34,15 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
   }
   const records = startRecordLoading(session);
   const taskTree = startTaskTreeLoading(session);
+  const commits = startCommitFiles(session);
+  const differences = startFileDifferences(session);
   const sources = startSourceNavigation(session);
   const diagrams = startDiagrams(browser);
   const closeLive = startLiveUpdates(session, () => {
     records.watch();
     taskTree.watch();
+    commits.watch();
+    differences.watch();
     sources.refresh();
     diagrams.watch();
   });
@@ -51,6 +57,8 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
     sources.close();
     records.close();
     taskTree.close();
+    commits.close();
+    differences.close();
     closeForms();
     closeReferences();
     closeCards();

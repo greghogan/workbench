@@ -15,6 +15,9 @@ Use the review baseline defined by workbench:ADR-1. A new record without a basel
 Deletions show the complete version being removed. ADR comparisons retain full document context in unified and
 side-by-side views. Paragraph reflow alone is not a word change; replacements group removals before additions.
 
+Commit-file inspection presents source-line changes with expandable surrounding context, including for Markdown files.
+Record review retains its complete-document presentation and acknowledgment requirements.
+
 Both presentations preserve the contents and ordering of each compared version. When detailed matching is unavailable,
 present both complete versions with unmatched content explicitly identified.
 

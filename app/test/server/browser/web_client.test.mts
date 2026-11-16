@@ -6,7 +6,7 @@ const resources: { close: () => void }[] = [];
 afterEach(() => {
   for (const resource of resources.splice(0)) resource.close();
 });
-function fixture(body: string) {
+function fixture(body: string, fetch = vi.fn<typeof globalThis.fetch>()) {
   const dom = new JSDOM(
     `<!doctype html><body data-revision="one" data-events-url="/notifications?channel=records" data-review-status-url="/versions?focus=current" data-compatibility-status-url="/review-status?compatibility=1" data-inventory-url="/inventory" data-inventory-view="projects"><nav aria-label="Main navigation"></nav><div id="live-status" hidden><span></span><a href="">Refresh</a></div><main>${body}</main></body>`,
     { url: "http://localhost:8080/collections", pretendToBeVisual: true },
@@ -38,13 +38,15 @@ function fixture(body: string) {
     disconnect() {
       /* The fixture owns observation delivery. */
     }
-    fire() {
-      this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+    fire(targets?: Element[]) {
+      this.callback(
+        (targets ?? [undefined]).map((target) => ({ isIntersecting: true, target }) as IntersectionObserverEntry),
+        this as unknown as IntersectionObserver,
+      );
     }
   }
   Object.defineProperty(window, "EventSource", { value: Events });
   Object.defineProperty(window, "IntersectionObserver", { value: Observer });
-  const fetch = vi.fn<typeof globalThis.fetch>();
   Object.defineProperty(window, "fetch", { value: fetch });
   window.scrollTo = vi.fn();
   window.scrollBy = vi.fn();
@@ -808,4 +810,192 @@ test("live renaming updates the project header while preserving a typed search",
   expect(web.document.getElementById("query")).toBe(input);
   expect(input.value).toBe("A search still being typed");
   expect(web.document.activeElement).toBe(input);
+});
+
+function fileDiffPlaceholder(path: string, automatic = true) {
+  return `<div data-file-diff data-file-path="${path}" data-file-commit="one"><a data-file-diff-link ${automatic ? "data-file-diff-auto" : ""} href="/delivery?commit=one&path=${path}&load=1">Load diff</a></div>`;
+}
+
+function diffBatch(contents: string, next = "") {
+  return updated(`<div data-file-diff-result="one" data-file-diff-batch="${next}">${contents}</div>`);
+}
+
+test("small file diffs load in sequential batches without scrolling or changing focus", async () => {
+  const first = deferredResponse(),
+    second = deferredResponse(),
+    fetch = vi.fn<typeof globalThis.fetch>().mockReturnValueOnce(first.response).mockReturnValueOnce(second.response),
+    web = fixture(
+      '<input id="keep-focus"><div id="commit-file-list" data-commit="one" data-file-diff-batch="/delivery?batch=1">' +
+        fileDiffPlaceholder("a.ts") +
+        fileDiffPlaceholder("b.py") +
+        fileDiffPlaceholder("c.md") +
+        fileDiffPlaceholder("large.txt", false) +
+        "</div>",
+      fetch,
+    );
+  const focus = web.document.getElementById("keep-focus");
+  focus?.focus();
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/delivery?batch=1"]);
+  first.finish(
+    diffBatch(
+      '<div data-file-diff data-file-path="a.ts" data-file-commit="one">First source</div>' +
+        '<div data-file-diff data-file-path="b.py" data-file-commit="one">Second source</div>',
+      "/delivery?batch=2",
+    ),
+  );
+  await vi.waitFor(() => {
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/delivery?batch=1", "/delivery?batch=2"]);
+    expect(web.document.querySelector('[data-file-path="a.ts"]')?.textContent).toBe("First source");
+    expect(web.document.querySelector('[data-file-path="b.py"]')?.textContent).toBe("Second source");
+  });
+  second.finish(diffBatch('<div data-file-diff data-file-path="c.md" data-file-commit="one">Third source</div>'));
+  await vi.waitFor(() => {
+    expect(web.document.querySelector('[data-file-path="c.md"]')?.textContent).toBe("Third source");
+  });
+  expect(web.document.activeElement).toBe(focus);
+  expect(web.document.querySelector('[data-file-path="large.txt"]')?.textContent).toBe("Load diff");
+  expect(web.window.location.search).toBe("");
+});
+
+test("an unavailable batch leaves its files manually retryable", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValueOnce(new Error("Network unavailable")),
+    web = fixture(
+      '<div id="commit-file-list" data-commit="one" data-file-diff-batch="/delivery?batch=1">' +
+        fileDiffPlaceholder("a.ts") +
+        "</div>",
+      fetch,
+    );
+  await vi.waitFor(() => {
+    expect(web.document.getElementById("live-status")?.textContent).toContain("Network unavailable");
+  });
+  expect(web.document.querySelector("[data-file-diff-batch]")).toBeNull();
+  fetch.mockResolvedValueOnce(
+    updated(
+      '<div data-file-diff data-file-path="a.ts" data-file-commit="one"><section class="file-diff-scroll" tabindex="0">Recovered source</section></div>',
+    ),
+  );
+  web.document.querySelector<HTMLAnchorElement>("[data-file-diff-link]")?.click();
+  await vi.waitFor(() => {
+    expect(web.document.activeElement?.textContent).toBe("Recovered source");
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+test("page restoration resumes an interrupted batch at the same continuation", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementationOnce(
+    (_url, options) =>
+      new Promise<Response>((_resolve, reject) => {
+        options?.signal?.addEventListener(
+          "abort",
+          () => {
+            reject(new Error("Aborted"));
+          },
+          { once: true },
+        );
+      }),
+  );
+  const web = fixture(
+    '<div id="commit-file-list" data-commit="one" data-file-diff-batch="/delivery?batch=1">' +
+      fileDiffPlaceholder("a.ts") +
+      "</div>",
+    fetch,
+  );
+  web.window.dispatchEvent(new web.window.PageTransitionEvent("pagehide"));
+  expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  fetch.mockResolvedValueOnce(
+    diffBatch('<div data-file-diff data-file-path="a.ts" data-file-commit="one">Restored source</div>'),
+  );
+  web.window.dispatchEvent(new web.window.PageTransitionEvent("pageshow"));
+  await vi.waitFor(() => {
+    expect(web.document.querySelector("[data-file-diff]")?.textContent).toBe("Restored source");
+  });
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/delivery?batch=1", "/delivery?batch=1"]);
+});
+
+test("file filtering searches complete paths and reveals matching folders without discarding their collapsed state", () => {
+  const web = fixture(
+    '<label hidden data-commit-filter>Filter<input data-commit-file-filter></label><ul><li data-commit-directory><details><summary>src</summary><ul><li data-commit-file-path="src/Alpha.ts">Alpha</li></ul></details></li><li data-commit-directory><details><summary>docs</summary><ul><li data-commit-file-path="docs/Beta.md">Beta</li></ul></details></li></ul>',
+  );
+  const input = web.document.querySelector<HTMLInputElement>("[data-commit-file-filter]");
+  if (!input) throw new Error("Missing file filter");
+  input.value = "SRC/ALPHA";
+  input.dispatchEvent(new web.window.Event("input", { bubbles: true }));
+  const folders = [...web.document.querySelectorAll<HTMLElement>("[data-commit-directory]")];
+  expect(folders[0]?.hidden).toBe(false);
+  expect(folders[1]?.hidden).toBe(true);
+  expect(folders[0]?.querySelector("details")?.open).toBe(true);
+  input.value = "";
+  input.dispatchEvent(new web.window.Event("input", { bubbles: true }));
+  expect(folders.every((folder) => !folder.hidden)).toBe(true);
+  expect(folders[0]?.querySelector("details")?.open).toBe(false);
+});
+
+test("file diff expansion preserves neighboring files, navigation, cold URLs, focus, and retry after a failed request", async () => {
+  const body =
+      '<details class="commit-navigation" open><label hidden data-commit-filter>Filter<input data-commit-file-filter></label><ul><li data-commit-file-path="Alpha.ts">Alpha</li><li data-commit-file-path="Beta.md">Beta</li></ul></details><div data-file-diff data-file-path="Alpha.ts" data-file-commit="one"><a data-file-diff-link href="/collections?commit=one&path=Alpha.ts&context=0%3A0%3A20">Expand context</a><p>Old source</p></div><div id="neighbor">Other open file</div>',
+    web = fixture(body),
+    neighbor = web.document.getElementById("neighbor"),
+    link = web.document.querySelector<HTMLAnchorElement>("[data-file-diff-link]");
+  web.window.history.replaceState({}, "", "/collections?commit=one&path=Alpha.ts");
+  const input = web.document.querySelector<HTMLInputElement>("[data-commit-file-filter]");
+  if (!input || !link) throw new Error("Missing file controls");
+  expect(input.parentElement?.hidden).toBe(false);
+  input.value = "ALPHA";
+  input.dispatchEvent(new web.window.Event("input", { bubbles: true }));
+  expect(web.document.querySelector<HTMLElement>('[data-commit-file-path="Beta.md"]')?.hidden).toBe(true);
+  web.fetch.mockResolvedValueOnce(new Response("Unavailable", { status: 503 }));
+  link.click();
+  await vi.waitFor(() => {
+    expect(web.document.getElementById("live-status")?.hidden).toBe(false);
+  });
+  expect(web.document.querySelector("[data-file-diff]")?.textContent).toContain("Old source");
+  web.fetch.mockResolvedValueOnce(
+    updated(
+      '<div data-file-diff data-file-path="Alpha.ts" data-file-commit="one"><div class="file-diff-scroll" tabindex="0">Expanded source</div></div>',
+    ),
+  );
+  link.click();
+  await vi.waitFor(() => {
+    expect(web.document.querySelector("[data-file-diff]")?.textContent).toBe("Expanded source");
+  });
+  expect(web.document.getElementById("neighbor")).toBe(neighbor);
+  expect(web.document.querySelector(".commit-navigation[open]")).not.toBeNull();
+  expect(web.document.activeElement?.className).toBe("file-diff-scroll");
+  expect(new URL(web.window.location.href).searchParams.get("context")).toBe("0:0:20");
+  expect(web.document.getElementById("live-status")?.hidden).toBe(true);
+});
+
+test("file diff expansion rejects a mismatched commit and aborts late publication on page cleanup", async () => {
+  const web = fixture(
+      '<div data-file-diff data-file-path="a.ts" data-file-commit="one"><a data-file-diff-link href="/collections?commit=one&path=a.ts&load=1">Load diff</a><p>Keep source</p></div>',
+    ),
+    link = web.document.querySelector<HTMLAnchorElement>("[data-file-diff-link]");
+  if (!link) throw new Error("Missing file link");
+  web.fetch.mockResolvedValueOnce(
+    updated('<div data-file-diff data-file-path="a.ts" data-file-commit="two">Wrong source</div>'),
+  );
+  link.click();
+  await vi.waitFor(() => {
+    expect(web.document.getElementById("live-status")?.textContent).toContain("comparison changed");
+  });
+  expect(web.document.querySelector("[data-file-diff]")?.textContent).toContain("Keep source");
+  const late = deferredResponse();
+  web.fetch.mockReturnValueOnce(late.response);
+  link.click();
+  const signal = web.fetch.mock.calls.at(-1)?.[1]?.signal;
+  web.close();
+  expect(signal?.aborted).toBe(true);
+  late.finish(updated('<div data-file-diff data-file-path="a.ts" data-file-commit="one">Late source</div>'));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(web.document.querySelector("[data-file-diff]")?.textContent).toContain("Keep source");
+});
+
+test("checkout changes do not replace an immutable commit inspection or discard its expanded context", () => {
+  const web = fixture("<div data-commit-inspection><p>Expanded historical file</p></div>"),
+    main = web.document.querySelector("main");
+  web.change();
+  expect(web.fetch).not.toHaveBeenCalled();
+  expect(web.document.querySelector("main")).toBe(main);
+  expect(web.document.getElementById("live-status")?.hidden).toBe(true);
 });

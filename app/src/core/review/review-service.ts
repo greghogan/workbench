@@ -353,16 +353,21 @@ export function reviewStatus(
 
 /** Consent and accepted-history authority stay live even when comparison contents are immutable. */
 export function reviewedChanges(root: string, changes: readonly ReviewChange[], receipt = reviewReceipt(root)) {
+  return reviewChangeStatus(root, receipt)(changes);
+}
+
+/** One authority read covers all immutable comparisons in a workspace refresh. */
+export function reviewChangeStatus(root: string, receipt = reviewReceipt(root)) {
   const approved = savedApprovals(receipt),
     history = acceptedComparisonDigests(root);
-  return {
+  return (changes: readonly ReviewChange[]) => ({
     receipt,
     changes: changes.map((change) => ({
       ...change,
       digest: reviewChangeDigest(change),
       approved: approved.has(reviewChangeDigest(change)) || history.has(reviewChangeDigest(change)),
     })),
-  };
+  });
 }
 
 /** All review adapters acknowledge the same byte and authorship contract; eligibility remains with the adapter. */
@@ -625,6 +630,7 @@ export function workingReviewContents(root: string, change: ReviewChange): Buffe
 export function reviewedBaselines(
   root: string,
   head = reviewHead(root),
+  path?: string,
 ): Map<string, { contents: string; approvedAt: string; mode: string }> {
   const receipt = reviewReceipt(root);
   const matches = new Map<string, boolean>();
@@ -644,7 +650,10 @@ export function reviewedBaselines(
   };
   return new Map(
     [...savedApprovals(receipt).values()].flatMap((ack) =>
-      ack.latest && matchingHead(ack.approval.head) && ack.approval.contents !== undefined
+      (path === undefined || ack.change.path === path) &&
+      ack.latest &&
+      matchingHead(ack.approval.head) &&
+      ack.approval.contents !== undefined
         ? [
             [
               ack.change.path,

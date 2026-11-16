@@ -12,6 +12,7 @@ import { metadataSections } from "./record-content.js";
 import { referenceAttributes } from "./record-links.js";
 import { normalizedNumber } from "../../core/records/record-identity.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
+import { isDocumentationSvg, isSvg } from "../documents/document-image.js";
 import { required } from "../../core/runtime/invariants.js";
 import { diagramView, diagramComparisonView } from "./diagram-view.js";
 import { markdownHeadingId } from "../../core/records/markdown-links.js";
@@ -23,8 +24,12 @@ export type MarkdownRecord = Pick<BrowserRecord, "directory" | "path"> & {
   scope?: string;
   type?: BrowserRecord["type"];
   history?: { commit: string; paths: ReadonlySet<string>; location?: (path: string) => string };
-  planFiles?: { reference: string; names: readonly string[]; version?: "approved"; base?: string };
+  planFiles?: { reference: string; files: ReadonlyMap<string, string>; version?: "approved"; base?: string };
 };
+function planFilePath(record: NonNullable<MarkdownRecord["planFiles"]>, relative: string): string {
+  const resolved = posix.normalize(posix.join(record.base ?? "", relative));
+  return record.base === undefined ? resolved.replace(/^files\//, "") : resolved;
+}
 export function markdownParser(
   record: MarkdownRecord | undefined,
   records: RecordLookup,
@@ -96,9 +101,8 @@ export function markdownParser(
     }
     const fragment = href.includes("#") ? "#" + documentPrefix + href.slice(href.indexOf("#") + 1) : "";
     if (record.planFiles) {
-      const resolved = posix.normalize(posix.join(record.planFiles.base ?? "", decoded));
-      const name = record.planFiles.base === undefined ? resolved.replace(/^files\//, "") : resolved;
-      if (!record.planFiles.names.includes(name)) return undefined;
+      const name = planFilePath(record.planFiles, decoded);
+      if (!record.planFiles.files.has(name)) return undefined;
       return {
         href:
           routeURL(Route.PlanFile, {
@@ -165,8 +169,51 @@ export function markdownParser(
     renderer.renderToken(tokens, index, options);
   parser.renderer.rules.table_close = (tokens, index, options, _environment: unknown, renderer) =>
     renderer.renderToken(tokens, index, options) + "</div>";
-  parser.renderer.rules.image = (tokens, index) =>
-    renderToString(<span class="muted">[Image: {tokens[index]?.content ?? ""}]</span>);
+  parser.renderer.rules.image = (tokens, index) => {
+    const token = tokens[index],
+      alt = token?.content ?? "",
+      source = String(token?.attrGet("src") ?? "");
+    if (record?.planFiles && source) {
+      try {
+        const relative = decodeURIComponent(source);
+        if (!/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(relative)) {
+          const name = planFilePath(record.planFiles, relative);
+          const image = record.planFiles.files.get(name);
+          if (image && isSvg(name))
+            return renderToString(
+              <img
+                src={routeURL(Route.PlanFile, {
+                  id: record.planFiles.reference,
+                  path: name,
+                  image,
+                  ...(record.planFiles.version ? { version: record.planFiles.version } : {}),
+                })}
+                alt={alt}
+                loading="lazy"
+              />,
+            );
+        }
+      } catch {
+        // Preserve alternate text when an image path cannot be resolved.
+      }
+    }
+    if (record && owner && !record.history && !owner.archive && !owner.collection && !owner.local && source) {
+      let path = "";
+      try {
+        const target = decodeURIComponent(source);
+        if (!/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(target))
+          path = relative(record.directory, resolve(record.directory, dirname(record.path), target)).replaceAll(
+            "\\",
+            "/",
+          );
+      } catch {
+        // Preserve readable image text for malformed destinations.
+      }
+      if (isDocumentationSvg(path))
+        return renderToString(<img src={routeURL(Route.DocumentImage, { path })} alt={alt} loading="lazy" />);
+    }
+    return renderToString(<span class="muted">[Image: {alt}]</span>);
+  };
   const fence = required(parser.renderer.rules.fence, "Markdown code renderer is unavailable");
   parser.renderer.rules.fence = (tokens, index, options, environment, renderer) => {
     const token = tokens[index];

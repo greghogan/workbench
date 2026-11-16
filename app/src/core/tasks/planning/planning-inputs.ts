@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { gitReferenceInputs } from "../../git/refs.js";
 import { repositoryStatePath } from "../../git/repository-state.js";
-import { planningSettings } from "./planning-store.js";
+import { planningSettings } from "./planning-settings.js";
 import { planningPaths } from "./plan-model.js";
 export function planningInputs(root: string): string[] {
   const state = repositoryStatePath(root),

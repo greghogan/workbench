@@ -276,8 +276,11 @@ Active queued work must be released or blocked before cancellation.
 
 Use `workbench commit history --branches` to list local branches, or `commit history BRANCH` to read its retained
 first-parent history. `--from REVISION` continues an older page; `--diff` and optional `--file PATH` show one commit's
-patch. The browser History page provides immutable commit and file views without switching branches; historical links
-stay in that version. Completed commits are read-only rather than new requests for human approval.
+patch. A task's Commits section opens each delivery with its message and file comparisons. Code uses syntax
+highlighting; Markdown retains formatted document comparisons. Unified and side-by-side views preserve the selected
+commit. Larger deliveries load more file comparisons as needed, with ordinary links available without JavaScript.
+Individual file links provide the full preview or download when an inline comparison is unavailable. Commit inspection
+neither switches branches nor approves records.
 
 `workbench queue` shows the local execution order and the next eligible task. Approval appends work automatically.
 Restore previously removed approved work with `workbench queue add <references...>` and reorder it with
@@ -592,17 +595,17 @@ amended commit. `--task REFERENCE` explicitly associates work; changed approved 
 also provide associations. Receipts are local, uncommitted Git metadata and contain no executable instructions.
 
 Before publication, use `workbench review task --base REVISION` with the same recording options to assess the
-accumulated outgoing work against the destination's current tip. After fetching and rebasing, collaborators' commits
-form the baseline; their local receipts are not required. The commit hook checks local change review, and the push hook
-checks the accumulated outgoing review. File content, mode, path, and baseline changes invalidate the applicable review.
+accumulated outgoing work against the destination's current tip. Use `--task REFERENCE` to review a specific task
+against the start of its delivery. Review all associated tasks before publication. After fetching and rebasing,
+collaborators' commits form the baseline. The commit hook checks local change review, and the push hook checks the
+accumulated outgoing review. File content, mode, path, and baseline changes invalidate the applicable review.
 
-Each worktree retains only its latest change review and accumulated review. New reviews replace superseded receipts; the
-post-commit hook releases change evidence after a successful commit. Explicit task associations remain attached to
-pending branch work, including after a rebase; consuming a receipt cannot remove an acceptance requirement. The hook
-uses the committed Workbench distribution or the installed command, independently of unstaged launcher changes and
-project registration. Failed pushes can reuse matching accumulated evidence. A later push that observes the reviewed
-snapshot at the destination retires that receipt; otherwise a newer accumulated review replaces it. Observing published
-branch work also retires its pending associations. Human file acknowledgments and task decisions are stored separately.
+Retained provisional commits keep their matching change receipts. Task reviews retain evidence for their selected
+tasks and Git snapshots. Explicit task associations remain attached to pending branch work across rebases. The hook uses
+the committed Workbench distribution or installed command, so unstaged launcher changes and project registration leave
+review enforcement intact. Failed pushes can reuse matching evidence. A later push retires receipts and pending
+associations when it observes the covered work at the destination. Human acknowledgments and task decisions are stored
+separately.
 
 With human task decisions enabled, task approval and acceptance require confirmation through the interactive task CLI or
 task page. Local implementation commits may precede acceptance. Acceptance captures the current project files through a

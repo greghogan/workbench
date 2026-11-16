@@ -138,6 +138,13 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     );
   });
   const tasks = object(data.tasks);
+  const planFiles = (value: unknown) => {
+    list(value, (item) => {
+      const file = object(item);
+      strings(file, ["name", "oid"]);
+      check(bool(file.executable));
+    });
+  };
   list(tasks.plans, (value) => {
     const plan = object(value);
     strings(plan, ["reference", "scope", "name", "title", "summary", "contents", "digest", "status"]);
@@ -153,11 +160,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     list(plan.dependencies, (value) => {
       check(text(value));
     });
-    list(plan.files, (value) => {
-      const file = object(value);
-      strings(file, ["name", "oid"]);
-      check(bool(file.executable));
-    });
+    planFiles(plan.files);
     list(plan.changedFiles, (value) => {
       const file = object(value);
       check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
@@ -165,6 +168,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     if (plan.approval !== undefined) {
       const approval = object(plan.approval);
       check(text(approval.at) && text(approval.contents) && bool(approval.current));
+      planFiles(approval.files);
     }
   });
   check(bool(tasks.decisionsRequired));

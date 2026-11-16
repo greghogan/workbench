@@ -17,7 +17,6 @@ import { proposedReview, ReviewSource } from "./review-service.js";
 /** Format real record files, then repair only the generated outputs depending on those records. */
 export async function formatPendingReviews(root: string, selected?: string): Promise<void> {
   const config = readConfig(root);
-  const width = config.markdown?.wrap_width ?? 120;
   const scopes = readProjects(root).map((project) => project.path);
   const collections = (config.collections?.sources ?? []).map((source) => source.id);
   const changes = proposedReview(root, ReviewSource.Working).changes;
@@ -41,6 +40,16 @@ export async function formatPendingReviews(root: string, selected?: string): Pro
           ...pendingRecordOutputs(root),
         ]),
       ];
+  await formatWorkingRecords(root, paths);
+}
+
+/** The caller resolves owned primary records; supporting evidence never enters automatic formatting. */
+export async function formatWorkingRecords(
+  root: string,
+  paths: readonly string[],
+  expected?: ReadonlyMap<string, Buffer>,
+): Promise<void> {
+  const width = readConfig(root).markdown?.wrap_width ?? 120;
   const formatter = new ReviewFormatter();
   const preparation = new ReviewPreparation(root);
   const affected = new Set<string>();
@@ -79,6 +88,9 @@ export async function formatPendingReviews(root: string, selected?: string): Pro
         continue;
       }
       const raw = readBoundedFile(join(root, path), reviewFileLimit, "record formatting");
+      const captured = expected?.get(path);
+      if (captured && !raw.equals(captured))
+        throw new StateConflict("Record changed before formatting; refresh and retry");
       const result = await formatter.prepare(path, raw, width);
       if (result.state === "unavailable") throw new FormattingProblem(path, result.problem);
       const formatted = result.state === "changed" ? result.formatted : raw.toString("utf8");

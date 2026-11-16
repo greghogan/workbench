@@ -1175,14 +1175,32 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         workbench("queue", "start", "demo:TSK-ZZ");
         await work.getByText("Active", { exact: true }).waitFor();
         writeFileSync(join(root, "task-delivery.ts"), 'export const outcome = "Initial browser result";\n');
-        git(root, "add", "workbench/tasks/TSK-ZZ.md", "task-delivery.ts");
+        const contextSource = Array.from(
+          { length: 100 },
+          (_, index) => `Paragraph ${String(index + 1)} **context**.\n`,
+        ).join("");
+        writeFileSync(join(root, "task-context.md"), contextSource);
+        git(root, "add", "workbench/tasks/TSK-ZZ.md", "task-delivery.ts", "task-context.md");
         git(root, "commit", "-qm", "Start the task workflow\n\nWorkbench-Provisional: true");
         writeFileSync(join(root, "task-delivery.ts"), 'export const outcome = "Verified in Chromium";\n');
         writeFileSync(
           path,
           readFileSync(path, "utf8") + "\n## Implementation account\n\nDelivered the browser workflow.\n",
         );
-        git(root, "add", "workbench/tasks/TSK-ZZ.md", "task-delivery.ts");
+        writeFileSync(join(root, "task-context.md"), contextSource.replace("Paragraph 50", "Changed paragraph 50"));
+        const extraPaths = Array.from({ length: 51 }, (_, index) => `zz-extra-${String(index).padStart(2, "0")}.ts`);
+        for (const [index, file] of extraPaths.entries())
+          writeFileSync(join(root, file), `export const value = ${String(index)};\n`);
+        writeFileSync(join(root, "zz-large.md"), "Long document line. ".repeat(5000));
+        git(
+          root,
+          "add",
+          "workbench/tasks/TSK-ZZ.md",
+          "task-delivery.ts",
+          "task-context.md",
+          "zz-large.md",
+          ...extraPaths,
+        );
         git(
           root,
           "commit",
@@ -1196,7 +1214,16 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           "--evidence",
           "Verified the human approval and queue workflow in Chromium.",
         );
-        await page.reload();
+        let outcomePage = await page.reload();
+        // The CLI just changed the queue while the server may be capturing a review snapshot.
+        const refreshDeadline = Date.now() + 5000;
+        while (outcomePage?.status() === 409 && Date.now() < refreshDeadline) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 100);
+          });
+          outcomePage = await page.reload();
+        }
+        assert(outcomePage?.ok(), "Task outcome page returned " + String(outcomePage?.status()));
         await page
           .getByRole("region", { name: "Outcomes", exact: true })
           .getByRole("link", { name: /Deliver the task workflow/ })
@@ -1209,16 +1236,91 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         const commitMessage = page.locator('pre[aria-label="Commit message"]');
         assert(await commitMessage.isVisible(), "Commit messages are visible without opening a disclosure");
         assert.match(await commitMessage.innerText(), /Verify human approval and task acceptance in the browser/);
-        await page.getByRole("link", { name: "task-delivery.ts", exact: true }).click();
+        const contextFile = page.locator('[data-commit-file="task-context.md"]');
+        assert.equal(await contextFile.locator(".document-diff").count(), 0);
+        assert.equal(await contextFile.getByText("Paragraph 1 **context**.", { exact: true }).count(), 0);
+        await contextFile.getByRole("link", { name: "Show more lines above", exact: true }).click();
+        await contextFile.getByText("Paragraph 30 **context**.", { exact: true }).waitFor();
+        assert(
+          await page.locator('[data-commit-file="task-delivery.ts"]').isVisible(),
+          "Context expansion retains other files",
+        );
+        await page.locator('[data-commit-file="task-delivery.ts"] .hljs-keyword').first().waitFor();
+        await page.getByRole("link", { name: "Side-by-side", exact: true }).click();
+        await page.locator('[data-commit-file="task-delivery.ts"] .file-diff-split').waitFor();
+        await page.getByRole("link", { name: "Unified", exact: true }).click();
+        assert.equal(await page.getByRole("link", { name: "More files", exact: true }).count(), 0);
+        assert.equal(await page.getByRole("link", { name: "Previous files", exact: true }).count(), 0);
+        assert((await page.locator("[data-commit-file]").count()) >= 4, "All file headers are present immediately");
+        const lastPath = extraPaths.at(-1);
+        assert(lastPath, "The fixture includes a deferred small file");
+        const lastSmall = page.locator(`[data-commit-file="${lastPath}"]`);
+        await lastSmall.locator(".file-diff code").first().waitFor();
+        assert.equal(await page.evaluate(() => window.scrollY), 0, "Small diffs finish without scrolling");
+        assert(await page.locator('[data-commit-file="zz-large.md"]').getByRole("link", { name: "Load diff" }).count());
+        await page.reload();
+        assert(
+          (await page.locator("[data-commit-file]").count()) >= 4,
+          "Reload retains the complete changed-file list",
+        );
+        for (const width of [1440, 390]) {
+          await page.setViewportSize({ width, height: 1000 });
+          assert(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            "Inline comparisons fit the viewport",
+          );
+          await page.evaluate(axe.source);
+          const inlineAccessibility = await page.evaluate<axe.AxeResults>("axe.run(document)");
+          assert.deepEqual(inlineAccessibility.violations, [], "Inline commit-file accessibility violations");
+          await page.screenshot({ path: join(directory, `task-inline-${String(width)}.png`), fullPage: true });
+        }
+        await page.locator(".commit-navigation > summary").click();
+        await page.locator("[data-commit-file-filter]").fill("ZZ-LARGE");
+        await page
+          .getByRole("navigation", { name: "Changed files", exact: true })
+          .getByRole("link", { name: "zz-large.md", exact: true })
+          .click();
+        await page.getByRole("link", { name: "Load diff", exact: true }).click();
+        await page.locator(".file-diff code").first().waitFor();
+        await page.reload();
+        assert.equal(await page.getByRole("link", { name: "Load diff", exact: true }).count(), 0);
+        await page
+          .getByRole("navigation", { name: "Changed files", exact: true })
+          .getByRole("link", { name: "task-delivery.ts", exact: true })
+          .click();
         await page.getByText('export const outcome = "Verified in Chromium";', { exact: true }).waitFor();
-        assert.match(await page.locator(".code-difference del").innerText(), /Initial browser result/);
+        assert.match(await page.locator(".file-diff .diff-removed").innerText(), /Initial browser result/);
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: 1000 });
           assert(
             await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
             "Commit inspection fits the viewport",
           );
+          await page.evaluate(axe.source);
+          const accessibility = await page.evaluate<axe.AxeResults>("axe.run(document)");
+          writeFileSync(
+            join(directory, `task-commit-${String(width)}-accessibility.json`),
+            JSON.stringify(accessibility, null, 2),
+          );
+          assert.deepEqual(accessibility.violations, [], "Commit-file accessibility violations");
           await page.screenshot({ path: join(directory, `task-commit-${String(width)}.png`), fullPage: true });
+        }
+        const scroll = page.locator(".file-diff-scroll").first();
+        await scroll.focus();
+        await page.keyboard.press("ArrowRight");
+        await page.waitForFunction(() => (document.querySelector(".file-diff-scroll")?.scrollLeft ?? 0) > 0);
+        const plainContext = await browser.newContext({ javaScriptEnabled: false }),
+          plainPage = await plainContext.newPage();
+        try {
+          const url = new URL(page.url());
+          url.searchParams.set("path", "task-context.md");
+          url.searchParams.delete("context");
+          await plainPage.goto(url.href);
+          await plainPage.getByRole("link", { name: "Show more lines above", exact: true }).click();
+          await plainPage.getByText("Paragraph 30 **context**.", { exact: true }).waitFor();
+          assert.equal(await plainPage.locator("form[data-review]").count(), 0);
+        } finally {
+          await plainContext.close();
         }
         await page
           .getByRole("navigation", { name: "Breadcrumb" })

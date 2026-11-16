@@ -13,7 +13,8 @@ import {
 } from "../../../../src/core/git/git-snapshot.ts";
 import { integrateBranch } from "../../../../src/core/git/branch-integration.ts";
 import { planIdentity, planDraftRef } from "../../../../src/core/tasks/planning/plan-model.ts";
-import { readPlan, readPlans, planningSettings } from "../../../../src/core/tasks/planning/planning-store.ts";
+import { readPlan, readPlans } from "../../../../src/core/tasks/planning/planning-store.ts";
+import { planningSettings } from "../../../../src/core/tasks/planning/planning-settings.ts";
 import {
   savePlanDraft,
   publishPlanDraftUpdates,

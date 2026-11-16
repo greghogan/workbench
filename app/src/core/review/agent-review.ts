@@ -84,29 +84,28 @@ export function proposedAgentReview(
     throw new InvalidInput("Task review requires --base naming the start of the accumulated work");
   else base = reviewTree(root, "HEAD");
   const tree = unit?.tree ?? (options.staged ? stagedReviewTree(root) : workingReviewTree(root));
-  const tasks = treeTasks(root, tree),
-    previous = treeTasks(root, base);
-  const inferred = [...tasks]
-    .filter(
-      ([reference, task]) =>
+  const associated = [...(options.tasks ?? [])];
+  if (kind !== AgentReviewKind.Task || !associated.length) {
+    const tasks = treeTasks(root, tree),
+      previous = treeTasks(root, base);
+    for (const [reference, task] of tasks) {
+      const prior = previous.get(reference);
+      if (
         ["Approved", "Accepted"].includes(task.status) &&
-        (previous.get(reference)?.digest !== task.digest || previous.get(reference)?.workDigest !== task.workDigest),
-    )
-    .map(([reference]) => reference);
-  for (const entry of unit ? [] : readTaskQueue(root).entries)
-    if (["Active", "Implemented"].includes(entry.state) && tasks.get(entry.reference)?.status === "Approved")
-      inferred.push(entry.reference);
+        (prior?.digest !== task.digest || prior.workDigest !== task.workDigest)
+      )
+        associated.push(reference);
+    }
+    for (const entry of unit ? [] : readTaskQueue(root).entries)
+      if (["Active", "Implemented"].includes(entry.state) && tasks.get(entry.reference)?.status === "Approved")
+        associated.push(entry.reference);
+    if (kind === AgentReviewKind.Task) associated.push(...pendingTasks(root, unit?.revision));
+  }
   return {
     kind,
     base,
     tree,
-    tasks: [
-      ...new Set([
-        ...(options.tasks ?? []),
-        ...inferred,
-        ...(kind === AgentReviewKind.Task ? pendingTasks(root, unit?.revision) : []),
-      ]),
-    ].sort(),
+    tasks: [...new Set(associated)].sort(),
     summary: "",
     verification: "",
     reviewed: new Date().toISOString(),
@@ -513,7 +512,8 @@ export function checkAgentPublication(root: string, tip: string, remote: string)
   };
   for (const receipt of aggregate) for (const task of receipt.tasks) associated.add(task);
   const uncovered = [...associated].filter((reference) => !taskReviews.some((entry) => covers(entry, reference)));
-  if (policy.tasks && !aggregate.length && (!associated.size || uncovered.length))
+  const wholeSnapshotReviewed = aggregate.some((entry) => !entry.tasks.length);
+  if (policy.tasks && !wholeSnapshotReviewed && (!associated.size || uncovered.length))
     throw new InvalidInput(
       uncovered.length
         ? `Accumulated work review is required for ${uncovered.join(", ")}; review the delivered task and record workbench review task --base <start-revision> --record.`

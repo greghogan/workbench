@@ -21,23 +21,22 @@ export interface PlanningRecord {
   draft: boolean;
   conflict: boolean;
   implementation?: { task: string; checkout: string; pending: boolean };
-  approval?: { at: string; contents: string; current: boolean };
+  approval?: { at: string; contents: string; current: boolean; files: PlanningRecord["files"] };
   files: { name: string; executable: boolean; oid: string }[];
   changedFiles: { name: string; change: "added" | "changed" | "removed" }[];
 }
 export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecord {
-  const files = [...view.entries]
-    .filter(([path]) => path.startsWith(planningPaths.files))
-    .map(([path, entry]) => ({
-      name: path.slice(planningPaths.files.length),
-      executable: entry.mode === "100755",
-      oid: entry.oid,
-    }));
-  const previous = new Map(
-    [...(view.approval?.entries ?? [])]
+  const supportingFiles = (entries: PlanView["entries"]) =>
+    [...entries]
       .filter(([path]) => path.startsWith(planningPaths.files))
-      .map(([path, entry]) => [path.slice(planningPaths.files.length), entry]),
-  );
+      .map(([path, entry]) => ({
+        name: path.slice(planningPaths.files.length),
+        executable: entry.mode === "100755",
+        oid: entry.oid,
+      }));
+  const files = supportingFiles(view.entries);
+  const approvedFiles = view.approval ? supportingFiles(view.approval.entries) : [];
+  const previous = new Map(approvedFiles.map((file) => [file.name, file]));
   const current = new Map(files.map((file) => [file.name, file]));
   const changedFiles = [...new Set([...previous.keys(), ...current.keys()])]
     .sort()
@@ -46,9 +45,7 @@ export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecor
         after = current.get(name);
       if (!before) return [{ name, change: "added" }];
       if (!after) return [{ name, change: "removed" }];
-      return before.oid !== after.oid || (before.mode === "100755") !== after.executable
-        ? [{ name, change: "changed" }]
-        : [];
+      return before.oid !== after.oid || before.executable !== after.executable ? [{ name, change: "changed" }] : [];
     });
   return {
     ...(claim
@@ -75,7 +72,14 @@ export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecor
     draft: view.draft,
     conflict: view.conflict,
     ...(view.approval
-      ? { approval: { at: view.approval.at, contents: view.approval.contents, current: view.approval.current } }
+      ? {
+          approval: {
+            at: view.approval.at,
+            contents: view.approval.contents,
+            current: view.approval.current,
+            files: approvedFiles,
+          },
+        }
       : {}),
     files,
     changedFiles,

@@ -49,6 +49,7 @@ export const Route = {
   CitationOriginal: "/records/:id/original",
   CitationOriginalContent: "/records/:id/original/content",
   File: "/records/:id/files",
+  DocumentImage: "/documentation/image",
   Metrics: "/metrics",
   Events: "/events",
   Style: "/assets/style.css",
@@ -136,7 +137,7 @@ export interface RouteQueries {
     view?: "read" | "changes" | "edit" | "delete" | "cancel";
     layout?: DifferenceLayout;
   };
-  [Route.PlanFile]: { id: string; path: string; version?: "approved"; download?: "1" | "0" };
+  [Route.PlanFile]: { id: string; path: string; version?: "approved"; download?: "1" | "0"; image?: string };
   [Route.Overview]: SourceQuery;
   [Route.Projects]: { refresh?: "1"; "refresh-sizes"?: "1" };
   [Route.Inventory]: { view?: "projects" | "caches"; project?: string; owner?: string };
@@ -145,6 +146,9 @@ export interface RouteQueries {
     id: string;
     commit?: string;
     path?: string;
+    context?: string;
+    load?: "1";
+    batch?: string;
     layout?: DifferenceLayout;
     tip?: string;
     offset?: string;
@@ -164,9 +168,14 @@ export interface RouteQueries {
   [Route.History]: SourceQuery & {
     commit?: string;
     path?: string;
+    context?: string;
+    load?: "1";
+    batch?: string;
+    view?: "files";
     layout?: DifferenceLayout;
   };
   [Route.TaskOperation]: SourceQuery & { id: string; kind: "delete" | "revert" | "cancel"; reason?: string };
+  [Route.DocumentImage]: { path: string };
   [Route.HistoryFile]: { commit: string; path: string; side: "before" | "after" };
   [Route.ReviewStatus]: { id?: string; path?: string; compatibility?: "1" };
   [Route.Review]: SourceQuery & {
@@ -271,6 +280,7 @@ export const routeContracts: RouteContracts = {
       reason: bounded(16384),
     },
   },
+  [Route.DocumentImage]: { scope: "project", methods: ["GET"], query: { path: bounded(4096) } },
   [Route.HistoryFile]: {
     scope: "project",
     methods: ["GET"],
@@ -300,6 +310,10 @@ export const routeContracts: RouteContracts = {
     query: {
       commit: bounded(1024),
       path: bounded(4096),
+      context: bounded(4096),
+      load: oneOf(["1"]),
+      batch: bounded(16),
+      view: oneOf(["files"]),
       layout: oneOf(["unified", "split"]),
       scope: bounded(1024),
       collection: bounded(1024),
@@ -313,6 +327,9 @@ export const routeContracts: RouteContracts = {
       id: bounded(1024),
       commit: bounded(1024),
       path: bounded(4096),
+      context: bounded(4096),
+      load: oneOf(["1"]),
+      batch: bounded(16),
       layout: oneOf(["unified", "split"]),
       tip: bounded(1024),
       offset: bounded(16),
@@ -348,7 +365,13 @@ export const routeContracts: RouteContracts = {
   [Route.PlanFile]: {
     scope: "project",
     methods: ["GET"],
-    query: { id: bounded(1024), path: bounded(4096), version: oneOf(["approved"]), download: oneOf(["1", "0"]) },
+    query: {
+      id: bounded(1024),
+      path: bounded(4096),
+      version: oneOf(["approved"]),
+      download: oneOf(["1", "0"]),
+      image: bounded(64),
+    },
   },
   [Route.PlanSave]: {
     scope: "project",

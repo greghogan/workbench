@@ -114,11 +114,14 @@ remains visible under **Tasks needing attention**.
 
 Task pages list their associated commits alongside outcome acceptance. Open a commit to inspect its changed files in
 unified or side-by-side views, then return through the task breadcrumb. Inspection preserves the selected scope and does
-not grant document review or task acceptance. Task pages separate approval and acceptance from secondary actions. Cancel
-and delete each open a confirmation page; cancellation optionally retains a reason, while deletion has no reason field.
-Accepted work must be reopened or explicitly reverted; active queued work must be released or blocked before
-cancellation. Related protected-document reviews remain visible from a task even when they belong to another project
-scope.
+not grant document review or task acceptance. All changed files appear in one continuous list. Small diffs appear when
+the commit opens or load automatically in batches. Large diffs use **Load diff**. The file list stays open and scrolls
+independently. Selecting a file jumps to its comparison in the full commit diff. The link preserves the selected file
+and layout. The list highlights the file in view and the file under the pointer.
+Task pages separate approval and acceptance from secondary actions. Cancel and delete each open a confirmation page;
+cancellation optionally retains a reason, while deletion has no reason field. Accepted work must be reopened or
+explicitly reverted; active queued work must be released or blocked before cancellation. Related protected-document
+reviews remain visible from a task even when they belong to another project scope.
 
 Task pages allow human plan approval, outcome acceptance, replanning, or cancellation. Each decision applies to the
 exact displayed task version. **Task queue** under **Workflow** presents three sections on one page: **Plans** awaiting
@@ -165,6 +168,18 @@ the document. Supporting Markdown files use the same formatted view and record p
 record and its supporting folders; folder views list their files. Other text files retain source previews, and files can
 be downloaded for inspection. Active file content is never executed in a record view. Individual text previews and
 editable documents are limited to 2 MiB.
+
+### Task commit inspection
+
+Task outcomes link to their delivered commits. Commit messages remain visible, and **Files** opens a searchable panel of
+changed paths. Commit-file comparisons use numbered source lines for every format, including Markdown; choose Unified or
+Side-by-side. Arrows reveal unchanged lines above or below a change, and **Expand all lines** shows the complete
+comparison within the viewer's display limits. Large comparisons start with **Load diff**. File downloads retain the
+original committed bytes. These inspections do not record document acknowledgment or task acceptance.
+
+![Commit inspection with tasks.ts highlighted in the file tree and its numbered source diff alongside it.](images/commit-viewer.png)
+
+Record review separately shows complete formatted documents using paragraph comparisons, including rendered diagrams.
 
 Fenced `mermaid` blocks render as diagrams using the locally shipped Mermaid Tiny build. Diagrams load only when needed,
 scroll within the document when wide, and offer **Diagram** and **Source** views. Changed diagrams retain their graphic

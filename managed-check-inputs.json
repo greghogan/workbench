@@ -4,9 +4,9 @@
     ".npmrc": "b962362ebe7560b534e834c2ede51186c2e3fceb94e12cc434a11180f22391f2",
     ".pnpmfile.cjs": "aeccd0787ff3f6640b5c208a5147e77a3e2413a56faffa5e802e1a516b469d79",
     "managed-bootstrap.json": "4940ca898dc3fa0de0f328262957da14ad14afb408dc07be37e287302ea02354",
-    "managed-registry.json.br": "5b3bd7b738b724b74bfbbf85119c18a5a6bcd0dfadd0e306fce2606d84b71222",
-    "package.json": "a97cedc156a2bbffdbae926bbe8c4d2616608e2bdf818b1b158a445380507d6c",
-    "pnpm-lock.yaml": "6171ba70d0f39e95585b829a29c9f397121ae80da48c1a25f68904588fc0f84e",
+    "managed-registry.json.br": "a84b20e0008c3a1260300d89eb07a8cb431ae60a82ba64ecb0a0b478cd2f60bc",
+    "package.json": "ae229477ee1c23daba60187b263267808c5d2490dbada404f2ac63037ffee6a5",
+    "pnpm-lock.yaml": "30c2cc2d8d65abbe795bfe34bb38d9afcf97c806b4ca091f9f37f7ee43a61d19",
     "pnpm-workspace.yaml": "71bea1c5c303f1bc17832efd16edaa9e7f65512336b7d7f20dbe8086a7e3a4a6"
   },
   "bootstrap": true,
@@ -1830,6 +1830,15 @@
       ]
     },
     {
+      "url": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.2.tgz",
+      "hash": "sha512-oaXMACAU0kzOMXBjWpNcX+vlwSBCIAiZ9BHa7gA15NOTtT2L/l8OSZDuqS2XppOhZBPJ7hm4o8ep2kyuip2uEQ==",
+      "destination": "npm/highlight.js-11.11.2.tgz",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
       "url": "https://registry.npmjs.org/hookified/-/hookified-1.15.1.tgz",
       "hash": "sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg==",
       "destination": "npm/hookified-1.15.1.tgz",
@@ -2155,6 +2164,15 @@
       "url": "https://registry.npmjs.org/locate-path/-/locate-path-6.0.0.tgz",
       "hash": "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==",
       "destination": "npm/locate-path-6.0.0.tgz",
+      "platforms": [
+        "linux-x64",
+        "linux-arm64"
+      ]
+    },
+    {
+      "url": "https://registry.npmjs.org/lowlight/-/lowlight-3.3.0.tgz",
+      "hash": "sha512-0JNhgFoPvP6U6lE/UdVsSq99tn6DhjjpAj5MxG49ewd2mOBVtwWYIT8ClyABhq198aXXODMU6Ox8DrGy/CpTZQ==",
+      "destination": "npm/lowlight-3.3.0.tgz",
       "platforms": [
         "linux-x64",
         "linux-arm64"
