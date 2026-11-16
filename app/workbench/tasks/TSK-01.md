@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: Accepted
 depends_on:
   - workbench-app:TSK-0
 ---
@@ -103,33 +103,38 @@ separation before deletion.
 
 ## Implementation account
 
-Repository-local settings keep named plans in independent Git history. Git references protect draft saves through cache
-cleanup and garbage collection. Explicit checkpoints group related edits, detect concurrent changes, and recover after
-interruption. Plan approval retains the exact record and supporting files before implementation.
+Saving a named plan keeps its draft in the local Git repository without creating a commit. A checkpoint puts selected
+drafts together in one ordinary commit on the planning branch. Approval also commits the approved version when that
+branch is configured. Workbench stops a checkpoint if the branch or a draft changes during preparation, or if the
+planning checkout has uncommitted edits. Only the configured destination accepts planning-only pushes. Cleanup preserves
+work in progress and commits still awaiting a push.
 
-The CLI and browser expose named plans and their supporting files. Starting work assigns a numeric ID and transfers the
-plan's approval and relationships. The planning copy stays in place until the first implementation commit is verified.
-Renaming preserves approval and updates related plans and queue entries. Tests exercised transfers, interruption
-recovery, and linked checkouts.
+Plans appear in order of when they were added. Approval adds a plan to the queue and saves the exact plan and supporting
+files. Reapproval keeps its place and progress. Starting work assigns a task ID and carries over the plan's approval,
+date, relationships, and files. Workbench removes the planning copy after verifying the first implementation commit. The
+browser shows readiness and progress. The CLI claims work and records verification. Canceling saves the reason, deleting
+previews the unpublished work it removes, and reverting prepares an inverse change for review. In recovery tests, an
+interrupted transfer resumed without allocating a second task ID.
 
-Retained commits have independent review units. Finalization preserves source and authorship and keeps the original
-history recoverable. Accepted Git history preserves unchanged comparison authority in clones without private receipts.
-Mechanical renumbering preserves approval when identity and meaning are proven unchanged. Immutable comparisons are
-cached separately from live review decisions. Verification exercised browser progression and review continuity across
-clones and rebases.
+Each retained commit is reviewed against its parent. Finalizing preserves the source and authorship and keeps the old
+history recoverable. Rebase and merge can carry a document review forward from finalized history when both sides of the
+comparison still match. This works in a fresh clone without the original local receipt. Confirmed ID renumbering can
+preserve approval when the task's identity and meaning stay the same. A changed project tree still needs agent review
+and checks.
 
-The CLI creates and checkpoints plans. The browser edits and reviews existing plans, with queue controls attached to the
-task they affect. Task outcome pages link to related document reviews and delivered commits across scopes. Cancellation
-keeps a supplied reason, deletion previews affected unpublished work, and reversion prepares an inverse for renewed
-review.
+Plan and task diffs compare against the saved approval and show delivery progress. Formatting preserves that approval.
+Task outcomes link to their commits, with messages and unified or side-by-side source diffs. The searchable file list
+stays open, scrolls independently, and jumps to the selected comparison. It highlights the file in view or under the
+pointer. Small diffs load automatically. Large diffs load on request. Workbench reads both versions of a file together
+and reuses recent file contents and syntax highlighting. Protected record reviews use full-document comparisons,
+including diagrams.
 
-The planning-only push exception applies to the configured destination. Cleanup preserves unpushed checkpoints and
-unfinished work. Existing plans moved into named storage with their order and supporting material intact. Tests
-exercised publication boundaries, pruning, and interrupted deletion.
+Named plan reviews display sandboxed SVG attachments from their exact Git versions.
 
-Plans awaiting approval are sorted by date added. Approval appends work to the local queue, and reapproval preserves
-position and progress. Renaming and transfer preserve the recorded creation date. The browser shows readiness and
-progress. The CLI handles claiming work and recording implementation.
+Selecting a filename scrolls the full list to that comparison. Reloading or sharing the resulting link restores the
+commit, layout, and selected file.
+
+![Commit viewer wireframe showing the selected file in the sidebar and full diff, with a URL anchor.](../../../docs/images/commit-viewer-wireframe.svg)
 
 ## Implementing-agent detail
 

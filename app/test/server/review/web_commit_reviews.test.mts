@@ -1,5 +1,7 @@
+import { displayedSource } from "../../fixtures/file-diff.mjs";
+import { filePreviewByteLimit } from "../../../src/server/review/file-comparison.ts";
 import { expect, test } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
@@ -21,8 +23,16 @@ test("task acceptance links only its deliveries, preserving scope, literal diffs
     '[[project]]\nid="demo"\npath="."\n[[project]]\nid="api"\npath="app"\n',
   );
   writeFileSync(join(root, "app/workbench/CHARTER.md"), "# Charter\n\nApplication intent.\n");
+  mkdirSync(join(root, "app/workbench/decisions"));
+  writeFileSync(
+    join(root, "app/workbench/decisions/ADR-00.md"),
+    "---\nsummary: Scope-specific authority.\n---\n\n# ADR-0: Application policy\n\nApplication policy.\n",
+  );
   const deliver = (summary: string, source: string) => {
-    writeFileSync(join(root, taskPath), `---\nstatus: Approved\n---\n\n# TSK-0: Deliver application\n\n${summary}\n`);
+    writeFileSync(
+      join(root, taskPath),
+      `---\nstatus: Approved\n---\n\n# TSK-0: Deliver application\n\n${summary}\n\nFollow ADR-0.\n`,
+    );
     writeFileSync(join(root, sourcePath), source);
     git(root, "add", ".");
     git(root, "commit", "-qm", `${summary}\n\nExplain ${summary.toLowerCase()}.\n\nWorkbench-Provisional: true`);
@@ -48,28 +58,37 @@ test("task acceptance links only its deliveries, preserving scope, literal diffs
   expect(commitURL).toContain("/records/api:TSK-0/history");
   expect(commitURL).toContain("scope=api");
   const commit = parseDOM((await readWebPage(web, commitURL)).html).window.document,
-    file = [...commit.querySelectorAll<HTMLAnchorElement>(".commit-files a")].find(
-      (link) => link.textContent === sourcePath,
+    file = [...commit.querySelectorAll<HTMLAnchorElement>(".commit-navigation a")].find(
+      (link) => link.title === sourcePath,
     );
-  const fileURL = file?.getAttribute("href");
+  expect(commit.querySelector('[data-commit-file="app/workbench/tasks/TSK-00.md"] [data-record-reference]')).toBeNull();
+  expect(
+    commit.querySelector('nav.commit-navigation[aria-label="Changed files"] .commit-navigation-list'),
+  ).not.toBeNull();
+  expect(file?.closest("[data-commit-file-path]")?.getAttribute("data-commit-file-path")).toBe(sourcePath);
+  const anchor = file?.getAttribute("href");
+  if (!anchor?.startsWith("#")) throw new Error("Missing comparison anchor");
+  expect(commit.getElementById(anchor.slice(1))?.getAttribute("data-commit-file")).toBe(sourcePath);
   const message = commit.querySelector('[aria-label="Commit message"]');
   expect(message?.textContent).toBe("Explain second delivery.");
   expect(message?.closest("details")).toBeNull();
   expect(message?.textContent).not.toContain("Workbench-Provisional");
-  if (!fileURL) throw new Error("Task source inspection unavailable");
-  const diff = parseDOM((await readWebPage(web, fileURL)).html).window.document;
-  expect(diff.querySelector(".code-difference del")?.textContent).toContain("old()");
-  expect(diff.querySelector(".code-difference ins")?.textContent).toContain("new()");
-  expect(diff.querySelector(".code-difference script")).toBeNull();
-  expect(diff.querySelector(".code-difference")?.textContent).not.toContain("diff --git");
+  const fileURL = new URL(commitURL, web.url);
+  fileURL.searchParams.set("path", sourcePath);
+  const diff = parseDOM((await readWebPage(web, fileURL.pathname + fileURL.search)).html).window.document;
+  expect(diff.querySelector('.commit-navigation a[aria-current="page"]')?.getAttribute("title")).toBe(sourcePath);
+  expect(diff.querySelector(".file-diff .diff-removed")?.textContent).toContain("old()");
+  expect(diff.querySelector(".file-diff .diff-added")?.textContent).toContain("new()");
+  expect(diff.querySelector(".file-diff script")).toBeNull();
+  expect(diff.querySelector(".file-diff")?.textContent).not.toContain("diff --git");
   expect(diff.querySelector("form[data-review]")).toBeNull();
   const splitURL = [...diff.querySelectorAll<HTMLAnchorElement>("a")]
     .find((link) => link.textContent === "Side-by-side")
     ?.getAttribute("href");
   if (!splitURL) throw new Error("Side-by-side control unavailable");
   const split = parseDOM((await readWebPage(web, splitURL)).html).window.document;
-  expect(split.querySelector('[aria-label="Previous file"]')?.textContent).toContain("old()");
-  expect(split.querySelector('[aria-label="Current file"]')?.textContent).toContain("new()");
+  expect(displayedSource(split, "before")).toContain("old()");
+  expect(displayedSource(split, "after")).toContain("new()");
   expect(split.querySelector(".breadcrumbs")?.textContent).toContain("Deliver application");
   expect((await readWebPage(web, commitURL.replace(second, unrelated))).response.status).toBe(404);
   expect((await readWebPage(web, "/history")).response.status).toBe(400);
@@ -282,7 +301,7 @@ test("browser reviews immutable commit versions independently and advances throu
   expect(await oldFile.text()).toContain("Second retained choice.");
 });
 
-test("feature history remains immutable and links unchanged records and supporting files inside the selected commit", async () => {
+test("feature source inspection preserves literal Markdown and immutable supporting and unchanged files", async () => {
   const root = fixtures.project(),
     head = git(root, "rev-parse", "HEAD"),
     index = git(root, "write-tree"),
@@ -306,21 +325,25 @@ test("feature history remains immutable and links unchanged records and supporti
   git(root, "update-ref", "refs/heads/feature/history", branch);
   const rendered = parseDOM((await readWebPage(web, `/history?commit=${branch}&path=${encodeURIComponent(path)}`)).html)
       .window.document,
-    links = [...rendered.querySelectorAll<HTMLAnchorElement>(".document a")];
+    links = [...rendered.querySelectorAll<HTMLAnchorElement>(".commit-navigation a")];
   expect(rendered.querySelector("form[data-review]")).toBeNull();
-  const reference = links.find((link) => link.textContent === "ADR-0"),
-    notes = links.find((link) => link.textContent === "the notes");
-  const policyURL = reference?.getAttribute("href"),
-    notesURL = notes?.getAttribute("href");
-  if (!policyURL || !notesURL) throw new Error("Historical links unavailable");
-  expect(policyURL).toContain(`commit=${branch}`);
+  expect(rendered.querySelector(".document a")).toBeNull();
+  expect(displayedSource(rendered, "after")).toContain("Use ADR-0 and [the notes](TSK-00/notes.md).");
+  const policyURL = `/history?commit=${branch}&path=workbench%2Fdecisions%2FADR-00.md`,
+    notesURL = links.find((link) => link.title === support)?.getAttribute("href");
+  if (!notesURL) throw new Error("Missing supporting-file navigation");
   expect(notesURL).toContain(`commit=${branch}`);
-  const policy = await readWebPage(web, policyURL),
-    linked = await readWebPage(web, notesURL);
+  const policy = await readWebPage(web, policyURL + "&context=all"),
+    linked = await readWebPage(web, notesURL),
+    comparisons = parseDOM(linked.html).window.document,
+    noteComparison = comparisons.getElementById(new URL(notesURL, web.url).hash.slice(1));
   expect(policy.response.status).toBe(200);
-  expect(policy.html).toContain("Keep files authoritative");
+  expect(displayedSource(parseDOM(policy.html).window.document, "after")).toContain("Keep files authoritative");
   expect(linked.response.status).toBe(200);
-  expect(linked.html).toContain("Preserved supporting context.");
+  expect(comparisons.querySelectorAll("[data-commit-file]")).toHaveLength(2);
+  expect(noteComparison?.getAttribute("data-commit-file")).toBe(support);
+  if (!noteComparison) throw new Error("Missing supporting-file comparison");
+  expect(displayedSource(noteComparison, "after")).toContain("Preserved supporting context.");
   expect(git(root, "rev-parse", "HEAD")).toBe(head);
   expect(git(root, "write-tree")).toBe(index);
 });
@@ -413,4 +436,114 @@ test("task outcomes expose related protected reviews outside the selected subpro
   expect(parseDOM(review.html).window.document.querySelector("main")?.textContent).toContain(
     "A changed shared policy.",
   );
+});
+
+test("inline task commits list every file with budgeted initial previews and batched small diffs", async () => {
+  const root = fixtures.project(),
+    taskPath = "workbench/tasks/TSK-00.md";
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(join(root, taskPath), "---\nstatus: Approved\n---\n\n# TSK-0: Inspect delivery\n");
+  writeFileSync(join(root, "a.ts"), 'const value = "before";\n');
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Start delivery");
+  writeFileSync(join(root, "a.ts"), 'const value = "<script>after()</script>";\n');
+  writeFileSync(join(root, "b.md"), "# Notes\n\nReadable **formatting**.\n");
+  writeFileSync(join(root, "c.bin"), Buffer.from([0, 1, 2]));
+  writeFileSync(join(root, "d.txt"), "x".repeat(filePreviewByteLimit + 1));
+  for (let index = 0; index < 51; index++)
+    writeFileSync(join(root, `e-${String(index).padStart(3, "0")}.py`), `value = ${String(index)}\n`);
+  writeFileSync(
+    join(root, taskPath),
+    readFileSync(join(root, taskPath), "utf8") + "\n## Implementation account\n\nDelivered the comparisons.\n",
+  );
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Inspect delivery\n\nExplain the changed files.\n\nWorkbench-Provisional: true");
+  const revision = git(root, "rev-parse", "HEAD"),
+    web = await fixtures.start(root);
+  const base = `/records/demo:TSK-0/history?commit=${revision}`;
+  const first = await readWebPage(web, base),
+    document = parseDOM(first.html).window.document;
+  expect(document.querySelectorAll("[data-commit-file]")).toHaveLength(56);
+  expect(document.querySelector("[data-commit-more]")).toBeNull();
+  expect(document.querySelector("[data-commit-file] script")).toBeNull();
+  expect(document.querySelector("[data-commit-file] form[data-review]")).toBeNull();
+  expect(document.querySelector('[data-commit-file="a.ts"] .hljs-keyword')).not.toBeNull();
+  expect(document.querySelector('[data-commit-file="a.ts"] .diff-added')?.textContent).toContain("after()");
+  expect(document.querySelector('[data-commit-file="b.md"] strong')).toBeNull();
+  expect(document.querySelector('[data-commit-file="b.md"]')?.textContent).toContain("**formatting**");
+  expect(document.querySelector('[data-commit-file="c.bin"]')?.textContent).toContain("Binary file");
+  expect(document.querySelector('[data-commit-file="d.txt"] [data-file-diff-auto]')).toBeNull();
+  const initiallyLoaded = document.querySelector('[data-commit-file="e-011.py"]');
+  expect(initiallyLoaded && displayedSource(initiallyLoaded, "after")).toBe("value = 11\n");
+  expect(document.querySelector('[data-commit-file="e-050.py"] [data-file-diff-auto]')).not.toBeNull();
+  const continuation = document.getElementById("commit-file-list")?.dataset.fileDiffBatch;
+  if (!continuation) throw new Error("The last small files need a continuation");
+  const batchPage = await readWebPage(web, continuation);
+  expect(batchPage.response.status).toBe(200);
+  const batch = parseDOM(batchPage.html).window.document.querySelector(`[data-file-diff-result="${revision}"]`);
+  if (!batch) throw new Error("Missing diff batch");
+  const lastFile = batch.querySelector('[data-file-path="e-050.py"]');
+  expect(lastFile && displayedSource(lastFile, "after")).toBe("value = 50\n");
+  expect(batch.querySelectorAll("[data-file-path]").length).toBeGreaterThan(1);
+  expect(batch.querySelector('[data-file-path="d.txt"]')).toBeNull();
+  expect(batch.getAttribute("data-file-diff-batch")).toBeNull();
+  const fullLink = document
+    .querySelector<HTMLAnchorElement>('[data-commit-file="d.txt"] [data-file-diff-link]')
+    ?.getAttribute("href");
+  if (!fullLink) throw new Error("Large file must remain explicitly loadable");
+  const large = parseDOM((await readWebPage(web, fullLink)).html).window.document;
+  expect(displayedSource(large, "after")).toBe("x".repeat(filePreviewByteLimit + 1));
+  const split = parseDOM((await readWebPage(web, base + "&layout=split")).html).window.document;
+  expect(split.querySelectorAll("[data-commit-file]")).toHaveLength(56);
+  expect(displayedSource(split.querySelector('[data-commit-file="a.ts"]') ?? split, "before")).toBe(
+    'const value = "before";\n',
+  );
+  expect(displayedSource(split.querySelector('[data-commit-file="a.ts"]') ?? split, "after")).toBe(
+    'const value = "<script>after()</script>";\n',
+  );
+});
+
+test("Markdown commit inspection expands literal context while record acknowledgment retains the whole formatted document", async () => {
+  const root = fixtures.project(),
+    path = "workbench/decisions/ADR-00.md",
+    task = "workbench/tasks/TSK-00.md";
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(join(root, task), "---\nstatus: Approved\n---\n\n# TSK-0: Inspect policy\n");
+  const before =
+    "---\nsummary: Review context.\n---\n\n# ADR-0: Context\n\n" +
+    Array.from({ length: 80 }, (_, i) => `Paragraph ${String(i + 1)} **remains** available.\n\n`).join("");
+  writeFileSync(join(root, path), before);
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Establish review context");
+  const after = before.replace("Paragraph 40 **remains**", "Paragraph 40 **changes**");
+  writeFileSync(join(root, path), after);
+  writeFileSync(
+    join(root, task),
+    readFileSync(join(root, task), "utf8") + "\n## Implementation account\n\nUpdated the policy.\n",
+  );
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Update policy\n\nWorkbench-Provisional: true");
+  const revision = git(root, "rev-parse", "HEAD"),
+    web = await fixtures.start(root),
+    base = `/records/demo:TSK-0/history?commit=${revision}&path=${encodeURIComponent(path)}`,
+    inspection = parseDOM((await readWebPage(web, base)).html).window.document;
+  expect(inspection.querySelector("form[data-review]")).toBeNull();
+  expect(inspection.querySelector(".document-diff")).toBeNull();
+  expect(displayedSource(inspection, "after")).toContain("Paragraph 40 **changes**");
+  expect(displayedSource(inspection, "after")).not.toContain("Paragraph 1 ");
+  const expand = inspection
+    .querySelector<HTMLAnchorElement>('[aria-label="Show more lines above"]')
+    ?.getAttribute("href");
+  if (!expand) throw new Error("Missing context expansion");
+  const expanded = parseDOM((await readWebPage(web, expand)).html).window.document;
+  expect(displayedSource(expanded, "after").length).toBeGreaterThan(displayedSource(inspection, "after").length);
+  const full = parseDOM((await readWebPage(web, base + "&context=all")).html).window.document;
+  expect(displayedSource(full, "before")).toBe(before);
+  expect(displayedSource(full, "after")).toBe(after);
+  expect((await readWebPage(web, base + "&context=bad")).response.status).toBe(400);
+  const review = parseDOM((await readWebPage(web, `/history?commit=${revision}&path=${encodeURIComponent(path)}`)).html)
+    .window.document;
+  expect(review.querySelector(".document-diff")?.textContent).toContain("Paragraph 1 ");
+  expect(review.querySelector("form[data-review]")).not.toBeNull();
+  expect(committedReview(root, revision).changes.find((change) => change.path === path)?.approved).toBe(false);
 });

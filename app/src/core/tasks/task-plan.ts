@@ -3,11 +3,26 @@ import MarkdownIt from "markdown-it";
 import { parseProseRecord } from "../records/record-document.js";
 
 const parser = new MarkdownIt({ html: false, linkify: false, typographer: false });
+const approvalParser = new MarkdownIt({ html: false, linkify: false, typographer: false });
+approvalParser.renderer.rules.softbreak = () => " ";
+
+/** Prose layout is separate from plan scope; literal code, links, breaks, and block structure remain significant. */
+function canonicalPlan(contents: string): string {
+  const tokens = approvalParser.parse(contents, {});
+  const fences: string[] = [];
+  const normalize = (items: typeof tokens) => {
+    for (const token of items) {
+      if (token.type === "paragraph_open" || token.type === "paragraph_close") token.hidden = false;
+      if (token.type === "text") token.content = token.content.replace(/\s+/g, " ");
+      if (token.type === "fence") fences.push(token.info.trim());
+      if (token.children) normalize(token.children);
+    }
+  };
+  normalize(tokens);
+  return JSON.stringify([approvalParser.renderer.render(tokens, approvalParser.options, {}), fences]);
+}
 /** Delivery accounts and completed checkboxes record execution, without authorizing a changed plan. */
-export function taskPlanDigest(
-  contents: string,
-  files: readonly { name: string; contents: string; executable: boolean }[] = [],
-): string {
+function planParts(contents: string) {
   const { metadata, body } = parseProseRecord(contents, "task plan"),
     lines = body.split("\n"),
     tokens = parser.parse(body, {}),
@@ -57,16 +72,30 @@ export function taskPlanDigest(
     .join("\n")
     .replace(/^# TSK-[0-9A-Za-z]+: /m, "# ")
     .trim();
+  return {
+    metadata: Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "status" && key !== "added_at")),
+    plan,
+  };
+}
+type PlanFiles = readonly { name: string; contents: string; executable: boolean }[];
+function planDigest(contents: string, files: PlanFiles, normalize: (text: string) => string): string {
+  const { metadata, plan } = planParts(contents);
   return createHash("sha256")
     .update(
       JSON.stringify([
-        Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "status" && key !== "added_at")),
-        plan,
+        metadata,
+        normalize(plan),
         ...(files.length ? [[...files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))] : []),
       ]),
     )
     .digest("hex");
 }
+
+/** Verification retains its existing source binding, independently of formatting-tolerant human plan approval. */
+export const taskPlanDigest = (contents: string, files: PlanFiles = []): string =>
+  planDigest(contents, files, (text) => text);
+export const taskPlanApprovalDigest = (contents: string, files: PlanFiles = []): string =>
+  planDigest(contents, files, canonicalPlan);
 
 /** Delivery notes remain outside the human-approved plan, including when later sections follow the account. */
 export function appendTaskAccount(contents: string, entry: string): string {

@@ -136,6 +136,8 @@ test("browser decisions bind approval to exact task versions and acceptance to v
   expect(accept.values.state).toBe("Accepted");
   expect((await postWebForm(web, accept.path, accept.values)).status).toBe(200);
   expect(readFileSync(path, "utf8")).toContain("status: Accepted");
+  const completed = parseDOM((await readWebPage(web, "/records/demo:TSK-0")).html).window.document;
+  expect(completed.querySelector(".document-diff")).toBeNull();
   const oldTree = readTaskDecisions(root).findLast((decision) => decision.status === "Accepted")?.tree;
   writeFileSync(join(root, "implementation.ts"), "export const revised=true;\n");
   const accepted = await readWebPage(web, "/records/demo:TSK-0");
@@ -388,7 +390,7 @@ test("task approval diffs show the retained plan and reject supporting files cha
   let document = parseDOM(viewed.html).window.document;
   expect(document.querySelector(".document-diff del")?.textContent).toContain("Human-readable");
   expect(document.querySelector(".document-diff ins")?.textContent).toContain("Automatic");
-  expect(document.querySelector('[aria-label="Record views"] [aria-current]')?.textContent).toBe("Diff");
+  expect(document.querySelector('[aria-label="Difference layout"] [aria-current]')?.textContent).toBe("Unified");
   expect(
     parseDOM((await readWebPage(web, "/queue")).html).window.document.querySelector('[aria-label="Plans"]')
       ?.textContent,
@@ -498,6 +500,61 @@ test("named plans remain durable drafts through browser editing, approval diffs,
     "/records/demo:TSK-0/files?path=workbench%2Ftasks%2FTSK-00%2Frequirements.md#document-requirements",
   );
   expect(git(root, "rev-parse", "HEAD")).toBe(initial);
+});
+
+test("named plan reviews display sandboxed SVGs from their saved and approved Git versions", async () => {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+  configurePlanning(root, { branch: "future", auto_prune: false });
+  const identity = planIdentity("demo", "layout");
+  const contents = "---\nstatus: Planned\n---\n\n# Review layout\n\n![Service flow](files/flow.svg)\n";
+  const svg = (text: string) =>
+    Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><text y="12">${text}</text></svg>`);
+  const before = svg("Previous flow");
+  const after = svg("Current flow");
+  savePlanDraft(root, identity, contents, { files: new Map([["flow.svg", { contents: before }]]) });
+  approvePlanDraft(root, identity, readPlan(root, identity).digest, true);
+  git(root, "switch", "-c", "independent-work");
+  const approved = readPlan(root, identity);
+  savePlanDraft(root, identity, approved.contents, {
+    expected: approved.digest,
+    files: new Map([["flow.svg", { contents: after }]]),
+  });
+  const web = await servers.start(root);
+  const page = "/plans/demo:plan%2Flayout";
+  const read = parseDOM((await readWebPage(web, page + "?view=read")).html).window.document;
+  expect(read.querySelector('.document img[alt="Service flow"]')).not.toBeNull();
+  const diffResponse = await readWebPage(web, page + "?view=changes&layout=split");
+  expect(diffResponse.response.status).toBe(200);
+  const diff = parseDOM(diffResponse.html).window.document;
+  expect([...diff.querySelectorAll<HTMLImageElement>("main img")].map((entry) => entry.alt)).toContain(
+    "Previous flow.svg",
+  );
+  const image = (selector: string) => {
+    const src = diff.querySelector(selector)?.getAttribute("src");
+    if (!src) throw new Error(`Missing plan image ${selector}`);
+    return src;
+  };
+  const previous = image('[data-diff-side="before"] img[alt="Service flow"]');
+  const current = image('[data-diff-side="after"] img[alt="Service flow"]');
+  expect(previous).not.toBe(current);
+  for (const [address, expected] of [
+    [previous, before],
+    [current, after],
+  ] as const) {
+    const result = await readWebPage(web, address);
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("content-type")).toMatch(/^image\/svg\+xml/);
+    expect(result.response.headers.get("content-security-policy")).toContain("sandbox; default-src 'none'");
+    expect(result.response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(result.html).toBe(expected.toString());
+  }
+  const stale = new URL(current, web.url);
+  stale.searchParams.set("image", "0".repeat(40));
+  expect((await readWebPage(web, stale.pathname + stale.search)).response.status).toBe(404);
+  expect(git(root, "branch", "--show-current")).toBe("independent-work");
+  expect(readPlan(root, identity).entries.get(planningPaths.files + "flow.svg")?.oid).toBe(
+    new URL(current, web.url).searchParams.get("image"),
+  );
 });
 
 test("workflow continuation preserves named-plan date order and rejects stale cursors", async () => {

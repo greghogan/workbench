@@ -44,6 +44,7 @@ import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
 import { recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
+import { isDocumentationSvg, isSvg, sendSandboxedSvg } from "../documents/document-image.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
@@ -245,6 +246,20 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           response.end();
           return;
         }
+        if (route === Route.DocumentImage) {
+          const path = query.path ?? "";
+          if (!isDocumentationSvg(path)) throw new WebError(404, "Documentation image not found");
+          let bytes: Buffer;
+          try {
+            bytes = recordBytes({ directory: root, path });
+          } catch (cause) {
+            if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")
+              throw new WebError(404, "Documentation image not found", { cause });
+            throw cause;
+          }
+          sendSandboxedSvg(response, bytes);
+          return;
+        }
         if (route === Route.ReviewFile) {
           const retained = actions.reviews.get(query.path ?? "", query.digest ?? "");
           const side = query.side;
@@ -362,6 +377,14 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
               planningPaths.files + filePath,
             );
             if (!entry) throw new WebError(404, "Plan supporting file not found");
+            if (query.image !== undefined && query.download !== "1") {
+              if (!isSvg(filePath) || entry.oid !== query.image)
+                throw new WebError(404, "This version of the plan image is unavailable");
+              const bytes = readGitObjects(root, [entry.oid], previewLimit).get(entry.oid);
+              if (!bytes) throw new WebError(404, "Plan image is unavailable for preview");
+              sendSandboxedSvg(response, bytes);
+              return;
+            }
             if (
               query.download === "1" ||
               ![".md", ".markdown", ".txt", ".json", ".toml", ".yaml", ".yml"].includes(extname(filePath).toLowerCase())

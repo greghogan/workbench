@@ -10,14 +10,18 @@ export function commitReviewContext(
   progress: ComponentChildren,
 ): JSX.Element {
   const history = historyFiles(root, revision),
-    tasks = history.changes.flatMap((file) => {
-      if (!/(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(file.path)) return [];
-      const current = historicalRecords(root, revision, history.logicalAfter).references.path(resolve(root, file.path)),
+    taskPaths = history.changes
+      .map((file) => file.path)
+      .filter((path) => /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(path)),
+    tasks = taskPaths.flatMap((path) => {
+      const current = historicalRecords(root, revision, () => history.logicalAfter, taskPaths).references.path(
+          resolve(root, path),
+        ),
         record =
           current ??
           (history.unit.parents[0]
-            ? historicalRecords(root, history.unit.parents[0], history.logicalBefore).references.path(
-                resolve(root, file.path),
+            ? historicalRecords(root, history.unit.parents[0], () => history.logicalBefore, taskPaths).references.path(
+                resolve(root, path),
               )
             : undefined);
       return record?.type === "TSK" ? [record] : [];

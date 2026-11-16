@@ -8,11 +8,15 @@ import { DifferenceLayout } from "../routes/navigation-state.js";
 import { shell } from "./page-frame.js";
 import { badge, panel, submitButton, confirmationActions } from "./components.js";
 import { mutationForm } from "./action-forms.js";
-import { tabs, linkButton, diffLayout } from "./render-links.js";
+import { linkButton, diffLayout } from "./render-links.js";
 import { markdown } from "./markdown-view.js";
 import { sourceDiffView } from "./diff-view.js";
 import { addedAtTag } from "./record-content.js";
 import type { ViewContext } from "../workspace/view-context.js";
+import { isSvg } from "../documents/document-image.js";
+import type { PlanningRecord } from "../../core/tasks/planning/planning-read-model.js";
+
+const attachmentBlobs = (files: PlanningRecord["files"]) => new Map(files.map(({ name, oid }) => [name, oid]));
 
 export function planPage(
   context: ViewContext,
@@ -90,9 +94,10 @@ export function planPage(
       </>,
     );
   }
-  const view = parameters.view ?? "read",
+  const changed = !!plan.approval && (plan.approval.contents !== plan.contents || plan.changedFiles.length > 0);
+  const view = parameters.view ?? (changed ? "changes" : "read"),
     split = parameters.layout === DifferenceLayout.Split,
-    url = (view: "read" | "changes" | "edit") =>
+    url = (view: "changes" | "edit") =>
       routeURL(Route.Plan, {
         id: plan.reference,
         view,
@@ -105,8 +110,16 @@ export function planPage(
       title: plan.title,
       type: "TSK" as const,
       scope: plan.scope,
-      planFiles: { reference: plan.reference, names: plan.files.map((file) => file.name) },
+      planFiles: { reference: plan.reference, files: attachmentBlobs(plan.files) },
     };
+  const approvedBlobs = attachmentBlobs(plan.approval?.files ?? []);
+  const fileLink = (name: string, version?: "approved", image?: string) =>
+    routeURL(Route.PlanFile, {
+      id: plan.reference,
+      path: name,
+      ...(version ? { version } : {}),
+      ...(image ? { image } : {}),
+    });
   let body: ComponentChildren;
   if (view === "edit")
     body = mutationForm({
@@ -124,7 +137,7 @@ export function planPage(
           )}
           {controls.area("contents", { id: "plan-editor", label: "Plan", value: draft?.contents ?? plan.contents })}
           <div class="actions">
-            {linkButton("Cancel", url("read"), true)}
+            {linkButton("Cancel", back, true)}
             {submitButton("Save draft")}
           </div>
         </>
@@ -134,17 +147,18 @@ export function planPage(
     if (!plan.approval) throw new WebError(400, "This plan has not been approved");
     body = sourceDiffView(
       { before: plan.approval.contents, after: plan.contents, patch: "" },
-      { record, records: context.index.references, pageTitle: plan.title },
+      {
+        record,
+        previousRecord: {
+          ...record,
+          planFiles: { reference: plan.reference, files: approvedBlobs, version: "approved" },
+        },
+        records: context.index.references,
+        pageTitle: plan.title,
+      },
       split,
     );
   } else body = markdown(plan.contents, record, context.index.references, plan.title);
-  const choices = [
-    { label: "Read", href: url("read"), current: view === "read" },
-    ...(plan.approval && (plan.approval.contents !== plan.contents || plan.changedFiles.length)
-      ? [{ label: "Diff", href: url("changes"), current: view === "changes" }]
-      : []),
-    ...(!plan.implementation ? [{ label: "Edit", href: url("edit"), current: view === "edit" }] : []),
-  ];
   return shell(
     context,
     plan.title,
@@ -178,8 +192,13 @@ export function planPage(
         </p>
       )}
       {panel(body, {
-        tabs: tabs(choices, "Plan views"),
-        tools: view === "changes" ? diffLayout(url("changes"), split) : null,
+        tools:
+          view !== "edit" ? (
+            <>
+              {view === "changes" && diffLayout(url("changes"), split)}
+              {!plan.implementation && linkButton("Edit", url("edit"), true)}
+            </>
+          ) : null,
       })}
       {plan.changedFiles.length > 0 && plan.approval && (
         <ul aria-label="Supporting file changes">
@@ -193,6 +212,24 @@ export function planPage(
               )}{" "}
               {file.change !== "removed" && (
                 <a href={routeURL(Route.PlanFile, { id: plan.reference, path: file.name })}>Current</a>
+              )}
+              {view === "changes" && isSvg(file.name) && (
+                <div class="document">
+                  {[approvedBlobs.get(file.name), record.planFiles.files.get(file.name)].map((oid, index) => {
+                    if (!oid) return null;
+                    const caption = index === 0 ? "Previous" : "Current";
+                    return (
+                      <figure key={caption}>
+                        <figcaption>{caption}</figcaption>
+                        <img
+                          src={fileLink(file.name, index === 0 ? "approved" : undefined, oid)}
+                          alt={`${caption} ${file.name}`}
+                          loading="lazy"
+                        />
+                      </figure>
+                    );
+                  })}
+                </div>
               )}
             </li>
           ))}
@@ -290,18 +327,7 @@ export function planFilePage(
       ? {
           planFiles: {
             reference: id,
-            names:
-              parameters.version === "approved"
-                ? [
-                    ...plan.files
-                      .filter(
-                        (file) =>
-                          !plan.changedFiles.some((change) => change.name === file.name && change.change === "added"),
-                      )
-                      .map((file) => file.name),
-                    ...plan.changedFiles.filter((file) => file.change === "removed").map((file) => file.name),
-                  ]
-                : plan.files.map((file) => file.name),
+            files: attachmentBlobs(parameters.version === "approved" ? (plan.approval?.files ?? []) : plan.files),
             ...(parameters.version ? { version: parameters.version } : {}),
             base: path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "",
           },

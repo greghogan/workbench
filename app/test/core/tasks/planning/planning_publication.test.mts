@@ -12,7 +12,8 @@ import {
   publishPlanDraftUpdates,
   approvePlanDraft,
 } from "../../../../src/core/tasks/planning/planning-operations.ts";
-import { planningSettings, readPlan, readPlans } from "../../../../src/core/tasks/planning/planning-store.ts";
+import { readPlan, readPlans } from "../../../../src/core/tasks/planning/planning-store.ts";
+import { planningSettings } from "../../../../src/core/tasks/planning/planning-settings.ts";
 import { planIdentity } from "../../../../src/core/tasks/planning/plan-model.ts";
 import { checkPlanningPublication } from "../../../../src/core/tasks/planning/planning-publication.ts";
 import { pruneEmptyPlanning } from "../../../../src/core/tasks/planning/planning-retention.ts";

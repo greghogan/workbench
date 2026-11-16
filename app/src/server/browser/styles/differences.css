@@ -127,31 +127,31 @@
 .document-diff ins {
   color: var(--green);
   background: var(--diff-add);
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-}
-.code-difference ins,
-.code-comparison ins {
-  background: var(--diff-add);
-  color: var(--green);
-  text-decoration: none;
-}
-.code-difference del,
-.code-comparison del {
-  background: var(--diff-remove);
-  color: var(--red);
-}
-.code-comparison {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-.code-comparison > :first-child {
-  border-right: 1px solid var(--line);
 }
 .document-diff del {
   color: var(--red);
   background: var(--diff-remove);
-  text-decoration: line-through;
+}
+.document-diff :is(ins, del) {
+  text-decoration: none;
+}
+.document-diff :is(ins, del) img {
+  border: 2px solid;
+  border-radius: var(--radius-control);
+}
+.document-diff ins img {
+  border-color: var(--green);
+}
+.document-diff del img {
+  border-color: var(--red);
+}
+@media (forced-colors: active) {
+  .document-diff ins {
+    text-decoration: underline;
+  }
+  .document-diff del {
+    text-decoration: line-through;
+  }
 }
 .document-diff .diff-block-removed:empty {
   border-color: var(--red);
@@ -177,4 +177,413 @@ summary {
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-block: var(--space-5);
+}
+
+/* Syntax colors preserve readable text and leave diff backgrounds and deletion marks independent. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: #663399;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-attr {
+  color: #195a30;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #536276;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-meta {
+  color: #714400;
+}
+.hljs-title,
+.hljs-built_in,
+.hljs-type {
+  color: #164c8b;
+}
+.commit-file {
+  min-width: 0;
+}
+.commit-file h2 {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+/* Commit inspection keeps compact file headers and full-width numbered source. */
+.diff-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: block;
+}
+.commit-workspace {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  align-items: start;
+}
+.commit-navigation {
+  position: sticky;
+  top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2 * var(--space-3));
+  min-width: 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+.commit-navigation-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: 36px;
+  font-size: 0.875rem;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+.commit-navigation summary::-webkit-details-marker,
+.commit-file-heading::-webkit-details-marker {
+  display: none;
+}
+.commit-content > section > .actions:first-child,
+.commit-content > .actions:first-child {
+  margin: 0 0 var(--space-3);
+  min-height: 36px;
+  justify-content: flex-end;
+}
+.commit-content .diff-layout {
+  margin: 0;
+}
+.commit-content .diff-layout .tabs a {
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+}
+.commit-navigation-list {
+  padding: var(--space-1) var(--space-2);
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.commit-navigation label {
+  display: block;
+  padding: var(--space-2) var(--space-3) 0;
+  font-size: 0.8125rem;
+}
+.commit-navigation input {
+  width: 100%;
+  margin-block: var(--space-1) var(--space-2);
+  min-height: 32px;
+}
+.commit-navigation ul {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.commit-navigation ul ul {
+  padding-left: var(--space-4);
+}
+.commit-navigation li {
+  margin: 0;
+  min-width: 0;
+}
+.commit-navigation li details {
+  margin: 0;
+}
+.commit-navigation li summary,
+.commit-navigation li a {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--ink);
+  border-radius: var(--radius-control);
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+.commit-navigation li summary {
+  list-style: none;
+}
+.commit-navigation li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commit-navigation li summary:hover,
+.commit-navigation li a:hover {
+  background: var(--soft);
+}
+.commit-navigation a[aria-current] {
+  background: var(--soft);
+  font-weight: 600;
+}
+.commit-navigation a[data-file-hover] {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.commit-content {
+  min-width: 0;
+}
+.commit-file {
+  border-radius: var(--radius-control);
+  position: relative;
+  margin-block: 0 var(--space-4);
+}
+.commit-file[id] {
+  scroll-margin-block-start: var(--space-3);
+}
+.commit-file-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 48px 10px var(--space-3);
+  min-height: 44px;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--code-bg);
+  color: var(--ink);
+}
+.commit-file-heading .diff-icon-chevron {
+  width: 12px;
+  height: 12px;
+}
+.commit-file[open] > .commit-file-heading .diff-icon-chevron {
+  transform: rotate(90deg);
+}
+.commit-file-name {
+  font: 0.8125rem/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.commit-file-heading .diff-stat {
+  margin-left: auto;
+}
+.commit-file-heading .badge {
+  flex: none;
+}
+.commit-file > .panel-heading {
+  background: var(--code-bg);
+  padding: 10px 48px 10px var(--space-3);
+}
+.commit-file > .panel-heading h2 {
+  font: 0.8125rem/1.5 var(--font-mono);
+  margin: 0;
+}
+.commit-file .file-path {
+  padding-inline: var(--space-3);
+}
+.commit-file-body {
+  min-width: 0;
+}
+.commit-file-body > [data-file-diff] > .notice {
+  margin: var(--space-4);
+}
+.file-diff-scroll {
+  overflow: auto;
+  max-width: 100%;
+}
+.file-diff {
+  width: 100%;
+  border-collapse: collapse;
+  font: 0.75rem/1.7 var(--font-mono);
+}
+.file-diff > tbody > tr > td {
+  padding: 0 var(--space-2);
+  border: 0;
+  vertical-align: top;
+  background: var(--paper);
+}
+.file-diff .diff-number {
+  width: 1%;
+  min-width: 4ch;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.file-diff .diff-sign {
+  width: 1%;
+  user-select: none;
+  padding-inline: var(--space-1);
+}
+.file-diff .diff-code {
+  min-width: 10ch;
+}
+.file-diff .diff-code code {
+  white-space: pre;
+  display: block;
+  min-height: 1.7em;
+  tab-size: 4;
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+.file-diff > tbody > .diff-added > td,
+.file-diff > tbody > tr > .diff-added {
+  background: var(--diff-add);
+}
+.file-diff > tbody > .diff-removed > td,
+.file-diff > tbody > tr > .diff-removed {
+  background: var(--diff-remove);
+}
+.file-diff .diff-gap > td {
+  background: var(--soft);
+  color: var(--muted);
+  vertical-align: middle;
+  height: 32px;
+}
+.file-diff .diff-gap > .diff-expand-cell {
+  padding: 0;
+}
+.file-diff .diff-gap-description {
+  font-size: 0.75rem;
+  padding-inline: var(--space-3);
+}
+.diff-gap-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.diff-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 28px;
+  min-height: 32px;
+  color: var(--accent);
+}
+.diff-expand:hover {
+  background: var(--accent);
+  color: var(--paper);
+}
+.diff-no-newline {
+  display: block;
+  font-style: italic;
+  color: var(--muted);
+}
+.diff-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.75rem;
+}
+.diff-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+}
+.diff-placeholder .button {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.8125rem;
+}
+.diff-stat {
+  white-space: nowrap;
+  font: 0.75rem var(--font-mono);
+}
+.diff-count-added {
+  color: var(--green);
+}
+.diff-count-removed {
+  color: var(--red);
+}
+.file-diff-split .diff-code {
+  position: relative;
+  padding-left: 1.5ch;
+}
+.file-diff-split .diff-removed::before {
+  content: "−";
+  position: absolute;
+  left: 0;
+}
+.file-diff-split .diff-added::before {
+  content: "+";
+  position: absolute;
+  left: 0;
+}
+@media (max-width: 900px) {
+  .commit-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .commit-navigation {
+    max-height: 32dvh;
+    z-index: 3;
+  }
+  .commit-file[id] {
+    scroll-margin-block-start: calc(32dvh + var(--space-4));
+  }
+}
+
+.commit-file-actions {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  margin: 0;
+  z-index: 2;
+}
+.commit-file-actions > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-control);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+}
+.commit-file-actions > summary::-webkit-details-marker {
+  display: none;
+}
+.commit-file-actions > summary:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.commit-file-actions > div {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  padding: var(--space-1);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 16px #0002;
+}
+.commit-file-actions a {
+  display: block;
+  white-space: nowrap;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  border-radius: var(--radius-control);
+}
+.commit-file-actions a:hover {
+  background: var(--soft);
+}
+.commit-navigation li .diff-icon-chevron {
+  width: 10px;
+  height: 10px;
+}
+.commit-navigation li details[open] > summary .diff-icon-chevron {
+  transform: rotate(90deg);
+}
+.commit-navigation li a {
+  padding-left: 26px;
+}
+.commit-file:not([open]) > .commit-file-heading {
+  border-bottom: 0;
+}
+.commit-file-heading {
+  border-start-start-radius: var(--radius-control);
+  border-start-end-radius: var(--radius-control);
 }

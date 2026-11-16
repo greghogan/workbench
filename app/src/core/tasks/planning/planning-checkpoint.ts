@@ -34,7 +34,8 @@ import {
   safePlanFile,
   type PlanIdentity,
 } from "./plan-model.js";
-import { planningSettings, planningScopes, readPlan, savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
+import { planningScopes, readPlan, savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
+import { planningSettings } from "./planning-settings.js";
 
 import { oid, treeFromEntries, transaction } from "./plan-git.js";
 interface PlanningOperation {

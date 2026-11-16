@@ -12,6 +12,7 @@ import { reviewAnnotations, type TextPart } from "../review/document-comparison.
 import type { ComparisonResult } from "../review/comparison-result.js";
 export interface DifferenceContext {
   record?: MarkdownRecord | undefined;
+  previousRecord?: MarkdownRecord;
   records: RecordLookup;
   pageTitle?: string;
 }
@@ -58,7 +59,7 @@ export function sourceDiffView(
 ): JSX.Element {
   if (!difference) return <p class="empty">No changes.</p>;
   const parser = markdownParser(context.record, context.records),
-    previous = markdownParser(context.record, context.records, "previous-"),
+    previous = markdownParser(context.previousRecord ?? context.record, context.records, "previous-"),
     current = markdownParser(context.record, context.records, "current-");
   const {
     old,

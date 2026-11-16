@@ -10,7 +10,7 @@ import {
   type TaskPlanApproval,
 } from "./task-approval-store.js";
 import type { TaskRecord } from "./task-model.js";
-import { taskPlanDigest } from "./task-plan.js";
+import { taskPlanDigest, taskPlanApprovalDigest } from "./task-plan.js";
 import { supportingFiles } from "../records/record-service.js";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { ownedPath } from "../runtime/paths.js";
@@ -102,7 +102,9 @@ export function attachTaskPlanApprovals(root: string, tasks: TaskRecord[]): void
     task.approval = {
       at: snapshot.at,
       contents: snapshot.contents,
-      current: taskPlanDigest(snapshot.contents, snapshot.files) === task.planDigest && changes.length === 0,
+      current:
+        taskPlanApprovalDigest(snapshot.contents, snapshot.files) === taskPlanApprovalDigest(task.contents, files) &&
+        changes.length === 0,
       files: changes,
     };
   }

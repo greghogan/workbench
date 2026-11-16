@@ -3,13 +3,14 @@ import { logicalRecordEntries } from "../records/archive-store.js";
 import { gitBytes, readGitTree, readGitObjects, type GitEntry } from "./git-snapshot.js";
 import { gitRevision } from "./refs.js";
 import { commitVersion } from "../review/review-units.js";
-import { planningSettings } from "../tasks/planning/planning-store.js";
+import { planningSettings } from "../tasks/planning/planning-settings.js";
 import { InvalidInput, MissingResource } from "../runtime/input-errors.js";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { resolve } from "node:path";
 
 const inspections = new WeightedCache<ReturnType<typeof inspectCommit>>(32 * 1024 * 1024);
 const taskPages = new WeightedCache<ReturnType<typeof taskCommitPage>>(4 * 1024 * 1024);
+const previews = new WeightedCache<ReturnType<typeof readGitObjects>>(8 * 1024 * 1024);
 
 function taskCommitPage(root: string, tip: string, path: string, offset: number) {
   if (!gitBytes(root, ["ls-tree", "-z", tip, "--", path]).length) return { tip, commits: [], next: undefined };
@@ -87,6 +88,8 @@ export interface HistoryFile {
   path: string;
   before?: GitEntry;
   after?: GitEntry;
+  additions?: number | null;
+  deletions?: number | null;
 }
 function inspectCommit(root: string, revision: string) {
   const unit = commitVersion(root, revision),
@@ -99,6 +102,33 @@ function inspectCommit(root: string, revision: string) {
     if (a?.oid !== b?.oid || a?.mode !== b?.mode)
       changes.push({ path, ...(a ? { before: a } : {}), ...(b ? { after: b } : {}) });
   }
+  const statistics = new Map(
+    gitBytes(root, [
+      "diff-tree",
+      "--no-commit-id",
+      "--numstat",
+      "-r",
+      "-z",
+      "--no-renames",
+      ...(unit.parents[0] ? [unit.parents[0], unit.revision] : ["--root", unit.revision]),
+    ])
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((row) => {
+        const first = row.indexOf("\t"),
+          second = row.indexOf("\t", first + 1);
+        if (first < 0 || second < 0) throw new InvalidInput("Invalid historical file statistics");
+        return [
+          row.slice(second + 1),
+          {
+            additions: row.slice(0, first) === "-" ? null : Number(row.slice(0, first)),
+            deletions: row.slice(first + 1, second) === "-" ? null : Number(row.slice(first + 1, second)),
+          },
+        ] as const;
+      }),
+  );
+  for (const change of changes) Object.assign(change, statistics.get(change.path));
   changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return {
     unit,
@@ -114,6 +144,10 @@ function inspectCommit(root: string, revision: string) {
   };
 }
 export function historyFiles(root: string, revision: string) {
+  if (/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(revision)) {
+    const cached = inspections.get(`${resolve(root)}:${revision}`);
+    if (cached) return cached;
+  }
   const commit = gitRevision(root, `${revision}^{commit}`);
   if (!commit) throw new MissingResource("History is unavailable locally");
   const key = `${resolve(root)}:${commit}`,
@@ -133,6 +167,8 @@ export function historyFile(
   path: string,
   inspection = historyFiles(root, revision),
 ): HistoryFile {
+  const changed = inspection.changes.find((file) => file.path === path);
+  if (changed) return changed;
   const { before, after, unit } = inspection,
     a = before.get(path),
     b = after.get(path);
@@ -144,12 +180,51 @@ export function historyFile(
   }
   return { path, ...(a ? { before: a } : {}), ...(b ? { after: b } : {}) };
 }
-export function historyText(root: string, entry?: GitEntry): Buffer | undefined {
-  if (!entry) return undefined;
-  const size = Number(gitBytes(root, ["cat-file", "-s", entry.oid]).toString());
-  if (!Number.isSafeInteger(size) || size < 0) throw new InvalidInput("Cannot inspect historical file size");
-  if (size > 2 * 1024 * 1024) return undefined;
-  const bytes = readGitObjects(root, [entry.oid], 2 * 1024 * 1024).get(entry.oid);
-  if (!bytes) throw new MissingResource("Historical file is unavailable locally");
-  return bytes;
+/** Read an immutable comparison's paired versions together. */
+export function historyFilePreviews(root: string, file: HistoryFile, maximum: number) {
+  const ids = [file.before, file.after].flatMap((entry) => (entry && entry.mode !== "160000" ? [entry.oid] : []));
+  // Check presence separately from the preview limit so missing objects remain visible as failures.
+  const contents = historyPreviewBlobs(root, ids, maximum, maximum * 2, true);
+  const preview = (entry?: GitEntry) =>
+    entry?.mode === "160000" ? Buffer.from(`Submodule ${entry.oid}\n`) : entry && contents.get(entry.oid);
+  return { before: preview(file.before), after: preview(file.after) };
+}
+
+export function historyPreviewBlobs(
+  root: string,
+  ids: string[],
+  maximum: number,
+  retainedBytes: number,
+  omitOversized = false,
+) {
+  const key = JSON.stringify([root, ids, maximum, retainedBytes, omitOversized]);
+  const saved = previews.get(key);
+  if (saved) return saved;
+  const contents = readGitObjects(root, ids, maximum, { retainedBytes, omitOversized, requirePresent: true });
+  if ([...contents.values()].every((bytes) => bytes !== undefined))
+    previews.set(
+      key,
+      contents,
+      key.length * 2 + [...contents.values()].reduce((size, bytes) => size + 128 + (bytes?.length ?? 0), 0),
+    );
+  return contents;
+}
+
+/** Read blob sizes together so previews can be selected before reading their contents. */
+export function historyBlobSizes(root: string, ids: readonly string[]): ReadonlyMap<string, number> {
+  const sizes = new Map<string, number>();
+  if (!ids.length) return sizes;
+  const rows = gitBytes(root, ["cat-file", "--batch-check"], ids.join("\n") + "\n")
+    .toString()
+    .trimEnd()
+    .split("\n");
+  if (rows.length !== ids.length) throw new MissingResource("Historical file metadata is incomplete");
+  for (const [index, row] of rows.entries()) {
+    const [id, type, value] = row.split(" "),
+      size = Number(value);
+    if (!id || id !== ids[index] || type !== "blob" || !Number.isSafeInteger(size) || size < 0)
+      throw new MissingResource("Historical file is unavailable locally");
+    sizes.set(id, size);
+  }
+  return sizes;
 }

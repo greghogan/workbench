@@ -63,9 +63,12 @@
 - `src/core/citations`: Imports bibliographic metadata and acquires, verifies, and serves preserved source documents.
 
 - `src/core/tasks`: Tracks task relationships, human decisions, local queues, and implementation evidence.
+- `src/core/tasks/task-formatting.ts`: Prepare canonical task and saved-plan review; keep formatting-tolerant plan
+  approval separate from exact review snapshots and implementation evidence.
 
 - `src/core/tasks/planning/plan-model.ts`, `src/core/tasks/planning/planning-index.ts`: Define scoped named plans and
   index independent planning history without checking it out.
+- `src/core/tasks/planning/planning-settings.ts`: Keeps personal planning settings available to lightweight Git hooks.
 - `src/core/tasks/planning/planning-store.ts`, `src/core/tasks/planning/planning-operations.ts`: Retain durable drafts
   and exact approvals. `src/core/tasks/planning/planning-checkpoint.ts` coordinates recoverable grouped checkpoints with
   concurrent editors; `src/core/tasks/planning/plan-git.ts` owns immutable tree and reference transactions.

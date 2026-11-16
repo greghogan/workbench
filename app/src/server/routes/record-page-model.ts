@@ -1,5 +1,6 @@
 import { comparisonChanged, hasReviewBaseline } from "../review/comparison-result.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
+import { terminalTask } from "../../core/records/record-document.js";
 import { WebError } from "../http/errors.js";
 import { recordURL } from "./locations.js";
 import { differenceLayout, DifferenceLayout, type ComparisonBaseline, type DocumentView } from "./navigation-state.js";
@@ -40,7 +41,6 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
   const record = context.index.byId.get(parameters.id ?? "");
   if (!record) return removedDecisionModel(context, parameters, layout);
   const document = context.document(record.id);
-  const views: { value: RecordView; label: string }[] = [{ value: "read", label: "Read" }];
   const compared =
     context.comparison?.state === "compared"
       ? context.comparison.decisions.find((item) => item.id === record.id)
@@ -51,10 +51,14 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
     !!document.modeChange;
   const upstream = record.collection && (context.comparison?.state !== "compared" || compared?.status !== "unchanged");
   const taskApproval = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id)?.approval : undefined;
-  if ((record.type === "ADR" || taskApproval) && !record.local && (reviewed || upstream))
-    views.push({ value: "changes", label: record.type === "TSK" ? "Diff" : "Changes" });
+  const taskComparison = !!taskApproval && !record.local && reviewed && !terminalTask.has(record.status);
+  const views: { value: RecordView; label: string }[] = taskComparison
+    ? [{ value: "changes", label: "Diff" }]
+    : [{ value: "read", label: "Read" }];
+  if (record.type === "ADR" && !record.local && (reviewed || upstream))
+    views.push({ value: "changes", label: "Changes" });
   if (record.editable) views.push({ value: "edit", label: "Edit" });
-  const requested = parameters.view ?? "read";
+  const requested = parameters.view ?? (taskComparison ? "changes" : "read");
   if (requested === "edit" && !record.editable) throw new WebError(400, "this record is read only");
   if (requested === "changes" && ((record.type !== "ADR" && !taskApproval) || record.local))
     throw new WebError(400, "source differences are available for project-owned ADRs and task approvals");

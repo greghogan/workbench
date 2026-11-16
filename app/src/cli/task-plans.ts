@@ -1,4 +1,5 @@
 import { cancelPlan, deletePlan, planDeletion } from "../core/tasks/planning/plan-disposition.js";
+import { prepareTaskReview } from "../core/tasks/task-formatting.js";
 import type { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { lstatSync, writeFileSync } from "node:fs";
@@ -20,13 +21,8 @@ import {
   parsePlanReference,
   type PlanIdentity,
 } from "../core/tasks/planning/plan-model.js";
-import {
-  planningScopes,
-  planningSettings,
-  readPlan,
-  readPlans,
-  type PlanView,
-} from "../core/tasks/planning/planning-store.js";
+import { planningScopes, readPlan, readPlans, type PlanView } from "../core/tasks/planning/planning-store.js";
+import { planningSettings } from "../core/tasks/planning/planning-settings.js";
 import {
   planningOperation,
   approvePlanDraft,
@@ -359,15 +355,14 @@ export function registerTaskPlanCommands(tasks: Command, root: string): void {
     .action(async (value: string, options: { expected: string }, command: Command) => {
       if (!terminalAvailable()) throw new InvalidInput("Approve plans in an interactive terminal or the browser");
       const selected = identity(value, command),
+        expected = await prepareTaskReview(root, selected.reference, options.expected),
         view = readPlan(root, selected);
-      if (view.digest !== options.expected)
-        throw new InvalidInput("Plan changed; inspect its current version before approval");
       console.log(safeOutput(view.contents));
       files(view);
       const prompt = createInterface({ input: process.stdin, output: process.stdout });
       try {
         if (!/^(?:y|yes)$/i.test((await prompt.question("Approve this plan? [y/N] ")).trim())) return;
-        show(approvePlanDraft(root, selected, options.expected, true), command);
+        show(approvePlanDraft(root, selected, expected, true), command);
       } finally {
         prompt.close();
       }

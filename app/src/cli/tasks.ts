@@ -1,7 +1,7 @@
 import { taskDisposition, applyTaskDisposition } from "../core/tasks/task-disposition.js";
 import { changeWorkQueue } from "../core/tasks/planning/plan-transfer.js";
 import { createPatch } from "diff";
-import { InvalidInput } from "../core/runtime/input-errors.js";
+import { InvalidInput, StateConflict } from "../core/runtime/input-errors.js";
 import { workReference } from "../core/tasks/planning/work-plans.js";
 import { registerTaskPlanCommands } from "./task-plans.js";
 import { Option, type Command } from "commander";
@@ -12,9 +12,11 @@ import { taskStatuses, terminalTask, type TaskStatus } from "../core/records/rec
 import type { TaskRecord } from "../core/tasks/task-model.js";
 import { readTaskGraph, taskReference, type TaskNode } from "../core/tasks/task-model.js";
 import { inspectTaskQueue, readTaskQueue, TaskReadiness, type QueueChange } from "../core/tasks/task-queue.js";
-import { changeTaskStatus } from "../core/tasks/task-service.js";
+import { changeTaskStatus, taskTransitionProblem } from "../core/tasks/task-service.js";
 import { registerCommand } from "./commands.js";
 import { terminalAvailable } from "./terminal/terminal-choice.js";
+import { prepareTaskReview } from "../core/tasks/task-formatting.js";
+import { safeOutput } from "../core/diagnostics/terminal-output.js";
 
 interface TaskOptions {
   json?: boolean;
@@ -152,9 +154,13 @@ export function registerTaskCommands(program: Command, root: string): void {
         if (guarded) {
           if (!terminalAvailable())
             throw new Error("Human task decisions require an interactive terminal or the task page");
-          const task = readTaskGraph(root).require(id);
-          expected ??= task.reviewDigest ?? task.digest;
-          console.log(task.contents);
+          const original = readTaskGraph(root).require(id);
+          expected = await prepareTaskReview(root, id, expected ?? original.reviewDigest ?? original.digest);
+          const graph = readTaskGraph(root),
+            task = graph.require(id);
+          const problem = taskTransitionProblem(task, new TaskReadiness(graph, readTaskQueue(root)), status);
+          if (problem) throw new StateConflict(problem);
+          console.log(safeOutput(task.contents));
           const prompt = createInterface({ input: process.stdin, output: process.stdout });
           try {
             if (

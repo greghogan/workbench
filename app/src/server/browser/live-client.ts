@@ -17,6 +17,8 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
   if (problem) session.notify(workspaceProblemText(problem), Notice.Workspace);
   let revision = document.body.dataset.revision ?? "";
   const refresh = async () => {
+    // Immutable file inspection keeps expanded context and file choices while the checkout changes.
+    if (document.querySelector("[data-commit-inspection]")) return;
     const reviews = [...document.querySelectorAll<HTMLFormElement>("form[data-review]")];
     const resolutions = [...document.querySelectorAll<HTMLFormElement>("form[data-resolution]")];
     if (session.protectedView() && !reviews.length && !resolutions.length) {

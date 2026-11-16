@@ -7,11 +7,8 @@ import {
   type SavedPlan,
 } from "./planning-index.js";
 import { existsSync } from "node:fs";
-import { parse } from "smol-toml";
 import { gitBytes, readGitObjects, readGitTree, type GitEntry } from "../../git/git-snapshot.js";
-import { repositoryStatePath } from "../../git/repository-state.js";
-import { gitRevision, validateBranch } from "../../git/refs.js";
-import { readBoundedFile } from "../../runtime/file-reads.js";
+import { gitRevision } from "../../git/refs.js";
 import { InvalidInput, MissingResource } from "../../runtime/input-errors.js";
 import { record, string } from "../../runtime/values.mjs";
 import { readProjects } from "../../projects/project-configuration.js";
@@ -30,13 +27,9 @@ import {
   type PlanIdentity,
   type PlanDocument,
 } from "./plan-model.js";
+import { taskPlanApprovalDigest } from "../task-plan.js";
+import { planningSettings } from "./planning-settings.js";
 
-export interface PlanningSettings {
-  branch?: string;
-  remote?: string;
-  remote_branch?: string;
-  auto_prune: boolean;
-}
 export interface PlanView extends PlanIdentity {
   tree: string;
   entries: ReadonlyMap<string, GitEntry>;
@@ -49,29 +42,6 @@ export interface PlanView extends PlanIdentity {
   branchTree?: string;
   baseTree?: string;
   approval?: { at: string; contents: string; entries: ReadonlyMap<string, GitEntry>; current: boolean };
-}
-export function planningSettings(root: string): PlanningSettings {
-  const path = repositoryStatePath(root, planningPaths.settings);
-  if (!existsSync(path)) return { auto_prune: true };
-  const input = record(
-    parse(readBoundedFile(path, 64 * 1024, "planning settings").toString()),
-    "Invalid planning settings",
-  );
-  if (Object.keys(input).some((key) => !["branch", "remote", "remote_branch", "auto_prune"].includes(key)))
-    throw new InvalidInput("Unknown planning setting");
-  for (const key of ["branch", "remote", "remote_branch"] as const)
-    if (
-      input[key] !== undefined &&
-      (typeof input[key] !== "string" || !input[key] || /[\0\r\n]/.test(input[key]) || input[key].startsWith("-"))
-    )
-      throw new InvalidInput(`Invalid planning ${key}`);
-  if (input.auto_prune !== undefined && typeof input.auto_prune !== "boolean")
-    throw new InvalidInput("Invalid planning auto_prune");
-  if (!!input.remote !== !!input.remote_branch)
-    throw new InvalidInput("Select both the planning remote and its destination branch");
-  if (typeof input.branch === "string") validateBranch(root, input.branch);
-  if (typeof input.remote_branch === "string") validateBranch(root, input.remote_branch);
-  return { ...input, auto_prune: input.auto_prune !== false };
 }
 export function planningScopes(root: string): PlanScope[] {
   if (existsSync(join(root, projectPaths.projects)))
@@ -174,7 +144,11 @@ function planView(input: PlanRead, objects: ReadonlyMap<string, Buffer | undefin
       at,
       contents: prior.toString(),
       entries: approved,
-      current: planVersion(planContent(entries)) === planVersion(approved),
+      current:
+        document?.metadata.status === "Approved" &&
+        taskPlanApprovalDigest(prior.toString()) === taskPlanApprovalDigest(contents) &&
+        planVersion(new Map([...planContent(entries)].filter(([path]) => path !== planningPaths.document))) ===
+          planVersion(new Map([...approved].filter(([path]) => path !== planningPaths.document))),
     };
   }
   return {

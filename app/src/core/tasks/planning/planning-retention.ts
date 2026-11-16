@@ -2,7 +2,8 @@ import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "..
 import { spawnSync } from "node:child_process";
 import { readPlanOperations } from "./plan-operation-store.js";
 import { readDraftGroups } from "./planning-draft-groups.js";
-import { planningSettings, savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
+import { savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
+import { planningSettings } from "./planning-settings.js";
 import { planningPaths } from "./plan-model.js";
 import { gitBytes } from "../../git/git-snapshot.js";
 import { gitAncestor, gitRevision } from "../../git/refs.js";
