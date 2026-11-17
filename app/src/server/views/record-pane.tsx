@@ -3,6 +3,7 @@ import type { BrowserRecord } from "../../core/records/record-service.js";
 import { recordKey, compareRecordKeys } from "../routes/record-listing.js";
 import type { ViewContext } from "../workspace/view-context.js";
 import { recordURL } from "../routes/locations.js";
+import { sourceURL } from "../routes/sources.js";
 
 export interface PaneStep {
   href: string;
@@ -21,7 +22,7 @@ export function recordNeighbors(context: ViewContext, record: Pick<BrowserRecord
     .sort((a, b) => compareRecordKeys(a.key, b.key));
   const index = ordered.findIndex(({ item }) => item.id === record.id);
   const step = (item: Pick<BrowserRecord, "id" | "title"> | undefined): PaneStep | undefined =>
-    item ? { href: recordURL(item.id), title: item.title } : undefined;
+    item ? { href: sourceURL(context, recordURL(item.id)), title: item.title } : undefined;
   return {
     previous: index > 0 ? step(ordered[index - 1]?.item) : undefined,
     next: index >= 0 ? step(ordered[index + 1]?.item) : undefined,

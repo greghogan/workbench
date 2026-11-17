@@ -26,14 +26,15 @@ inspection, not prescribed boundaries. Refactoring may split, join, move, or rem
 distinct contract. Create shared packages for stable boundaries used by multiple consumers, keeping consumer-specific
 models private.
 
-Commits keep coherent changes with their tests, documentation, decisions, and derived files. Commit conventions are
-configurable; keep exact formatting defaults in configuration and the contributing guide. Recent-commit reviews and
-full-codebase audits are separately requested activities. Planning and approval records may be published for
-coordination. Local commits and revisions may precede human acceptance. Publishing implementation requires human
-acceptance and an explicit request to publish; approval to implement a batch is insufficient. Consolidate follow-up
-corrections with the unpublished work they amend, preserving unrelated work and published history. Avoid commits solely
-for local execution progress. Human approval follows each record's policy, not ordinary code or generated-file changes
-by default.
+Commits keep coherent changes with their tests, documentation, decisions, and derived files. Group a task's unpublished
+commits where practical, preserving dependency order and published history. Review reordered changes and renew affected
+evidence. Commit conventions are configurable; keep exact formatting defaults in configuration and the contributing
+guide. Recent-commit reviews and full-codebase audits are separately requested activities. Planning and approval records
+may be published for coordination. Local commits and revisions may precede human acceptance. Publishing implementation
+requires human acceptance and an explicit request to publish; approval to implement a batch is insufficient. Consolidate
+follow-up corrections with the unpublished work they amend, preserving unrelated work and published history. Avoid
+commits solely for local execution progress. Human approval follows each record's policy, not ordinary code or
+generated-file changes by default.
 
 Rationale: Semantic boundaries make invariants understandable; coherent changes and review keep implementation and
 evidence together while improving the practices that produced them.

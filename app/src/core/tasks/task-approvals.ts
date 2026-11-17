@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { lstatSync } from "node:fs";
 import { relative } from "node:path";
+import { readConfig } from "../projects/project-configuration.js";
 import { taskDecisionPath, readTaskDecisions, type TaskDecision } from "./task-decisions.js";
 import {
   retainPlanApproval,
@@ -19,7 +19,8 @@ import { gitBytes } from "../git/git-snapshot.js";
 import { taskRepositoryDirectory } from "./task-project-state.js";
 import { transferredFileModes } from "./planning/plan-operation-store.js";
 
-const digest = (contents: string) => createHash("sha256").update(contents).digest("hex");
+import { acceptedTaskVersion, taskOutcomeDigest } from "./task-snapshot.js";
+
 function canonicalFileModes(root: string): Map<string, string> | undefined {
   if (!taskRepositoryDirectory(root)) return;
   const mode = spawnSync("git", ["-C", root, "config", "--bool", "--get", "core.filemode"], { encoding: "utf8" });
@@ -58,8 +59,7 @@ export function taskPlanFiles(root: string, task: Pick<TaskRecord, "path">): Tas
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 export function taskReviewVersion(root: string, task: Pick<TaskRecord, "path" | "contents">): string {
-  const files = taskPlanFiles(root, task);
-  return files.length ? digest(JSON.stringify([task.contents, files])) : digest(task.contents);
+  return taskOutcomeDigest(task.contents, taskPlanFiles(root, task));
 }
 export const retainTaskPlanApproval = (root: string, snapshot: TaskPlanApproval): string =>
   retainPlanApproval(taskDecisionPath(root), snapshot);
@@ -70,21 +70,38 @@ export interface TaskApprovalView {
   at: string;
   contents: string;
   current: boolean;
+  source?: TaskDecision["source"];
   files: { name: string; change: "added" | "changed" | "removed" }[];
 }
-export function attachTaskPlanApprovals(root: string, tasks: TaskRecord[]): void {
-  const decisions = new Map(
-    readTaskDecisions(root)
-      .filter((decision) => decision.status === "Approved")
-      .map((decision) => [decision.reference, decision]),
-  );
+export function attachTaskDecisions(root: string, tasks: TaskRecord[]): void {
+  const approvals = new Map<string, TaskDecision>();
+  const accepted = new Map<string, TaskDecision[]>();
+  const enforce = readConfig(root).review?.task_approvals === true;
+  for (const decision of readTaskDecisions(root)) {
+    if (decision.status === "Approved") approvals.set(decision.reference, decision);
+    else if (enforce) {
+      const outcomes = accepted.get(decision.reference) ?? [];
+      outcomes.push(decision);
+      accepted.set(decision.reference, outcomes);
+    }
+  }
   for (const task of tasks) {
     if (task.archived) continue;
     const files = taskPlanFiles(root, task),
-      decision = decisions.get(task.reference),
+      decision = approvals.get(task.reference),
       snapshot = decision ? readTaskPlanApproval(root, decision) : undefined;
-    task.reviewDigest = files.length ? digest(JSON.stringify([task.contents, files])) : task.digest;
+    task.reviewDigest = taskOutcomeDigest(task.contents, files);
     task.planDigest = taskPlanDigest(task.contents, files);
+    // Only a task with a local acceptance decision can enter this renewal workflow.
+    if (
+      task.metadata.status === "Accepted" &&
+      accepted
+        .get(task.reference)
+        ?.some(
+          (outcome) => outcome.digest === task.digest && acceptedTaskVersion(root, outcome) === task.reviewDigest,
+        ) === false
+    )
+      task.acceptanceNeedsReview = true;
     if (!snapshot) continue;
     const previous = new Map(snapshot.files.map((file) => [file.name, file])),
       current = new Map(files.map((file) => [file.name, file]));
@@ -102,6 +119,7 @@ export function attachTaskPlanApprovals(root: string, tasks: TaskRecord[]): void
     task.approval = {
       at: snapshot.at,
       contents: snapshot.contents,
+      ...(decision?.source ? { source: decision.source } : {}),
       current:
         taskPlanApprovalDigest(snapshot.contents, snapshot.files) === taskPlanApprovalDigest(task.contents, files) &&
         changes.length === 0,

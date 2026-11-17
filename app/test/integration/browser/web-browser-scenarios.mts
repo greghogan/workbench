@@ -97,7 +97,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           writeFileSync(record, contents);
           await page.goto(base + "/records/demo:ADR-Z");
           await page.locator(".diagram-viewport img").nth(1).waitFor();
-          await page.locator(".diagram > .muted").waitFor();
+          const diagrams = page.locator("[data-diagram-comparison]");
+          await diagrams.nth(1).locator("output").filter({ hasText: "source is shown" }).waitFor();
           assert.equal(await page.locator(".diagram-renderer").count(), 1, "One renderer serves all diagrams");
           assert.equal(await page.locator(".diagram-renderer").getAttribute("sandbox"), "allow-scripts");
           assert.equal(await page.locator(".diagram-viewport img").count(), 2);
@@ -110,10 +111,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
               .first()
               .evaluate((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 1),
           );
-          assert.equal(
-            await page.locator(".diagram > .muted").textContent(),
-            "Diagram could not be rendered; source is shown.",
-          );
+          assert.equal(await diagrams.nth(1).locator("output").textContent(), "Diagram unavailable; source is shown.");
           assert.equal(
             await page
               .locator(".diagram-renderer")
@@ -121,9 +119,13 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             true,
             "The renderer cannot access the parent document",
           );
-          await page.locator(".diagram details summary").first().click();
-          assert.equal(await page.locator(".diagram details pre").first().textContent(), graph);
-          await page.locator(".diagram details summary").first().click();
+          await diagrams.first().getByRole("button", { name: "Source", exact: true }).click();
+          assert.equal(await diagrams.first().locator("[data-diagram-source] pre").textContent(), graph);
+          assert(await diagrams.first().locator("[data-diagram-graphics]").isHidden());
+          await diagrams.first().getByRole("button", { name: "Diagram", exact: true }).click();
+          assert(await diagrams.first().locator("[data-diagram-source]").isHidden());
+          await diagrams.nth(1).getByRole("button", { name: "Retry diagram" }).click();
+          await diagrams.nth(1).locator("output").filter({ hasText: "source is shown" }).waitFor();
           await page.screenshot({ path: join(directory, "diagrams.png"), fullPage: true });
           await page.evaluate(axe.source);
           const accessibility = await page.evaluate<import("axe-core").AxeResults>("axe.run(document)");
@@ -142,7 +144,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           try {
             const fallback = await plain.newPage();
             await fallback.goto(base + "/records/demo:ADR-Z");
-            assert.equal(await fallback.locator(".diagram code").first().textContent(), graph);
+            assert.equal(await fallback.locator("[data-diagram-source] code").first().textContent(), graph);
+            assert.equal(await fallback.getByRole("button", { name: "Diagram", exact: true }).count(), 0);
             assert.equal(await fallback.locator(".diagram-renderer").count(), 0);
           } finally {
             await plain.close();
@@ -150,13 +153,39 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           git(root, "add", "workbench/decisions/ADR-0Z.md");
           git(root, "commit", "-qm", "Diagram fixture");
           writeFileSync(record, contents.replace("Toolchain artifact", "Prepared toolchain"));
-          await page.goto(base + "/records/demo:ADR-Z/review?layout=unified");
-          assert(
-            (await page.locator(".document-diff pre").allTextContents()).some((text) =>
-              text.includes("Prepared toolchain"),
-            ),
-            "Review retains changed diagram source",
-          );
+          for (const layout of ["unified", "split"]) {
+            await page.goto(base + "/records/demo:ADR-Z/review?layout=" + layout);
+            const comparison = page.locator(".document-diff"),
+              removed = comparison.locator(".diagram-removed"),
+              added = comparison.locator(".diagram-added"),
+              paired = comparison
+                .locator("[data-diagram-comparison]")
+                .filter({ has: page.locator(".diagram-removed,.diagram-added") });
+            await removed.locator("img").waitFor();
+            await added.locator("img").waitFor();
+            assert.equal(await removed.count(), 1);
+            assert.equal(await added.count(), 1);
+            assert.equal(await paired.getByRole("group", { name: "Diagram view" }).count(), 1);
+            assert((await removed.locator("img").getAttribute("alt"))?.includes("Toolchain artifact"));
+            assert((await added.locator("img").getAttribute("alt"))?.includes("Prepared toolchain"));
+            await paired.getByRole("button", { name: "Source", exact: true }).click();
+            assert(await removed.isHidden());
+            assert(await added.isHidden());
+            assert.equal(await comparison.locator("del").textContent(), "Toolchain artifact");
+            assert.equal(await comparison.locator("ins").textContent(), "Prepared toolchain");
+            await paired.getByRole("button", { name: "Diagram", exact: true }).click();
+            assert(await removed.isVisible());
+            assert(await added.isVisible());
+            assert(
+              await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+              "Diagram comparisons remain within the page on narrow screens",
+            );
+            await page.evaluate(axe.source);
+            const checked = await page.evaluate<import("axe-core").AxeResults>("axe.run(document)");
+            writeFileSync(join(directory, `diagrams-${layout}-accessibility.json`), JSON.stringify(checked, null, 2));
+            assert.deepEqual(checked.violations, [], `Diagram ${layout} accessibility violations`);
+            await page.screenshot({ path: join(directory, `diagrams-${layout}.png`), fullPage: true });
+          }
         } finally {
           await page.unroute("**/*");
         }
@@ -520,6 +549,20 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await paragraph.locator("del,ins").evaluateAll((elements) => elements.map((element) => element.tagName)),
             ["DEL", "INS"],
           );
+          for (const forcedColors of ["active", "none"] as const) {
+            await page.emulateMedia({ forcedColors });
+            const annotations = await paragraph.locator("del,ins").evaluateAll((elements) =>
+              elements.map((element) => ({
+                decoration: getComputedStyle(element).textDecorationLine,
+                prefix: getComputedStyle(element, "::before").content,
+              })),
+            );
+            assert(annotations.every(({ prefix }) => prefix === "none" || prefix === "normal"));
+            assert.deepEqual(
+              annotations.map(({ decoration }) => decoration),
+              forcedColors === "active" ? ["line-through", "underline"] : ["none", "none"],
+            );
+          }
           assert.equal(await page.locator(".diff-legend,.diff-change-label").count(), 0);
           await paragraph.evaluate((element) => {
             const range = globalThis.document.createRange();
@@ -532,7 +575,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           assert.equal(await page.evaluate(() => globalThis.navigator.clipboard.readText()), rendered.text);
           await page.evaluate(() => globalThis.getSelection()?.removeAllRanges());
           const crumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
-          assert.deepEqual(await crumbs.getByRole("link").allTextContents(), ["demo", "Review queue"]);
+          assert.deepEqual(await crumbs.getByRole("link").allTextContents(), ["demo", "Reviews"]);
           assert.equal(
             await page.locator(".panel-controls").getByRole("navigation", { name: "Difference layout" }).count(),
             1,
@@ -630,6 +673,12 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           const response = await cold.goto(base + "/records/demo:ADR-0/review?layout=unified");
           assert.equal(response?.status(), 200);
           await cold.getByRole("button", { name: "Review file", exact: true }).waitFor();
+          const trail = cold.getByRole("navigation", { name: "Breadcrumb" });
+          assert.equal(
+            new URL((await trail.getByRole("link", { name: "Reviews", exact: true }).getAttribute("href")) ?? "", base)
+              .pathname,
+            new URL(base + "/reviews").pathname,
+          );
           assert.equal(readFileSync(adr, "utf8"), unformatted, "GET must not format the file");
           await cold.getByRole("button", { name: "Review file", exact: true }).click();
           await cold.locator("form[data-review]").waitFor();
@@ -782,10 +831,12 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.equal(await page.locator("[data-file-mode]").count(), 0);
         assert.equal(await page.getByRole("button", { name: "Confirm new file", exact: true }).isEnabled(), true);
         await page.screenshot({ path: join(directory, "new-file-review.png"), fullPage: true });
-        git(root, "add", ".");
+        const task = "workbench/tasks/TSK-00.md";
+        writeFileSync(join(root, task), "---\nstatus: Canceled\n---\n\n# TSK-0: Inspect the interface\n");
+        git(root, "add", "workbench/decisions/ADR-00.md", added, task);
         git(root, "commit", "-qm", "Retained policy updates\n\nWorkbench-Provisional: true");
         const revision = git(root, "rev-parse", "HEAD");
-        await page.goto(base + "/review");
+        await page.goto(base + "/reviews");
         const unit = page.locator(`[data-review-commit="${revision}"]`);
         await unit.waitFor();
         assert.equal(await unit.locator(".panel-heading a").count(), 0);
@@ -796,7 +847,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: 1000 });
           const metadata = await unit.locator(".commit-review-context > p").last().boundingBox(),
-            title = await unit.locator("h2").boundingBox(),
+            title = await unit.getByRole("heading", { name: "Retained policy updates", exact: true }).boundingBox(),
             path = await unit.locator(".record-row > .file-path").first().boundingBox();
           assert(metadata && title && path);
           assert(Math.abs(metadata.x - path.x) <= 1, "Review counts align with record text");
@@ -827,7 +878,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert(!existsSync(join(root, "workbench/collections/company")));
         await page.screenshot({ path: join(directory, "collection-preview-desktop.png"), fullPage: true });
         await page.getByRole("button", { name: "Adopt for review", exact: true }).click();
-        await page.waitForURL(base + "/review?collection_applied=company", { timeout: 30000 });
+        await page.waitForURL(base + "/reviews?collection_applied=company", { timeout: 30000 });
         const applicationResult = page.getByLabel("Collection application result");
         await applicationResult.waitFor();
         assert.match(await applicationResult.innerText(), /Project context synchronized and validation passed\./);
@@ -879,7 +930,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
     {
       name: BrowserScenario.Compatibility,
       run: async () => {
-        await page.goto(base + "/review");
+        await page.goto(base + "/reviews");
         await page
           .locator("[data-compatibility-item]")
           .getByRole("link", { name: "Resolve policy incompatibilities" })
@@ -897,7 +948,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.getByRole("button", { name: "Approve resolution", exact: true }).click();
         await page.waitForURL((url) => !url.searchParams.has("compatibility"));
         assert.equal(readFileSync(adr, "utf8"), before);
-        await page.goto(base + "/review");
+        await page.goto(base + "/reviews");
         assert.equal(await page.locator("[data-compatibility-item]").count(), 0);
         await page.goto(base + "/collections");
         await page
@@ -1139,11 +1190,41 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           return bounds.height;
         };
         const path = join(root, "workbench/tasks/TSK-ZZ.md");
-        writeFileSync(
-          path,
-          "---\nstatus: Planned\n---\n\n# TSK-ZZ: Deliver the task workflow\n\n## Overview\n\nReview the delivered behavior.\n\n## Details\n\n- [x] Check the browser workflow.\n",
+        const taskSource =
+          "---\nstatus: Planned\n---\n\n# TSK-ZZ: Deliver the task workflow\n\n## Overview\n\n" +
+          "Preserve user work while reviewing the delivered behavior and recovering interrupted operations. "
+            .repeat(6)
+            .trim() +
+          "\n\n## Details\n\n- [x] Check the browser workflow.\n";
+        writeFileSync(path, taskSource);
+        const plain = await browser.newContext({ javaScriptEnabled: false });
+        try {
+          const review = await plain.newPage();
+          await review.goto(base + "/records/demo:TSK-ZZ");
+          await review.getByRole("button", { name: "Review plan", exact: true }).waitFor();
+          assert.equal(readFileSync(path, "utf8"), taskSource, "Reading a plan does not write formatting");
+          await review.getByRole("button", { name: "Review plan", exact: true }).click();
+          await review.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
+          assert.notEqual(readFileSync(path, "utf8"), taskSource, "Review preparation saves canonical formatting");
+          assert.match(readFileSync(path, "utf8"), /status: Planned/, "Formatting does not grant approval");
+        } finally {
+          await plain.close();
+        }
+        writeFileSync(path, taskSource);
+        const preparation = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            response.url().endsWith("/actions/review-prepare") &&
+            response.status() === 200,
         );
         await page.goto(base + "/records/demo:TSK-ZZ");
+        await preparation;
+        await page.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
+        assert.notEqual(
+          readFileSync(path, "utf8"),
+          taskSource,
+          "Browser enhancement prepares formatting automatically",
+        );
         assert.equal(await page.getByRole("checkbox", { name: "Approve plan", exact: true }).count(), 0);
         assert.equal(await page.locator('main textarea[name="reason"]').count(), 0);
         await page.getByText("More task actions", { exact: true }).click();
@@ -1169,8 +1250,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.match(readFileSync(path, "utf8"), /status: Planned/);
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.getByRole("button", { name: "Approve plan", exact: true }).click();
-        await page.getByRole("heading", { name: "Plans", exact: true }).waitFor();
-        const work = page.getByRole("region", { name: "Work", exact: true });
+        await page.getByRole("heading", { name: "Work", exact: true }).waitFor();
+        const work = page.getByRole("main");
         assert.equal(await page.getByRole("button", { name: "Start task", exact: true }).count(), 0);
         workbench("queue", "start", "demo:TSK-ZZ");
         await work.getByText("Active", { exact: true }).waitFor();
@@ -1214,7 +1295,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           "--evidence",
           "Verified the human approval and queue workflow in Chromium.",
         );
-        let outcomePage = await page.reload();
+        let outcomePage = await page.goto(base + "/reviews");
         // The CLI just changed the queue while the server may be capturing a review snapshot.
         const refreshDeadline = Date.now() + 5000;
         while (outcomePage?.status() === 409 && Date.now() < refreshDeadline) {
@@ -1225,7 +1306,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         }
         assert(outcomePage?.ok(), "Task outcome page returned " + String(outcomePage?.status()));
         await page
-          .getByRole("region", { name: "Outcomes", exact: true })
+          .locator('[data-task-group^="task:"]')
           .getByRole("link", { name: /Deliver the task workflow/ })
           .click();
         assert.equal(await page.locator('.sidebar a[href*="/history"]').count(), 0);
@@ -1263,6 +1344,31 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           (await page.locator("[data-commit-file]").count()) >= 4,
           "Reload retains the complete changed-file list",
         );
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        const fileNavigation = page.getByRole("navigation", { name: "Changed files", exact: true });
+        const fileList = fileNavigation.getByRole("region", { name: "File list", exact: true });
+        const pageScroll = await page.evaluate(() => window.scrollY);
+        assert(
+          await fileList.evaluate((list) => {
+            list.scrollTop = list.scrollHeight;
+            return list.scrollTop > 0;
+          }),
+          "The visible file list has an independent scroll area",
+        );
+        assert.equal(await page.evaluate(() => window.scrollY), pageScroll);
+        await contextFile.evaluate((file) => {
+          file.scrollIntoView({ block: "start" });
+        });
+        await fileNavigation
+          .getByRole("link", { name: "task-context.md", exact: true })
+          .and(page.locator('[aria-current="location"]'))
+          .waitFor();
+        const navigationBounds = await fileNavigation.boundingBox();
+        assert(navigationBounds && navigationBounds.y >= 0, "The file list stays in view while the diff scrolls");
+        await contextFile.locator(":scope > .commit-file-heading").hover();
+        await fileNavigation.locator('a[title="task-context.md"][data-file-hover]').waitFor();
+        await fileList.hover();
+        assert.equal(await fileNavigation.locator("[data-file-hover]").count(), 0);
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: 1000 });
           assert(
@@ -1274,22 +1380,34 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           assert.deepEqual(inlineAccessibility.violations, [], "Inline commit-file accessibility violations");
           await page.screenshot({ path: join(directory, `task-inline-${String(width)}.png`), fullPage: true });
         }
-        await page.locator(".commit-navigation > summary").click();
-        await page.locator("[data-commit-file-filter]").fill("ZZ-LARGE");
-        await page
-          .getByRole("navigation", { name: "Changed files", exact: true })
-          .getByRole("link", { name: "zz-large.md", exact: true })
-          .click();
-        await page.getByRole("link", { name: "Load diff", exact: true }).click();
-        await page.locator(".file-diff code").first().waitFor();
-        await page.reload();
-        assert.equal(await page.getByRole("link", { name: "Load diff", exact: true }).count(), 0);
-        await page
-          .getByRole("navigation", { name: "Changed files", exact: true })
-          .getByRole("link", { name: "task-delivery.ts", exact: true })
-          .click();
-        await page.getByText('export const outcome = "Verified in Chromium";', { exact: true }).waitFor();
-        assert.match(await page.locator(".file-diff .diff-removed").innerText(), /Initial browser result/);
+        const filter = page.locator("[data-commit-file-filter]"),
+          large = page.locator('[data-commit-file="zz-large.md"]'),
+          largeLink = fileNavigation.getByRole("link", { name: "zz-large.md", exact: true }),
+          delivery = page.locator('[data-commit-file="task-delivery.ts"]'),
+          inlineURL = new URL(page.url());
+        await filter.fill("ZZ-LARGE");
+        await large.evaluate((file) => {
+          (file as HTMLDetailsElement).open = false;
+        });
+        const anchor = await largeLink.getAttribute("href");
+        assert(anchor?.startsWith("#"));
+        await largeLink.click();
+        await page.waitForURL((url) => url.hash === anchor && url.search === inlineURL.search);
+        assert.equal(await filter.inputValue(), "ZZ-LARGE", "A jump preserves the file filter");
+        assert.equal(await large.getAttribute("open"), "");
+        await large.getByRole("link", { name: "Load diff", exact: true }).click();
+        await large.locator(".file-diff code").first().waitFor();
+        await filter.fill("");
+        await fileNavigation.getByRole("link", { name: "task-delivery.ts", exact: true }).click();
+        await fileNavigation.locator('a[title="task-delivery.ts"][aria-current="location"]').waitFor();
+        await delivery.getByText('export const outcome = "Verified in Chromium";', { exact: true }).waitFor();
+        assert.match(await delivery.locator(".file-diff .diff-removed").innerText(), /Initial browser result/);
+        await page.getByLabel("File actions: task-delivery.ts", { exact: true }).click();
+        assert(
+          await page.getByRole("link", { name: "Download current file", exact: true }).isVisible(),
+          "File downloads are available from the compact header menu",
+        );
+        await page.getByLabel("File actions: task-delivery.ts", { exact: true }).click();
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: 1000 });
           assert(
@@ -1305,20 +1423,49 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           assert.deepEqual(accessibility.violations, [], "Commit-file accessibility violations");
           await page.screenshot({ path: join(directory, `task-commit-${String(width)}.png`), fullPage: true });
         }
-        const scroll = page.locator(".file-diff-scroll").first();
+        const scroll = delivery.locator(".file-diff-scroll");
         await scroll.focus();
         await page.keyboard.press("ArrowRight");
-        await page.waitForFunction(() => (document.querySelector(".file-diff-scroll")?.scrollLeft ?? 0) > 0);
+        await page.waitForFunction(
+          () =>
+            (document.querySelector('[data-commit-file="task-delivery.ts"] .file-diff-scroll')?.scrollLeft ?? 0) > 0,
+        );
         const plainContext = await browser.newContext({ javaScriptEnabled: false }),
           plainPage = await plainContext.newPage();
         try {
-          const url = new URL(page.url());
+          const url = new URL(inlineURL);
+          url.hash = "";
+          await plainPage.goto(url.href);
+          await plainPage
+            .getByRole("navigation", { name: "Changed files", exact: true })
+            .getByRole("link", { name: "task-context.md", exact: true })
+            .click();
+          const target = await plainPage.locator('[data-commit-file="task-context.md"]').getAttribute("id");
+          assert(target, "The selected file has a fragment target");
+          assert.equal(new URL(plainPage.url()).hash, "#" + target);
           url.searchParams.set("path", "task-context.md");
           url.searchParams.delete("context");
           await plainPage.goto(url.href);
           await plainPage.getByRole("link", { name: "Show more lines above", exact: true }).click();
           await plainPage.getByText("Paragraph 30 **context**.", { exact: true }).waitFor();
           assert.equal(await plainPage.locator("form[data-review]").count(), 0);
+          assert.equal(await plainPage.locator("[data-commit-file]").count(), 1);
+          await plainPage
+            .getByRole("navigation", { name: "Changed files", exact: true })
+            .getByRole("link", { name: "task-delivery.ts", exact: true })
+            .click();
+          const destination = new URL(plainPage.url()),
+            destinationFile = plainPage.locator('[data-commit-file="task-delivery.ts"]'),
+            destinationId = await destinationFile.getAttribute("id");
+          assert(destinationId, "File selection from a single comparison returns to the commit file list");
+          assert.equal(destination.search, inlineURL.search);
+          assert.equal(destination.hash, "#" + destinationId);
+          await plainPage.reload();
+          assert.equal(plainPage.url(), destination.href);
+          assert(await plainPage.locator('[data-commit-file="task-context.md"]').isVisible());
+          const heading = await destinationFile.locator(":scope > summary").boundingBox(),
+            viewport = plainPage.viewportSize();
+          assert(heading && viewport && heading.y >= 0 && heading.y < viewport.height, "Reload jumps to the file");
         } finally {
           await plainContext.close();
         }
@@ -1336,11 +1483,11 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           ),
           page.getByRole("button", { name: "Accept outcome", exact: true }).click(),
         ]);
-        await page.getByRole("heading", { name: "Outcomes", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "Reviews", exact: true }).waitFor();
         assert.match(readFileSync(path, "utf8"), /status: Accepted/);
         assert.equal(
           await page
-            .getByRole("region", { name: "Outcomes", exact: true })
+            .locator('[data-task-group^="task:"]')
             .getByRole("link", { name: /Deliver the task workflow/ })
             .count(),
           0,
@@ -1353,7 +1500,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         writeFileSync(input, planText);
         workbench("task", "plan", "create", "discarded", "--file", input);
         rmSync(input);
-        await page.goto(base + "/queue");
+        await page.goto(base + "/plans");
         await page.getByRole("link", { name: "Disposable browser plan", exact: true }).click();
         await page.getByRole("heading", { name: "Disposable browser plan", exact: true }).waitFor();
         assert.deepEqual(await page.locator("main .task-actions").locator("a, button").allTextContents(), [
@@ -1391,7 +1538,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await page.waitForURL((url) => url.searchParams.get("view") !== "edit");
             await page.getByText("A shared service keeps project activity available", { exact: false }).waitFor();
           }
-          await page.goto(base + "/queue");
+          await page.goto(base + "/plans");
           const row = page.locator('[data-task-node="demo:plan/discarded"]');
           for (const width of [1440, 390, 320]) {
             await page.setViewportSize({ width, height: 1000 });
@@ -1425,7 +1572,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             join(root, `workbench/tasks/TSK-0${id}.md`),
             `---\nstatus: Approved\n---\n\n# TSK-${id}: ${title}\n\n## Overview\n\nA browser fixture task.\n`,
           );
-        await page.goto(base + "/queue");
+        await page.goto(base + "/work");
         for (const [id, title] of [
           ["V", "Prepare data"],
           ["W", "Build the report"],
@@ -1588,6 +1735,18 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         );
         await page.locator(".project-switch-name").getByText("Renamed project", { exact: true }).waitFor();
         assert.equal(await search.inputValue(), "Search draft retained during rename");
+        await Promise.all([
+          page.waitForResponse((response) => new URL(response.url()).searchParams.get("workflow") === "plans"),
+          page.goto(base + "/plans"),
+        ]);
+        writeFileSync(
+          join(root, "workbench/tasks/TSK-0Z.md"),
+          "---\nstatus: Planned\n---\n\n# TSK-Z: Explain notebook tags\n",
+        );
+        await page.getByRole("link", { name: "TSK-Z: Explain notebook tags", exact: true }).waitFor();
+        await page.waitForFunction(
+          () => document.getElementById("workflow-notice")?.textContent === "A plan needs approval",
+        );
       },
     },
     {
@@ -1678,7 +1837,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         );
         await page.screenshot({ path: join(directory, "wrapping-mobile.png"), fullPage: true });
         await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
-        await page.goto(base + "/review");
+        await page.goto(base + "/reviews");
         await page.screenshot({ path: join(directory, "review-forced-colors.png"), fullPage: true });
         await page.keyboard.press("Tab");
         assert.equal(await page.locator(":focus").textContent(), "Skip to content");
@@ -1702,7 +1861,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           mkdirSync(join(root, path ?? "", "workbench/tasks"), { recursive: true });
           writeFileSync(
             join(root, path ?? "", "workbench/tasks/TSK-00.md"),
-            `---\nstatus: Planned\n---\n\n# ${id ?? ""} nested discovery token\n`,
+            `---\nstatus: Planned\n---\n\n# TSK-0: ${id ?? ""} nested discovery token\n`,
           );
         }
         await page.goto(base + "/records?scope=solver&type=TSK");
@@ -1742,10 +1901,19 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         writeFileSync(nestedTask, readFileSync(nestedTask, "utf8") + "\nLive nested summary.\n");
         await page.getByText("Live nested summary.", { exact: true }).waitFor();
         assert.equal(await page.locator(":focus").getAttribute("aria-label"), "Toggle subprojects of GraphMP");
+        for (const label of ["Plans", "Work", "Reviews"]) {
+          await page
+            .getByRole("navigation", { name: "Main navigation" })
+            .getByRole("link", { name: new RegExp(`^${label}\\b`) })
+            .click();
+          await page.getByRole("heading", { name: label, exact: true }).waitFor();
+          assert.equal(new URL(page.url()).searchParams.get("scope"), "solver");
+          await page.screenshot({ path: join(directory, `scoped-${label.toLowerCase()}.png`), fullPage: true });
+        }
         await page.getByLabel("Search project records").fill("nested discovery token");
         await page.getByRole("button", { name: "Search", exact: true }).click();
-        await page.getByRole("heading", { name: "graphmp nested discovery token", exact: true }).waitFor();
-        await page.getByRole("heading", { name: "solver nested discovery token", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "TSK-0: graphmp nested discovery token", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "TSK-0: solver nested discovery token", exact: true }).waitFor();
         await page
           .getByRole("navigation", { name: "Record sources" })
           .getByRole("link", { name: "GraphMP", exact: true })
@@ -1755,6 +1923,101 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await breadcrumbs.getByRole("link", { name: "GraphAI", exact: true }).click();
         await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
         assert.equal(new URL(page.url()).searchParams.get("scope"), "demo");
+
+        await page.goto(base + "/records/solver:TSK-0");
+        await page.getByRole("button", { name: "Approve plan", exact: true }).click();
+        await page.getByRole("heading", { name: "Work", exact: true }).waitFor();
+        workbench("queue", "start", "solver:TSK-0");
+        await page.goto(base + "/reviews?collection=company");
+        const parentReviews = sources.getByRole("link", { name: "1 pending review in GraphAI/GraphMP", exact: true });
+        assert.equal(await parentReviews.count(), 0);
+        const sharedPolicy = "workbench/decisions/ADR-0Y.md";
+        writeFileSync(
+          join(root, sharedPolicy),
+          "---\nsummary: Shared solver policy.\n---\n\n# ADR-Y: Solver policy\n\nShared policy for the solver.\n",
+        );
+        writeFileSync(
+          nestedTask,
+          readFileSync(nestedTask, "utf8") + "\n## Implementation account\n\nDelivered the shared solver policy.\n",
+        );
+        git(root, "add", sharedPolicy, nestedTask, registry);
+        git(
+          root,
+          "commit",
+          "-qm",
+          "Deliver shared solver policy\n\nWorkbench-Provisional: true",
+          "--",
+          sharedPolicy,
+          nestedTask,
+          registry,
+        );
+        workbench("queue", "implemented", "solver:TSK-0", "--evidence", "Verified shared solver policy");
+        await parentReviews.waitFor();
+        await parentReviews.click();
+        await page.waitForURL(
+          (url) => url.pathname.endsWith("/reviews") && url.searchParams.get("scope") === "graphmp",
+        );
+        const group = page.locator('[data-task-group="task:solver:TSK-0"]');
+        await group.waitFor();
+        const scopedReviews = page.url();
+        await page.goto(base + "/records/graphmp:TSK-0");
+        await page.getByRole("button", { name: "Approve plan", exact: true }).click();
+        await page.getByRole("heading", { name: "Work", exact: true }).waitFor();
+        workbench("queue", "start", "graphmp:TSK-0");
+        workbench("queue", "implemented", "graphmp:TSK-0", "--evidence", "Verified the earlier outcome");
+        await page.goto(scopedReviews);
+        await page
+          .locator('[data-task-group="task:graphmp:TSK-0"]')
+          .getByRole("link", { name: "TSK-0: graphmp nested discovery token", exact: true })
+          .click();
+        await page.locator('a[rel="next"]').click();
+        await page.getByRole("button", { name: "Confirm new file", exact: true }).waitFor();
+        assert.equal(new URL(page.url()).searchParams.get("path"), sharedPolicy);
+        await page.getByRole("heading", { name: "demo:ADR-Y: Solver policy", level: 1, exact: true }).waitFor();
+        assert.deepEqual(await breadcrumbs.getByRole("link").allTextContents(), [
+          "GraphAI",
+          "GraphMP",
+          "Reviews",
+          "TSK-0: solver nested discovery token",
+        ]);
+        assert.doesNotMatch(await page.locator(".commit-review-context").innerText(), /solver nested discovery token/);
+        const reviewURL = page.url();
+        await page.getByRole("link", { name: /^Commit [0-9a-f]{12}$/ }).click();
+        await page.getByRole("heading", { name: "Deliver shared solver policy", level: 1, exact: true }).waitFor();
+        assert.equal(new URL(page.url()).searchParams.get("scope"), "graphmp");
+        await page.getByRole("navigation", { name: "Changed files", exact: true }).waitFor();
+        assert.equal(await page.locator("form[data-review]").count(), 0);
+        await page.goBack();
+        await page.waitForURL(reviewURL);
+        await page.getByRole("button", { name: "Confirm new file", exact: true }).waitFor();
+        await page.locator('a[rel="next"]').click();
+        await page.getByRole("heading", { name: "TSK-0: solver nested discovery token", exact: true }).waitFor();
+        await page.locator('a[rel="prev"]').click();
+        await page.getByRole("button", { name: "Confirm new file", exact: true }).waitFor();
+        await page.locator('a[rel="prev"]').click();
+        await page.getByRole("heading", { name: "TSK-0: graphmp nested discovery token", exact: true }).waitFor();
+        await page.getByRole("button", { name: "Accept outcome", exact: true }).click();
+        await page.waitForURL(scopedReviews);
+        await parentReviews.waitFor();
+        await page.screenshot({ path: join(directory, "subproject-review-queue.png"), fullPage: true });
+        await group.getByRole("link", { name: "ADR-Y: Solver policy", exact: true }).click();
+        await page.getByRole("button", { name: "Confirm new file", exact: true }).waitFor();
+        assert.equal(new URL(page.url()).searchParams.get("scope"), "graphmp");
+        assert.equal(new URL(page.url()).searchParams.get("task"), "solver:TSK-0");
+        await page.reload();
+        await page.getByRole("button", { name: "Confirm new file", exact: true }).click();
+        await page.waitForURL(
+          (url) =>
+            url.pathname.endsWith("/records/solver:TSK-0") &&
+            url.searchParams.get("scope") === "graphmp" &&
+            url.searchParams.get("workflow") === "1",
+        );
+        await parentReviews.waitFor();
+        await page.getByRole("heading", { name: "TSK-0: solver nested discovery token", exact: true }).waitFor();
+        await page.getByRole("button", { name: "Accept outcome", exact: true }).click();
+        await page.waitForURL(scopedReviews);
+        assert.equal(await group.getByRole("link", { name: "ADR-Y: Solver policy", exact: true }).count(), 0);
+        assert.equal(await parentReviews.count(), 0);
       },
     },
     {
@@ -1800,16 +2063,35 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.goto(demonstration + "/records/demo:TSK-9");
         await page.getByRole("heading", { name: "Questions and confirmed constraints", exact: true }).waitFor();
         await page.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
-        await page.goto(demonstration + "/queue");
-        await page
-          .locator('[aria-label="Plans"] [data-task-node="demo:TSK-9"] > .task-tree > [data-task-node="demo:TSK-A"]')
-          .waitFor();
+        await page.goto(demonstration + "/plans");
+        assert.equal(await page.locator("main [data-task-node]").first().getAttribute("data-task-node"), "demo:TSK-2");
+        await page.getByRole("link", { name: "Bookmark notes for later reading", exact: true }).waitFor();
+        await page.locator('main [data-task-node="demo:TSK-9"] > .task-tree > [data-task-node="demo:TSK-A"]').waitFor();
+        await page.goto(demonstration + "/work");
         for (const state of ["Active", "Blocked", "Queued"])
           await page.getByText(state, { exact: true }).first().waitFor();
         await page.getByText("Waiting for demo:TSK-5 (Approved)", { exact: true }).waitFor();
+        const revisedTask = page.getByRole("region", { name: "Queued work" }).locator('[data-task-node="demo:TSK-2"]');
+        await revisedTask.getByText("demo:TSK-2", { exact: true }).waitFor();
+        await revisedTask.getByRole("link", { name: "Review revised plan", exact: true }).waitFor();
         await page.screenshot({ path: join(directory, "demonstration-task-queue.png"), fullPage: true });
-        const outcomes = page.getByRole("region", { name: "Outcomes", exact: true });
-        await outcomes.locator('[data-record-id="demo:TSK-7"] a[data-card-link]').click();
+        await page.goto(demonstration + "/reviews");
+        const outcome = page.locator('[data-task-group="task:demo:TSK-7"]');
+        const rows = outcome.locator("[data-task-group-items] > [data-task-node]");
+        const first = await rows.nth(0).boundingBox(),
+          last = await rows.nth(1).boundingBox();
+        assert(first && last && Math.abs(last.y - first.y - first.height) < 1, "Review rows stack without a gap");
+        assert.deepEqual(
+          await rows
+            .locator("[data-record-id]")
+            .evaluateAll((items) => items.map((item) => item.getAttribute("data-record-id"))),
+          ["demo:ADR-1", "demo:TSK-7"],
+        );
+        await page.screenshot({ path: join(directory, "demonstration-review-groups.png"), fullPage: true });
+        await outcome.getByRole("link", { name: "ADR-1: Offline search and previews", exact: true }).click();
+        await page.getByRole("button", { name: "Confirm changes", exact: true }).click();
+        await page.waitForURL((url) => url.pathname === "/demonstration/reviews");
+        await outcome.locator('[data-record-id="demo:TSK-7"] a[data-card-link]').click();
         await Promise.all([
           page.waitForResponse(
             (response) =>
@@ -1822,10 +2104,10 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.waitForURL(
           (url) =>
             url.origin === origin &&
-            url.pathname === "/demonstration/queue" &&
+            url.pathname === "/demonstration/reviews" &&
             url.searchParams.get("scope") === "demo",
         );
-        assert.equal(await page.locator('[aria-label="Outcomes"] [data-record-id="demo:TSK-7"]').count(), 0);
+        assert.equal(await page.locator('[data-task-group="task:demo:TSK-7"]').count(), 0);
         await page.goto(demonstration + "/records/demo:TSK-7");
         await page.locator(".record-metadata").getByText("Accepted", { exact: true }).waitFor();
         await page.goto(demonstration + "/records?type=ADR");
@@ -1844,12 +2126,12 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.evaluate(() => globalThis.getSelection()?.removeAllRanges());
         await card.click({ position: { x: 8, y: 8 } });
         await page.locator("h1").filter({ hasText: "ADR-0" }).waitFor();
-        await page.goto(demonstration + "/review");
+        await page.goto(demonstration + "/reviews");
         const queueLinks = page.locator("main article.record-row a[data-card-link]");
         const paths = await queueLinks.evaluateAll((links) =>
           links.map((link) => link.closest("[data-record-id]")?.getAttribute("data-record-id")),
         );
-        assert.deepEqual(paths, ["demo:ADR-0", "demo:EXP-0", "demo:EXP-1"]);
+        assert.deepEqual(paths, ["demo:ADR-0", "demo:EXP-0"]);
         await page.getByRole("link", { name: "EXP-0: Warm index versus scanning notes", exact: true }).click();
         assert.equal(await page.locator("form[data-review]").count(), 1);
         await page.getByRole("heading", { name: "Supporting files", exact: true }).waitFor();

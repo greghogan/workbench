@@ -30,7 +30,9 @@ export async function accessibilityEvidence(
       ["overview", base],
       ["records", base + "/records"],
       ["current-tasks", base + "/records?type=TSK"],
-      ["task-queue", base + "/queue"],
+      ["plans", base + "/plans"],
+      ["work", base + "/work"],
+      ["reviews", base + "/reviews"],
       ["task-state", base + "/records?type=TSK&status=Planned"],
       ["search", base + "/records?q=files&type=ADR"],
       ["record", base + "/records/demo:ADR-0"],
@@ -43,7 +45,6 @@ export async function accessibilityEvidence(
       ["experiment", base + "/records/demo:EXP-0"],
       ["environment", base + "/records/demo:ENV-0"],
       ["release", base + "/records/demo:REL-0"],
-      ["review-queue", base + "/review"],
       ["review", base + "/review?path=workbench/decisions/ADR-00.md"],
       ["collections", base + "/collections"],
     ] as const) {

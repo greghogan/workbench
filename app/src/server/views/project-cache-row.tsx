@@ -24,7 +24,7 @@ export const reviewCount = (
       data-review-revision={String(value?.revision ?? 0)}
       data-review-count={value?.count === undefined ? undefined : String(value.count)}
       data-review-problem={value?.problem}
-      href={projectBase(project.id) + Route.Review}
+      href={projectBase(project.id) + Route.Reviews}
       title={value?.problem}
     >
       {reviewCountLabel(value)}
@@ -114,7 +114,7 @@ export function ProjectCacheRow({
             data-cache-preview=""
             aria-labelledby={id + "-size " + id + "-label"}
           >
-            <span id={id + "-size"}>{quantityValue(id + "-owned", quantities.owned)}</span>
+            <span id={id + "-size"}>{quantityValue(id + "-owned", quantities.owned, undefined, false)}</span>
             <span id={id + "-label"} class="sr-only">
               cache breakdown for {project.name}
             </span>
@@ -129,7 +129,7 @@ export function ProjectCacheRow({
               {breakdown.map((entry) => (
                 <div key={entry.key}>
                   <dt>{entry.label}</dt>
-                  <dd>{quantityValue(id + "-preview-" + entry.key, entry.value)}</dd>
+                  <dd>{quantityValue(id + "-preview-" + entry.key, entry.value, undefined, false)}</dd>
                 </div>
               ))}
               <div>
@@ -144,7 +144,9 @@ export function ProjectCacheRow({
         </td>
       ) : (
         <>
-          {breakdown.map((entry) => cell(id + "-" + entry.key, entry.value, entry.key === "owned" ? href : undefined))}
+          {breakdown.map((entry) =>
+            cell(id + "-" + entry.key, entry.value, entry.key === "owned" ? href : undefined, false),
+          )}
           <td data-cache-cell={id + "-images"}>
             {complete ? formatBytes(images.reduce((sum, entry) => sum + entry.bytes, 0)) : "Calculating…"}
           </td>

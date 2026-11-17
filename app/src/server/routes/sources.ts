@@ -1,10 +1,20 @@
 import type { WorkspaceView } from "../workspace/workspace-service.js";
 import { projectPath } from "./project-paths.js";
-export function sourceURL(context: WorkspaceView, path: string): string {
+import type { SourceQuery } from "./routes.js";
+type Source = Pick<WorkspaceView, "scope" | "selection" | "all">;
+export function sourceQuery(context: Source): SourceQuery {
+  return context.all
+    ? { all: "1" }
+    : context.selection
+      ? { collection: context.selection }
+      : context.scope
+        ? { scope: context.scope }
+        : {};
+}
+export function sourceURL(context: Source, path: string): string {
   const url = new URL(path, "http://localhost");
   for (const key of ["all", "collection", "scope"]) url.searchParams.delete(key);
-  if (context.all) url.searchParams.set("all", "1");
-  else if (context.selection) url.searchParams.set("collection", context.selection);
-  else if (context.scope) url.searchParams.set("scope", context.scope);
+  for (const [key, value] of Object.entries(sourceQuery(context)))
+    if (typeof value === "string") url.searchParams.set(key, value);
   return projectPath(url.pathname + url.search);
 }

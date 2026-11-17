@@ -59,7 +59,7 @@ export async function addRecord(
           ...(parent ? { parent } : {}),
           ...(dependencies.length ? { depends_on: dependencies } : {}),
         },
-        heading + (bodyInput ?? "## Review summary\n\n## Implementing-agent detail\n\n### Verification\n"),
+        heading + (bodyInput ?? "## Review summary\n"),
       );
     if (kind === "ENV") return renderProseRecord({}, heading + "## Hardware configuration\n");
     return {

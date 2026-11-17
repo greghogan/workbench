@@ -15,7 +15,7 @@ if (kind === "validation") {
 } else if (kind === "web") {
   const web = await startWebServer(root, { port: 0 });
   try {
-    for (const path of ["/records", "/records?type=ADR", "/review"]) {
+    for (const path of ["/records", "/records?type=ADR", "/plans", "/work", "/reviews"]) {
       const response = await fetch(web.url + path);
       assert.equal(response.status, 200, `Read-only web case ${path}`);
       assert.ok((await response.text()).length > 0);

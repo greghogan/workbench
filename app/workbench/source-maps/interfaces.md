@@ -3,8 +3,10 @@
 Commands adapt the shared core to terminal workflows; configuration and diagnostics retain their common ownership.
 
 - `src/cli/rust-cache-command.ts`: Preview fresh owned Rust artifact selections and revalidate reviewed cleanup.
-- `src/cli/tasks.ts`, `src/core/tasks/task-model.ts`, `src/core/tasks/task-service.ts`, `src/core/tasks/task-queue.ts`:
-  Resolve task graphs, shared decisions, and atomic local queue progress across the CLI and web UI.
+- `src/cli/tasks.ts`, `src/cli/task-decisions.ts`, `src/core/tasks/task-model.ts`, `src/core/tasks/task-service.ts`,
+  `src/core/tasks/task-queue.ts`: Resolve task graphs, confirm selected versions, and coordinate local execution.
+- `src/core/tasks/task-snapshot.ts`: Resolve task records and supporting files in Git snapshots for review and retain
+  outcome acceptance through history rewrites.
 - `src/core/projects/project-registry.ts`, `src/cli/project-admission.ts`, `src/core/projects/project-registration.ts`,
   `src/core/projects/project-requirements.ts`, `src/cli/projects.ts`: Track personal checkout approval, declared and
   verified tool requirements, and explicit project lifecycle commands, stable registered identities, and explicit

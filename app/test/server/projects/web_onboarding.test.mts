@@ -76,7 +76,7 @@ test("the unified review queue includes project-owned collection records", async
   applyCollection(root, request, previewCollection(root, request).digest);
   git(root, "add", "workbench");
   const web = await servers.start(root);
-  const page = await readWebPage(web, "/review");
+  const page = await readWebPage(web, "/reviews");
   expect(page.html).toContain('aria-label="Record sources"');
   expect(
     [...parseDOM(page.html).window.document.querySelectorAll("main article.record-row a[data-card-link]")].some(

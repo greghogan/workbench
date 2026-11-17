@@ -1,4 +1,6 @@
 import { allCommitReviews, reviewRecordCount } from "../../core/review/review-units.js";
+import { taskReviewInventory } from "./task-review-inventory.js";
+import { reviewTaskOwner, reviewTaskPaths } from "../review/task-review-groups.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
 import { existsSync, lstatSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -156,6 +158,7 @@ export class ReviewInventory {
     } catch {
       // A failed compatibility analysis has no actionable human resolution, matching the document queue.
     }
+    const tasks = taskReviewInventory(this.root, observe);
     for (const path of protectedRecordPaths(scopes, sources)) observe(join(this.root, path));
     for (const path of [...inputs.keys()]) {
       for (let directory = dirname(path); ; directory = dirname(directory)) {
@@ -172,16 +175,14 @@ export class ReviewInventory {
     }
     if (![...inputs].every(([path, stamp]) => inputStamp(path) === stamp))
       throw new Error("Review inputs changed during acquisition; retrying");
-    return {
-      count:
-        pending.size +
-        Number(compatibility) +
-        allCommitReviews(this.root).reduce(
-          (count, unit) =>
-            count + reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path)),
-          0,
-        ),
-      inputs,
-    };
+    let standalone = 0;
+    for (const unit of allCommitReviews(this.root)) {
+      if (!unit.pending) continue;
+      const owner = reviewTaskOwner(reviewTaskPaths(this.root, unit.revision, unit.parents[0]), tasks.byPath);
+      if (!owner)
+        standalone += reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path));
+      else if (owner.metadata.status === "Accepted") tasks.outcomes.add(owner.reference);
+    }
+    return { count: pending.size + standalone + tasks.outcomes.size + Number(compatibility), inputs };
   }
 }

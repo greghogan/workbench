@@ -18,8 +18,10 @@ import { changeTaskQueue, inspectTaskQueue, readTaskQueue, TaskReadiness } from 
 import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
 import { readTaskDecisions } from "../../../src/core/tasks/task-decisions.ts";
 import { WorkspaceCollector, WorkspaceIndex } from "../../../src/server/workspace/workspace-service.ts";
-import { taskControls, taskQueuePage } from "../../../src/server/views/task-pages.tsx";
+import { taskControls } from "../../../src/server/views/task-pages.tsx";
 import { git } from "../../fixtures/adoption.mjs";
+import { workPage } from "../../../src/server/views/workflow-pages.tsx";
+import { reviewsPage } from "../../../src/server/views/review-list.tsx";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { webFixture } from "../../fixtures/web.mjs";
 
@@ -198,7 +200,7 @@ test("older verified baselines remain discoverable across long histories", () =>
   expect(readTaskGraph(checkout).require("demo:TSK-0").implementation?.baseline).toBe(baseline);
 });
 
-test("CLI and web workflow expose proof provenance as an outcome rather than fresh local execution", async () => {
+test("verified work appears as an outcome while the CLI retains its proof provenance", async () => {
   const baseline = implement(),
     checkout = worktree(baseline),
     collector = new WorkspaceCollector(checkout),
@@ -209,17 +211,15 @@ test("CLI and web workflow expose proof provenance as an outcome rather than fre
       problem: "",
     });
   expect(context.taskReviews.map((item) => [item.record.id, item.decision])).toEqual([["demo:TSK-0", "outcome"]]);
-  const page = parseDOM(taskQueuePage(context)).window.document;
-  expect(page.querySelector('[aria-label="Outcomes"]')?.textContent).toContain("Work 0");
-  expect(page.querySelector('[aria-label="Work"]')?.textContent).not.toContain("Work 0");
+  const page = parseDOM(reviewsPage(context)).window.document;
+  expect(page.querySelector('[data-task-group="task:demo:TSK-0"]')?.textContent).toContain("Work 0");
+  expect(parseDOM(workPage(context)).window.document.querySelector('[data-task-node="demo:TSK-0"]')).toBeNull();
   const record = context.index.byId.get("demo:TSK-0");
   if (!record) throw new Error("Missing prerequisite record");
   const controls = taskControls(context, record);
   if (!controls) throw new Error("Missing task controls");
   const html = renderToString(controls);
-  expect(html).toContain(baseline.slice(0, 12));
-  expect(html).toContain(root);
-  expect(html).toContain("Integration tests passed.");
+  expect(html).toContain("Accept outcome");
   const messages: unknown[] = [];
   const capture = vi.spyOn(console, "log").mockImplementation((message: unknown) => messages.push(message));
   try {

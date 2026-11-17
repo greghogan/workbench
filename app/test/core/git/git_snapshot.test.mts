@@ -9,6 +9,7 @@ import {
   writeReviewBlobs,
   readGitTree,
 } from "../../../src/core/git/git-snapshot.ts";
+import { MissingResource } from "../../../src/core/runtime/input-errors.ts";
 import {
   reviewStatus,
   ReviewSource,
@@ -127,6 +128,7 @@ test("batch blob reads preserve exact bytes, deduplicate immutable objects, and 
     second = `${tree}:same binary`,
     missing = `${tree}:missing`;
   const objects = readGitObjects(root, [first, second, missing, first]);
+  expect(() => readGitObjects(root, [first, missing], undefined, { requirePresent: true })).toThrow(MissingResource);
   expect(objects.size).toBe(3);
   expect(objects.get(first)).toEqual(bytes);
   expect(objects.get(second)).toBe(objects.get(first));

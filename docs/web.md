@@ -49,8 +49,9 @@ callers must register it explicitly. Declining blocks project operations and pri
 without asking again. Registration is personal state and does not alter project files.
 
 Project navigation is available while cache sizes load. Sizes refresh without replacing an active control or an
-unfinished Add project form. Inventory events update measured cells directly; a slow directory does not hold back the
-other measurements. Each cache breakdown links to **Caches**. Referenced tool sizes can overlap; the shared subtotal
+unfinished Add project form. Inventory events update visible detail measurements and publish project totals when
+measurement finishes. Each cache breakdown links to **Caches**. Use the controls beneath a cache table to inspect more
+entries. Totals cover the complete inventory. Referenced tool sizes can overlap; the shared subtotal
 identifies installations used by multiple projects. The inventory counts an installation once and shows its consumers,
 current protections, older versions, and retention choices. Build roots can serve several subprojects, such as crates
 sharing one Cargo workspace. **Clear root** clears that shared build root together. Shared package downloads are
@@ -112,24 +113,37 @@ Canceled) have separate history views with automatic loading and a **Load more**
 state and named future plans; Workflow keeps those plans separate from task record counts. Invalid or missing metadata
 remains visible under **Tasks needing attention**.
 
+Task and plan comparisons show the complete documents in unified or side-by-side form, without a separate Read tab.
+Outcome comparisons include checklist completion and implementation-account updates against the retained approved plan.
+
 Task pages list their associated commits alongside outcome acceptance. Open a commit to inspect its changed files in
 unified or side-by-side views, then return through the task breadcrumb. Inspection preserves the selected scope and does
 not grant document review or task acceptance. All changed files appear in one continuous list. Small diffs appear when
-the commit opens or load automatically in batches. Large diffs use **Load diff**. The file list stays open and scrolls
-independently. Selecting a file jumps to its comparison in the full commit diff. The link preserves the selected file
-and layout. The list highlights the file in view and the file under the pointer.
+the commit opens or load automatically in batches. Large diffs use **Load diff**. The searchable file tree stays open
+and links directly to each file’s comparison.
 Task pages separate approval and acceptance from secondary actions. Cancel and delete each open a confirmation page;
 cancellation optionally retains a reason, while deletion has no reason field. Accepted work must be reopened or
 explicitly reverted; active queued work must be released or blocked before cancellation. Related protected-document
 reviews remain visible from a task even when they belong to another project scope.
 
-Task pages allow human plan approval, outcome acceptance, replanning, or cancellation. Each decision applies to the
-exact displayed task version. **Task queue** under **Workflow** presents three sections on one page: **Plans** awaiting
-approval, **Work** showing approved tasks and local execution progress, and **Outcomes** awaiting acceptance. Work keeps
-the selected order and shows other approved tasks available to add. Move up/down buttons also work with the keyboard.
-Readiness, blocking reasons, and verification evidence remain visible. CLI queue changes refresh connected browser
-views. The queue survives a server restart and cache cleanup; it never changes Git staging or commits work. Agent
-execution, including any permission to work in parallel, is directed through the developer's chat.
+**Workflow** has three pages, each with a count for the selected project or subproject and its descendants:
+
+- **Plans** puts started tasks needing revised approval first, followed by initial approvals, oldest first in each group.
+- **Work** shows queued and available tasks, execution progress, prerequisites, and active experiments. A started
+  task that needs plan approval stays visible with a link to the revised plan. Move
+  up/down controls order queued work; they also work with the keyboard. Agents claim work and record progress through
+  the CLI, as directed in chat.
+- **Reviews** gives each completed task one entry. Its delivered commits and associated record reviews are available
+  from that entry. Standalone protected records and policy findings remain directly accessible. Experiments receive
+  record review after completion.
+
+Approval, document review, and task acceptance remain separate decisions. Revised plans return to Plans before their
+outcomes can be accepted; changed plans need renewed implementation evidence. Completed tasks remain discoverable in
+Records. Queue changes refresh connected browsers and survive server restarts and cache cleanup. Workflow pages update
+when the visible rows or counts change. Workbench requests notification permission on the first interaction with the
+page if the browser has no saved choice. When allowed, an open background tab can alert you to plans needing approval
+and completed work awaiting acceptance. Notification permission is managed in the browser. Review actions leave Git
+staging and commits to the user.
 
 The project control in the header opens the **Projects** dashboard. **Switch project** appears beside the current
 project name. The sidebar lists the project, its registered subprojects as an expandable hierarchy, and installed
@@ -139,20 +153,26 @@ controls. The Workbench wordmark is an identity label; **Overview** provides nav
 Only declared subprojects appear in the tree; language check roots are independent. Nested scopes attach to their
 nearest registered parent. Labels use each scope's optional `name`, falling back to its ID. Breadcrumbs use those same
 names, such as `GraphAI/GraphMP`, and never insert intermediate directory names. Linked breadcrumbs above the page
-heading return to parent sources and pages, including the review queue and record lists. Expand/collapse buttons support
-the keyboard, remember disclosure choices for the browser session, and reveal the selected node's ancestors on
-navigation. Links remain usable when JavaScript or browser storage is unavailable.
+heading return to parent sources and pages, including Reviews and record lists. Expand/collapse buttons support the
+keyboard, remember disclosure choices for the browser session, and reveal the selected node's ancestors on navigation.
+Links remain usable when JavaScript or browser storage is unavailable.
 
 Record navigation and counts follow the selected scope or collection. A subproject shows records it owns; its parent and
 children remain separately selectable. Header search spans the open project's records and subprojects, keeping
 collections separate. Selecting a collection searches only that collection. Search is case-insensitive and includes file
 contents. Its record-type selector defaults to **All types**; search results retain the query and selected type. Record
 lists use this same header search rather than a separate form. It does not search other registered projects. A record
-reference selects its owning scope. **Workflow** appears above **Records** and links **Review queue** and the private
-**Task queue** while retaining the selected source. Workflow views include the selected project scope and its
-descendants; the root shows the unified project workflow. Selecting a different source retains the workflow view.
-Counts, review continuation, and action redirects follow that selection. Project-wide policy compatibility appears in
-the root review queue; source filtering does not waive project-wide review or publication requirements.
+reference selects its owning scope. **Workflow** appears above **Records** and links **Plans**, **Work**, and
+**Reviews** while retaining the selected source. Workflow views include the selected project scope and its descendants;
+the root shows the unified project workflow. Selecting a different source retains the workflow view. Counts, review
+continuation, and action redirects follow that selection. Project-wide policy compatibility appears in the root Reviews
+page; source filtering does not waive project-wide review or publication requirements.
+
+A pending review count beside a subproject opens its Reviews page, including descendant work. Reviews opened from a task
+group keep the selected queue scope, including for documents owned elsewhere. The breadcrumbs link back to that queue and
+the task outcome. The arrows follow task groups in queue order, with each task's pending documents before its outcome.
+Within a retained commit, root-project documents come before subproject documents. Confirming the last document in a
+task opens its pending outcome. Accepting the outcome returns to the Reviews queue for the selected scope.
 
 Lists load as you scroll, with an accessible **Load more** link as a fallback. **Load previous records** returns to
 earlier entries, and the URL retains the current range for reload and browser navigation. Automatic loading pauses
@@ -171,9 +191,13 @@ editable documents are limited to 2 MiB.
 
 ### Task commit inspection
 
-Task outcomes link to their delivered commits. Commit messages remain visible, and **Files** opens a searchable panel of
-changed paths. Commit-file comparisons use numbered source lines for every format, including Markdown; choose Unified or
-Side-by-side. Arrows reveal unchanged lines above or below a change, and **Expand all lines** shows the complete
+The Reviews page groups each task's pending document reviews and outcome, with document links first. Task outcomes
+link to their delivered commits. Select the commit hash in a document review to inspect all changed files in that
+commit. The searchable file list stays open and scrolls independently. Selecting a file jumps to its comparison within
+the full commit diff. The URL retains that destination for reloads and shared links. The list highlights the file in
+view and outlines the file under the pointer.
+Commit-file comparisons use numbered source lines for every format, including Markdown. Choose Unified or Side-by-side.
+Arrows reveal unchanged lines above or below a change, and **Expand all lines** shows the complete
 comparison within the viewer's display limits. Large comparisons start with **Load diff**. File downloads retain the
 original committed bytes. These inspections do not record document acknowledgment or task acceptance.
 
@@ -264,11 +288,11 @@ stays open with a completion notice instead of navigating away.
 
 ## Review records
 
-Open **Review queue** to review current records and their supporting files in the selected project scope and its
-descendants, or in the selected collection. The root scope provides a unified project queue, including adopted
-collections. Record listings link **Needs review** tags to the owning record, including when only its supporting files
-changed. Each record appears once in the queue, and each file has its own acknowledgment. Reviewed files leave the
-queue; records remain only while they have unreviewed files. Later changes return a record to the queue.
+Open **Reviews** to review current records and their supporting files in the selected project scope and its descendants,
+or in the selected collection. The root scope provides a unified project queue, including adopted collections. Record
+listings link **Needs review** tags to the owning record, including when only its supporting files changed. Each record
+appears once in the queue, and each file has its own acknowledgment. Reviewed files leave the queue; records remain only
+while they have unreviewed files. Later changes return a record to the queue.
 
 The queue separates each project's records into a named section. Main-project records come first, followed by
 subprojects in hierarchy order; headings use registered name breadcrumbs. Adopted collections have separate sections
@@ -291,7 +315,7 @@ files retain independent exact-file acknowledgments within their record's review
 Inspect the record and its supporting evidence, then select **Confirm new file**, **Confirm changes**, or **Confirm
 deletion**. For a charter, confirmation also acknowledges human authorship. Use **Previous** and **Next** to move
 between records. Confirmation keeps the record open while another file needs review, then advances to the next
-unreviewed record. After the final item it returns to the queue.
+unreviewed record. After the final standalone item, Workbench returns to the queue.
 
 Records are formatted automatically before review. Confirmation acknowledges the version shown and never rewrites the
 file. Later on-disk edits remain intact and pending review. Without JavaScript, **Review file** starts preparation.
@@ -357,9 +381,10 @@ link. It supports narrow windows, browser zoom, reduced motion, and forced color
 and do not silently replace a review snapshot. These provisions support the project's Section 508 requirement; a full
 conformance claim requires the release-specific automated and human assessment described by ADR-18.
 
-Document reviews group the main project before its subprojects and collections. Within each scope, charters come first,
-followed by ADRs in canonical numeric order, environment records, and experiment records. Supporting files remain with
-their record.
+Reviews lists the main project first, followed by subprojects and collections with pending items. Documents delivered
+by a task appear under that task’s project, alongside its outcome. Standalone working document reviews within a scope
+list charters, ADRs in canonical numeric order, environment records, and experiments. Supporting files stay with their
+record.
 
 ## Request failures
 

@@ -314,6 +314,7 @@ export async function startPlan(
       entry.updated = now;
       if (original === reference) {
         entry.state = TaskExecution.Active;
+        entry.started = true;
         delete entry.reason;
         delete entry.evidence;
       }

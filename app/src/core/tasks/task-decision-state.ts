@@ -6,7 +6,9 @@ export interface TaskDecision {
   digest: string;
   updated: string;
   tree?: string;
+  outcome?: string;
   snapshot?: string;
+  source?: "developer-requested-review";
 }
 export interface TaskDecisionState {
   reference: string;
@@ -23,7 +25,9 @@ export interface TaskDecisionChange {
 function decodeTaskDecisions(input: unknown): TaskDecision[] {
   const decisions = records(input, "Invalid task decisions").map((value): TaskDecision => {
     if (
-      Object.keys(value).some((key) => !["reference", "status", "digest", "updated", "tree", "snapshot"].includes(key))
+      Object.keys(value).some(
+        (key) => !["reference", "status", "digest", "updated", "tree", "outcome", "snapshot", "source"].includes(key),
+      )
     )
       throw new InvalidInput("Unknown human task decision field");
     const reference = decodeTaskReference(value.reference),
@@ -35,10 +39,25 @@ function decodeTaskDecisions(input: unknown): TaskDecision[] {
     const tree = value.tree === undefined ? undefined : string(value.tree, "Invalid accepted tree");
     if (tree !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(tree))
       throw new InvalidInput("Invalid accepted snapshot");
+    const outcome = value.outcome === undefined ? undefined : string(value.outcome, "Invalid accepted outcome");
+    if (outcome !== undefined && (status !== "Accepted" || !/^[a-f0-9]{64}$/.test(outcome)))
+      throw new InvalidInput("Invalid accepted outcome");
     const snapshot = value.snapshot === undefined ? undefined : string(value.snapshot, "Invalid plan snapshot");
     if (snapshot !== undefined && !/^[a-f0-9]{64}$/.test(snapshot))
       throw new InvalidInput("Invalid approved plan snapshot");
-    return { reference, status, digest, updated, ...(tree ? { tree } : {}), ...(snapshot ? { snapshot } : {}) };
+    const source = value.source;
+    if (source !== undefined && (source !== "developer-requested-review" || status !== "Approved" || !snapshot))
+      throw new InvalidInput("Invalid project review authorization");
+    return {
+      reference,
+      status,
+      digest,
+      updated,
+      ...(tree ? { tree } : {}),
+      ...(outcome ? { outcome } : {}),
+      ...(snapshot ? { snapshot } : {}),
+      ...(source ? { source } : {}),
+    };
   });
   if (decisions.length > 20000 || new Set(decisions.map(decisionIdentity)).size !== decisions.length)
     throw new InvalidInput("Duplicate or excessive human task decisions");
@@ -46,7 +65,12 @@ function decodeTaskDecisions(input: unknown): TaskDecision[] {
 }
 
 export function decisionIdentity(decision: TaskDecision): string {
-  return JSON.stringify([decision.reference, decision.status, decision.digest, decision.tree ?? null]);
+  return JSON.stringify([
+    decision.reference,
+    decision.status,
+    decision.digest,
+    decision.outcome ?? decision.tree ?? null,
+  ]);
 }
 
 function decodeTaskReference(input: unknown): string {

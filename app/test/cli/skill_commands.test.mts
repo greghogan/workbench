@@ -121,25 +121,28 @@ test("one user selection applies inside and outside projects while validation ig
   expect(existsSync(join(root, "workbench/local.toml"))).toBe(false);
 });
 
-test.each(["fetch-and-rebase-onto", "plan-work", "review-plan", "review-project"])(
-  "%s starts disabled and enabling exposes its definition to both harnesses",
-  async (name) => {
-    const { root, run } = await fixture();
-    const selected = () =>
-      (JSON.parse(run(root, "skills", "--json").stdout) as SkillFixture[]).find((skill) => skill.name === name);
-    expect(selected()).toMatchObject({ enabled: false, active: false });
-    const enabled = run(root, "skills", "enable", name);
-    expect(enabled.status, enabled.stderr).toBe(0);
-    expect(selected()).toMatchObject({ enabled: true, active: true });
-    for (const harness of [".agents", ".claude"]) {
-      const link = join(root, harness, "skills", name);
-      expect(realpathSync(link)).toBe(join(distribution, "skills/workflows", name));
-      expect(() => git(root, "check-ignore", "--quiet", link)).not.toThrow();
-    }
-    expect(run(root, "skills", "disable", name).status).toBe(0);
-    expect(selected()).toMatchObject({ enabled: false, active: false });
-  },
-);
+test.each([
+  "fetch-and-rebase-onto",
+  "plan-work",
+  "review-plan",
+  "workbench-review-project",
+  "workbench-task-decisions",
+])("%s starts disabled and enabling exposes its definition to both harnesses", async (name) => {
+  const { root, run } = await fixture();
+  const selected = () =>
+    (JSON.parse(run(root, "skills", "--json").stdout) as SkillFixture[]).find((skill) => skill.name === name);
+  expect(selected()).toMatchObject({ enabled: false, active: false });
+  const enabled = run(root, "skills", "enable", name);
+  expect(enabled.status, enabled.stderr).toBe(0);
+  expect(selected()).toMatchObject({ enabled: true, active: true });
+  for (const harness of [".agents", ".claude"]) {
+    const link = join(root, harness, "skills", name);
+    expect(realpathSync(link)).toBe(join(distribution, "skills/workflows", name));
+    expect(() => git(root, "check-ignore", "--quiet", link)).not.toThrow();
+  }
+  expect(run(root, "skills", "disable", name).status).toBe(0);
+  expect(selected()).toMatchObject({ enabled: false, active: false });
+});
 
 test("help depends on the owning project, while explicit help remains available outside projects", async () => {
   const { root, outside, run } = await fixture();

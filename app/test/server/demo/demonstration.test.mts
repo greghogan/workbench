@@ -7,6 +7,11 @@ import { readTaskQueue, inspectTaskQueue, changeTaskQueue } from "../../../src/c
 import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
 import { validateRelationships } from "../../../src/core/records/records.ts";
 import { distribution } from "../../fixtures/adoption.mjs";
+import { workspaceRecords } from "../../../src/core/records/record-service.ts";
+import { recordTypes } from "../../../src/core/records/record-metadata.ts";
+import { experimentStatuses } from "../../../src/core/records/record-document.ts";
+import { readPlanningRecords } from "../../../src/core/tasks/planning/planning-read-model.ts";
+import { allCommitReviews } from "../../../src/core/review/review-units.ts";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -21,6 +26,20 @@ test("demonstration covers adaptive plans, grouped reviews, dependencies and the
     const graph = readTaskGraph(demonstration.root),
       tasks = graph.tasks,
       queue = readTaskQueue(demonstration.root);
+    const records = workspaceRecords(demonstration.root);
+    expect(new Set(records.map((record) => record.type))).toEqual(new Set(recordTypes));
+    expect(new Set(records.filter((record) => record.type === "EXP").map((record) => record.status))).toEqual(
+      new Set(experimentStatuses),
+    );
+    expect(readPlanningRecords(demonstration.root)).toMatchObject([
+      { reference: "demo:plan/bookmark-notes", status: "Planned" },
+    ]);
+    expect(graph.require("demo:TSK-2").approval?.current).toBe(false);
+    expect(
+      allCommitReviews(demonstration.root).flatMap((unit) =>
+        unit.changes.filter((change) => !change.approved).map((change) => change.path),
+      ),
+    ).toContain("workbench/decisions/ADR-01.md");
     expect(new Set(tasks.map((task) => task.metadata.status))).toEqual(
       new Set(["Planned", "Approved", "Accepted", "Canceled"]),
     );

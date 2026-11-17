@@ -1,4 +1,5 @@
-import { historyFiles } from "../../core/git/history.js";
+import { reviewTaskPaths, reviewTaskOwner, reviewTasksByPath } from "../review/task-review-groups.js";
+import { taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
 import { allCommitReviews, reviewRecordGroups } from "../../core/review/review-units.js";
 import { readPlanOperations } from "../../core/tasks/planning/plan-operation-store.js";
 import { workGraph } from "../../core/tasks/planning/work-plans.js";
@@ -8,14 +9,14 @@ import {
   planningBrowserRecord,
   type PlanningRecord,
 } from "../../core/tasks/planning/planning-read-model.js";
-import { attachTaskPlanApprovals } from "../../core/tasks/task-approvals.js";
+import { taskRecordState } from "./task-state.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
 import { pendingRecordOutputs, reviewPreparationPath } from "../../core/review/review-preparation-state.js";
 import type { ReviewPreparation } from "../review/review-state.js";
 import { retainedBytes } from "../../core/runtime/retained-bytes.js";
 import { workerFailure } from "../http/error-response.js";
 import { withConfigurationSnapshot } from "../../core/configuration/configuration-snapshot.js";
-import { attachTaskImplementations, taskImplementationPath } from "../../core/tasks/task-implementations.js";
+import { taskImplementationPath } from "../../core/tasks/task-implementations.js";
 import { taskDecisionPath } from "../../core/tasks/task-decisions.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
 import {
@@ -24,13 +25,13 @@ import {
   compatibilityFindingsPath,
   type PolicyCompatibilityReport,
 } from "../../core/collections/policy-compatibility.js";
-import { parseTask, TaskGraph, type TaskRecord } from "../../core/tasks/task-model.js";
+import { type TaskGraph, type TaskRecord } from "../../core/tasks/task-model.js";
 import {
   taskQueuePath,
   readTaskQueue,
   inspectQueue,
+  taskStarted,
   TaskReadiness,
-  TaskExecution,
   type TaskQueue,
 } from "../../core/tasks/task-queue.js";
 import { GitSnapshot } from "../../core/git/git-snapshot.js";
@@ -59,7 +60,6 @@ import {
   type BrowserRecord,
 } from "../../core/records/record-service.js";
 import { RecordLookup } from "../../core/records/record-lookup.js";
-import { terminalTask } from "../../core/records/record-document.js";
 import {
   reviewedBaselines,
   reviewFileContents,
@@ -136,6 +136,7 @@ export interface ReviewGroup {
 export class WorkspaceIndex {
   private readonly searchable = new Map<string, string>();
   private searchBytes = 0;
+  private scopedReviewCounts?: ReadonlyMap<string, number>;
   readonly hierarchy: ProjectHierarchy;
   readonly taskGraph: TaskGraph;
   readonly taskReadiness: TaskReadiness;
@@ -145,6 +146,8 @@ export class WorkspaceIndex {
   readonly references: RecordLookup;
   readonly sources: string[];
   readonly reviews: ReviewQueue;
+  readonly reviewTaskOwners: ReadonlyMap<string, TaskRecord>;
+  private readonly reviewScopeOrder: ReadonlyMap<string, number>;
   constructor(
     readonly snapshot: WorkspaceSnapshot,
     previous?: WorkspaceIndex,
@@ -159,9 +162,17 @@ export class WorkspaceIndex {
         }
       }
     this.hierarchy = new ProjectHierarchy(snapshot.projects);
+    this.reviewScopeOrder = new Map(this.hierarchy.ordered().map((project, position) => [project.id, position]));
     this.taskGraph = workGraph(snapshot.tasks.records, snapshot.tasks.plans);
     this.taskReadiness = new TaskReadiness(this.taskGraph, snapshot.tasks.queue);
     this.taskQueue = inspectQueue(this.taskReadiness);
+    const taskPaths = reviewTasksByPath(snapshot.root, snapshot.tasks.records);
+    this.reviewTaskOwners = new Map(
+      (snapshot.tasks.problem ? [] : snapshot.commitReviews).flatMap((unit) => {
+        const task = unit.paths.length ? reviewTaskOwner(unit.taskPaths, taskPaths) : undefined;
+        return task ? [[unit.revision, task] as const] : [];
+      }),
+    );
     const adaptations = new Map(
       [...snapshot.comparisons.values()]
         .flatMap((comparison) => (comparison.state === "compared" ? comparison.decisions : []))
@@ -234,6 +245,26 @@ export class WorkspaceIndex {
   projectForPath(path: string): Project | undefined {
     return this.hierarchy.recordOwner(path);
   }
+  commitReviewGroups(paths: readonly string[]) {
+    return reviewRecordGroups(paths)
+      .map((group) => ({
+        group,
+        position: reviewCollection(group.path)
+          ? this.reviewScopeOrder.size
+          : (this.reviewScopeOrder.get(this.projectForPath(group.path)?.id ?? "") ?? this.reviewScopeOrder.size),
+      }))
+      .sort((a, b) => a.position - b.position)
+      .map(({ group }) => ({ ...group, record: this.byPath.get(group.path) }));
+  }
+  /** Share scoped queue counts across page renders and live updates of this snapshot. */
+  get subprojectReviewCounts(): ReadonlyMap<string, number> {
+    this.scopedReviewCounts ??= new Map(
+      this.snapshot.projects.flatMap((project) =>
+        project.path === "." ? [] : [[project.id, this.select({ scope: project.id }).pendingReviews] as const],
+      ),
+    );
+    return this.scopedReviewCounts;
+  }
   select(parameters: { id?: string; path?: string; collection?: string; scope?: string; all?: string }): WorkspaceView {
     const record = parameters.id ? this.byId.get(parameters.id) : undefined;
     const review = parameters.id ? this.reviews.byId.get(parameters.id) : undefined;
@@ -242,8 +273,11 @@ export class WorkspaceIndex {
     let all = parameters.all === "1";
     if (record) {
       selection = record.collection ? record.scope : "";
-      scope = record.collection ? "" : record.scope;
-      all = false;
+      const owner = this.snapshot.projects.find((project) => project.id === record.scope);
+      const ancestor =
+        owner && parameters.scope && this.hierarchy.lineage(owner).some((project) => project.id === parameters.scope);
+      scope = record.collection ? "" : ancestor ? (parameters.scope ?? record.scope) : record.scope;
+      all = !record.collection && parameters.all === "1";
     } else if (review && !all) {
       selection = review.collection;
       scope = review.scope;
@@ -361,11 +395,40 @@ export class WorkspaceView {
       ready: queue.ready.filter((reference) => this.includesWorkflow(reference.split(":")[0] ?? "")),
     };
   }
-  get taskWorkflowCount(): number {
+  get workflowPlans() {
+    return this.taskReviews
+      .filter((item) => item.decision === "plan")
+      .map((item) => item.record)
+      .sort(
+        (left, right) =>
+          Number(this.awaitingReapproval(right.id)) - Number(this.awaitingReapproval(left.id)) ||
+          (left.addedAt ?? "").localeCompare(right.addedAt ?? "") ||
+          left.id.localeCompare(right.id),
+      );
+  }
+  awaitingReapproval(reference: string): boolean {
+    const task = this.index.taskGraph.byReference.get(reference),
+      entry = this.index.taskReadiness.entries.get(reference);
+    return !!task && taskPhase(task, entry) === TaskPhase.Plans && (taskStarted(entry) || !!task.implementation);
+  }
+  get workflowOutcomes() {
+    const outcomes = this.taskReviews.filter((item) => item.decision === "outcome").map((item) => item.record);
+    if (outcomes.length < 2) return outcomes;
+    const order = new Map(this.index.hierarchy.ordered().map((project, position) => [project.id, position]));
+    return outcomes.sort((a, b) => (order.get(a.scope) ?? 0) - (order.get(b.scope) ?? 0));
+  }
+  get workflowWork() {
+    const entries = new Map(this.index.snapshot.tasks.queue.entries.map((entry) => [entry.reference, entry]));
+    return this.workflowTasks.filter(
+      (task) =>
+        taskPhase(task, entries.get(task.reference)) === TaskPhase.Work || this.awaitingReapproval(task.reference),
+    );
+  }
+  get workCount(): number {
     return (
-      this.workflowTasks.filter((task) => !terminalTask.has(task.metadata.status)).length +
+      this.workflowWork.length +
       this.taskQueue.entries.filter((entry) => !this.index.taskGraph.byReference.has(entry.reference)).length +
-      this.experimentWorkflow.length
+      this.experimentWorkflow.filter((item) => item.phase === "work").length
     );
   }
 
@@ -396,35 +459,24 @@ export class WorkspaceView {
   get taskReviews() {
     const prepared = this.index.snapshot.tasks;
     const entries = new Map(prepared.queue.entries.map((entry) => [entry.reference, entry]));
+    const acceptedWithPendingDocuments = new Set(
+      [...this.index.reviewTaskOwners.values()]
+        .filter((task) => task.metadata.status === "Accepted")
+        .map((task) => task.reference),
+    );
     const tasks = (prepared.problem ? [] : this.index.taskGraph.tasks).flatMap<{
       record: BrowserRecord;
       decision: "plan" | "outcome";
     }>((task) => {
       const record = this.index.byId.get(task.reference);
       if (!record || record.collection || record.local || !this.includesWorkflow(record.scope)) return [];
-      const entry = entries.get(task.reference);
-      if (
-        task.metadata.status === "Planned" ||
-        (task.metadata.status === "Approved" &&
-          task.approval &&
-          !task.approval.current &&
-          (!entry || entry.state === TaskExecution.Queued))
-      )
-        return [{ record, decision: "plan" as const }];
-      if (
-        task.metadata.status === "Approved" &&
-        ((entry?.state === TaskExecution.Implemented && entry.planDigest === task.planDigest) ||
-          (!entry && task.implementation))
-      )
+      const phase = taskPhase(task, entries.get(task.reference));
+      if (phase === TaskPhase.Plans) return [{ record, decision: "plan" as const }];
+      if (phase === TaskPhase.Reviews || acceptedWithPendingDocuments.has(task.reference))
         return [{ record, decision: "outcome" as const }];
       return [];
     });
-    return [
-      ...tasks,
-      ...this.experimentWorkflow.flatMap<{ record: BrowserRecord; decision: "plan" | "outcome" }>((item) =>
-        item.phase === "work" ? [] : [{ record: item.record, decision: item.phase }],
-      ),
-    ];
+    return tasks;
   }
   get commitReviews() {
     return this.index.snapshot.commitReviews
@@ -442,10 +494,19 @@ export class WorkspaceView {
       .filter((unit) => unit.paths.length > 0)
       .map((unit) => ({
         ...unit,
-        groups: reviewRecordGroups(unit.paths).map((group) => ({
-          ...group,
-          record: this.index.byPath.get(group.path),
-        })),
+        groups: this.index.commitReviewGroups(unit.paths),
+      }));
+  }
+  get standaloneCommitReviews() {
+    return this.commitReviews.filter((unit) => this.selection || !this.index.reviewTaskOwners.has(unit.revision));
+  }
+  taskDocumentReviews(reference: string) {
+    return this.index.snapshot.commitReviews
+      .filter((unit) => this.index.reviewTaskOwners.get(unit.revision)?.reference === reference)
+      .map((unit) => ({
+        revision: unit.revision,
+        subject: unit.subject,
+        groups: this.index.commitReviewGroups(unit.paths),
       }));
   }
   commitReviewFor(path: string) {
@@ -457,8 +518,9 @@ export class WorkspaceView {
   }
   get pendingReviews(): number {
     return (
-      this.commitReviews.reduce((count, unit) => count + unit.groups.length, 0) +
+      this.standaloneCommitReviews.reduce((count, unit) => count + unit.groups.length, 0) +
       this.reviewQueue.length +
+      this.workflowOutcomes.length +
       (this.compatibilityNeedsHumanReview ? 1 : 0)
     );
   }
@@ -492,6 +554,14 @@ export class WorkspaceCollector {
   private readonly comparisons = new CollectionComparisons();
   private diffs = new Map<string, { key: string; diff: SourceDifference }>();
   private previous: { snapshot: WorkspaceSnapshot; stamps: Map<string, string>; acquiredAt: number } | undefined;
+  private history:
+    | {
+        key: string;
+        at: number;
+        baselines: ReturnType<typeof reviewedBaselines>;
+        units: WorkspaceSnapshot["commitReviews"];
+      }
+    | undefined;
   constructor(private readonly root: string) {
     this.catalog = new RecordCatalog(root);
   }
@@ -546,12 +616,19 @@ export class WorkspaceCollector {
       observe(join(base, "index.toml"));
       observe(join(base, "AGENTS.md"));
     }
-    const gitIndex = observeGitInputs(this.root, observe);
+    const gitPaths = new Set<string>();
+    const observeGitPath = (path: string) => {
+      observe(path);
+      gitPaths.add(path);
+    };
+    const gitIndex = observeGitInputs(this.root, observeGitPath);
     const selected = spawnSync("git", ["-C", this.root, "symbolic-ref", "--quiet", "HEAD"], { encoding: "utf8" });
     if (selected.error || (selected.status !== 0 && selected.status !== 1))
       throw new Error("cannot inspect the current Git branch");
     if (selected.stdout.trim().startsWith("refs/"))
-      observe(resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", selected.stdout.trim()]).trim()));
+      observeGitPath(
+        resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", selected.stdout.trim()]).trim()),
+      );
     const projects = readProjects(this.root);
     const collections = resolveCollections(this.root);
     const git = new GitSnapshot(this.root, { staged: false });
@@ -588,7 +665,15 @@ export class WorkspaceCollector {
         throw new Error("workspace browser snapshot exceeds 64 MiB; use the CLI for this workspace");
     };
     const head = git.head;
-    const baselines = reviewedBaselines(this.root, head);
+    const historyKey = contentDigest(
+      JSON.stringify([
+        head,
+        [...gitPaths].filter((path) => path !== gitIndex).map((path) => [path, observed.get(path)]),
+      ]),
+    );
+    const savedHistory =
+      !fresh && this.history?.key === historyKey && Date.now() - this.history.at < 60_000 ? this.history : undefined;
+    const baselines = savedHistory?.baselines ?? reviewedBaselines(this.root, head);
     const nextDiffs = new Map<string, { key: string; diff: SourceDifference }>();
     const cachedDiff = (id: string, key: string, read: () => SourceDifference) => {
       const saved = nextDiffs.get(id) ?? this.diffs.get(id);
@@ -740,8 +825,6 @@ export class WorkspaceCollector {
       }
     }
     for (const base of localCollectionDirectories(this.root)) paths.add(join(base, "index.toml"));
-    for (const name of ["HEAD", "packed-refs", "workbench/review.json"])
-      paths.add(resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", name]).trim()));
     let compatibility: WorkspaceSnapshot["compatibility"];
     try {
       compatibility = { report: policyCompatibility(this.root), error: "" };
@@ -752,46 +835,48 @@ export class WorkspaceCollector {
     const plans = readPlanningRecords(this.root);
     for (const plan of plans) charge(plan.contents, plan.approval?.contents);
     const tasks: WorkspaceTasks = {
+      ...taskRecordState(
+        this.root,
+        records
+          .filter((record) => record.type === "TSK")
+          .map((record) => ({
+            reference: record.id,
+            path: join(record.directory, record.path),
+            archived: !!record.archive,
+            read: () => {
+              const document = documents.get(record.id);
+              if (!document || document.error) throw new Error(document?.error ?? "Task document unavailable");
+              return document.contents;
+            },
+          })),
+      ),
       plans,
       decisionsRequired: readConfig(this.root).review?.task_approvals === true,
-      records: [],
-      errors: new Map(),
       queue: readTaskQueue(this.root),
-      problem: "",
     };
-    for (const record of records.filter((record) => record.type === "TSK")) {
-      try {
-        const document = documents.get(record.id);
-        if (!document || document.error) throw new Error(document?.error ?? "Task document unavailable");
-        tasks.records.push({
-          ...parseTask(this.root, record.id, join(record.directory, record.path), document.contents),
-          ...(record.archive ? { archived: true } : {}),
-        });
-      } catch (error) {
-        tasks.errors.set(record.id, error instanceof Error ? error.message : String(error));
-      }
+    for (const task of tasks.records) {
+      if (!task.approval) continue;
+      const document = documents.get(task.reference);
+      if (!document) continue;
+      charge(task.approval.contents);
+      document.reviewed = acquireComparison(() =>
+        cachedDiff(
+          `plan:${task.reference}`,
+          contentDigest(JSON.stringify([task.approval?.contents, task.contents])),
+          () => sourceDifference(task.approval?.contents ?? "", task.contents, task.path),
+        ),
+      );
+      document.baseline = { kind: "review", approvedAt: task.approval.at };
     }
-    try {
-      attachTaskPlanApprovals(this.root, tasks.records);
-      for (const task of tasks.records) {
-        if (!task.approval) continue;
-        const document = documents.get(task.reference);
-        if (!document) continue;
-        charge(task.approval.contents);
-        document.reviewed = acquireComparison(() =>
-          cachedDiff(
-            `plan:${task.reference}`,
-            contentDigest(JSON.stringify([task.approval?.contents, task.contents])),
-            () => sourceDifference(task.approval?.contents ?? "", task.contents, task.path),
-          ),
-        );
-        document.baseline = { kind: "review", approvedAt: task.approval.at };
-      }
-      new TaskGraph(tasks.records).validate();
-      attachTaskImplementations(this.root, tasks.records);
-    } catch (error) {
-      tasks.problem = String(error);
-    }
+    const commitReviews =
+      savedHistory?.units ??
+      allCommitReviews(this.root).map((unit) => ({
+        revision: unit.revision,
+        subject: unit.message.split("\n")[0] ?? "",
+        paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
+        files: unit.changes.length,
+        taskPaths: unit.pending ? reviewTaskPaths(this.root, unit.revision, unit.parents[0]) : [],
+      }));
     for (const [path, before] of observed)
       if (inputStamp(path) !== before)
         throw new StateConflict(`workspace changed during refresh (${path}); retaining the last complete snapshot`);
@@ -804,19 +889,7 @@ export class WorkspaceCollector {
     }
     const snapshot: WorkspaceSnapshot = {
       retainedSize: 0,
-      commitReviews: allCommitReviews(this.root).map((unit) => ({
-        revision: unit.revision,
-        subject: unit.message.split("\n")[0] ?? "",
-        paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
-        files: unit.changes.length,
-        taskPaths: unit.pending
-          ? historyFiles(this.root, unit.revision)
-              .changes.filter((file) =>
-                /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(file.path),
-              )
-              .map((file) => file.path)
-          : [],
-      })),
+      commitReviews,
       compatibility,
       tasks,
       root: this.root,
@@ -827,6 +900,7 @@ export class WorkspaceCollector {
           stamps: stamps.filter(([path]) => path !== gitIndex),
           compatibility,
           head,
+          commitReviews,
           projects,
           review: review.changes.map((change) => [change.digest, change.approved]),
           records,
@@ -882,6 +956,7 @@ export class WorkspaceCollector {
     snapshot.retainedSize = retainedBytes(snapshot, 64 * 1024 * 1024);
     if (snapshot.retainedSize > 64 * 1024 * 1024)
       throw new Error("workspace browser snapshot exceeds 64 MiB; use the CLI for this workspace");
+    this.history = savedHistory ?? { key: historyKey, at: Date.now(), baselines, units: commitReviews };
     this.previous = { snapshot, stamps: new Map(stamps), acquiredAt: Date.now() };
     return snapshot;
   }

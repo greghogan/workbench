@@ -19,7 +19,8 @@
   align-items: center;
   gap: 15px;
 }
-.panel-heading h2 {
+.panel-heading h2,
+.review-group .panel-heading h3 {
   margin: 0;
 }
 .commit-review-context {
@@ -47,6 +48,9 @@
 }
 .record-row:last-child {
   border-bottom: 0;
+}
+.review-group > [data-task-group-items] > [data-task-node] + [data-task-node] {
+  border-top: 1px solid var(--line);
 }
 .task-commit {
   display: flex;

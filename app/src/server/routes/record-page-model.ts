@@ -50,8 +50,13 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
     (hasReviewBaseline(document.baseline) && comparisonChanged(document.reviewed)) ||
     !!document.modeChange;
   const upstream = record.collection && (context.comparison?.state !== "compared" || compared?.status !== "unchanged");
-  const taskApproval = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id)?.approval : undefined;
-  const taskComparison = !!taskApproval && !record.local && reviewed && !terminalTask.has(record.status);
+  const task = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id) : undefined;
+  const taskApproval = task?.approval;
+  const taskComparison =
+    !!taskApproval &&
+    !record.local &&
+    reviewed &&
+    (!terminalTask.has(task.metadata.status) || task.acceptanceNeedsReview);
   const views: { value: RecordView; label: string }[] = taskComparison
     ? [{ value: "changes", label: "Diff" }]
     : [{ value: "read", label: "Read" }];

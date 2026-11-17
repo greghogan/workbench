@@ -49,7 +49,7 @@ test("nested request observers share one quiet cancellation log while maintainin
     socket = new Socket();
   try {
     const request = new IncomingMessage(socket);
-    request.url = "/review";
+    request.url = "/reviews";
     request.method = "GET";
     const response = new Response(request),
       hub = new WebMetrics(),

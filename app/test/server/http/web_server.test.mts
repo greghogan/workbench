@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { once } from "node:events";
-import { request as httpRequest } from "node:http";
+import { request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import type { startWebServer } from "../../../src/server/http/server.ts";
 import { ReviewSource, reviewStatus, presentedReviewDigest } from "../../../src/core/review/review-service.ts";
 import { checkReview } from "../../../src/core/review/review-check.js";
@@ -111,7 +111,7 @@ test("review confirms current bytes, rejects unseen commit contents, and enforce
   const retained = await get(`/review-file?path=${path}&digest=${digest}&side=after`);
   expect(retained.response.status).toBe(200);
   expect(retained.html).toBe("# Different working file\n");
-  const pending = parseDOM((await get("/review")).html).window.document;
+  const pending = parseDOM((await get("/reviews")).html).window.document;
   expect(pending.querySelector("a[data-card-link]")?.getAttribute("href")).toContain("/records/demo:ADR-0/review");
   expect(pending.querySelector("main")?.textContent).not.toContain("Needs review");
 });
@@ -156,9 +156,12 @@ test.each(["md", "markdown"])(
       "Keep files authoritative.",
     );
     const sibling = body?.querySelector<HTMLAnchorElement>('a[href*="related.md"]');
-    expect(sibling?.getAttribute("href")).toBe(
-      "/records/demo:ADR-0/files?path=workbench%2Fdecisions%2FADR-00%2Frelated.md",
-    );
+    const destination = new URL(sibling?.getAttribute("href") ?? "", "http://localhost");
+    expect(destination.pathname).toBe("/records/demo:ADR-0/files");
+    expect(Object.fromEntries(destination.searchParams)).toEqual({
+      scope: "demo",
+      path: "workbench/decisions/ADR-00/related.md",
+    });
     const anchor = body?.querySelector<HTMLAnchorElement>('a[href^="#"]')?.getAttribute("href")?.slice(1);
     expect(anchor).toBeTruthy();
     expect(document.getElementById(anchor ?? "")?.textContent).toBe("Findings");
@@ -271,7 +274,7 @@ test("collection requests remain responsive and require the exact prepared propo
   const applied = await post("/actions/collection-apply", { csrf, token, reviewed: "yes" });
   expect(applied.status).toBe(200);
   const landing = (await applied.json()) as { redirect: string };
-  expect(landing.redirect).toBe("/review?collection_applied=company");
+  expect(landing.redirect).toBe("/reviews?collection_applied=company");
   expect((await get(landing.redirect)).html).toContain("Project context synchronized and validation passed.");
   expect(runner.mock.calls[1]?.[3]).toBe(plan.digest);
   expect((await get(result.redirect)).response.status).toBe(409);
@@ -373,7 +376,7 @@ test("new repositories without a first commit remain browsable", async () => {
   git(root, "update-ref", "-d", "HEAD");
   expect((await get("/")).response.status).toBe(200);
   expect((await get("/records/demo:ADR-0")).html).toContain("Keep files authoritative");
-  expect((await get("/review")).response.status).toBe(200);
+  expect((await get("/reviews")).response.status).toBe(200);
 });
 
 test("a request whose body finishes during shutdown cannot admit a new mutation", async () => {
@@ -585,23 +588,41 @@ test("cancelled review reads finish shared reconciliation without retaining an u
   const admitted = new Promise<void>((resolve) => {
     entered = resolve;
   });
-  const reconcile = vi.spyOn(web.monitor, "reconcile").mockImplementationOnce(() => {
-    entered();
-    return blocked;
-  });
+  const reconcile = vi.spyOn(web.monitor, "reconcile");
   const retain = vi.spyOn(ReviewVersions.prototype, "retainBatch");
-  const disconnected = new Promise<void>((resolve) => {
-    web.server.once("request", (_request, response) => {
-      response.once("close", resolve);
+  const disconnected = Promise.withResolvers<undefined>();
+  const received = (_request: IncomingMessage, response: ServerResponse) => {
+    response.once("close", () => {
+      disconnected.resolve(undefined);
+    });
+    // A background workspace refresh can run before the HTTP request is dispatched.
+    reconcile.mockImplementationOnce(() => {
+      entered();
+      return blocked;
+    });
+  };
+  web.server.prependOnceListener("request", received);
+  const request = httpRequest(web.url + "/records/demo:ADR-0/review");
+  let canceling = false;
+  const watchdog = AbortSignal.timeout(15_000);
+  const failed = new Promise<never>((_resolve, reject) => {
+    watchdog.addEventListener(
+      "abort",
+      () => {
+        reject(new Error("Review cancellation fixture did not complete"));
+      },
+      { once: true },
+    );
+    request.on("error", (error) => {
+      if (!canceling) reject(error);
     });
   });
-  const request = httpRequest(web.url + "/records/demo:ADR-0/review");
-  request.on("error", () => undefined);
   try {
     request.end();
-    await admitted;
+    await Promise.race([admitted, failed]);
+    canceling = true;
     request.destroy();
-    await disconnected;
+    await Promise.race([disconnected.promise, failed]);
     release();
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
@@ -609,6 +630,7 @@ test("cancelled review reads finish shared reconciliation without retaining an u
     expect(retain).not.toHaveBeenCalled();
   } finally {
     release();
+    web.server.off("request", received);
     reconcile.mockRestore();
     retain.mockRestore();
     request.destroy();

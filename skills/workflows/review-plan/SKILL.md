@@ -2,7 +2,7 @@
 name: review-plan
 description:
   Review a proposed or revised work plan for clarity, feasibility, missing decisions, and agreement with project
-  constraints. Use for requested plan review, not implementation review or a whole-project audit.
+  constraints. Use before requesting human plan approval or when asked to review a plan.
 ---
 
 # Plan review
@@ -20,9 +20,10 @@ throughout the plan. Assess the parts material to this work; do not fill a check
 that the human overview explains why, what, and how with useful prose and visuals, while implementing-agent details
 remain clearly separate and proportionate.
 
-For user-facing work, assess whether the plan explains a coherent user workflow and its verification, beyond the
-presence of commands, pages, or data operations. Distinguish consequential unresolved product choices from ordinary
-design details the implementing agent can resolve within the approved direction.
+Walk each consequential scenario from its normal entry point. Look for a plausible alternative implementation that
+satisfies the plan but gives the user a materially different result. If you find one, identify the observable
+distinction the plan needs to specify. For changes to an existing interface, compare the wireframe with the running UI.
+Check what the user sees after the action and what reload or further navigation should preserve.
 
 For multi-task work, check dependency readiness, preferred order, shared changes that constrain parallel execution, and
 the authorized execution scope. Check acceptance criteria and how verified implementation will be presented for any

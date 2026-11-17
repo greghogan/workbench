@@ -102,15 +102,13 @@ export function appendTaskAccount(contents: string, entry: string): string {
   const { body } = parseProseRecord(contents, "task account"),
     tokens = parser.parse(body, {}),
     lines = body.split("\n");
+  let detail: number | undefined;
   for (let index = 0; index < tokens.length; index++) {
     const heading = tokens[index];
-    if (
-      heading?.type !== "heading_open" ||
-      heading.level !== 0 ||
-      tokens[index + 1]?.content !== "Implementation account" ||
-      !heading.map
-    )
-      continue;
+    if (heading?.type !== "heading_open" || heading.level !== 0 || !heading.map) continue;
+    const title = tokens[index + 1]?.content;
+    if (title === "Implementing-agent detail" && heading.tag === "h2") detail ??= heading.map[0];
+    if (title !== "Implementation account") continue;
     const level = Number(heading.tag.slice(1));
     let end = lines.length;
     for (let next = index + 2; next < tokens.length; next++) {
@@ -128,5 +126,14 @@ export function appendTaskAccount(contents: string, entry: string): string {
     lines.splice(end, 0, "", entry.trim(), "");
     return contents.slice(0, contents.length - body.length) + lines.join("\n");
   }
-  return contents.trimEnd() + `\n\n## Implementation account\n\n${entry.trim()}\n`;
+  const account = `## Implementation account\n\n${entry.trim()}\n`;
+  if (detail === undefined) return contents.trimEnd() + "\n\n" + account;
+  return (
+    contents.slice(0, contents.length - body.length) +
+    lines.slice(0, detail).join("\n").trimEnd() +
+    "\n\n" +
+    account +
+    "\n" +
+    lines.slice(detail).join("\n")
+  );
 }
