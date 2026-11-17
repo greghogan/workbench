@@ -3,14 +3,21 @@ import type { BrowserRecord } from "../../core/records/record-service.js";
 import { recordKey, compareRecordKeys } from "../routes/record-listing.js";
 import type { ViewContext } from "../workspace/view-context.js";
 import { recordURL } from "../routes/locations.js";
+import { sourceURL } from "../routes/sources.js";
+import type { TaskLifecycle } from "../../core/tasks/task-workflow.js";
 
 export interface PaneStep {
   href: string;
   title?: string;
 }
-export function recordNeighbors(context: ViewContext, record: Pick<BrowserRecord, "id" | "type" | "scope">) {
+export function recordNeighbors(
+  context: ViewContext,
+  record: Pick<BrowserRecord, "id" | "type" | "scope">,
+  status?: TaskLifecycle,
+) {
   const candidates: Pick<BrowserRecord, "id" | "type" | "scope" | "title">[] = context.records.filter(
-    (item) => item.scope === record.scope && item.type === record.type,
+    (item) =>
+      item.scope === record.scope && item.type === record.type && (!status || context.taskState(item.id) === status),
   );
   if (!candidates.some((item) => item.id === record.id)) candidates.push({ ...record, title: record.id });
   const ordered = candidates
@@ -21,7 +28,7 @@ export function recordNeighbors(context: ViewContext, record: Pick<BrowserRecord
     .sort((a, b) => compareRecordKeys(a.key, b.key));
   const index = ordered.findIndex(({ item }) => item.id === record.id);
   const step = (item: Pick<BrowserRecord, "id" | "title"> | undefined): PaneStep | undefined =>
-    item ? { href: recordURL(item.id), title: item.title } : undefined;
+    item ? { href: sourceURL(context, recordURL(item.id, status ? { status } : {})), title: item.title } : undefined;
   return {
     previous: index > 0 ? step(ordered[index - 1]?.item) : undefined,
     next: index >= 0 ? step(ordered[index + 1]?.item) : undefined,

@@ -67,7 +67,7 @@ export function sourceDiffView(
     compared,
     rows: metadataRows,
     sameMetadata,
-  } = prepareDocumentComparison(difference, context.pageTitle, parser);
+  } = prepareDocumentComparison(difference, context.pageTitle, { parser, previousParser: previous });
   for (const renderer of [parser, previous, current]) reviewAnnotations(renderer);
   const rows = metadataRows.map(({ key, before, after, same, parts }) => {
     const value = (side: "unified" | "previous" | "current") => {

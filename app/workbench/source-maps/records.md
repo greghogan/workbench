@@ -124,8 +124,8 @@
   histories and exempt only the configured manual publication destination.
 - `src/core/tasks/planning/planning-retention.ts`, `src/core/tasks/planning/plan-disposition.ts`: Protect drafts,
   relationships, execution queues, and unpushed history during explicit deletion and empty-branch retention.
-- `src/core/tasks/task-disposition.ts`, `src/server/views/task-operation-page.tsx`: Preview recoverable removal of
-  unpublished task commits or staged inverse work while preserving unrelated and published history.
+- `src/core/tasks/task-disposition.ts`, `src/core/tasks/task-publication.ts`, `src/server/views/task-operation-page.tsx`:
+  Preview cancellation and inverse changes, observe publication, and retain recoverable local history.
 - `src/core/git/history.ts`, `src/server/review/historical-records.ts`: Read immutable branch histories and route record
   and supporting-file links within their captured revision.
 

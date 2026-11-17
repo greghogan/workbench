@@ -181,9 +181,15 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     const task = object(value);
     strings(task, ["reference", "title", "path", "contents", "digest", "planDigest"]);
     check(task.reviewDigest === undefined || text(task.reviewDigest));
+    check(task.acceptanceNeedsReview === undefined || task.acceptanceNeedsReview === true);
+    check(task.previouslyApproved === undefined || task.previouslyApproved === true);
+    check(task.finalized === undefined || task.finalized === true);
+    check(task.committedDelivery === undefined || task.committedDelivery === true);
+    check(task.verificationStale === undefined || task.verificationStale === true);
     if (task.approval !== undefined) {
       const approval = object(task.approval);
       check(text(approval.at) && text(approval.contents) && bool(approval.current));
+      check(approval.source === undefined || approval.source === "developer-requested-review");
       list(approval.files, (value) => {
         const file = object(value);
         check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
@@ -204,6 +210,11 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     strings(document, ["contents", "digest", "error"]);
     reviewBaseline(document.baseline);
     comparison(document.reviewed);
+    if (document.taskFiles !== undefined)
+      list(document.taskFiles, (value) => {
+        const file = object(value);
+        check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
+      });
     list(document.files, (value) => {
       const file = object(value);
       check(text(file.path) && bytes(file.size));

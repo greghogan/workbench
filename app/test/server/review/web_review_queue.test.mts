@@ -24,5 +24,4 @@ test("review sections order charters, canonical ADR numbers, environments, and e
   const queue = new ReviewQueue(new ProjectHierarchy([project]), new Map(), [], changes, new Map(), () => project);
   expect(queue.groups.map((group) => group.path)).toEqual([paths[5], paths[4], paths[2], paths[1], paths[3], paths[0]]);
   expect(queue.pending).toEqual(queue.groups);
-  expect(queue.navigation(changes[5]?.digest ?? "", false).next).toMatchObject({ path: paths[4] });
 });

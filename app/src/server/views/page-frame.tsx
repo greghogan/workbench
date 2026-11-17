@@ -10,13 +10,14 @@ import { headerSearch, workbenchBrand } from "./components.js";
 import { pageDocument } from "./page-document.js";
 import { projectPath } from "../routes/project-paths.js";
 import { sourceNavigation } from "./source-navigation.js";
-import { sourceURL } from "../routes/sources.js";
+import { sourceQuery, sourceURL } from "../routes/sources.js";
 import { workspaceProblemText } from "../workspace/workspace-problem.js";
 import type { ViewContext, PageKey, SearchType } from "../workspace/view-context.js";
-import { type TaskStatus } from "../../core/records/record-document.js";
+import { type TaskLifecycle } from "../../core/tasks/task-workflow.js";
 interface PageOptions extends PageTrail {
   search?: { query: string; type: SearchType };
-  taskStatus?: TaskStatus;
+  taskStatus?: TaskLifecycle;
+  workflowList?: "plans" | "work" | "reviews";
 }
 export function shell(
   context: ViewContext,
@@ -37,7 +38,7 @@ export function shell(
     .filter((type) => !context.selection || type === "CHARTER" || type === "ADR")
     .map((type) =>
       navigation(
-        "/records?type=" + type,
+        type === "CHARTER" ? Route.Charters : "/records?type=" + type,
         recordPresentations[type].label,
         type,
         records.filter((record) => record.type === type).length,
@@ -47,12 +48,12 @@ export function shell(
     <nav aria-label="Main navigation">
       <div class="nav-group">
         <p class="nav-group-label">Workflow</p>
-        {navigation(Route.Review, "Review queue", "review", pending)}
-        {navigation(Route.TaskQueue, "Task queue", "queue", context.taskWorkflowCount)}
+        {!context.selection && navigation(Route.Plans, "Plans", "plans", context.workflowPlans.length)}
+        {!context.selection && navigation(Route.Work, "Work", "work", context.workCount)}
+        {navigation(Route.Reviews, "Reviews", "review", pending)}
       </div>
       <div class="nav-group">
         <p class="nav-group-label">Records</p>
-        {navigation("/", "Overview", "")}
         {recordNavigation}
       </div>
     </nav>
@@ -80,7 +81,10 @@ export function shell(
     title: title + (context.demonstration ? " · Demonstration" : ""),
     attributes: {
       "data-project-base": context.basePath ?? "",
-      "data-events-url": routeURL(Route.Events, {}),
+      "data-events-url": routeURL(Route.Events, {
+        ...sourceQuery(context),
+        ...(options.workflowList ? { workflow: options.workflowList } : {}),
+      }),
       "data-review-status-url": routeURL(Route.ReviewStatus, context.reviewTarget ?? {}),
       "data-compatibility-status-url": routeURL(Route.ReviewStatus, { compatibility: "1" }),
       "data-revision": context.revision,
@@ -105,7 +109,7 @@ export function shell(
           </header>
           <aside id="live-status" aria-live="polite" tabIndex={-1} hidden={!context.problem}>
             <span>{context.problem ? workspaceProblemText(context.problem) : ""}</span>
-            <a href={projectPath(context.requestLocation ?? Route.Overview)}>Refresh</a>
+            <a href={projectPath(context.requestLocation ?? Route.Charters)}>Refresh</a>
             {mutationForm({
               action: Route.WorkspaceRetry,
               fields: {},
@@ -122,6 +126,7 @@ export function shell(
 
             {body}
           </main>
+          <output id="workflow-notice" class="sr-only" aria-live="polite"></output>
         </div>
       </>
     ),

@@ -11,13 +11,14 @@ import { decodeReviewTarget, type ReviewTarget } from "../review/review-request.
 import { performance } from "node:perf_hooks";
 import { FormattingProblem } from "../../core/review/review-formatting.js";
 import { recordURL, routeURL } from "../routes/locations.js";
-import { sourceURL } from "../routes/sources.js";
+import { sourceQuery, sourceURL } from "../routes/sources.js";
 import { localEndpoint, createLocalServer, listenLocal, closeLocalServer } from "./http-listener.js";
 import { compatibilityReviewPage } from "../views/compatibility-review.js";
 import { WorkerGeneration } from "../workspace/worker-generation.js";
-import { reviewPreparationPage } from "../views/review-page.js";
+import { reviewPreparationPage, taskReviewPreparationPage } from "../views/review-page.js";
 import { prepareReviewPage, resolveReviewPage } from "../review/review-model.js";
-import { taskQueuePage } from "../views/task-pages.js";
+import { plansPage, workPage } from "../views/workflow-pages.js";
+import { reviewsPage } from "../views/review-list.js";
 import {
   routeContracts,
   decodeRequest,
@@ -25,6 +26,7 @@ import {
   type DecodedRoute,
   Route,
   actionDefinition,
+  type RouteQuery,
 } from "../routes/routes.js";
 import {
   ActionEffect,
@@ -36,18 +38,18 @@ import {
   settleCleanup,
 } from "../../core/diagnostics/diagnostics.mjs";
 import { WorkspaceView } from "../workspace/workspace-service.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { reviewLocation, taskReviewFiles, taskReviewLocation, workflowRecordURL } from "../review/review-navigation.js";
 import { randomBytes } from "node:crypto";
 import { type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, extname } from "node:path";
 import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
-import { recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
+import { contentDigest, recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
-import { isDocumentationSvg, isSvg, sendSandboxedSvg } from "../documents/document-image.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
+import { isDocumentationSvg, isSvg, sendSandboxedSvg } from "../documents/document-image.js";
 import type { runCollectionWorker } from "../projects/collection-runner.js";
 import { sendDownload, sendArchivedDownload, sendGitDownload } from "./downloads.js";
 import { WebError } from "./errors.js";
@@ -57,7 +59,7 @@ import {
   collectionProposalPage,
   collectionsPage,
   newCharterPage,
-  overview,
+  chartersPage,
   recordPage,
   supportingFilePage,
   supportingDirectoryPage,
@@ -69,6 +71,7 @@ import { requestUnavailablePage } from "../views/page-frame.js";
 import { type ViewContext } from "../workspace/view-context.js";
 import { decodeWorkerFailure, errorResponse, isCanceledRead } from "./error-response.js";
 import { RequestTimings, WebMetrics } from "./observability.js";
+import { workflowUpdates } from "../workspace/workflow-updates.js";
 
 interface WebOptions {
   workerBundle?: string;
@@ -89,7 +92,23 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
   const generation = options.workerBundle ? undefined : new WorkerGeneration(root);
   const bundle = options.workerBundle ?? generation?.path;
   const monitor = new WorkspaceMonitor(root, options.pollInterval, metrics, undefined, bundle);
-  const clients = new Set<ServerResponse>();
+  const clients = new Map<
+    ServerResponse,
+    {
+      query: RouteQuery<typeof Route.Events>;
+      workflow: ReturnType<typeof workflowUpdates> | undefined;
+    }
+  >();
+  const workflowFor = (query: RouteQuery<typeof Route.Events>) => {
+    if (!monitor.index) return;
+    try {
+      const selected = monitor.index.select(sourceSelection(query));
+      return withProjectPaths(options.basePath ?? "", () => workflowUpdates(selected, query.workflow));
+    } catch (error) {
+      if (error instanceof MissingResource) return;
+      throw error;
+    }
+  };
   const citationDocuments = new CitationDocuments((id) => {
     const citation = monitor.index?.snapshot.documents.get(id)?.citation;
     if (citation?.error)
@@ -117,7 +136,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
     if (!monitor.index) throw new WebError(503, "Workspace snapshot is not available.");
     return Object.assign(monitor.index.select(sourceSelection(parameters)), {
       csrf,
-      requestLocation: requestLocation ?? Route.Overview,
+      workflow: "workflow" in parameters,
+      requestLocation: requestLocation ?? Route.Charters,
       reviewTarget: {
         ...("id" in reviewParameters && reviewParameters.id ? { id: reviewParameters.id } : {}),
         ...("path" in reviewParameters && reviewParameters.path ? { path: reviewParameters.path } : {}),
@@ -144,7 +164,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         return;
       }
       const origin = requestOrigin(request);
-      url = new URL(request.url ?? Route.Overview, origin);
+      url = new URL(request.url ?? Route.Charters, origin);
       if (url.origin !== origin) throw new WebError(400, "request URL is outside this service");
       const decoded = decodeRequest(url.pathname, url.searchParams);
       if (!decoded) {
@@ -235,7 +255,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             "x-accel-buffering": "no",
           });
           response.write(`event: revision\ndata: ${monitor.revision}\n\n`);
-          clients.add(response);
+          clients.set(response, { query, workflow: workflowFor(query) });
           response.on("close", () => {
             clients.delete(response);
           });
@@ -275,9 +295,35 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           return;
         }
         if (route === Route.File) {
-          const record = monitor.index?.byId.get(query.id ?? ""),
+          const index = monitor.index;
+          const record = index?.byId.get(query.id ?? ""),
             path = query.path ?? "";
           if (!record) throw new WebError(404, "record not found");
+          const file = {
+            directory: record.directory,
+            path,
+            ...(record.archive ? { archive: { ...record.archive, path } } : {}),
+          };
+          if (query.image) {
+            const document = index?.snapshot.documents.get(record.id);
+            if (query.download === "1" || !isSvg(path) || !document)
+              throw new WebError(404, "supporting image not found");
+            const previous = document.taskImages?.previous.get(path);
+            if (previous?.digest === query.image) {
+              sendSandboxedSvg(response, Buffer.from(previous.contents, "base64"));
+              return;
+            }
+            if (
+              !document.files.some((entry) => entry.path === path && entry.size <= previewLimit) ||
+              (query.image !== "1" && document.taskImages?.current.get(path) !== query.image)
+            )
+              throw new WebError(404, "supporting image not found");
+            const bytes = recordBytes(file);
+            if (query.image !== "1" && contentDigest(bytes) !== query.image)
+              throw new WebError(404, "supporting image changed");
+            sendSandboxedSvg(response, bytes);
+            return;
+          }
           const files = supportingFiles(record);
           const base = record.path.slice(0, -extname(record.path).length);
           const directory =
@@ -300,15 +346,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             else sendDownload(response, record.directory, path);
             return;
           }
-          const size = files.find((file) => file.path === path)?.size ?? Infinity;
-          const bytes =
-            size <= 2 * 1024 * 1024
-              ? recordBytes({
-                  ...record,
-                  path,
-                  ...(record.archive ? { archive: { ...record.archive, path } } : {}),
-                })
-              : undefined;
+          const size = files.find((entry) => entry.path === path)?.size ?? Infinity;
+          const bytes = size <= previewLimit ? recordBytes(file) : undefined;
           send(
             response,
             200,
@@ -332,12 +371,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           missingRecord ||
           route === Route.NewCharter ||
           route === Route.Review ||
+          route === Route.Reviews ||
           (route === Route.Record && query.view === "edit")
         )
           await timings.measure("workspace", () => monitor.reconcile());
         if (response.destroyed) return;
         const selected = context(
-          route === Route.Review
+          route === Route.Review || route === Route.History
             ? { ...(scope ? { scope } : {}), ...(collection ? { collection } : {}), ...(all === "1" ? { all } : {}) }
             : route === Route.ReviewStatus
               ? {}
@@ -349,7 +389,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         let page: string;
         switch (route) {
           case Route.TaskOperation:
-            page = taskOperationPage(selected, query);
+            page = await taskOperationPage(selected, query);
             break;
           case Route.HistoryFile: {
             const file = historyFile(root, query.commit ?? "", query.path ?? ""),
@@ -367,8 +407,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           case Route.NewCharter:
             page = newCharterPage(selected, query.project ?? "");
             break;
-          case Route.Overview:
-            page = overview(selected);
+          case Route.Charters:
+            page = chartersPage(selected);
             break;
           case Route.PlanFile: {
             const filePath = query.path ?? "",
@@ -404,14 +444,23 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           case Route.Plan:
             page = planPage(selected, query);
             break;
-          case Route.TaskQueue:
-            page = taskQueuePage(selected, query);
+          case Route.Plans:
+            page = plansPage(selected, query);
+            break;
+          case Route.Reviews: {
+            const application = query.collection_applied ? actions.application(query.collection_applied) : undefined;
+            if (application) selected.collectionApplication = application;
+            page = reviewsPage(selected, query);
+            break;
+          }
+          case Route.Work:
+            page = workPage(selected, query);
             break;
           case Route.Records:
             page = recordsPage(selected, query);
             break;
           case Route.Record:
-            page = recordPage(selected, query);
+            page = taskReviewPreparationPage(selected, query.id ?? "", query) ?? recordPage(selected, query);
             break;
           case Route.ReviewStatus: {
             if (query.compatibility) {
@@ -446,8 +495,6 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
               page = compatibilityReviewPage(selected);
               break;
             }
-            const application = query.collection_applied ? actions.application(query.collection_applied) : undefined;
-            if (application) selected.collectionApplication = application;
             const target = resolveReviewPage(selected, query);
             const preparation = target ? selected.index.snapshot.reviewPreparation.files.get(target.owner) : undefined;
             if (target && preparation?.state === PreparationState.Unavailable) {
@@ -524,7 +571,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       if (form.get("csrf") !== csrf) throw new WebError(403, "invalid browser review session; refresh this page");
       if (route === Route.WorkspaceRetry) {
         await monitor.retry();
-        const redirect = projectPath(Route.Overview);
+        const redirect = projectPath(Route.Charters);
         if (request.headers.accept?.includes("application/json"))
           send(response, 200, "application/json", JSON.stringify({ redirect }));
         else {
@@ -546,7 +593,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       };
       const reviewContext = route === Route.Approve ? monitor.index?.select(actionSource) : undefined;
       const selectedId = form.get("id") ?? form.get("reference") ?? "",
-        selectedPath = form.get("path") ?? "";
+        selectedPath = form.get("path") ?? "",
+        reviewCommit = route === Route.Approve ? form.get("review_commit") : null,
+        reviewTask = route === Route.Approve ? form.get("review_task") : null,
+        taskFiles = reviewTask && reviewContext ? taskReviewFiles(reviewContext, reviewTask) : [],
+        taskFileIndex = taskFiles.findIndex((file) => file.commit === reviewCommit && file.path === selectedPath);
+      if (reviewTask && taskFileIndex < 0)
+        throw new WebError(409, "The selected task review changed; reopen it from Reviews");
       const target =
         preparation?.path ??
         ((operation === WebAction.Save || operation === WebAction.Task) && monitor.index?.byId.has(selectedId)
@@ -641,30 +694,57 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         );
         result.redirect = next
           ? reviewLocation(context, next, form.get("review_layout") === "split" ? "split" : "unified")
-          : sourceURL(context, Route.Review);
+          : sourceURL(context, Route.Reviews);
       }
-      if (route === Route.Approve && form.get("review_commit") && monitor.index) {
-        const reviewCommit = form.get("review_commit"),
-          selected = monitor.index.select(actionSource),
-          next = selected.commitReviews.find((unit) => unit.revision === reviewCommit) ?? selected.commitReviews[0];
-        result.redirect = next
-          ? sourceURL(
-              selected,
-              routeURL(Route.History, {
-                commit: next.revision,
-                layout: form.get("review_layout") === "split" ? "split" : "unified",
-              }),
-            )
-          : sourceURL(selected, Route.Review);
+      if (reviewCommit && monitor.index) {
+        const selected = monitor.index.select(actionSource),
+          layout = form.get("review_layout") === "split" ? "split" : "unified";
+        result.redirect = sourceURL(selected, Route.Reviews);
+        if (reviewTask) {
+          const remaining = taskReviewFiles(selected, reviewTask);
+          const next =
+            taskFiles
+              .slice(taskFileIndex + 1)
+              .find((file) => remaining.some((item) => item.commit === file.commit && item.path === file.path)) ??
+            remaining[0];
+          if (next) result.redirect = taskReviewLocation(selected, reviewTask, next, layout);
+          else if (selected.workflowOutcomes.some((record) => record.id === reviewTask))
+            result.redirect = workflowRecordURL(selected, reviewTask, layout);
+        } else {
+          const candidates = selected.standaloneCommitReviews,
+            next = candidates.find((unit) => unit.revision === reviewCommit) ?? candidates[0];
+          if (next)
+            result.redirect = routeURL(Route.History, { ...sourceQuery(selected), commit: next.revision, layout });
+        }
       }
       if (operation === WebAction.PolicyResolution && monitor.index) {
         const current = monitor.index.select(actionSource);
         if (!current.pendingCompatibilityFindings.length)
           result.redirect = current.reviewQueue[0]
             ? reviewLocation(current, current.reviewQueue[0])
-            : sourceURL(current, Route.Review);
+            : sourceURL(current, Route.Reviews);
       }
-      if ((route === Route.TaskState || route === Route.QueueChange) && monitor.index)
+      if (route === Route.TaskState && form.get("state") === "Approved" && monitor.index) {
+        const current = monitor.index.select(actionSource),
+          reference = form.get("reference");
+        if (current.workflowOutcomes.some((record) => record.id === reference)) result.redirect = Route.Reviews;
+      }
+      if (
+        ((
+          [
+            Route.TaskState,
+            Route.QueueChange,
+            Route.PlanSave,
+            Route.PlanRename,
+            Route.PlanApprove,
+            Route.PlanCancel,
+            Route.PlanDelete,
+            Route.TaskDisposition,
+          ] as readonly Route[]
+        ).includes(route) ||
+          (route === Route.ReviewPrepare && !!preparation?.task)) &&
+        monitor.index
+      )
         result.redirect = sourceURL(monitor.index.select(actionSource), result.redirect);
       if (request.headers.accept === "application/json")
         send(
@@ -777,8 +857,24 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
     return true;
   };
   const broadcast = (revision: string) => {
-    for (const response of clients) {
-      if (!slowClient(response)) response.write(`event: revision\ndata: ${revision}\n\n`);
+    const projections = new Map<string, ReturnType<typeof workflowFor>>();
+    for (const [response, subscription] of clients) {
+      if (slowClient(response)) continue;
+      const scope = JSON.stringify(subscription.query);
+      if (!projections.has(scope)) projections.set(scope, workflowFor(subscription.query));
+      const previous = subscription.workflow,
+        current = projections.get(scope);
+      subscription.workflow = current;
+      if (!subscription.query.workflow || !current || previous?.key !== current.key)
+        response.write(`event: revision\ndata: ${revision}\n\n`);
+      if (previous && current) {
+        const known = new Set(previous.decisions.map((item) => item.key));
+        const added = current.decisions.filter((item) => !known.has(item.key));
+        if (added.length)
+          response.write(
+            `event: attention\ndata: ${JSON.stringify({ revision, count: added.length, items: added.slice(0, 10) })}\n\n`,
+          );
+      }
     }
   };
   monitor.on("change", broadcast);
@@ -788,12 +884,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       problem: monitor.problem,
       collectedAt: monitor.index?.snapshot.collectedAt ?? "",
     });
-    for (const response of clients) if (!slowClient(response)) response.write(`event: freshness\ndata: ${data}\n\n`);
+    for (const response of clients.keys())
+      if (!slowClient(response)) response.write(`event: freshness\ndata: ${data}\n\n`);
   };
   monitor.on("freshness", freshness);
 
   const heartbeat = setInterval(() => {
-    for (const response of clients) {
+    for (const response of clients.keys()) {
       if (!slowClient(response)) response.write(": keepalive\n\n");
     }
   }, 15_000);
@@ -825,7 +922,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         () => actions.close(),
         () => monitor.close(),
         () => {
-          for (const response of clients) response.end();
+          for (const response of clients.keys()) response.end();
           clients.clear();
         },
         () => closeLocalServer(server),

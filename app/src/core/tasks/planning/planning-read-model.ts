@@ -61,7 +61,7 @@ export function planningRecord(view: PlanView, claim?: PlanClaim): PlanningRecor
     scope: view.scope,
     name: view.name,
     title: view.document?.title ?? view.name,
-    summary: markdownExcerpt(view.document?.body ?? ""),
+    summary: markdownExcerpt(view.document?.body ?? "", ["Overview", "Review summary"]),
     contents: view.contents,
     digest: view.digest,
     status: view.document?.metadata.status ?? "Planned",

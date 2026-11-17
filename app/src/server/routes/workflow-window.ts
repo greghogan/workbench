@@ -1,29 +1,37 @@
 import { WebError } from "../http/errors.js";
+import { sourceURL } from "./sources.js";
 import { routeURL } from "./locations.js";
-import { Route, type RouteQuery } from "./routes.js";
+import { Route, type WorkflowQuery } from "./routes.js";
 import { recordBatchSize, recordWindowLimit } from "./record-window.js";
 import type { ViewContext } from "../workspace/view-context.js";
 
-const phases = ["plans", "work", "available", "outcomes"] as const;
-export type WorkflowPhase = (typeof phases)[number];
+export type WorkflowPhase = NonNullable<WorkflowQuery["phase"]>;
+export type WorkflowRoute = typeof Route.Plans | typeof Route.Work | typeof Route.Reviews;
 
 /** Each phase keeps its own cursor; the complete restored page still obeys the shared browser bound. */
 export function workflowWindows(
   context: Pick<ViewContext, "revision" | "scope" | "selection" | "all">,
-  parameters: RouteQuery<typeof Route.TaskQueue>,
+  parameters: WorkflowQuery,
+  route: WorkflowRoute,
 ) {
+  const problem = (status: 400 | 409, message: string) =>
+    new WebError(status, message, { recovery: { href: sourceURL(context, route), label: "Refresh workflow" } });
+  const phases: readonly WorkflowPhase[] =
+    route === Route.Plans ? ["plans"] : route === Route.Work ? ["work"] : ["approvals", "reviews"];
+  if (parameters.phase && !phases.includes(parameters.phase))
+    throw problem(400, "Select a phase from this workflow page");
   if (parameters.cursor_revision && parameters.cursor_revision !== context.revision)
-    throw new WebError(409, "Workflow changed; refresh before loading more");
+    throw problem(409, "Workflow changed; refresh before loading more");
   if ((parameters.after || parameters.before || parameters.through) && !parameters.phase)
-    throw new WebError(400, "Select a workflow phase for its cursor");
-  if (parameters.after && parameters.before) throw new WebError(400, "Select one workflow direction");
+    throw problem(400, "Select a workflow phase for its cursor");
+  if (parameters.after && parameters.before) throw problem(400, "Select one workflow direction");
   let windows: Record<string, string> = {};
   if (parameters.task_windows) {
     let input: unknown;
     try {
       input = JSON.parse(parameters.task_windows);
     } catch {
-      throw new WebError(400, "Invalid workflow windows");
+      throw problem(400, "Invalid workflow windows");
     }
     if (
       !input ||
@@ -32,18 +40,19 @@ export function workflowWindows(
       Object.keys(input).some((key) => !phases.some((phase) => key === `workflow-${phase}`)) ||
       Object.values(input).some((value) => typeof value !== "string")
     )
-      throw new WebError(400, "Invalid workflow windows");
+      throw problem(400, "Invalid workflow windows");
     windows = input as Record<string, string>;
   }
+  let rendered = 0;
   return <T>(phase: WorkflowPhase, items: readonly T[], id: (item: T) => string) => {
     const key = `workflow-${phase}`,
       selected = parameters.phase === phase,
       position = (reference: string) => {
         const index = items.findIndex((item) => id(item) === reference);
-        if (index < 0) throw new WebError(409, "Workflow order changed; refresh before loading more");
+        if (index < 0) throw problem(409, "Workflow order changed; refresh before loading more");
         return index;
       },
-      batch = Math.min(recordBatchSize, Math.floor(recordWindowLimit / phases.length)),
+      batch = Math.max(1, Math.floor(recordBatchSize / phases.length)),
       start =
         selected && parameters.after
           ? position(parameters.after) + 1
@@ -56,19 +65,21 @@ export function workflowWindows(
         : selected && parameters.before
           ? position(parameters.before)
           : Math.min(items.length, start + batch);
-    if (end < start || end - start > recordWindowLimit) throw new WebError(400, "Workflow window exceeds its limit");
+    const length = end - start;
+    if (length < 0 || rendered + length > recordWindowLimit) throw problem(400, "Workflow window exceeds its limit");
+    rendered += length;
     const visible = items.slice(start, end),
       first = visible[0],
       last = visible.at(-1),
       url = (values: { after?: string; before?: string }) =>
-        routeURL(Route.TaskQueue, {
-          scope: context.scope,
-          collection: context.selection,
-          ...(context.all ? { all: "1" } : {}),
-          phase,
-          ...values,
-          cursor_revision: context.revision,
-        });
+        sourceURL(
+          context,
+          routeURL(route, {
+            phase,
+            ...values,
+            cursor_revision: context.revision,
+          }),
+        );
     return {
       key,
       visible,

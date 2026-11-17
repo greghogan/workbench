@@ -1,70 +1,62 @@
-import { workflowWindows, type WorkflowPhase } from "../routes/workflow-window.js";
+import { taskTree } from "./workflow-navigation.js";
+import { workflowRecordURL } from "../review/review-navigation.js";
+import { taskHadApproval, taskLifecycles, TaskLifecycle } from "../../core/tasks/task-workflow.js";
 import { taskTransitionProblem } from "../../core/tasks/task-service.js";
 import { recordBatchSize, recordWindowLimit } from "../routes/record-window.js";
+import { compareRecordKeys, recordKey } from "../routes/record-listing.js";
+import type { TaskRecord } from "../../core/tasks/task-model.js";
 import { WebError } from "../http/errors.js";
 import type { JSX } from "preact";
-import { taskStatuses, terminalTask, type TaskStatus } from "../../core/records/record-document.js";
+import { taskStatuses, type TaskStatus } from "../../core/records/record-document.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { queueDigest, TaskBlockerKind, TaskExecution } from "../../core/tasks/task-queue.js";
 import type { ViewContext } from "../workspace/view-context.js";
-import { recordList, timeTag } from "./record-content.js";
+import { recordList } from "./record-content.js";
 import { shell } from "./page-frame.js";
-import { tabs, linkButton } from "./render-links.js";
+import { tabs } from "./render-links.js";
 import { sourceURL } from "../routes/sources.js";
 import { recordURL, routeURL } from "../routes/locations.js";
 import { referenceLink } from "./record-links.js";
+import { taskDecisionActions } from "./task-decision-actions.js";
 import { mutationForm } from "./action-forms.js";
 import { submitButton, badge } from "./components.js";
-import { Route, type RouteQuery, type QueueOperation } from "../routes/routes.js";
+import { Route, type RouteQuery } from "../routes/routes.js";
 
-const taskOverviewOrder: readonly TaskStatus[] = ["Approved", "Planned", "Accepted", "Canceled"];
+const compareTasks = (left: TaskRecord, right: TaskRecord) =>
+  compareRecordKeys(recordKey(left.reference), recordKey(right.reference));
 
 /** Workflow phases preserve parentage; a parent in another phase remains a contextual link. */
-function taskList(
+export function taskList(
   context: ViewContext,
   records: BrowserRecord[],
-  render: (record: BrowserRecord) => JSX.Element | null = (record) => recordList([record], context, 3),
+  render: (record: BrowserRecord) => JSX.Element | null = (record) =>
+    recordList([record], context, 3, (item) => workflowRecordURL(context, item.id)),
 ): JSX.Element {
-  const selected = records;
-  if (context.index.snapshot.tasks.problem) return recordList(selected, context);
-  const byId = new Map(selected.map((record) => [record.id, record]));
-  const children = new Map<string, BrowserRecord[]>();
-  const roots: BrowserRecord[] = [];
-  for (const record of selected) {
-    let parent = context.index.taskGraph.byReference.get(record.id)?.parent;
-    while (parent && !byId.has(parent)) parent = context.index.taskGraph.byReference.get(parent)?.parent;
-    if (parent) {
-      const siblings = children.get(parent) ?? [];
-      siblings.push(record);
-      children.set(parent, siblings);
-    } else roots.push(record);
-  }
-  const item = (record: BrowserRecord): JSX.Element => {
-    const parentId = context.index.taskGraph.byReference.get(record.id)?.parent;
-    const parent = parentId && !byId.has(parentId) ? context.index.byId.get(parentId) : undefined;
-    const nested = children.get(record.id) ?? [];
-    return (
-      <li data-task-node={record.id} key={record.id}>
-        {parent && <nav aria-label="Parent task">{referenceLink(parent, parent.title)}</nav>}
-        {render(record)}
-        {nested.length > 0 && <ul class="task-tree">{nested.map(item)}</ul>}
-      </li>
-    );
-  };
+  if (context.index.snapshot.tasks.problem) return recordList(records, context);
+  const item = (node: ReturnType<typeof taskTree>[number]): JSX.Element => (
+    <li data-task-node={node.record.id} key={node.record.id}>
+      {node.parent && (
+        <nav aria-label="Parent task">
+          {referenceLink(node.parent, node.parent.title, workflowRecordURL(context, node.parent.id))}
+        </nav>
+      )}
+      {render(node.record)}
+      {node.children.length > 0 && <ul class="task-tree">{node.children.map(item)}</ul>}
+    </li>
+  );
   return (
     <ul class="task-tree" data-task-items="">
-      {roots.map(item)}
+      {taskTree(context, records).map(item)}
     </ul>
   );
 }
 
-export function taskNavigation(context: ViewContext, status?: TaskStatus): JSX.Element {
+export function taskNavigation(context: ViewContext, status?: TaskLifecycle): JSX.Element {
   return tabs(
     [
       { label: "All tasks", href: sourceURL(context, "/records?type=TSK"), current: status === undefined },
-      ...taskStatuses.map((state) => ({
+      ...taskLifecycles.map((state) => ({
         label: state,
-        href: sourceURL(context, "/records?type=TSK&status=" + state),
+        href: sourceURL(context, routeURL(Route.Records, { type: "TSK", status: state })),
         current: status === state,
       })),
     ],
@@ -97,17 +89,27 @@ export function tasksPage(
   }
   let displayed = 0;
   const prepared = context.index.snapshot.tasks;
-  const byId = new Map(records.map((record) => [record.id, record]));
-  const tasks = prepared.records.filter((task) => byId.has(task.reference));
+  const status = parameters.status;
+  const allRecords = new Map(records.map((record) => [record.id, record]));
+  const byId = status ? new Map<string, BrowserRecord>() : allRecords;
+  if (status)
+    for (const record of records) {
+      if (context.taskState(record.id) !== status) continue;
+      for (let id: string | undefined = record.id; id && !byId.has(id);) {
+        const ancestor = allRecords.get(id);
+        if (!ancestor) break;
+        byId.set(id, ancestor);
+        id = context.index.taskGraph.byReference.get(id)?.parent;
+      }
+    }
+  const tasks = prepared.records.filter((task) => byId.has(task.reference)).sort(compareTasks);
   if (parameters.cursor_revision && parameters.cursor_revision !== context.revision)
     throw new WebError(409, "Task tree changed; refresh before loading more");
   const parent = parameters.parent ? context.index.taskGraph.byReference.get(parameters.parent) : undefined;
   if (parameters.parent && (!parent || !byId.has(parent.reference)))
     throw new WebError(404, "Task parent is unavailable");
   const roots = prepared.problem ? tasks : tasks.filter((task) => !task.parent || !byId.has(task.parent));
-  const candidates = parent
-    ? tasks.filter((task) => task.parent === parent.reference)
-    : taskOverviewOrder.flatMap((status) => roots.filter((task) => task.metadata.status === status));
+  const candidates = parent ? tasks.filter((task) => task.parent === parent.reference) : roots;
   const position = (id: string) => {
     const index = candidates.findIndex((task) => task.reference === id);
     if (index < 0) throw new WebError(409, "Task window changed; refresh the tree");
@@ -128,10 +130,15 @@ export function tasksPage(
     key = parent?.reference ?? "roots";
   let reserved = visible.length;
   const url = (values: Record<string, string>) => {
-    const query = new URLSearchParams({ type: "TSK", ...values, ...(parent ? { parent: parent.reference } : {}) });
+    const query = new URLSearchParams({
+      type: "TSK",
+      ...values,
+      ...(status ? { status } : {}),
+      ...(parent && !values.parent ? { parent: parent.reference } : {}),
+    });
     return sourceURL(context, "/records?" + query.toString());
   };
-  const item = (task: (typeof tasks)[number]): JSX.Element | null => {
+  const item = (task: (typeof tasks)[number], heading: 2 | 3): JSX.Element | null => {
     reserved--;
     if (++displayed > recordWindowLimit)
       throw new WebError(400, "Task tree window exceeds its limit; collapse branches or open the next task view");
@@ -139,7 +146,9 @@ export function tasksPage(
     if (!record) return null;
     const children = prepared.problem
       ? []
-      : (context.index.taskGraph.children.get(task.reference) ?? []).filter((child) => byId.has(child.reference));
+      : (context.index.taskGraph.children.get(task.reference) ?? [])
+          .filter((child) => byId.has(child.reference))
+          .sort(compareTasks);
     const requested = windows[task.reference];
     const through = Object.hasOwn(windows, task.reference)
       ? requested
@@ -149,17 +158,16 @@ export function tasksPage(
     if (requested && !through) throw new WebError(409, "Task branch changed; refresh the tree");
     const last = children[through - 1]?.reference;
     reserved += through;
-    const branchURL = sourceURL(
-      context,
-      "/records?type=TSK&parent=" +
-        encodeURIComponent(task.reference) +
-        (last ? "&after=" + encodeURIComponent(last) : "") +
-        "&cursor_revision=" +
-        context.revision,
-    );
+    const branchURL = url({
+      parent: task.reference,
+      ...(last ? { after: last } : {}),
+      cursor_revision: context.revision,
+    });
     return (
       <li data-task-node={task.reference} key={task.reference}>
-        {recordList([record], context, 3)}
+        {recordList([record], context, heading, (record) =>
+          sourceURL(context, recordURL(record.id, status ? { status } : {})),
+        )}
         {children.length > 0 && (
           <details
             data-task-branch={task.reference}
@@ -168,7 +176,7 @@ export function tasksPage(
             <summary>Subtasks ({children.length})</summary>
             <div data-task-window={task.reference} data-list-revision={context.revision}>
               <ul class="task-tree" data-task-items="">
-                {children.slice(0, through).map((child) => item(child))}
+                {children.slice(0, through).map((child) => item(child, 3))}
               </ul>
               <div data-task-loader="">
                 {through < children.length && (
@@ -195,7 +203,7 @@ export function tasksPage(
     "Tasks",
     "TSK",
     <>
-      {taskNavigation(context)}
+      {taskNavigation(context, status)}
       {prepared.problem && <p class="notice">{prepared.problem}</p>}
       {ancestors.length > 0 && (
         <nav aria-label="Task hierarchy">
@@ -212,27 +220,9 @@ export function tasksPage(
             Load previous tasks
           </a>
         )}
-        {parent ? (
-          <ul class="task-tree" data-task-items="">
-            {visible.map(item)}
-          </ul>
-        ) : (
-          <div data-task-items="">
-            {taskOverviewOrder.map((status) => {
-              const group = visible.filter((task) => task.metadata.status === status);
-              return (
-                group.length > 0 && (
-                  <section aria-label={status} data-task-group={status}>
-                    <h2>{status}</h2>
-                    <ul class="task-tree" data-task-group-items="">
-                      {group.map(item)}
-                    </ul>
-                  </section>
-                )
-              );
-            })}
-          </div>
-        )}
+        <ul class="task-tree" data-task-items="">
+          {visible.map((task) => item(task, 2))}
+        </ul>
 
         {!visible.length && <p>No tasks.</p>}
         <div data-task-loader="">
@@ -271,13 +261,13 @@ export function tasksPage(
       )}
       <output id="task-loading-status" class="sr-only"></output>
     </>,
-    { search: { query: "", type: "TSK" } },
+    { search: { query: "", type: "TSK" }, ...(status ? { taskStatus: status } : {}) },
   );
 }
 
 export function taskChildren(context: ViewContext, record: BrowserRecord): JSX.Element | null {
   if (record.type !== "TSK") return null;
-  const children = (context.index.taskGraph.children.get(record.id) ?? []).flatMap((task) => {
+  const children = [...(context.index.taskGraph.children.get(record.id) ?? [])].sort(compareTasks).flatMap((task) => {
     const child = context.index.byId.get(task.reference);
     return child ? [child] : [];
   });
@@ -288,7 +278,8 @@ export function taskChildren(context: ViewContext, record: BrowserRecord): JSX.E
       <ul>
         {children.map((child) => (
           <li key={child.id}>
-            {referenceLink(child, child.title)} {child.status && badge(child.status)}
+            {referenceLink(child, child.title)}{" "}
+            {context.taskState(child.id) && badge(context.taskState(child.id) ?? "")}
           </li>
         ))}
       </ul>
@@ -310,9 +301,10 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
   if (context.index.snapshot.tasks.problem) return <p class="notice">{context.index.snapshot.tasks.problem}</p>;
   const task = context.index.taskGraph.byReference.get(record.id);
   if (!task) return null;
-  const pendingDocuments = context.index.snapshot.commitReviews.filter(
-    (unit) => unit.taskPaths.includes(record.path) && unit.paths.length,
-  );
+  const document = context.document(record.id);
+  const fileChanges = document.taskFiles;
+  const state = context.taskState(record.id);
+  const planActions = !taskHadApproval(task, entry);
   const expected = task.reviewDigest ?? task.digest;
   const readiness = context.index.taskReadiness;
   const transition = (state: TaskStatus, label: string) =>
@@ -328,354 +320,62 @@ export function taskControls(context: ViewContext, record: BrowserRecord): JSX.E
           children: () => submitButton(label, { secondary: state !== "Approved" && state !== "Accepted" }),
         })
       : null;
+  const operationURL = (kind: "cancel" | "delete-plan" | "revert") =>
+    sourceURL(
+      context,
+      routeURL(Route.TaskOperation, { id: record.id, kind, ...(context.workflow ? { workflow: "1" } : {}) }),
+    );
+  const primary =
+    state === TaskLifecycle.Planned || state === TaskLifecycle.AwaitingApproval
+      ? transition("Approved", "Approve plan")
+      : state === TaskLifecycle.AwaitingAcceptance
+        ? transition("Accepted", "Accept outcome")
+        : null;
+  const mayCancel =
+    state !== TaskLifecycle.Canceled &&
+    state !== TaskLifecycle.Accepted &&
+    state !== TaskLifecycle.Finalized &&
+    !taskTransitionProblem(task, readiness, "Canceled");
+  const completed = state === TaskLifecycle.Accepted || state === TaskLifecycle.Finalized;
+  const secondary = [
+    planActions &&
+      !entry &&
+      !document.files.length &&
+      !readiness.graph.tasks.some(
+        (candidate) => candidate.parent === record.id || candidate.dependencies.includes(record.id),
+      ) && (
+        <a class="button secondary" href={operationURL("delete-plan")}>
+          Delete plan
+        </a>
+      ),
+    mayCancel && (
+      <a class="button secondary" href={operationURL("cancel")}>
+        {planActions ? "Cancel plan" : "Cancel task"}
+      </a>
+    ),
+    (state === TaskLifecycle.AwaitingImplementation || state === TaskLifecycle.AwaitingAcceptance) &&
+      transition("Planned", "Revise plan"),
+    (completed || state === TaskLifecycle.Canceled) &&
+      transition("Planned", planActions ? "Reopen plan" : "Reopen task"),
+    completed && context.taskHasDelivery(record.id) && (
+      <a class="button secondary" href={operationURL("revert")}>
+        Revert work
+      </a>
+    ),
+  ];
   return (
     <section aria-label="Task actions" class="task-workflow">
-      {entry && (
-        <p>
-          {badge(entry.state === TaskExecution.Implemented ? "Awaiting acceptance" : entry.state)}{" "}
-          {entry.reason ?? entry.evidence}
-        </p>
-      )}
-      {!entry && task.implementation && (
-        <p>
-          Implementation evidence at <code>{task.implementation.baseline.slice(0, 12)}</code> from{" "}
-          <code>{task.implementation.checkout}</code> ({timeTag(task.implementation.verified)}):{" "}
-          {task.implementation.evidence}
-        </p>
-      )}
-      {task.approval && task.approval.files.length > 0 && (
+      {task.approval?.source === "developer-requested-review" && <p class="muted">Review requested by the developer</p>}
+      {fileChanges && fileChanges.length > 0 && (
         <ul aria-label="Supporting file changes">
-          {task.approval.files.map((file) => (
+          {fileChanges.map((file) => (
             <li key={file.name}>
               {file.name}: {file.change}
             </li>
           ))}
         </ul>
       )}
-      {pendingDocuments.length > 0 && (
-        <section aria-label="Pending document reviews">
-          <h2>Pending document reviews</h2>
-          <ul>
-            {pendingDocuments.flatMap((unit) =>
-              unit.paths.map((path) => (
-                <li key={unit.revision + path}>
-                  <a href={routeURL(Route.History, { commit: unit.revision, path, all: "1" })}>{path}</a>
-                  {" · "}
-                  {unit.subject}
-                </li>
-              )),
-            )}
-          </ul>
-        </section>
-      )}
-      <div class="task-actions">
-        {record.status === "Approved" &&
-          !entry &&
-          !task.implementation &&
-          mutationForm({
-            action: Route.QueueChange,
-            context,
-            csrf: context.csrf,
-            fields: { operation: "add", reference: record.id, target: "", expected: queueDigest(queue) },
-            children: () => submitButton("Add to local queue", { secondary: true }),
-          })}
-        {(record.status === "Planned" || (record.status === "Approved" && task.approval && !task.approval.current)) &&
-          transition("Approved", record.status === "Approved" ? "Approve revised plan" : "Approve plan")}
-        {record.status === "Approved" &&
-          (entry?.state === TaskExecution.Implemented || (!entry && task.implementation)) &&
-          transition("Accepted", "Accept outcome")}
-      </div>
-      {(record.status !== "Planned" ||
-        !!task.implementation ||
-        !taskTransitionProblem(task, readiness, "Canceled")) && (
-        <details>
-          <summary>More task actions</summary>
-          <div class="task-actions">
-            {!terminalTask.has(record.status) && !taskTransitionProblem(task, readiness, "Canceled") && (
-              <a
-                class="button secondary"
-                href={routeURL(Route.TaskOperation, { id: record.id, kind: "cancel", scope: context.scope })}
-              >
-                Cancel task
-              </a>
-            )}
-            {record.status !== "Planned" &&
-              transition(
-                "Planned",
-                record.status === "Accepted" || record.status === "Canceled" ? "Reopen task" : "Return to planning",
-              )}
-            {(!!task.implementation ||
-              (!!entry && entry.state !== TaskExecution.Queued) ||
-              record.status === "Approved" ||
-              record.status === "Accepted") && (
-              <>
-                <a
-                  class="button secondary"
-                  href={routeURL(Route.TaskOperation, { id: record.id, kind: "delete", scope: context.scope })}
-                >
-                  Delete unpublished work
-                </a>
-                <a
-                  class="button secondary"
-                  href={routeURL(Route.TaskOperation, { id: record.id, kind: "revert", scope: context.scope })}
-                >
-                  Revert work
-                </a>
-              </>
-            )}
-            {record.status === "Accepted" &&
-              context.index.snapshot.tasks.decisionsRequired &&
-              transition("Accepted", "Renew acceptance")}
-            {record.status === "Approved" && !entry && !task.implementation && transition("Accepted", "Accept outcome")}
-          </div>
-        </details>
-      )}
+      {taskDecisionActions(planActions ? "plan" : "task", primary, secondary)}
     </section>
-  );
-}
-
-export function taskQueuePage(context: ViewContext, parameters: RouteQuery<typeof Route.TaskQueue> = {}): string {
-  const pageWindows = workflowWindows(context, parameters);
-  const window = <T,>(phase: WorkflowPhase, items: readonly T[], id: (item: T) => string) => {
-    const result = pageWindows(phase, items, id);
-    return {
-      ...result,
-      previous: result.previous ? (
-        <a class="button secondary" href={result.previous}>
-          Load previous
-        </a>
-      ) : null,
-      loader: (
-        <div data-task-loader="">
-          {result.next && (
-            <a class="button secondary" data-task-more="" href={result.next}>
-              Load more
-            </a>
-          )}
-        </div>
-      ),
-    };
-  };
-
-  const queue = context.taskQueue;
-  const reviews = context.taskReviews;
-  const plans = reviews.filter((item) => item.decision === "plan").map((item) => item.record);
-  const outcomes = reviews.filter((item) => item.decision === "outcome").map((item) => item.record);
-  const outcomeIds = new Set(outcomes.map((record) => record.id));
-  const planIds = new Set(plans.map((record) => record.id));
-  const work = queue.entries.filter(
-    (entry) =>
-      !outcomeIds.has(entry.reference) &&
-      !planIds.has(entry.reference) &&
-      entry.status !== "Planned" &&
-      (!entry.status || !terminalTask.has(entry.status)),
-  );
-  plans.sort(
-    (left, right) => (left.addedAt ?? "").localeCompare(right.addedAt ?? "") || left.id.localeCompare(right.id),
-  );
-  const planWindow = window("plans", plans, (record) => record.id),
-    workWindow = window("work", work, (entry) => entry.reference),
-    outcomeWindow = window("outcomes", outcomes, (record) => record.id);
-  const selected = new Set(queue.entries.map((entry) => entry.reference));
-  const available = context.workflowTasks.filter(
-    (task) =>
-      task.metadata.status === "Approved" &&
-      !selected.has(task.reference) &&
-      !outcomeIds.has(task.reference) &&
-      !planIds.has(task.reference),
-  );
-
-  const availableWindow = window("available", available, (task) => task.reference);
-  if (
-    planWindow.visible.length +
-      workWindow.visible.length +
-      outcomeWindow.visible.length +
-      availableWindow.visible.length >
-    recordWindowLimit
-  )
-    throw new WebError(400, "Workflow window exceeds its limit; open the next page");
-  const queueForm = (operation: QueueOperation, reference: string, children: JSX.Element, target = "") =>
-    mutationForm({
-      action: Route.QueueChange,
-      context,
-      csrf: context.csrf,
-      fields: { operation, reference, target, expected: queue.digest },
-      children: () => children,
-    });
-  const action = (operation: QueueOperation, reference: string, label: string, target = "") =>
-    queueForm(
-      operation,
-      reference,
-      submitButton(label, { secondary: true, id: `queue-${operation}-${reference}` }),
-      target,
-    );
-  const orderControls = (
-    reference: string,
-    title: string,
-    before: string | undefined,
-    after: string | undefined,
-    removable: boolean,
-  ) => {
-    const control = (operation: QueueOperation, glyph: string, label: string, disabled: boolean, target = "") =>
-      queueForm(
-        operation,
-        reference,
-        <button
-          type="submit"
-          class="secondary icon-button"
-          id={`queue-${operation}-${reference}`}
-          aria-label={`${label}: ${title}`}
-          title={`${label}: ${title}`}
-          disabled={disabled}
-        >
-          <span aria-hidden="true">{glyph}</span>
-        </button>,
-        target,
-      );
-    return (
-      <fieldset class="task-queue-controls">
-        <legend class="sr-only">Queue controls: {title}</legend>
-        {control("move-before", "↑", "Move up", !before, before)}
-        {control("remove", "×", "Remove from queue", !removable)}
-        {control("move-after", "↓", "Move down", !after, after)}
-      </fieldset>
-    );
-  };
-  return shell(
-    context,
-    "Task workflow",
-    "queue",
-    <>
-      <section aria-label="Plans">
-        <h2>Plans</h2>
-        <div
-          data-task-window={planWindow.key}
-          data-task-through={planWindow.through}
-          data-list-revision={context.revision}
-        >
-          {planWindow.previous}
-          {plans.length ? (
-            taskList(context, [...planWindow.visible], (record) => recordList([record], context, 3))
-          ) : (
-            <p>No plans awaiting approval.</p>
-          )}
-          {planWindow.loader}
-        </div>
-      </section>
-      <section aria-label="Work">
-        <h2>Work</h2>
-        {work.length === 0 && <p>No tasks selected for implementation.</p>}
-        <div
-          data-task-window={workWindow.key}
-          data-task-through={workWindow.through}
-          data-list-revision={context.revision}
-        >
-          {workWindow.previous}
-          <ol class="task-queue" data-task-items="">
-            {workWindow.visible.map((entry) => {
-              const index = work.findIndex((item) => item.reference === entry.reference);
-              const task = context.index.taskGraph.byReference.get(entry.reference),
-                blockers = task
-                  ? context.index.taskReadiness
-                      .blockers(task)
-                      .filter((blocker) => blocker.kind !== TaskBlockerKind.Active)
-                      .map((blocker) => blocker.message)
-                  : entry.blockers;
-              return (
-                <li key={entry.reference} data-task-node={entry.reference} class="task-queue-row">
-                  {orderControls(
-                    entry.reference,
-                    entry.title,
-                    work[index - 1]?.reference,
-                    work[index + 1]?.reference,
-                    entry.state !== TaskExecution.Active,
-                  )}
-                  <div class="task-queue-content">
-                    <h3>
-                      <a href={recordURL(entry.reference)}>{entry.title}</a>
-                    </h3>
-                    <p>
-                      {badge(entry.status ?? "Missing")}{" "}
-                      {badge(entry.state === TaskExecution.Implemented ? "Awaiting acceptance" : entry.state)}{" "}
-                      {queue.ready.includes(entry.reference) && badge("Ready")}
-                    </p>
-                    {blockers.length > 0 && (
-                      <ul>
-                        {blockers.map((reason) => (
-                          <li>{reason}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {entry.evidence && <p>{entry.evidence}</p>}
-                    {entry.state === TaskExecution.Implemented && entry.status !== "Accepted" && (
-                      <div class="task-actions">{linkButton("Review outcome", recordURL(entry.reference), true)}</div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          {workWindow.loader}
-        </div>
-        <div
-          data-task-window={availableWindow.key}
-          data-task-through={availableWindow.through}
-          data-list-revision={context.revision}
-        >
-          {availableWindow.previous}
-          {taskList(
-            context,
-            availableWindow.visible.flatMap((task) => {
-              const record = context.index.byId.get(task.reference);
-              return record ? [record] : [];
-            }),
-            (record) => {
-              const task = context.index.taskGraph.byReference.get(record.id);
-              if (!task) return null;
-              const blockers = context.index.taskReadiness.blockers(task);
-              return (
-                <article key={task.reference}>
-                  <h3>{referenceLink(record, record.title)}</h3>
-                  {badge(blockers.length ? "Waiting on prerequisites" : "Ready")}
-                  {blockers.length > 0 && (
-                    <ul>
-                      {blockers.map((blocker) => (
-                        <li>{blocker.message}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {action("add", task.reference, "Add to local queue")}
-                </article>
-              );
-            },
-          )}
-          {availableWindow.loader}
-        </div>
-        {context.experimentWorkflow.some((item) => item.phase === "work") && (
-          <section aria-label="Experiments">
-            <h2>Experiments</h2>
-            {recordList(
-              context.experimentWorkflow
-                .filter((item) => item.phase === "work")
-                .map((item) => item.record)
-                .slice(0, recordBatchSize),
-              context,
-            )}
-          </section>
-        )}
-      </section>
-      <section aria-label="Outcomes">
-        <h2>Outcomes</h2>
-        <div
-          data-task-window={outcomeWindow.key}
-          data-task-through={outcomeWindow.through}
-          data-list-revision={context.revision}
-        >
-          {outcomeWindow.previous}
-          {outcomes.length ? taskList(context, [...outcomeWindow.visible]) : <p>No outcomes awaiting acceptance.</p>}
-          {outcomeWindow.loader}
-        </div>
-      </section>
-    </>,
   );
 }

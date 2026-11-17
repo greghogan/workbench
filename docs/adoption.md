@@ -272,9 +272,10 @@ not a policy requirement. Toolchain and environment updates follow workbench:ADR
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `fetch-and-rebase-onto`                     | Requested rebase onto a remote branch; requires a clean checkout and resolves conflicts         |
 | `plan-work`                                 | Requested iterative planning, including material questions, answers, and newly discovered work  |
-| `review-plan`                               | Requested plan review against requirements, project constraints, and relevant source            |
+| `review-plan`                               | Review before requesting plan approval or on request                                            |
 | `review-changes`                            | Before commit or task completion; reviews accumulated work and fixes in-scope issues            |
-| `review-project`                            | Explicit project or scoped review; human selection of follow-ups, with authorized local commits |
+| `workbench-review-project`                            | Explicit project or scoped review; human selection of follow-ups, with authorized local commits |
+| `workbench-task-decisions`                  | Explicit selection of plans to approve or task outcomes to accept in Workbench                 |
 | `find-bugs`                                 | Requested defect investigation within the selected scope                                        |
 | `run-experiment`                            | Requested comparisons; human review of completed EXP and changed ENV records and support        |
 | `workbench-adopt`                           | Requested adoption or migration of an existing project's Workbench integration                  |
@@ -305,28 +306,33 @@ assesses the plan and its relevant sources; fresh-context review is used only wh
 same-context review states that limitation. Both skills start disabled and do not change the record schema or prescribe
 a planning framework.
 
-For major features, the planning skills require human approval of the concrete plan before implementation and renewed
-approval for material scope changes. Readiness and agent review do not establish that approval. Authorized small audit
-fixes and refinements of the current implementation remain distinct.
+`plan-work` applies `review-plan` before requesting approval. ADR-7 requires review of the current plan before asking
+for approval, human approval before major-feature implementation, and renewed approval for material scope changes.
+Readiness and agent review do not establish human approval. Authorized small audit fixes and refinements of the current
+implementation remain distinct.
 
 Normal skills permit implicit selection when their description matches; this is not a scheduled hook. Required
 completion review comes from ADR-C. `review-changes` considers the complete proposed commit and, at task completion, the
 accumulated implementation across its commits and pending changes. It includes worthwhile design improvements revealed
 by implementation. Skill availability does not itself authorize edits, commits, or publication.
 
-`review-project` requires explicit invocation in both harnesses, using Claude's `disable-model-invocation` frontmatter
+`workbench-review-project` requires explicit invocation in both harnesses, using Claude's `disable-model-invocation` frontmatter
 and Codex's `agents/openai.yaml` policy; validation checks agreement. An unqualified invocation covers the project; a
 request can name a subsystem, task, or recent work and focus on usability, tests, simplification, performance, or
-another concern. For example, `$review-project cache management, focusing on ownership and recovery` reviews that area
+another concern. For example, `$workbench-review-project cache management, focusing on ownership and recovery` reviews that area
 across its implementation boundaries. Explicit advice-only requests leave files unchanged. Otherwise, the review task
-retains the overview, evidence, proposed groups, and coverage limits. There is no finding quota or numerical cap. Small
-repairs require authorization.
+retains the overview, evidence, proposed groups, and coverage limits. The explicit request authorizes scoped small
+fixes and queues the review as ordinary work. There is no finding quota or numerical cap.
 
 The developer reviews proposed follow-ups before they become approved work. The log and authorized automatic repairs may
 be committed locally while that review is pending. Proposal acceptance does not itself authorize implementing them.
 Meaningful task updates accompany related work; authorized fixups can be folded into the task's own unpublished commits,
 preserving unrelated and published history. Required developer completion acceptance and push authorization remain
 separate from local verification and commits.
+
+`workbench-task-decisions` resolves a developer's selection to named plans or numbered tasks and prepares the matching
+Workbench review links or a version-bound terminal command. A single terminal confirmation can approve or accept
+several specified items.
 
 Backward compatibility is deliberately opt-in during initial development. Setup writes `compatibility.required = false`
 to `workbench/config.toml`; only a human changes that Boolean to require compatibility. When enabled, the compatibility

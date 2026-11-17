@@ -25,7 +25,7 @@ import { readForm, requestOrigin, secureResponse, send } from "../http/http.js";
 import { HubLifecycle, ProjectViews } from "./hub-lifecycle.js";
 import { ProjectReviews } from "./project-reviews.js";
 import { ProjectDirectory, availableProjects, type ProjectDirectoryView } from "./project-directory.js";
-import { cacheMeasurement } from "../cache/cache-view-model.js";
+import { cacheMeasurement, ProjectCacheSizes } from "../cache/cache-view-model.js";
 import {
   cleanupPage,
   hubErrorPage,
@@ -142,12 +142,18 @@ export async function startProjectHub(
       }
     }
   };
+  let projectSizes: ProjectCacheSizes | undefined;
   const broadcast = (event?: CacheProgress) => {
-    emit(
-      event?.kind === "size"
-        ? `event: size\ndata: ${JSON.stringify(cacheMeasurement(event.size))}\n\n`
-        : `event: inventory\ndata: ${String(revision)}\n\n`,
-    );
+    if (event?.kind !== "size") {
+      projectSizes = undefined;
+      emit(`event: inventory\ndata: ${String(revision)}\n\n`);
+      return;
+    }
+    if (!clients.size) return;
+    emit(`event: size\ndata: ${JSON.stringify(cacheMeasurement(event.size))}\n\n`);
+    projectSizes ??= new ProjectCacheSizes(inventories.view());
+    for (const update of projectSizes.update(event.size))
+      emit(`event: project-size\ndata: ${JSON.stringify({ ...update, revision: revision + 1 })}\n\n`);
   };
   const unsubscribe = inventories.onChange(broadcast);
   const reviews = new ProjectReviews(
@@ -313,12 +319,13 @@ export async function startProjectHub(
       if (request.method === "GET" && decoded?.route === Route.Inventory) {
         const query = decoded.query;
         const data = await inventory();
+        const observedRevision = revision;
         const metadata = await currentProjects(data),
           projects = metadata.projects;
         const view = query.view === "caches" ? "caches" : "projects";
         const owner = projects.find((entry) => entry.id === query.project)?.path ?? query.owner;
-        const body = JSON.stringify(
-          inventoryPatch(
+        const body = JSON.stringify({
+          ...inventoryPatch(
             inventoryPresentation(
               data,
               projects,
@@ -327,9 +334,14 @@ export async function startProjectHub(
               owner,
               reviews.read(availableProjects(metadata)),
               metadata,
+              {
+                ...(query.section ? { section: query.section } : {}),
+                ...(query.offset === undefined ? {} : { offset: query.offset }),
+              },
             ),
           ),
-        );
+          revision: observedRevision,
+        });
         if (Buffer.byteLength(body) > 16 * 1024 * 1024)
           throw new WebError(413, "Inventory response is too large; use the cache CLI");
         send(response, 200, "application/json", body);
@@ -456,8 +468,10 @@ export async function startProjectHub(
             await tasks.run(proposal.task);
           } finally {
             releaseView?.();
+            invalidate();
+            const priority = proposal.task.kind === "apply" ? proposal.task.plan.project : undefined;
+            void inventories.read(true, false, priority).catch(() => undefined);
           }
-          invalidate();
           redirect(response, "/projects");
           return;
         }
@@ -490,7 +504,7 @@ export async function startProjectHub(
       const data = await inventories.read(query.refresh !== undefined, query["refresh-sizes"] !== undefined, priority);
       const metadata = await currentProjects(data),
         projects = metadata.projects;
-      if (url.pathname === Route.Overview || url.pathname === Route.Projects) {
+      if (url.pathname === Route.Charters || url.pathname === Route.Projects) {
         send(
           response,
           200,
@@ -508,7 +522,12 @@ export async function startProjectHub(
           "text/html",
           layout(
             "Caches",
-            inventoryContent(inventoryPresentation(data, projects, csrf, "caches", owner, undefined, metadata)),
+            inventoryContent(
+              inventoryPresentation(data, projects, csrf, "caches", owner, undefined, metadata, {
+                ...(query.section ? { section: query.section } : {}),
+                ...(query.offset === undefined ? {} : { offset: query.offset }),
+              }),
+            ),
             {
               active: "caches",
             },

@@ -9,6 +9,7 @@ import { ProjectHierarchy, projectName } from "../../../src/core/projects/projec
 import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
 import { provider, distribution } from "../../fixtures/adoption.mjs";
 import { previewCollection, applyCollection } from "../../../src/server/projects/collection-service.ts";
+import { changeTaskQueue } from "../../../src/core/tasks/task-queue.ts";
 const fixtures = webServers();
 function formValues(form: HTMLFormElement): Record<string, string> {
   return Object.fromEntries(
@@ -87,7 +88,7 @@ test("workflow source changes retain the view and include only the selected scop
   }
   const web = await fixtures.start(root);
   const read = async (path: string) => parseDOM((await readWebPage(web, path)).html, { url: web.url }).window.document;
-  const plans = await read("/queue?scope=graphmp");
+  const plans = await read("/plans?scope=graphmp");
   expect([...plans.querySelectorAll("[data-task-node]")].map((node) => node.getAttribute("data-task-node"))).toEqual([
     "graphmp:TSK-0",
     "solver:TSK-0",
@@ -95,7 +96,7 @@ test("workflow source changes retain the view and include only the selected scop
   expect(plans.querySelector('a.nav-item[aria-current="page"] .nav-count')?.textContent).toBe("2");
   expect(plans.querySelector('[data-source-navigation] a[aria-current="page"]')?.textContent).toBe("GraphMP");
   const leafLink = plans.querySelector<HTMLAnchorElement>('[data-source-navigation] a[href*="scope=solver"]');
-  expect(new URL(leafLink?.href ?? "", web.url).pathname).toBe("/queue");
+  expect(new URL(leafLink?.href ?? "", web.url).pathname).toBe("/plans");
   const leaf = await read(leafLink?.getAttribute("href") ?? "");
   expect([...leaf.querySelectorAll("[data-task-node]")].map((node) => node.getAttribute("data-task-node"))).toEqual([
     "solver:TSK-0",
@@ -103,21 +104,45 @@ test("workflow source changes retain the view and include only the selected scop
   const rootLink = plans.querySelector('[data-source-navigation] a[href*="scope=demo"]')?.getAttribute("href");
   expect((await read(rootLink ?? "")).querySelectorAll("[data-task-node]")).toHaveLength(3);
 
-  const record = await read("/records/graphmp:TSK-0");
+  const directory = join(root, "packages/compute/src/solver/workbench/tasks");
+  writeFileSync(
+    join(directory, "TSK-01.md"),
+    "---\nstatus: Planned\n---\n\n# TSK-1: Next scoped proposal\n\nSee ADR-0. [Notes](TSK-01/notes.md).\n",
+  );
+  mkdirSync(join(directory, "TSK-01"));
+  writeFileSync(join(directory, "TSK-01/notes.md"), "# Notes\n\nSee ADR-0.\n");
+
+  const childLink = plans
+    .querySelector<HTMLAnchorElement>('[data-record-id="solver:TSK-0"] a[data-card-link]')
+    ?.getAttribute("href");
+  if (!childLink) throw new Error("Missing scoped child plan");
+  expect(new URL(childLink, web.url).searchParams.get("scope")).toBe("graphmp");
+  const record = await read(childLink);
+  expect(record.querySelector('[data-source-navigation] a[aria-current="page"]')?.textContent).toBe("GraphMP");
+  expect(record.querySelector('a.nav-item[aria-current="page"] > span')?.textContent).toBe("Plans");
+  const next = record.querySelector<HTMLAnchorElement>('a[rel="next"]')?.getAttribute("href");
+  if (!next) throw new Error("Missing next workflow plan");
+  expect(new URL(next, web.url).searchParams.get("scope")).toBe("graphmp");
+  const nextRecord = await read(next);
+  expect(nextRecord.querySelector('[data-record-reference="solver:ADR-0"]')).not.toBeNull();
+  const notes = nextRecord.querySelector<HTMLAnchorElement>('.document a[href*="notes.md"]')?.getAttribute("href");
+  if (!notes) throw new Error("Missing scoped supporting document");
+  expect(new URL(notes, web.url).searchParams.get("scope")).toBe("graphmp");
+  const supporting = await read(notes);
+  expect(supporting.querySelector('nav[aria-label="Breadcrumb"] a[href*="/plans"]')?.getAttribute("href")).toBe(
+    "/plans?scope=graphmp",
+  );
   const approval = record.querySelector<HTMLInputElement>('form input[name="state"][value="Approved"]')?.form;
   if (!approval) throw new Error("Missing plan approval");
   const response = await postWebForm(web, approval.getAttribute("action") ?? "", formValues(approval));
   expect(response.status).toBe(200);
-  expect(await response.json()).toMatchObject({ redirect: "/queue?scope=graphmp" });
-  const work = await read("/queue?scope=graphmp");
+  expect(await response.json()).toMatchObject({ redirect: "/work?scope=graphmp" });
+  const work = await read("/work?scope=graphmp");
   expect(work.querySelectorAll(".task-queue > li")).toHaveLength(1);
-  const remove = work.querySelector<HTMLInputElement>('form input[name="operation"][value="remove"]')?.form;
-  if (!remove) throw new Error("Missing queue removal action");
-  const removed = await postWebForm(web, remove.getAttribute("action") ?? "", formValues(remove));
-  expect(removed.status).toBe(200);
-  expect(await removed.json()).toMatchObject({ redirect: "/queue?scope=graphmp" });
-  expect((await read("/queue?scope=solver")).querySelectorAll(".task-queue > li")).toHaveLength(0);
-  expect((await read("/queue?scope=graphmp")).querySelectorAll(".task-queue > li")).toHaveLength(0);
+  expect(work.querySelector('.task-queue > li[data-task-node="solver:TSK-0"]')).not.toBeNull();
+  changeTaskQueue(root, { action: "remove", reference: "solver:TSK-0" });
+  expect((await read("/work?scope=solver")).querySelectorAll(".task-queue > li")).toHaveLength(0);
+  expect((await read("/work?scope=graphmp")).querySelectorAll(".task-queue > li")).toHaveLength(0);
 });
 
 test("review navigation, confirmation, and counts stay within the selected source", async () => {
@@ -128,20 +153,20 @@ test("review navigation, confirmation, and counts stay within the selected sourc
   );
   const web = await fixtures.start(root);
   const read = async (path: string) => parseDOM((await readWebPage(web, path)).html, { url: web.url }).window.document;
-  let page = await read("/review?scope=graphmp");
+  let page = await read("/reviews?scope=graphmp");
   expect(
     [...page.querySelectorAll("[data-review-source]")].map((node) => node.getAttribute("data-review-source")),
   ).toEqual(["project:graphmp", "project:solver"]);
   expect(page.querySelector('a.nav-item[aria-current="page"] .nav-count')?.textContent).toBe("2");
   const source = page.querySelector<HTMLAnchorElement>('[data-source-navigation] a[href*="scope=solver"]');
-  expect(new URL(source?.href ?? "", web.url).pathname).toBe("/review");
+  expect(new URL(source?.href ?? "", web.url).pathname).toBe("/reviews");
   for (const remaining of [1, 0]) {
     const href = page.querySelector("main a[data-card-link]")?.getAttribute("href");
     if (!href) throw new Error("Missing scoped review");
     expect(new URL(href, web.url).searchParams.get("scope")).toBe("graphmp");
     const document = await read(href);
-    expect(document.querySelector('nav[aria-label="Breadcrumb"] a[href*="/review"]')?.getAttribute("href")).toBe(
-      "/review?scope=graphmp",
+    expect(document.querySelector('nav[aria-label="Breadcrumb"] a[href*="/reviews"]')?.getAttribute("href")).toBe(
+      "/reviews?scope=graphmp",
     );
     const form = document.querySelector<HTMLFormElement>("form[data-review]");
     if (!form) throw new Error("Missing review confirmation");
@@ -149,11 +174,11 @@ test("review navigation, confirmation, and counts stay within the selected sourc
     expect(result.status).toBe(200);
     const { redirect } = (await result.json()) as { redirect: string };
     expect(new URL(redirect, web.url).searchParams.get("scope")).toBe("graphmp");
-    page = await read("/review?scope=graphmp");
+    page = await read("/reviews?scope=graphmp");
     expect(page.querySelectorAll("main a[data-card-link]")).toHaveLength(remaining);
     expect(page.querySelector('a.nav-item[aria-current="page"] .nav-count')?.textContent).toBe(String(remaining));
   }
-  const rootPage = await read("/review?scope=demo");
+  const rootPage = await read("/reviews?scope=demo");
   expect(
     [...rootPage.querySelectorAll("[data-review-source]")].map((node) => node.getAttribute("data-review-source")),
   ).toEqual(["project:demo"]);
@@ -165,10 +190,18 @@ test("header search spans project scopes and searches collections separately", a
   const request = { source: source.directory, commit: source.commit, collection: ".", visibility: "public" as const };
   applyCollection(root, request, previewCollection(root, request).digest);
   const web = await fixtures.start(root);
-  const overview = parseDOM((await readWebPage(web, "/")).html, { url: web.url }).window.document;
-  expect(overview.querySelector('form[role="search"] input[name="all"]')?.getAttribute("value")).toBe("1");
-  expect(overview.querySelector<HTMLSelectElement>('form[role="search"] select[name="type"]')?.value).toBe("");
-  expect(overview.querySelector('form[role="search"] option:checked')?.textContent).toBe("All types");
+  const charters = parseDOM((await readWebPage(web, "/")).html, { url: web.url }).window.document;
+  expect(charters.querySelector('form[role="search"] input[name="all"]')?.getAttribute("value")).toBe("1");
+  expect(charters.querySelector<HTMLSelectElement>('form[role="search"] select[name="type"]')?.value).toBe("");
+  expect(charters.querySelector('form[role="search"] option:checked')?.textContent).toBe("All types");
+  const collectionLanding = charters.querySelector('[data-source-navigation] a[href="/?collection=company"]');
+  expect(collectionLanding?.textContent).toBe("company");
+  const companyCharters = parseDOM((await readWebPage(web, "/?collection=company")).html).window.document;
+  expect(
+    [...companyCharters.querySelectorAll("main [data-record-id]")].map((record) =>
+      record.getAttribute("data-record-id"),
+    ),
+  ).toEqual(["company:CHARTER"]);
   const results = parseDOM((await readWebPage(web, "/records?all=1&q=decision")).html, { url: web.url }).window
     .document;
   expect(results.querySelector("h1")?.textContent).toBe("Search results");
@@ -205,7 +238,7 @@ test("header search spans project scopes and searches collections separately", a
     ),
   ).toBe(true);
   expect(collectionResults.querySelector('[data-record-id="company:ADR-0"]')).not.toBeNull();
-  const review = parseDOM((await readWebPage(web, "/review")).html, { url: web.url }).window.document;
+  const review = parseDOM((await readWebPage(web, "/reviews")).html, { url: web.url }).window.document;
   expect(review.querySelector("main")?.textContent).toContain("packages/compute/workbench/decisions/ADR-00.md");
   expect(review.querySelector("main")?.textContent).toContain(
     "packages/compute/src/solver/workbench/decisions/ADR-00.md",
@@ -244,7 +277,7 @@ test("explicit review refresh exposes invalid declarations as caller errors inst
   const root = fixtures.project(),
     web = await fixtures.start(root);
   writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="demo"\npath="."\nunknown_field="invalid"\n');
-  const response = await fetch(web.url + "/review");
+  const response = await fetch(web.url + "/reviews");
   expect(response.status).toBe(400);
   const body = await response.text();
   expect(body).toContain("unknown field");
@@ -316,7 +349,7 @@ test("local collections share the collection list, remain read only, and are abs
   expect(management.querySelector("main")?.textContent).toContain("Checkout-local");
   expect(management.querySelector("main")?.textContent).toContain("Local · read only");
   expect(management.querySelector('main option[value="hostrules"]')).toBeNull();
-  expect(management.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Review queue");
+  expect(management.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Reviews");
   const collections = parseDOM((await readWebPage(web, "/collections")).html).window.document;
   expect(collections.querySelector("main")?.textContent).toContain("hostrules");
   expect(collections.querySelector("main")?.textContent).not.toContain("workbench sync");
@@ -326,9 +359,9 @@ test("local collections share the collection list, remain read only, and are abs
   expect(local.querySelector("main")?.textContent).toContain("Localonlyneedle");
   expect(local.querySelector("main")?.textContent).toContain("Local collection · read only");
   expect(local.querySelector("main")?.textContent).not.toContain("Upstream comparison unavailable");
-  expect(local.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Review queue");
+  expect(local.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Reviews");
   expect(local.querySelector('a[href*="view=edit"], a[href*="view=changes"]')).toBeNull();
-  const review = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const review = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   const reviews = [...review.querySelectorAll("main a[data-card-link]")].map((link) => link.getAttribute("href"));
   expect(reviews).toEqual([expect.stringContaining("/records/demo:ADR-0")]);
 });

@@ -135,7 +135,7 @@ test("failed inventory refreshes retain the complete values and retry automatica
   }
 });
 
-test("partial discovery does not replace a completed overview or satisfy an explicit fresh read", async () => {
+test("fresh project discovery replaces old totals before auxiliary discovery finishes", async () => {
   const tasks = new CacheTasks(distribution),
     inventories = inventoryService(tasks);
   try {
@@ -160,59 +160,79 @@ test("partial discovery does not replace a completed overview or satisfy an expl
       expect(inventories.refreshing).toBe(false);
     });
     inventories.invalidate();
-    await inventories.read();
+    const refresh = inventories.read(true);
     workers[1]?.emit("message", {
       progress: { kind: "metadata", value: { ...emptyInventory(), pendingComponents: ["builders"] } },
     });
-    expect(inventories.view().kept).toEqual(["/retained"]);
+    expect(inventories.view()).toMatchObject({ kept: [], pendingComponents: ["builders"] });
+    const revised = emptyInventory();
+    revised.issues.push({ component: "tools", phase: "discovery", message: "Tool inspection failed" });
+    workers[1]?.emit("message", { progress: { kind: "metadata", value: revised } });
+    expect(await refresh).toMatchObject({ kept: [], issues: revised.issues });
+    workers[1]?.emit("message", { value: revised });
+    workers[1]?.emit("exit", 0);
+    await vi.waitFor(() => {
+      expect(inventories.view()).toMatchObject({ kept: [], issues: revised.issues, refreshing: false });
+    });
   } finally {
     inventories.close();
     await tasks.close();
   }
 });
 
-test("a directory generation change refreshes only that measurement without rediscovering cache ownership", async () => {
-  vi.useFakeTimers();
-  const root = mkdtempSync(join(tmpdir(), "workbench-measure-invalidation-"));
-  const first = join(root, "first"),
-    second = join(root, "second");
-  for (const path of [first, second]) {
-    mkdirSync(path);
-    invalidateCacheSize(path, true);
-  }
-  const tasks = new CacheTasks(distribution),
-    inventories = inventoryService(tasks);
-  try {
-    const value = emptyInventory();
-    value.sizes = [first, second].map((directory, index) => ({
-      directory,
-      state: "ready",
-      bytes: (index + 1) * 10,
-      measuredAt: new Date().toISOString(),
-    }));
-    await inventories.read();
-    workers[0]?.emit("message", { value });
-    workers[0]?.emit("exit", 0);
-    await vi.advanceTimersByTimeAsync(0);
-    const calls = vi.spyOn(tasks, "run");
-    invalidateCacheSize(first, true);
-    await vi.advanceTimersByTimeAsync(15_000);
-    await inventories.read();
-    expect(calls.mock.calls.map(([task]) => task.kind)).toEqual(["measure"]);
-    expect(inventories.view().sizes.map((size) => size.bytes)).toEqual([10, 20]);
-    workers[1]?.emit("message", {
-      value: { size: { directory: first, state: "ready", bytes: 15, measuredAt: new Date().toISOString() } },
-    });
-    workers[1]?.emit("exit", 0);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(inventories.view().sizes.map((size) => size.bytes)).toEqual([15, 20]);
-    expect(calls).toHaveBeenCalledOnce();
-  } finally {
-    inventories.close();
-    await tasks.close();
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+test.each([false, true])(
+  "a directory generation change refreshes only that measurement (active scan: %s)",
+  async (scanning) => {
+    vi.useFakeTimers();
+    const root = mkdtempSync(join(tmpdir(), "workbench-measure-invalidation-"));
+    const first = join(root, "first"),
+      second = join(root, "second");
+    for (const path of [first, second]) {
+      mkdirSync(path);
+      invalidateCacheSize(path, true);
+    }
+    const tasks = new CacheTasks(distribution),
+      inventories = inventoryService(tasks);
+    try {
+      const value = emptyInventory();
+      value.sizes = [first, second].map((directory, index) => ({
+        directory,
+        state: "ready",
+        bytes: (index + 1) * 10,
+        measuredAt: new Date().toISOString(),
+      }));
+      await inventories.read();
+      const finishScan = async () => {
+        workers[0]?.emit("message", { value });
+        workers[0]?.emit("exit", 0);
+        await vi.advanceTimersByTimeAsync(0);
+      };
+      if (scanning) workers[0]?.emit("message", { progress: { kind: "metadata", value } });
+      else await finishScan();
+      const calls = vi.spyOn(tasks, "run");
+      invalidateCacheSize(first, true);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await inventories.read();
+      if (scanning) {
+        expect(calls).not.toHaveBeenCalled();
+        await finishScan();
+      }
+      expect(calls.mock.calls.map(([task]) => task.kind)).toEqual(["measure"]);
+      expect(inventories.view().sizes.map((size) => size.bytes)).toEqual([10, 20]);
+      workers[1]?.emit("message", {
+        value: { size: { directory: first, state: "ready", bytes: 15, measuredAt: new Date().toISOString() } },
+      });
+      workers[1]?.emit("exit", 0);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(inventories.view().sizes.map((size) => size.bytes)).toEqual([15, 20]);
+      expect(calls).toHaveBeenCalledOnce();
+    } finally {
+      inventories.close();
+      await tasks.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 test("shutdown cancels scans while draining an admitted mutation", async () => {
   const tasks = new CacheTasks(distribution),
     scan = tasks.run({ kind: "inventory" }),

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { taskPlanApprovalDigest, taskPlanDigest } from "../../../src/core/tasks/task-plan.ts";
+import { appendTaskAccount, taskPlanApprovalDigest, taskPlanDigest } from "../../../src/core/tasks/task-plan.ts";
 import { formatDocument } from "../../../src/core/records/formatting.ts";
 
 const record = (body: string) => `---\nstatus: Approved\n---\n\n# TSK-0: Service installation\n\n${body}\n`;
@@ -52,5 +52,23 @@ test("execution accounts cannot conceal later plan sections, and supporting file
   );
   expect(taskPlanApprovalDigest(original, files)).not.toBe(
     taskPlanApprovalDigest(original, [{ ...file, executable: true }]),
+  );
+});
+
+test("generated implementation accounts precede agent detail and preserve approved plan identity", () => {
+  const original = record(
+    "## Review summary\n\nPreserve all data.\n\n## Implementing-agent detail\n\n### Verification\n\nExercise recovery.",
+  );
+  const delivered = appendTaskAccount(original, "Verified recovery with existing data.");
+  expect(delivered).toBe(
+    original.replace(
+      "## Implementing-agent detail",
+      "## Implementation account\n\nVerified recovery with existing data.\n\n## Implementing-agent detail",
+    ),
+  );
+  expect(taskPlanApprovalDigest(delivered)).toBe(taskPlanApprovalDigest(original));
+  expect(taskPlanDigest(delivered)).toBe(taskPlanDigest(original));
+  expect(taskPlanApprovalDigest(delivered.replace("## Implementation account", "### Implementation account"))).toBe(
+    taskPlanApprovalDigest(original),
   );
 });

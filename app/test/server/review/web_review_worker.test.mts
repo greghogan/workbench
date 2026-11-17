@@ -93,7 +93,7 @@ test("a failed approval releases admission and does not conceal its cause", asyn
   await expect(actions.run(Route.Approve, form)).rejects.toThrow("Receipt publication failed");
   expect(actions.activeOperations).toBe(0);
   fail = false;
-  await expect(actions.run(Route.Approve, form)).resolves.toMatchObject({ redirect: Route.Review });
+  await expect(actions.run(Route.Approve, form)).resolves.toMatchObject({ redirect: Route.Reviews });
   await actions.close();
 });
 

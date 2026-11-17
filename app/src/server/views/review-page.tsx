@@ -1,6 +1,4 @@
-import { compatibilityReviewItem } from "./compatibility-review.js";
 import type { ComponentChildren, JSX } from "preact";
-import { basename } from "node:path";
 import { badge, panel, submitButton } from "./components.js";
 import { diffLayout, tabs as viewTabs } from "./render-links.js";
 import { comparisonView, sourceDiffView, fileModeChange } from "./diff-view.js";
@@ -9,30 +7,101 @@ import { routeURL, withView } from "../routes/locations.js";
 import { Route, type RouteQuery } from "../routes/routes.js";
 import { markdown } from "./markdown-view.js";
 import { shell } from "./page-frame.js";
-import { type ViewContext } from "../workspace/view-context.js";
+import { type ViewContext, type PageKey } from "../workspace/view-context.js";
 import { prepareReviewPage, reviewPageModel, resolveReviewPage } from "../review/review-model.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { pendingReviewNeighbors } from "../review/review-navigation.js";
 import { sourceURL } from "../routes/sources.js";
 import { recordPane } from "./record-pane.js";
-import { commitReviewContext } from "./commit-review-context.js";
+import { basename } from "node:path";
+import { DifferenceLayout, differenceLayout } from "../routes/navigation-state.js";
+import { PreparationState } from "../review/review-state.js";
+import { taskWorkflowNavigation, tasksParent, workflowParent } from "./workflow-navigation.js";
+import type { Breadcrumb } from "./breadcrumbs.js";
+
+type PreparationForm = Pick<NonNullable<ReturnType<typeof resolveReviewPage>>, "owner" | "layout"> & {
+  task?: { reference: string; expected: string };
+  workflow?: "1";
+  recordView?: "read" | "changes";
+};
+
+export function reviewPreparationForm(
+  context: ViewContext,
+  prepared: PreparationForm,
+  label: string,
+  view?: RouteQuery<typeof Route.Review>["view"],
+): JSX.Element {
+  return mutationForm({
+    action: Route.ReviewPrepare,
+    context,
+    csrf: context.csrf,
+    fields: {
+      path: prepared.owner,
+      review_layout: prepared.layout,
+      ...(view ? { review_view: view } : {}),
+      expected: prepared.task?.expected ?? context.index.reviewChange(prepared.owner)?.digest ?? context.revision,
+      ...(prepared.workflow ? { workflow: prepared.workflow } : {}),
+      ...(prepared.recordView ? { record_view: prepared.recordView } : {}),
+    },
+    children: () => submitButton(label),
+  });
+}
+
 export function reviewPreparationPage(
   context: ViewContext,
-  prepared: NonNullable<ReturnType<typeof resolveReviewPage>>,
+  prepared: PreparationForm & { heading: string },
   view?: RouteQuery<typeof Route.Review>["view"],
+  active: PageKey = "review",
+  parents: Breadcrumb[] = [workflowParent(context, Route.Reviews)],
 ): string {
   return shell(
     context,
     prepared.heading,
-    "review",
+    active,
     panel(
-      mutationForm({
-        action: Route.ReviewPrepare,
+      reviewPreparationForm(
         context,
-        csrf: context.csrf,
-        fields: { path: prepared.owner, review_layout: prepared.layout, ...(view ? { review_view: view } : {}) },
-        children: () => submitButton("Review file"),
-      }),
+        prepared,
+        prepared.task ? (active === "review" ? "Review outcome" : "Review plan") : "Review file",
+        view,
+      ),
     ),
+    { parents },
+  );
+}
+
+/** Format only mutable plan/outcome presentation; edit forms and retained history keep their captured source. */
+export function taskReviewPreparationPage(
+  context: ViewContext,
+  id: string,
+  query: { view?: string; layout?: DifferenceLayout; workflow?: "1" },
+): string | undefined {
+  if (query.view && !["read", "changes"].includes(query.view)) return;
+  const record = context.index.byId.get(id);
+  if (
+    record?.type !== "TSK" ||
+    record.local ||
+    record.collection ||
+    record.archive ||
+    context.index.snapshot.reviewPreparation.files.get(record.path)?.state !== PreparationState.Required
+  )
+    return;
+  const task = context.index.taskGraph.byReference.get(id),
+    expected = task?.reviewDigest ?? task?.digest;
+  if (!expected) return;
+  const navigation = query.workflow === "1" ? taskWorkflowNavigation(context, id) : undefined;
+  return reviewPreparationPage(
+    context,
+    {
+      heading: record.title,
+      owner: record.path,
+      layout: differenceLayout(query),
+      task: { reference: id, expected },
+      ...(query.workflow ? { workflow: query.workflow } : {}),
+      ...(query.view === "read" || query.view === "changes" ? { recordView: query.view } : {}),
+    },
+    undefined,
+    navigation?.active ?? "TSK",
+    navigation?.phase ? navigation.parents : [tasksParent(context)],
   );
 }
 export function reviewPage(
@@ -43,104 +112,15 @@ export function reviewPage(
   if (!prepared)
     return shell(
       context,
-      "Review queue",
+      "Review complete",
       "review",
-      <>
-        {context.collectionApplication && (
-          <section class="notice" aria-label="Collection application result">
-            <p>
-              {context.collectionApplication.issues.length || context.collectionApplication.omitted
-                ? `Collection ${context.collectionApplication.id} applied; preparation needs attention.`
-                : `Collection ${context.collectionApplication.id} applied. Project context synchronized and validation passed.`}
-            </p>
-            {context.collectionApplication.issues.length > 0 && (
-              <ul>
-                {context.collectionApplication.issues.map((issue) => (
-                  <li>{issue}</li>
-                ))}
-              </ul>
-            )}
-            {context.collectionApplication.omitted > 0 && (
-              <p>
-                {String(context.collectionApplication.omitted)} additional issues. Run <code>workbench validate</code>{" "}
-                for the complete report.
-              </p>
-            )}
-          </section>
-        )}
-        {context.pendingReviews ? (
-          <>
-            {context.commitReviews.map((unit) => (
-              <section class="panel" key={unit.revision} data-review-commit={unit.revision}>
-                <div class="panel-heading">
-                  {commitReviewContext(
-                    context.root,
-                    unit.revision,
-                    unit.subject,
-                    `${String(unit.groups.length)} ${unit.groups.length === 1 ? "review" : "reviews"}`,
-                  )}
-                </div>
-                {unit.groups.map((group) => (
-                  <article class="record-row" data-card="" data-review-record={group.path}>
-                    {group.record && badge(group.record.id)}
-                    <h3>
-                      <a
-                        data-card-link=""
-                        href={sourceURL(
-                          context,
-                          routeURL(Route.History, {
-                            commit: unit.revision,
-                            path: group.paths.includes(group.path) ? group.path : (group.paths[0] ?? group.path),
-                          }),
-                        )}
-                      >
-                        {group.record?.title ?? basename(group.path)}
-                      </a>
-                    </h3>
-                    <p class="file-path">{group.path}</p>
-                  </article>
-                ))}
-              </section>
-            ))}
-            {context.reviewSections.map((section) => (
-              <section
-                class="panel"
-                key={section.key}
-                data-review-source={section.key}
-                aria-labelledby={`review-source-${section.key}`}
-              >
-                <div class="panel-heading">
-                  <h2 id={`review-source-${section.key}`}>{section.title}</h2>
-                </div>
-                {section.groups.map((group) => (
-                  <article class="record-row" data-card="" data-record-id={group.record?.id}>
-                    {group.record && badge(group.record.id)}
-                    <h3>
-                      <a data-card-link="" href={reviewLocation(context, group)}>
-                        {group.record?.title ?? basename(group.path)}
-                      </a>
-                    </h3>
-                    <p class="file-path">{group.path}</p>
-                    {group.record?.summary && <p class="muted">{group.record.summary}</p>}
-                  </article>
-                ))}
-              </section>
-            ))}
-            {context.compatibilityNeedsHumanReview && (
-              <section class="panel">{compatibilityReviewItem(context)}</section>
-            )}
-          </>
-        ) : (
-          <p class="empty">No protected changes.</p>
-        )}
-      </>,
+      <p>
+        No pending changes. <a href={sourceURL(context, Route.Reviews)}>Reviews</a>
+      </p>,
+      { parents: [workflowParent(context, Route.Reviews)] },
     );
-  const { primary, supporting, unchanged, heading, owner, navigation, layout } = prepared;
-  const steps = {
-    previous: navigation.previous ? { href: reviewLocation(context, navigation.previous, layout) } : undefined,
-    next: navigation.next ? { href: reviewLocation(context, navigation.next, layout) } : undefined,
-    label: "review",
-  };
+  const { primary, supporting, unchanged, heading, owner, layout } = prepared;
+  const steps = pendingReviewNeighbors(context, `working:${owner}`, layout);
   return shell(
     context,
     heading,
@@ -174,7 +154,7 @@ export function reviewPage(
         </section>
       )}
     </>,
-    { parents: [{ label: "Review queue", href: sourceURL(context, "/review") }] },
+    { parents: [workflowParent(context, Route.Reviews)] },
   );
 }
 
@@ -310,7 +290,7 @@ function fileReview(
     },
   );
   return (
-    <section data-review-file={path} aria-label={path}>
+    <section class="review-document" data-review-file={path} aria-label={path}>
       <p class="file-path">
         {path}{" "}
         {model.operation === "deletion"

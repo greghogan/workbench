@@ -1,6 +1,9 @@
+import { inventorySections, type InventorySection } from "../cache/inventory-protocol.js";
 import { recordTypes } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { taskStatuses, type TaskStatus } from "../../core/records/record-document.js";
+import type { TaskStatus } from "../../core/records/record-document.js";
+import { taskLifecycles, type TaskLifecycle } from "../../core/tasks/task-workflow.js";
+import { taskDispositionKinds, type TaskDispositionKind } from "../../core/tasks/task-disposition.js";
 import type { DocumentView, DifferenceLayout, ViewState, ReviewView } from "./navigation-state.js";
 import { InvalidInput } from "../../core/runtime/input-errors.js";
 import { ActionEffect, WebAction } from "../../core/diagnostics/diagnostics.mjs";
@@ -18,13 +21,15 @@ export const Route = {
   CleanupApply: "/cleanup/apply",
   Cleanup: "/cleanup",
   Demonstration: "/demonstration",
-  Overview: "/",
+  Charters: "/",
   NewCharter: "/charter/new",
   CreateCharter: "/actions/charter-create",
   WorkspaceRetry: "/actions/workspace-retry",
   Record: "/records/:id",
   Records: "/records",
-  TaskQueue: "/queue",
+  Plans: "/plans",
+  Work: "/work",
+  Reviews: "/reviews",
   TaskHistory: "/records/:id/history",
   Plan: "/plans/:id",
   PlanFile: "/plans/:id/files",
@@ -43,13 +48,13 @@ export const Route = {
   ReviewStatus: "/review-status",
   PolicyResolution: "/actions/policy-resolution",
   ReviewFile: "/review-file",
+  DocumentImage: "/documentation/image",
   Collections: "/collections",
   Proposal: "/collection-proposal",
   CitationDocument: "/records/:id/document",
   CitationOriginal: "/records/:id/original",
   CitationOriginalContent: "/records/:id/original/content",
   File: "/records/:id/files",
-  DocumentImage: "/documentation/image",
   Metrics: "/metrics",
   Events: "/events",
   Style: "/assets/style.css",
@@ -119,31 +124,43 @@ export interface SourceQuery {
   scope?: string;
   all?: "1";
 }
+export interface WorkflowQuery extends SourceQuery {
+  phase?: "plans" | "work" | "approvals" | "reviews";
+  after?: string;
+  before?: string;
+  through?: string;
+  cursor_revision?: string;
+  task_windows?: string;
+}
 export interface RouteQueries {
   [Route.Style]: { v?: string };
   [Route.Client]: { v?: string };
   [Route.Diagrams]: { v?: string };
-  [Route.Events]: Record<string, never>;
-  [Route.TaskQueue]: SourceQuery & {
-    phase?: "plans" | "work" | "available" | "outcomes";
-    after?: string;
-    before?: string;
-    through?: string;
-    cursor_revision?: string;
-    task_windows?: string;
-  };
+  [Route.Events]: SourceQuery & { workflow?: "plans" | "work" | "reviews" };
+  [Route.Plans]: WorkflowQuery;
+  [Route.Work]: WorkflowQuery;
+  [Route.Reviews]: WorkflowQuery & { collection_applied?: string };
   [Route.Plan]: SourceQuery & {
     id: string;
     view?: "read" | "changes" | "edit" | "delete" | "cancel";
     layout?: DifferenceLayout;
   };
-  [Route.PlanFile]: { id: string; path: string; version?: "approved"; download?: "1" | "0"; image?: string };
-  [Route.Overview]: SourceQuery;
+  [Route.PlanFile]: SourceQuery & {
+    workflow?: "1";
+    id: string;
+    path: string;
+    version?: "approved";
+    download?: "1" | "0";
+    image?: string;
+  };
+  [Route.Charters]: SourceQuery;
   [Route.Projects]: { refresh?: "1"; "refresh-sizes"?: "1" };
-  [Route.Inventory]: { view?: "projects" | "caches"; project?: string; owner?: string };
-  [Route.Record]: SourceQuery & Omit<ViewState, "view"> & { id: string; saved?: "1"; view?: DocumentView };
+  [Route.Inventory]: CacheWindowQuery & { view?: "projects" | "caches"; project?: string; owner?: string };
+  [Route.Record]: SourceQuery &
+    Omit<ViewState, "view"> & { id: string; saved?: "1"; workflow?: "1"; view?: DocumentView; status?: TaskLifecycle };
   [Route.TaskHistory]: SourceQuery & {
     id: string;
+    workflow?: "1";
     commit?: string;
     path?: string;
     context?: string;
@@ -155,7 +172,7 @@ export interface RouteQueries {
   };
   [Route.Records]: SourceQuery & {
     type?: BrowserRecord["type"] | "";
-    status?: TaskStatus;
+    status?: TaskLifecycle;
     q?: string;
     after?: string;
     through?: string;
@@ -167,15 +184,21 @@ export interface RouteQueries {
   };
   [Route.History]: SourceQuery & {
     commit?: string;
+    task?: string;
+    view?: "files";
     path?: string;
     context?: string;
     load?: "1";
     batch?: string;
-    view?: "files";
     layout?: DifferenceLayout;
   };
-  [Route.TaskOperation]: SourceQuery & { id: string; kind: "delete" | "revert" | "cancel"; reason?: string };
-  [Route.DocumentImage]: { path: string };
+  [Route.TaskOperation]: SourceQuery & {
+    id: string;
+    kind: TaskDispositionKind | "cancel" | "delete-plan";
+    workflow?: "1";
+    reason?: string;
+    file?: string;
+  };
   [Route.HistoryFile]: { commit: string; path: string; side: "before" | "after" };
   [Route.ReviewStatus]: { id?: string; path?: string; compatibility?: "1" };
   [Route.Review]: SourceQuery & {
@@ -184,7 +207,6 @@ export interface RouteQueries {
     path?: string;
     view?: ReviewView;
     layout?: DifferenceLayout;
-    collection_applied?: string;
   };
   [Route.NewCharter]: { project: string };
   [Route.Collections]: SourceQuery;
@@ -193,11 +215,16 @@ export interface RouteQueries {
   [Route.CitationDocument]: { id: string; source: string; download?: "1" | "0" };
   [Route.CitationOriginal]: { id: string; source: string; download?: "1" | "0"; images?: "1" | "0" };
   [Route.CitationOriginalContent]: { id: string; source: string; images?: "1" | "0" };
-  [Route.File]: { id: string; path: string; download?: "1" | "0" };
+  [Route.File]: SourceQuery & { workflow?: "1"; id: string; path: string; download?: "1" | "0"; image?: string };
   [Route.ReviewFile]: { path: string; digest: string; side?: "before" | "after" };
-  [Route.Caches]: { project?: string; owner?: string; refresh?: "1"; "refresh-sizes"?: "1" };
+  [Route.DocumentImage]: { path: string };
+  [Route.Caches]: CacheWindowQuery & { project?: string; owner?: string; refresh?: "1"; "refresh-sizes"?: "1" };
 }
-export const queueOperations = ["add", "remove", "move-before", "move-after"] as const;
+interface CacheWindowQuery {
+  section?: InventorySection;
+  offset?: string;
+}
+export const queueOperations = ["move-before", "move-after"] as const;
 export type QueueOperation = (typeof queueOperations)[number];
 type EmptyFields = Record<string, never>;
 type CacheTarget = { project: string; unlisted?: never } | { unlisted: string; project?: never };
@@ -210,10 +237,16 @@ export interface MutationFields {
   };
   [Route.PlanSave]: { reference: string; expected: string };
   [Route.PlanRename]: { reference: string; expected: string };
-  [Route.PlanApprove]: { reference: string; expected: string };
+  [Route.PlanApprove]: { reference: string; expected: string; intent?: "revise" };
   [Route.PlanCancel]: { reference: string; expected: string };
   [Route.PlanDelete]: { reference: string; expected: string };
-  [Route.TaskDisposition]: { reference: string; expected: string; kind: "delete" | "revert"; reason: string };
+  [Route.TaskDisposition]: {
+    reference: string;
+    expected: string;
+    kind: TaskDispositionKind | "delete-plan";
+    reason: string;
+    confirmPublished?: "1";
+  };
   [Route.TaskState]: { reference: string; expected: string; state: TaskStatus };
   [Route.QueueChange]: { operation: QueueOperation; reference: string; target: string; expected: string };
   [Route.WorkspaceRetry]: EmptyFields;
@@ -224,10 +257,18 @@ export interface MutationFields {
     digest: string;
     review_layout: DifferenceLayout;
     review_commit?: string;
+    review_task?: string;
     reviewed: "yes";
     human_written: "yes" | "no";
   };
-  [Route.ReviewPrepare]: { path: string; review_layout: DifferenceLayout; review_view?: ReviewView };
+  [Route.ReviewPrepare]: {
+    path: string;
+    review_layout: DifferenceLayout;
+    review_view?: ReviewView;
+    expected?: string;
+    record_view?: "read" | "changes";
+    workflow?: "1";
+  };
   [Route.Preview]: EmptyFields;
   [Route.Apply]: { token: string; reviewed: "yes"; accept_all?: "yes" | "no" };
   [Route.ProjectAdd]: EmptyFields;
@@ -253,6 +294,17 @@ const oneOf =
     if (!choices.includes(value)) throw new InvalidInput("Unknown route parameter value");
     return value;
   };
+const workflowQuery = {
+  collection: bounded(1024),
+  scope: bounded(1024),
+  all: oneOf(["1"]),
+  phase: oneOf(["plans", "work", "approvals", "reviews"]),
+  after: bounded(4096),
+  before: bounded(4096),
+  through: bounded(4096),
+  cursor_revision: bounded(1024),
+  task_windows: bounded(65536),
+};
 interface RouteContract {
   scope: "global" | "project";
   methods: readonly string[];
@@ -276,11 +328,12 @@ export const routeContracts: RouteContracts = {
       collection: bounded(1024),
       all: oneOf(["1"]),
       id: bounded(1024),
-      kind: oneOf(["delete", "revert", "cancel"]),
+      kind: oneOf([...taskDispositionKinds, "cancel", "delete-plan"]),
+      workflow: oneOf(["1"]),
       reason: bounded(16384),
+      file: bounded(4096),
     },
   },
-  [Route.DocumentImage]: { scope: "project", methods: ["GET"], query: { path: bounded(4096) } },
   [Route.HistoryFile]: {
     scope: "project",
     methods: ["GET"],
@@ -309,11 +362,12 @@ export const routeContracts: RouteContracts = {
     methods: ["GET"],
     query: {
       commit: bounded(1024),
+      task: bounded(1024),
+      view: oneOf(["files"]),
       path: bounded(4096),
       context: bounded(4096),
       load: oneOf(["1"]),
       batch: bounded(16),
-      view: oneOf(["files"]),
       layout: oneOf(["unified", "split"]),
       scope: bounded(1024),
       collection: bounded(1024),
@@ -325,6 +379,7 @@ export const routeContracts: RouteContracts = {
     methods: ["GET"],
     query: {
       id: bounded(1024),
+      workflow: oneOf(["1"]),
       commit: bounded(1024),
       path: bounded(4096),
       context: bounded(4096),
@@ -366,6 +421,10 @@ export const routeContracts: RouteContracts = {
     scope: "project",
     methods: ["GET"],
     query: {
+      workflow: oneOf(["1"]),
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
       id: bounded(1024),
       path: bounded(4096),
       version: oneOf(["approved"]),
@@ -391,20 +450,12 @@ export const routeContracts: RouteContracts = {
     query: {},
     action: { operation: WebAction.Task, effect: ActionEffect.Applied },
   },
-  [Route.TaskQueue]: {
+  [Route.Plans]: { scope: "project", methods: ["GET"], query: workflowQuery },
+  [Route.Work]: { scope: "project", methods: ["GET"], query: workflowQuery },
+  [Route.Reviews]: {
     scope: "project",
     methods: ["GET"],
-    query: {
-      collection: bounded(1024),
-      scope: bounded(1024),
-      all: oneOf(["1"]),
-      phase: oneOf(["plans", "work", "available", "outcomes"]),
-      after: bounded(1024),
-      before: bounded(1024),
-      through: bounded(1024),
-      cursor_revision: bounded(1024),
-      task_windows: bounded(65536),
-    },
+    query: { ...workflowQuery, collection_applied: bounded(1024) },
   },
   [Route.TaskState]: {
     scope: "project",
@@ -426,12 +477,25 @@ export const routeContracts: RouteContracts = {
   [Route.Caches]: {
     scope: "global",
     methods: ["GET"],
-    query: { project: bounded(1024), owner: bounded(1024), refresh: oneOf(["1"]), "refresh-sizes": oneOf(["1"]) },
+    query: {
+      section: oneOf(inventorySections),
+      offset: bounded(10),
+      project: bounded(1024),
+      owner: bounded(1024),
+      refresh: oneOf(["1"]),
+      "refresh-sizes": oneOf(["1"]),
+    },
   },
   [Route.Inventory]: {
     scope: "global",
     methods: ["GET"],
-    query: { view: oneOf(["projects", "caches"]), project: bounded(1024), owner: bounded(1024) },
+    query: {
+      section: oneOf(inventorySections),
+      offset: bounded(10),
+      view: oneOf(["projects", "caches"]),
+      project: bounded(1024),
+      owner: bounded(1024),
+    },
   },
   [Route.ProjectAdd]: { operation: "project.add", scope: "global", methods: ["POST"], query: {} },
   [Route.ProjectRemove]: { operation: "project.remove.preview", scope: "global", methods: ["POST"], query: {} },
@@ -442,7 +506,7 @@ export const routeContracts: RouteContracts = {
   [Route.CleanupApply]: { operation: "cache.cleanup.apply", scope: "global", methods: ["POST"], query: {} },
   [Route.Cleanup]: { scope: "global", methods: ["GET"], query: { token: bounded(1024) } },
   [Route.Demonstration]: { operation: "demonstration.open", scope: "global", methods: ["POST"], query: {} },
-  [Route.Overview]: {
+  [Route.Charters]: {
     scope: "project",
     methods: ["GET"],
     query: { collection: bounded(1024), scope: bounded(1024), all: oneOf(["1"]) },
@@ -459,11 +523,13 @@ export const routeContracts: RouteContracts = {
     scope: "project",
     methods: ["GET"],
     query: {
+      workflow: oneOf(["1"]),
       collection: bounded(1024),
       scope: bounded(1024),
       all: oneOf(["1"]),
       id: bounded(1024),
       saved: oneOf(["1"]),
+      status: oneOf(taskLifecycles),
       view: oneOf(["read", "changes", "edit"]),
       baseline: oneOf(["reviewed", "upstream"]),
       layout: oneOf(["unified", "split"]),
@@ -477,7 +543,7 @@ export const routeContracts: RouteContracts = {
       scope: bounded(1024),
       all: oneOf(["1"]),
       type: oneOf(["", ...recordTypes]),
-      status: oneOf(taskStatuses),
+      status: oneOf(taskLifecycles),
       q: bounded(512),
       after: bounded(8192),
       through: bounded(8192),
@@ -505,7 +571,6 @@ export const routeContracts: RouteContracts = {
       id: bounded(1024),
       path: bounded(4096),
       view: oneOf(["diff", "previous", "current"]),
-      collection_applied: bounded(1024),
       layout: oneOf(["unified", "split"]),
       collection: bounded(1024),
       scope: bounded(1024),
@@ -549,10 +614,29 @@ export const routeContracts: RouteContracts = {
   [Route.File]: {
     scope: "project",
     methods: ["GET"],
-    query: { id: bounded(1024), path: bounded(4096), download: oneOf(["1", "0"]) },
+    query: {
+      workflow: oneOf(["1"]),
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
+      id: bounded(1024),
+      path: bounded(4096),
+      download: oneOf(["1", "0"]),
+      image: bounded(64),
+    },
   },
   [Route.Metrics]: { scope: "project", methods: ["GET"], query: {} },
-  [Route.Events]: { scope: "project", methods: ["GET"], query: {} },
+  [Route.DocumentImage]: { scope: "project", methods: ["GET"], query: { path: bounded(4096) } },
+  [Route.Events]: {
+    scope: "project",
+    methods: ["GET"],
+    query: {
+      scope: bounded(1024),
+      collection: bounded(1024),
+      all: oneOf(["1"]),
+      workflow: oneOf(["plans", "work", "reviews"]),
+    },
+  },
   [Route.Style]: { scope: "global", methods: ["GET", "HEAD"], query: { v: bounded(64) } },
   [Route.Client]: { scope: "global", methods: ["GET", "HEAD"], query: { v: bounded(64) } },
   [Route.Diagrams]: { scope: "global", methods: ["GET", "HEAD"], query: { v: bounded(64) } },

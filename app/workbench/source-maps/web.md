@@ -6,8 +6,12 @@ shipped-browser workflows exercise the assembled interface separately from domai
 
 - `src/server/views/record-pane.tsx`: Shares adjacent-record navigation and document-pane controls across reading and
   review.
-- `src/server/views/task-pages.tsx`, `src/server/browser/task-tree-client.ts`: Present nested plans, human task
-  decisions, and the local execution queue.
+- `src/server/views/task-pages.tsx`, `src/server/views/workflow-pages.tsx`, `src/server/views/review-list.tsx`,
+  `src/server/views/workflow-navigation.ts`, `src/server/browser/task-tree-client.ts`: Present nested records, separate
+  Plans/Work/Reviews, project and task groups with bounded continuation, human decisions, and local execution order.
+- `src/core/tasks/task-workflow.ts`, `src/server/workspace/task-state.ts`, `src/server/review/task-review-groups.ts`,
+  `src/server/projects/task-review-inventory.ts`: Share task phase membership and approval/evidence acquisition between
+  open workspaces and independently refreshed project counts.
 - `src/server/views/task-history.tsx`, `src/server/views/history-page.tsx`, `src/server/views/code-difference.tsx`:
   Present task-linked deliveries and immutable file comparisons during outcome acceptance, sharing exact-version
   document review rendering without granting acknowledgment through inspection.
@@ -19,9 +23,9 @@ shipped-browser workflows exercise the assembled interface separately from domai
   `src/server/cache/inventory-service.ts`: Validate maintenance protocols and publish component metadata before
   persistent size measurements.
 - `src/server/browser/reference-client.ts`: Show accessible record-reference previews without changing link navigation.
-- `src/server/browser/diagram-client.ts`, `src/server/browser/diagram-renderer.ts`, `src/server/http/diagram-asset.ts`,
-  `resources/browser`: Render local Mermaid diagrams in an isolated frame, display inert images, and preserve readable
-  source during failure and review.
+- `src/server/views/diagram-view.tsx`, `src/server/browser/diagram-client.ts`, `src/server/browser/diagram-renderer.ts`,
+  `src/server/http/diagram-asset.ts`, `resources/browser`: Render local Mermaid diagrams in an isolated frame, display
+  inert images, and preserve readable source during failure and review.
 - `src/server/browser/card-client.ts`: Add card navigation while preserving ordinary links, text selection, and
   controls.
 - `src/server/browser/hub-client.ts`: Refresh asynchronously calculated cache inventory without replacing navigation or
@@ -73,11 +77,14 @@ shipped-browser workflows exercise the assembled interface separately from domai
   browser TypeScript and authored CSS by the tooling build.
 - `src/server/workspace/live.ts`: Reconciles filesystem changes and Git state, watches relevant directories, and reports
   revisions.
+- `src/server/workspace/workflow-updates.ts`, `src/server/browser/workflow-notifications.ts`: Limit live refresh to
+  visible workflow changes and notify the developer about new decisions.
 - `src/server/review/diff.ts`: Compare current record contents with acquired review and collection baselines.
 - `src/server/review/comparison-result.ts`: Keeps each acquired comparison independent from document availability and
   other baselines.
 - `src/server/workspace/workspace-problem.ts`: Shares safe workspace freshness messages with browser controllers.
-- `src/server/review/review-navigation.ts`: Preserve record order and layout while retaining independent file reviews.
+- `src/server/review/review-layout.ts`, `src/server/review/review-navigation.ts`: Share the review queue order with the
+  document arrows while retaining independent file reviews.
 - `src/server/views/breadcrumbs.tsx`: Links declared project names and page ancestors without repeating the current
   heading.
 - `src/server/review/document-comparison.ts`, `src/server/review/block-alignment.ts`,
@@ -173,7 +180,6 @@ shipped-browser workflows exercise the assembled interface separately from domai
   dismissal controls.
 - `src/server`: Serves documents and actions through HTTP, rendered views, browser controllers, and supervised workers.
 
-- `src/server/views/diagram-view.tsx`: Share isolated diagram and source presentations across records and comparisons.
 - `src/server/views/commit-files.tsx`, `src/server/views/commit-file-diff.tsx`,
   `src/server/views/commit-file-actions.tsx`, `src/server/views/commit-navigation.tsx`,
   `src/server/views/diff-icons.tsx`, `src/server/views/history-comparison.tsx`,

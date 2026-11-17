@@ -66,7 +66,7 @@ export const cases = {
       "Did the review identify the zero-quantity contradiction, skipped verification, and missing approval boundary, cite evidence, and accurately distinguish unanswered questions, human approval, and any fresh-context review limitation?",
   },
   refactors: {
-    skill: "review-project",
+    skill: "workbench-review-project",
     request:
       "Review the recent basket-total work with a focus on simplification and design. Advice only; leave project files unchanged.",
     review: "Does the advice identify concrete value and distinguish missed cleanup from a separate design change?",
@@ -77,7 +77,7 @@ export const cases = {
     review: "Were unrelated requirements, tool pins, and checks preserved, and were the retained changes verified?",
   },
   "project-review": {
-    skill: "review-project",
+    skill: "workbench-review-project",
     request:
       "Resume the project review from fixture:TSK-0, focusing on correctness and simplification. Fix verified internal defects and reconcile the review log. You may commit and squash locally as useful. I have not reviewed this log yet; do not push or approve proposed follow-ups.",
     review:

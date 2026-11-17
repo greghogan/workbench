@@ -50,8 +50,13 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
     (hasReviewBaseline(document.baseline) && comparisonChanged(document.reviewed)) ||
     !!document.modeChange;
   const upstream = record.collection && (context.comparison?.state !== "compared" || compared?.status !== "unchanged");
-  const taskApproval = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id)?.approval : undefined;
-  const taskComparison = !!taskApproval && !record.local && reviewed && !terminalTask.has(record.status);
+  const task = record.type === "TSK" ? context.index.taskGraph.byReference.get(record.id) : undefined;
+  const taskComparison =
+    !!task &&
+    !record.local &&
+    document.reviewed.state === "available" &&
+    (reviewed || !!document.taskFiles?.length) &&
+    (!terminalTask.has(task.metadata.status) || task.acceptanceNeedsReview);
   const views: { value: RecordView; label: string }[] = taskComparison
     ? [{ value: "changes", label: "Diff" }]
     : [{ value: "read", label: "Read" }];
@@ -60,8 +65,8 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
   if (record.editable) views.push({ value: "edit", label: "Edit" });
   const requested = parameters.view ?? (taskComparison ? "changes" : "read");
   if (requested === "edit" && !record.editable) throw new WebError(400, "this record is read only");
-  if (requested === "changes" && ((record.type !== "ADR" && !taskApproval) || record.local))
-    throw new WebError(400, "source differences are available for project-owned ADRs and task approvals");
+  if (requested === "changes" && ((record.type !== "ADR" && !task) || record.local))
+    throw new WebError(400, "source differences are available for project-owned ADRs and tasks");
   const view = requested === "changes" ? "changes" : views.find((choice) => choice.value === requested)?.value;
   if (!view) throw new WebError(400, "unknown record view");
   const state = recordViewState(record, view, parameters, upstream);
@@ -72,9 +77,10 @@ export function recordPageModel(context: ViewContext, parameters: RouteQuery<typ
     views,
     state,
     compared,
-    reviewed: comparisonChanged(document.reviewed)
-      ? document.reviewed
-      : { state: "available" as const, difference: null },
+    reviewed:
+      comparisonChanged(document.reviewed) || document.taskFiles?.length
+        ? document.reviewed
+        : { state: "available" as const, difference: null },
     upstream: context.index.snapshot.upstreamDiffs.get(record.id),
     related: [
       ...new Set(document.contents.match(/[a-z][a-z0-9_-]*:(?:ADR|TSK|EXP|ENV|CIT|REL)-[0-9A-Z]+/gi) ?? []),

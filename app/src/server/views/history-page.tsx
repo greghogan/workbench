@@ -24,10 +24,14 @@ import { commitFileId, commitNavigation } from "./commit-navigation.js";
 import { commitFileActions } from "./commit-file-actions.js";
 import { filePreviewByteLimit } from "../review/file-comparison.js";
 import { inlineCommitFiles } from "./commit-files.js";
+import { pendingReviewNeighbors, taskReviewFiles, workflowRecordURL } from "../review/review-navigation.js";
+import { workflowParent } from "./workflow-navigation.js";
+import type { Breadcrumb } from "./breadcrumbs.js";
 
 interface TaskHistoryContext {
   location: (values: RouteQuery<typeof Route.History>) => string;
-  parents: { label: string; href: string }[];
+  parents: Breadcrumb[];
+  active: "plans" | "work" | "review" | "TSK";
 }
 
 export function historyPage(
@@ -39,8 +43,30 @@ export function historyPage(
   const location =
     task?.location ??
     ((values: RouteQuery<typeof Route.History>) =>
-      sourceURL(context, routeURL(Route.History, { ...(query.view ? { view: query.view } : {}), ...values })));
+      sourceURL(
+        context,
+        routeURL(Route.History, {
+          ...(query.view ? { view: query.view } : {}),
+          ...(query.task ? { task: query.task } : {}),
+          ...values,
+        }),
+      ));
   if (!query.commit) throw new WebError(400, "Select a commit from its task or document review");
+  const reviews = workflowParent(context, Route.Reviews);
+  const taskRecord = query.task ? context.index.byId.get(query.task) : undefined;
+  const trail = task?.parents ?? [
+    reviews,
+    ...(taskRecord ? [{ label: taskRecord.title, href: workflowRecordURL(context, taskRecord.id, query.layout) }] : []),
+  ];
+  const taskFiles = query.task ? taskReviewFiles(context, query.task) : undefined;
+  const taskFile = taskFiles?.find((file) => file.commit === query.commit && (!query.path || file.path === query.path));
+  if (query.task) {
+    if (query.view || query.batch || query.context || query.load) throw new WebError(400, "Select a file to review");
+    if (!taskFile)
+      throw new WebError(404, "This file is no longer pending review for the selected task", {
+        recovery: { href: reviews.href, label: "Return to Reviews" },
+      });
+  }
   const files = historyFiles(context.root, query.commit);
   if (query.batch !== undefined) {
     if (query.path || query.context || query.load) throw new WebError(400, "Invalid file diff continuation");
@@ -49,11 +75,19 @@ export function historyPage(
   const unit = files.unit,
     review = task || query.view === "files" ? undefined : committedReview(context.root, unit.revision),
     split = query.layout === "split",
-    pendingPaths = new Set(review ? context.commitReviews.find((item) => item.revision === unit.revision)?.paths : []),
+    pendingPaths = new Set(
+      taskFiles
+        ? taskFiles.filter((file) => file.commit === unit.revision).map((file) => file.path)
+        : review &&
+            context.commitReviews
+              .find((item) => item.revision === unit.revision)
+              ?.groups.flatMap((group) => group.paths),
+    ),
+    unacknowledged = new Set(review?.changes.filter((change) => !change.approved).map((change) => change.path)),
     candidates = review?.provisional
-      ? review.changes.filter((change) => !change.approved && pendingPaths.has(change.path))
+      ? [...pendingPaths].filter((path) => unacknowledged.has(path)).map((path) => ({ path }))
       : [],
-    selectedPath = query.path ?? (task ? undefined : candidates[0]?.path),
+    selectedPath = taskFile?.path ?? query.path ?? candidates[0]?.path,
     title = unit.message.split("\n")[0] ?? unit.revision.slice(0, 12),
     messageBody = unit.message
       .replace(/^.*\n?/, "")
@@ -84,15 +118,12 @@ export function historyPage(
     return shell(
       context,
       title,
-      task ? "queue" : "review",
+      task?.active ?? "review",
       <>
         {commitHeading}
         {workspace(inlineCommitFiles(context, query, files.changes, unit.revision, location))}
       </>,
-      {
-        parents: task?.parents ?? [{ label: "Review queue", href: sourceURL(context, routeURL(Route.Review, {})) }],
-        current: unit.revision.slice(0, 8),
-      },
+      { parents: trail },
     );
   const file = historyFile(context.root, unit.revision, selectedPath, files),
     change = review?.changes.find((change) => change.path === selectedPath),
@@ -141,23 +172,49 @@ export function historyPage(
       ],
       review.head,
     );
-  const list = reviewing ? candidates : files.changes,
-    selected = list.findIndex((item) => item.path === selectedPath),
+  const list =
+      taskFiles ?? (reviewing ? candidates : files.changes).map(({ path }) => ({ commit: unit.revision, path })),
+    selected = list.findIndex((item) => item.commit === unit.revision && item.path === selectedPath),
     previous = list[selected - 1],
     next = list[selected + 1],
     mode = fileModeChange(file.before?.mode ?? "000000", file.after?.mode ?? "000000"),
     same = file.before?.oid === file.after?.oid && file.before?.mode === file.after?.mode;
+  const layout = split ? "split" : "unified";
+  const commitHref = sourceURL(
+    context,
+    taskRecord && files.after.has(taskRecord.path)
+      ? routeURL(Route.TaskHistory, {
+          id: taskRecord.id,
+          commit: unit.revision,
+          tip: unit.revision,
+          workflow: "1",
+          layout,
+        })
+      : routeURL(Route.History, { commit: unit.revision, view: "files", layout }),
+  );
+  const recordTitle = owner?.title.startsWith(`${owner.id.slice(owner.scope.length + 1)}: `)
+    ? `${owner.scope}:${owner.title}`
+    : (owner?.title ?? selectedPath);
+  const navigation =
+    (query.task && taskFiles) || (reviewing && !task)
+      ? pendingReviewNeighbors(context, `${unit.revision}:${selectedPath}`, layout)
+      : {
+          previous: previous ? { href: location({ ...previous, layout }) } : undefined,
+          next: next ? { href: location({ ...next, layout }) } : undefined,
+          label: "changed file",
+        };
   return shell(
     context,
-    reviewing ? (owner?.title ?? selectedPath) : title,
-    reviewing ? "review" : "queue",
+    reviewing ? recordTitle : title,
+    task?.active ?? "review",
     <>
       {reviewing
         ? commitReviewContext(
             context.root,
             unit.revision,
             title,
-            `File ${String(selected + 1)} of ${String(candidates.length)}`,
+            `File ${String(selected + 1)} of ${String(list.length)}`,
+            { showTasks: !taskRecord, commitHref },
           )
         : commitHeading}
       {protectedReview && (
@@ -170,8 +227,7 @@ export function historyPage(
         </>
       )}
       {protectedReview ? (
-        <>
-          {" "}
+        <div class="review-document">
           {recordPane(
             panel(
               historyComparison(reviewed ? Buffer.from(reviewed.contents) : before, after, {
@@ -184,19 +240,9 @@ export function historyPage(
               }),
               { tools: !tooLarge && !binary && before && after && !same ? diffLayout(base, split) : null },
             ),
-            {
-              previous: previous
-                ? {
-                    href: location({ commit: unit.revision, path: previous.path, layout: split ? "split" : "unified" }),
-                  }
-                : undefined,
-              next: next
-                ? { href: location({ commit: unit.revision, path: next.path, layout: split ? "split" : "unified" }) }
-                : undefined,
-              label: reviewing ? "review file" : "changed file",
-            },
+            navigation,
           )}
-        </>
+        </div>
       ) : (
         workspace(
           <>
@@ -245,6 +291,7 @@ export function historyPage(
             path: selectedPath,
             digest,
             review_commit: unit.revision,
+            ...(query.task ? { review_task: query.task } : {}),
             review_layout: split ? "split" : "unified",
             reviewed: "yes",
             human_written: change.charter ? "yes" : "no",
@@ -255,13 +302,6 @@ export function historyPage(
             }),
         })}
     </>,
-    {
-      current: unit.revision.slice(0, 8),
-      parents: task
-        ? task.parents
-        : reviewing
-          ? [{ label: "Review queue", href: sourceURL(context, routeURL(Route.Review, {})) }]
-          : [{ label: "Review queue", href: sourceURL(context, routeURL(Route.Review, {})) }],
-    },
+    { parents: trail },
   );
 }

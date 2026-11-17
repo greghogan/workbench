@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="659" viewBox="0 0 1040 659" role="img" aria-labelledby="title description">
+  <title id="title">Task actions and cancellation with published history</title>
+  <desc id="description">The task outcome shows Show task actions to the left of Accept outcome. Opening it changes the label to Hide task actions and reveals Cancel task and Revise plan in a row below. The first row stays in place. The cancellation screen offers Remove task commits and Revert with a new commit. The removal preview warns that some commits are published and shows the local and remote tips, proposed local tip, affected commits, and a link to the file changes. Removing the published commits locally requires explicit confirmation. Back returns to the choice.</desc>
+  <defs>
+    <style>
+      text{fill:#20354d;font-family:system-ui,sans-serif;font-size:15px}
+      .heading{font-size:23px;font-weight:700}
+      .subheading{font-size:15px;font-weight:650}
+      .small{font-size:13px}
+      .muted{fill:#52667e}
+      .mono{font-family:ui-monospace,monospace;font-size:13px}
+      .panel{fill:#fff;stroke:#a9b7c8}
+      .warning{fill:#fff5dc;stroke:#d4b876}
+      .preview{fill:#f5f8fb;stroke:#c4cfdb}
+      .choice{fill:#fff;stroke:#8fa5bf}
+      .choice-text{fill:#244f94;font-size:14px;font-weight:650}
+      .decision{fill:#244f94}
+      .primary{fill:#8e2738}
+      .primary-text{fill:#fff;font-size:14px;font-weight:650}
+      .link{fill:#244f94;text-decoration:underline}
+    </style>
+  </defs>
+  <rect width="1040" height="659" rx="16" fill="#edf2f7"/>
+  <g aria-label="Before revealing additional task actions">
+    <rect class="panel" x="20" y="20" width="480" height="189" rx="12"/>
+    <text class="heading" x="42" y="60">Awaiting acceptance</text>
+    <text class="muted" x="42" y="87">TSK-C · Simplify report export</text>
+    <rect class="choice" x="77" y="108" width="176" height="36" rx="6"/>
+    <text class="choice-text" x="165" y="131" text-anchor="middle">Show task actions</text>
+    <rect class="decision" x="267" y="108" width="176" height="36" rx="6"/>
+    <text class="primary-text" x="355" y="131" text-anchor="middle">Accept outcome</text>
+  </g>
+  <g aria-label="After revealing additional task actions">
+    <rect class="panel" x="540" y="20" width="480" height="189" rx="12"/>
+    <text class="heading" x="562" y="60">Awaiting acceptance</text>
+    <text class="muted" x="562" y="87">TSK-C · Simplify report export</text>
+    <rect class="choice" x="597" y="108" width="176" height="36" rx="6"/>
+    <text class="choice-text" x="685" y="131" text-anchor="middle">Hide task actions</text>
+    <rect class="decision" x="787" y="108" width="176" height="36" rx="6"/>
+    <text class="primary-text" x="875" y="131" text-anchor="middle">Accept outcome</text>
+    <rect class="choice" x="597" y="155" width="176" height="36" rx="6"/>
+    <text class="choice-text" x="685" y="178" text-anchor="middle">Cancel task</text>
+    <rect class="choice" x="787" y="155" width="176" height="36" rx="6"/>
+    <text class="choice-text" x="875" y="178" text-anchor="middle">Revise plan</text>
+  </g>
+
+  <g transform="translate(0 209)">
+    <rect class="panel" x="20" y="20" width="480" height="410" rx="12"/>
+    <rect class="panel" x="540" y="20" width="480" height="410" rx="12"/>
+
+    <g aria-label="Cancellation choices">
+      <text class="heading" x="42" y="60">Cancel task</text>
+      <text class="muted" x="42" y="87">TSK-C · Simplify report export</text>
+      <text x="42" y="130">Choose how to undo this task’s commits.</text>
+      <text class="subheading" x="42" y="177">Reason <tspan class="muted">(optional)</tspan></text>
+      <rect class="preview" x="42" y="189" width="436" height="58" rx="6"/>
+      <text class="muted" x="58" y="217">Keep the existing export.</text>
+      <rect class="choice" x="42" y="275" width="209" height="38" rx="6"/>
+      <text class="choice-text" x="146.5" y="299" text-anchor="middle">Remove task commits</text>
+      <rect class="choice" x="269" y="275" width="209" height="38" rx="6"/>
+      <text class="choice-text" x="373.5" y="299" text-anchor="middle">Revert with a new commit</text>
+      <text class="link" x="42" y="365">Back</text>
+    </g>
+
+    <g aria-label="Commit removal preview">
+      <text class="heading" x="562" y="60">Remove task commits</text>
+      <text class="muted" x="562" y="87">TSK-C · Simplify report export</text>
+      <rect class="warning" x="562" y="103" width="436" height="53" rx="7"/>
+      <text class="subheading" x="578" y="126">A commit is published on origin/main.</text>
+      <text class="small" x="578" y="145">This removal changes only the local branch.</text>
+      <rect class="preview" x="562" y="168" width="436" height="82" rx="7"/>
+      <text x="579" y="190">Local main</text>
+      <text class="mono" x="980" y="190" text-anchor="end">e0e0a45</text>
+      <text x="579" y="213">Published origin/main</text>
+      <text class="mono" x="980" y="213" text-anchor="end">5afa1d3</text>
+      <text x="579" y="236">Local main after removal</text>
+      <text class="mono" x="980" y="236" text-anchor="end">415cad2</text>
+      <text class="subheading" x="562" y="274">Commits to remove</text>
+      <text class="mono muted" x="562" y="296">e0e0a45</text>
+      <text x="640" y="296">Verify the simplified export</text>
+      <text class="mono muted" x="562" y="319">5afa1d3</text>
+      <text x="640" y="319">Simplify report export</text>
+      <text class="small link" x="562" y="343">Preview the 3 file changes</text>
+      <text class="link" x="562" y="391">Back</text>
+      <rect class="primary" x="744" y="369" width="254" height="34" rx="6"/>
+      <text class="primary-text" x="871" y="391" text-anchor="middle">Remove published commits locally</text>
+    </g>
+  </g>
+</svg>

@@ -45,7 +45,7 @@ export function emptyInventory(): CacheInventory {
     issues: [],
   };
 }
-export function applyInventorySize(value: CacheInventory, size: CacheSize): void {
+export function applyInventorySize(value: CacheInventory, size: CacheSize): CacheSize | undefined {
   let lookup = sizeIndexes.get(value);
   if (!lookup) {
     const entries = new Map<string, { bytes?: number | undefined; measurement?: CacheSize | undefined }[]>();
@@ -75,6 +75,7 @@ export function applyInventorySize(value: CacheInventory, size: CacheSize): void
     if (measured.bytes !== undefined) entry.bytes = measured.bytes;
     entry.measurement = measured;
   }
+  return measured;
 }
 const sizeIndexes = new WeakMap<
   CacheInventory,

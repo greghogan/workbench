@@ -1,7 +1,8 @@
-import { closeSync, existsSync, mkdtempSync, openSync, readSync, realpathSync, rmSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdtempSync, openSync, readSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join, relative, isAbsolute, sep } from "node:path";
 import { spawnSync } from "node:child_process";
+import { parse } from "smol-toml";
 import { BoundedState } from "../storage/bounded-state.js";
 import { taskProjectStateFile, taskRepositoryDirectory } from "./task-project-state.js";
 import {
@@ -10,11 +11,15 @@ import {
   recoverCacheMetadataLock,
   withCacheLocksSync,
 } from "../storage/cache-lock.js";
-import { gitBytes, workingReviewTree } from "../git/git-snapshot.js";
+import { gitBytes, readGitTree, refreshReviewPaths, workingReviewTree, type GitEntry } from "../git/git-snapshot.js";
+import { gitRevision } from "../git/refs.js";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { record, records, string } from "../runtime/values.mjs";
 import type { TaskRecord } from "./task-model.js";
+import { decodeTaskVerification, type TaskQueueEntry } from "./task-queue-state.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
+import { projectPaths } from "../projects/project-paths.js";
+import { coverageSummaryPath } from "../execution/checks/coverage-summary.mjs";
 
 export interface TaskImplementation {
   reference: string;
@@ -23,6 +28,7 @@ export interface TaskImplementation {
   checkout: string;
   verified: string;
   evidence: string;
+  paths?: string[];
 }
 export interface ApplicableTaskImplementation extends TaskImplementation {
   baseline: string;
@@ -87,7 +93,7 @@ export function decodeTaskImplementation(input: unknown): TaskImplementation {
   const entry = record(input, "Invalid implementation evidence");
   if (
     Object.keys(entry).some(
-      (key) => !["reference", "planDigest", "tree", "checkout", "verified", "evidence"].includes(key),
+      (key) => !["reference", "planDigest", "tree", "checkout", "verified", "evidence", "paths"].includes(key),
     )
   )
     throw new InvalidInput("Unknown implementation evidence field");
@@ -107,7 +113,9 @@ export function decodeTaskImplementation(input: unknown): TaskImplementation {
     !Number.isFinite(Date.parse(verified))
   )
     throw new InvalidInput("Invalid implementation evidence");
-  return { reference, planDigest, checkout, evidence, verified, tree: oid(entry.tree) };
+  const tree = oid(entry.tree);
+  const paths = entry.paths === undefined ? undefined : decodeTaskVerification({ tree, paths: entry.paths }).paths;
+  return { reference, planDigest, checkout, evidence, verified, tree, ...(paths ? { paths } : {}) };
 }
 export function decodeApplicableTaskImplementation(input: unknown): ApplicableTaskImplementation {
   const { baseline, ...entry } = record(input, "Invalid applicable implementation evidence");
@@ -129,18 +137,57 @@ function store(path: string) {
     () => ({ version: 1, entries: [] }),
   );
 }
-export function recordTaskImplementation(root: string, task: TaskRecord, evidence: string): void {
+export function recordTaskImplementation(
+  root: string,
+  task: TaskRecord,
+  evidence: string,
+  startedFrom?: string,
+  previous?: TaskQueueEntry["verification"],
+): TaskQueueEntry["verification"] {
   const path = taskImplementationPath(root);
-  if (!path) return;
+  if (!path) return undefined;
+  const head = gitRevision(root, "HEAD");
+  const taskPath = relative(root, task.path).replaceAll("\\", "/");
+  const readPaths = (args: string[]) => gitBytes(root, args).toString().split("\0").filter(Boolean);
+  const claim = startedFrom && gitRevision(root, `${startedFrom}^{commit}`);
+  const delivered = head
+    ? readPaths([
+        "log",
+        "--format=",
+        "--full-history",
+        "--full-diff",
+        "--name-only",
+        "-z",
+        head,
+        ...(claim ? ["^" + claim] : ["--min-parents=1"]),
+        "--",
+        taskPath,
+        taskPath.slice(0, -3),
+      ])
+    : [];
+  // After delivery, retained commits identify the task's files even if an earlier receipt captured unrelated edits.
+  const retained = task.acceptanceNeedsReview && delivered.length > 0;
+  const scope =
+    head && (retained || previous)
+      ? new Set([...(retained ? [] : (previous?.paths ?? [])), ...delivered, taskPath])
+      : undefined;
+  const tip = scope && head ? readGitTree(root, head) : undefined;
+  const tree =
+    scope && head && tip
+      ? refreshReviewPaths(
+          root,
+          head,
+          [...scope].filter((file) => tip.has(file) || !!lstatSync(join(root, file), { throwIfNoEntry: false })),
+        )
+      : workingReviewTree(root);
   const entry: TaskImplementation = {
     reference: task.reference,
     planDigest: task.planDigest,
     checkout: realpathSync.native(root),
-    tree: workingReviewTree(root),
+    tree,
     verified: new Date().toISOString(),
     evidence,
   };
-  const taskPath = relative(root, task.path).replaceAll("\\", "/");
   const expected = gitBytes(root, ["hash-object", "--path", taskPath, "--stdin"], task.contents).toString().trim(),
     captured = gitBytes(root, ["rev-parse", `${entry.tree}:${taskPath}`])
       .toString()
@@ -150,6 +197,20 @@ export function recordTaskImplementation(root: string, task: TaskRecord, evidenc
     readBoundedFile(task.path, 2 * 1024 * 1024, "task record").toString("utf8") !== task.contents
   )
     throw new StateConflict("Task changed while recording its implementation; refresh and retry");
+  // Rechecking a retained delivery refreshes its owned paths and commits, even while another task is in progress.
+  const edited = scope
+    ? [...scope]
+    : head
+      ? readPaths(["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", head, entry.tree])
+      : [...readGitTree(root, entry.tree).keys()];
+  const paths = [...new Set([...edited, ...delivered])].filter(
+    (path) =>
+      path !== "AGENTS.md" &&
+      !projectRelativePath(path, coverageSummaryPath) &&
+      !/(?:^|\/)workbench\/tasks\//.test(path) &&
+      !/(?:^|\/)workbench\/(?:task-map|decision-map|experiment-map|environment-map|citation-map)\.md$/.test(path),
+  );
+  entry.paths = paths;
   const lock = inspectCacheMetadataLock(path);
   if (lock.state === CacheLockState.Abandoned) recoverCacheMetadataLock(path, { expected: lock.digest });
   withCacheLocksSync(
@@ -167,7 +228,61 @@ export function recordTaskImplementation(root: string, task: TaskRecord, evidenc
     },
     { mutable: false },
   );
+  return { tree: entry.tree, paths };
 }
+
+function projectRelativePath(path: string, file: string): boolean {
+  return path === file || path.endsWith("/" + file);
+}
+
+function retainedProjectState(root: string, entry: GitEntry | undefined): string {
+  if (!entry) return "{}";
+  if (entry.mode !== "100644") throw new Error("Unexpected project state file mode");
+  const state = parse(gitBytes(root, ["cat-file", "blob", entry.oid]).toString("utf8"));
+  delete state.next;
+  return JSON.stringify(state);
+}
+
+export function taskVerificationApplies(root: string, proof: NonNullable<TaskQueueEntry["verification"]>): boolean {
+  try {
+    const baseline = readGitTree(root, proof.tree);
+    const paths = proof.paths.filter(
+      (path) =>
+        !projectRelativePath(path, coverageSummaryPath) &&
+        (baseline.has(path) || !!lstatSync(join(root, path), { throwIfNoEntry: false })),
+    );
+    const current = refreshReviewPaths(root, proof.tree, paths);
+    if (current === proof.tree) return true;
+    const changes = gitBytes(root, [
+      "diff-tree",
+      "--no-commit-id",
+      "--no-renames",
+      "--name-only",
+      "-r",
+      "-z",
+      proof.tree,
+      current,
+    ])
+      .toString()
+      .split("\0")
+      .filter(Boolean);
+    if (!changes.every((path) => projectRelativePath(path, projectPaths.state))) return false;
+    const updated = readGitTree(root, current);
+    // Allocating another record only advances the sequence. Archive metadata remains part of the delivery.
+    return changes.every(
+      (path) => retainedProjectState(root, baseline.get(path)) === retainedProjectState(root, updated.get(path)),
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function taskVerification(task: TaskRecord, entry?: TaskQueueEntry): TaskQueueEntry["verification"] {
+  if (entry) return entry.state === "Implemented" ? entry.verification : undefined;
+  const implementation = task.implementation;
+  return implementation?.paths ? { tree: implementation.tree, paths: implementation.paths } : undefined;
+}
+
 function implementationBaselines(root: string, head: string, trees: Set<string>): Map<string, string> {
   const directory = mkdtempSync(join(tmpdir(), "workbench-task-history-"));
   let descriptor: number | undefined;

@@ -6,6 +6,13 @@ import { createHash } from "node:crypto";
 import { synchronize } from "../../core/records/sync.js";
 import { registerConsumingProject } from "../../core/projects/project-registration.js";
 import { citationPdf } from "../../core/verification/document-fixtures.mjs";
+import { planIdentity } from "../../core/tasks/planning/plan-model.js";
+import { checkpointPlans, configurePlanning, savePlanDraft } from "../../core/tasks/planning/planning-operations.js";
+import { changeTaskStatus } from "../../core/tasks/task-service.js";
+import { appendTaskAccount } from "../../core/tasks/task-plan.js";
+import { provisionalTrailer } from "../../core/git/commit-history.js";
+import { formatDocument } from "../../core/records/formatting.js";
+import { readConfig } from "../../core/projects/project-configuration.js";
 
 /** Seed the fictional demonstration consumer using the same services as ordinary projects. */
 export async function seedDemonstration(
@@ -15,6 +22,10 @@ export async function seedDemonstration(
   repositoryGit: (repository: string, ...args: string[]) => string,
 ) {
   const git = (...args: string[]) => repositoryGit(root, ...args);
+  const width = readConfig(root).markdown?.wrap_width ?? 120;
+  const writeRecord = async (path: string, contents: string) => {
+    writeFileSync(path, await formatDocument(contents, path, width));
+  };
   const pdf = citationPdf();
   mkdirSync(join(root, "library/citations"), { recursive: true });
   writeFileSync(join(root, "library/citations/CIT-00-published.pdf"), pdf);
@@ -23,20 +34,52 @@ export async function seedDemonstration(
     `sources:\n  - kind: published\n    status: acquired\n    landing-url: https://example.invalid/paper\n    sha256: ${createHash("sha256").update(pdf).digest("hex")}\n`,
   );
   git("init", "--quiet");
+  git("config", "user.name", "Workbench demonstration");
+  git("config", "user.email", "demo@example.invalid");
   await registerConsumingProject(root);
   synchronize(root);
   git("add", ".");
   git("commit", "--quiet", "-m", "Demonstration baseline");
+  configurePlanning(root, { branch: "workbench/plans", auto_prune: true });
+  const named = planIdentity("demo", "bookmark-notes");
+  savePlanDraft(root, named, readFileSync(join(source, "plans/bookmark-notes.md"), "utf8"));
+  checkpointPlans(root, [named]);
   changeTaskQueue(root, {
     action: "add",
     references: ["demo:TSK-2", "demo:TSK-5", "demo:TSK-6", "demo:TSK-B", "demo:TSK-7"],
   });
+  changeTaskStatus(root, "demo:TSK-2", "Approved", undefined, true);
+  changeTaskQueue(root, { action: "start", reference: "demo:TSK-2" });
   changeTaskQueue(root, {
     action: "block",
     reference: "demo:TSK-2",
     detail: "Awaiting a representative reader session.",
   });
+  const assessment = join(root, "workbench/tasks/TSK-02.md");
+  await writeRecord(
+    assessment,
+    readFileSync(assessment, "utf8") +
+      "\n## Decisions before approval\n\nInclude a screen reader session and a keyboard-only session before comparing the preview designs. Confirm the expanded session scope before resuming.\n",
+  );
   changeTaskQueue(root, { action: "start", reference: "demo:TSK-7" });
+  const preview = "workbench/decisions/ADR-01.md",
+    focus = "workbench/tasks/TSK-07.md";
+  await writeRecord(
+    join(root, preview),
+    readFileSync(join(root, preview), "utf8").replace(
+      "continue reading.",
+      "resume at the same link and reading position after dismissal.",
+    ),
+  );
+  await writeRecord(
+    join(root, focus),
+    appendTaskAccount(
+      readFileSync(join(root, focus), "utf8"),
+      "Preview dismissal restores the original link and reading position. The offline search decision records the behavior.",
+    ),
+  );
+  git("add", preview, focus);
+  git("commit", "--quiet", "-m", "Restore reading context after previews", "-m", `${provisionalTrailer}: true`);
   changeTaskQueue(root, {
     action: "implemented",
     reference: "demo:TSK-7",

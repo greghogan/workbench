@@ -1,7 +1,7 @@
 import { taskPlanDigest } from "./task-plan.js";
-import { attachTaskPlanApprovals, type TaskApprovalView } from "./task-approvals.js";
+import { attachTaskDecisions, type TaskApprovalView } from "./task-approvals.js";
 import { recordInventory, readInventoryRecords } from "../records/archive-store.js";
-import { createHash } from "node:crypto";
+import { taskDigest } from "./task-snapshot.js";
 import { readProjects, selectProject } from "../projects/project-configuration.js";
 import { parseReference } from "../records/record-files.js";
 import { recordTitle, recordDocument, type MetadataByKind } from "../records/record-document.js";
@@ -22,10 +22,15 @@ export interface TaskRecord {
   digest: string;
   reviewDigest?: string;
   approval?: TaskApprovalView;
+  previouslyApproved?: true;
+  finalized?: true;
+  committedDelivery?: true;
+  verificationStale?: true;
+  acceptanceNeedsReview?: true;
   planning?: { name: string; approved: boolean; problem?: string };
   planDigest: string;
 }
-export const taskDigest = (contents: string): string => createHash("sha256").update(contents).digest("hex");
+export { taskDigest } from "./task-snapshot.js";
 
 export function taskReference(root: string, value: string, project?: string): string {
   const scoped = value.includes(":")
@@ -133,7 +138,7 @@ export function readTaskGraph(root: string): TaskGraph {
       };
     });
   });
-  attachTaskPlanApprovals(root, tasks);
+  attachTaskDecisions(root, tasks);
   const graph = new TaskGraph(tasks).validate();
   attachTaskImplementations(root, tasks);
   return graph;

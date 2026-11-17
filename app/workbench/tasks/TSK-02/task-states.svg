@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 716" role="img" aria-labelledby="title description">
+  <title id="title">Task states and transitions</title>
+  <desc id="description">Solid blue arrows indicate developer actions, dashed orange arrows indicate agent actions, and dotted green arrows indicate Workbench transitions. Revise plan moves work from Awaiting implementation or Awaiting acceptance to Awaiting approval. Active implementation must pause before revision or cancellation. The developer can cancel from Planned, Awaiting approval, Awaiting implementation, or Awaiting acceptance. Canceling work with commits offers local removal or reversion. Both choices lead to Canceled. Reopen task sends Accepted or Finalized work back for plan approval. Revert work from the same states returns the task to Awaiting implementation to verify and accept the inverse changes. Workbench sends an edited outcome back for acceptance when verification still applies, or to Work when fresh verification is needed.</desc>
+  <defs>
+    <marker id="arrow-developer" class="developer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0l10 5-10 5z" fill="currentColor"/>
+    </marker>
+    <marker id="arrow-agent" class="agent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0l10 5-10 5z" fill="currentColor"/>
+    </marker>
+    <marker id="arrow-workbench" class="workbench" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0l10 5-10 5z" fill="currentColor"/>
+    </marker>
+    <style>
+      text{font-family:system-ui,sans-serif;fill:#1d2e44}
+      .state{font-size:18px;font-weight:650;text-anchor:middle}
+      .action{font-size:15px;fill:#435973}
+      .area{font-size:14px;font-weight:650;fill:#435973}
+      .line,.rail{fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+      .developer{color:#2458a6}
+      .agent{color:#a84a15;stroke-dasharray:6 3}
+      .workbench{color:#1f7255;stroke-dasharray:1 3}
+      .actor{fill:currentColor}
+      .line.developer{marker-end:url(#arrow-developer)}
+      .line.agent{marker-end:url(#arrow-agent)}
+      .line.workbench{marker-end:url(#arrow-workbench)}
+      .node{fill:#fff;stroke:#9cadc0;stroke-width:1.3}
+      .decision{fill:#fff5dc;stroke:#b99a57;stroke-width:1.3}
+      .accepted{fill:#edf6ed;stroke:#86a88a;stroke-width:1.3}
+      .canceled{fill:#fbeef0;stroke:#b98086;stroke-width:1.3}
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1038" height="714" rx="15" fill="#f8fafc" stroke="#c2cfdb"/>
+  <rect x="278" y="174" width="459" height="312" rx="11" fill="#edf3fa" stroke="#becfdf"/>
+  <text class="area" x="294" y="198">Approved task</text>
+
+  <g aria-label="Forward transitions">
+    <circle cx="493" cy="32" r="6" fill="#496078"/>
+    <path class="line agent" d="M493 38v52"/>
+    <text class="action" x="507" y="64">Create plan</text>
+    <path class="line developer" d="M493 138v64"/>
+    <text class="action" x="507" y="170">First approval</text>
+    <path class="line agent" d="M493 250v62"/>
+    <text class="action" x="507" y="268">Start or resume</text>
+    <path class="line agent" d="M493 360v60"/>
+    <text class="action" x="507" y="394">Verify outcome</text>
+    <path class="line developer" d="M493 468v60"/>
+    <text class="action" x="507" y="501">Accept outcome</text>
+    <path class="line workbench" d="M493 576v58"/>
+    <text class="action" x="507" y="609">Git finalizes delivery</text>
+  </g>
+
+  <g aria-label="Return transitions">
+    <path class="line agent" d="M636 332h42V246h-42"/>
+    <text class="action" x="666" y="304" text-anchor="end">Return to waiting</text>
+    <path class="line workbench" d="M636 430h76V230h-76"/>
+    <text class="action" x="724" y="332">Verification</text>
+    <text class="action" x="724" y="351">is stale</text>
+    <path class="line agent" d="M278 187h-36v20"/>
+    <text class="action" x="229" y="184" text-anchor="end">Material plan revision</text>
+    <path class="line developer" d="M251 221h99"/>
+    <text class="action" x="262" y="216">Approve</text>
+    <path class="rail developer" d="M350 242H264V350H166M350 444H166V350"/>
+    <path class="line developer" d="M166 350V255"/>
+    <text class="action" x="178" y="429">Revise plan</text>
+    <path class="line workbench" d="M377 634v-58"/>
+    <text class="action" x="362" y="598" text-anchor="end">Finalization</text>
+    <text class="action" x="362" y="617" text-anchor="end">unconfirmed</text>
+    <path class="rail workbench" d="M636 657h192V317H712M636 555h192"/>
+    <path class="line workbench" d="M828 455H636"/>
+    <text class="action" x="647" y="449">Edit retains verification</text>
+    <path class="rail developer" d="M636 671h234V543M636 543h234V221"/>
+    <path class="line developer" d="M870 221H636"/>
+    <text class="action" x="649" y="534">Revert work</text>
+  </g>
+
+  <g aria-label="Cancellation and reopening">
+    <path class="line developer" d="M636 115h175"/>
+    <text class="action" x="704" y="103">Cancel</text>
+    <path class="line developer" d="M636 215h44v-22h219v-55"/>
+    <text class="action" x="754" y="182">Cancel</text>
+    <path class="rail developer" d="M615 468v12h249"/>
+    <path class="line developer" d="M876 480h54V138"/>
+    <text class="action" x="941" y="390">Cancel</text>
+    <path class="line developer" d="M899 90V58H621v32"/>
+    <text class="action" x="674" y="46">Reopen never-approved plan</text>
+    <path class="line developer" d="M941 90V19H58v188"/>
+    <text class="action" x="72" y="46">Reopen previously approved task</text>
+    <path class="line developer" d="M28 236h-9v-85H789v-24h22"/>
+    <text class="action" x="205" y="142">Cancel revised plan</text>
+    <path class="rail developer" d="M350 649H94V545M350 545H94"/>
+    <path class="line developer" d="M94 545V255"/>
+    <text class="action" x="108" y="504">Reopen task</text>
+  </g>
+
+  <g aria-label="Displayed task states">
+    <rect class="node" x="350" y="90" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="120">Planned</text>
+    <rect class="decision" x="28" y="207" width="223" height="48" rx="8"/>
+    <text class="state" x="139.5" y="237">Awaiting approval</text>
+    <rect class="node" x="350" y="202" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="232">Awaiting implementation</text>
+    <rect class="node" x="350" y="312" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="342">Implementing</text>
+    <rect class="decision" x="350" y="420" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="450">Awaiting acceptance</text>
+    <rect class="accepted" x="350" y="528" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="558">Accepted</text>
+    <rect class="accepted" x="350" y="634" width="286" height="48" rx="8"/>
+    <text class="state" x="493" y="664">Finalized</text>
+    <rect class="canceled" x="811" y="90" width="176" height="48" rx="8"/>
+    <text class="state" x="899" y="120">Canceled</text>
+  </g>
+  <g aria-label="Arrow legend">
+    <path class="line developer" d="M273 701h40"/>
+    <text class="action actor developer" x="323" y="706">Developer</text>
+    <path class="line agent" d="M443 701h40"/>
+    <text class="action actor agent" x="493" y="706">Agent</text>
+    <path class="line workbench" d="M585 701h40"/>
+    <text class="action actor workbench" x="635" y="706">Workbench</text>
+  </g>
+</svg>

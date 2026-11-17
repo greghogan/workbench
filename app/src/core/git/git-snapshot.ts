@@ -311,6 +311,14 @@ export function workingReviewTree(root: string): string {
     return run(["write-tree"]);
   });
 }
+/** Refresh only the paths in a retained proof using Git's worktree normalization. */
+export function refreshReviewPaths(root: string, tree: string, paths: readonly string[]): string {
+  if (!paths.length) return tree;
+  return withPrivateIndex(root, tree, (run) => {
+    run(["--literal-pathspecs", "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"], paths.join("\0") + "\0");
+    return run(["write-tree"]);
+  });
+}
 /** Reconstruct staged objects in an owned index without taking or updating the caller's index lock. */
 export function stagedReviewTree(root: string): string {
   const snapshot = new GitSnapshot(root);

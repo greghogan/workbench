@@ -1,7 +1,5 @@
-import { gitAncestor, gitRevision } from "../git/refs.js";
+import { gitAncestor } from "../git/refs.js";
 import { acceptedAgentContext } from "./review-authority.js";
-import { logicalRecordEntries } from "../records/archive-store.js";
-import { relativeRecordPath, normalizedNumber } from "../records/record-identity.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -9,16 +7,16 @@ import { resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { commitVersion } from "./review-units.js";
 import { checkProvisionalPush, retainedProvisionalCommits } from "../git/commit-history.js";
-import { gitBytes, readGitObjects, readGitTree, stagedReviewTree, workingReviewTree } from "../git/git-snapshot.js";
-import { projectsFromData } from "../projects/project-configuration.js";
-import { recordDocument, parseProseRecord } from "../records/record-document.js";
+import { gitBytes, readGitObjects, stagedReviewTree, workingReviewTree } from "../git/git-snapshot.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { record, records, string, strings } from "../runtime/values.mjs";
 import { BoundedState } from "../storage/bounded-state.js";
 import { withCacheLocksSync } from "../storage/cache-lock.js";
-import { taskDigest } from "../tasks/task-model.js";
 import { readTaskQueue } from "../tasks/task-queue.js";
 import { readTaskDecisions } from "../tasks/task-decisions.js";
+import { readTaskPlanApproval } from "../tasks/task-approvals.js";
+import { taskPlanApprovalDigest } from "../tasks/task-plan.js";
+import { acceptedTaskVersion, treeTasks } from "../tasks/task-snapshot.js";
 
 export enum AgentReviewKind {
   Changes = "changes",
@@ -307,62 +305,6 @@ function requiredPolicy(
     task_approvals: previous.task_approvals || current.task_approvals,
   };
 }
-interface SnapshotTask {
-  path: string;
-  status: string;
-  digest: string;
-  workDigest: string;
-  mode: string;
-}
-export function treeTasks(root: string, tree: string): Map<string, SnapshotTask> {
-  const entries = logicalRecordEntries(root, readGitTree(root, tree));
-  const paths = [...entries.keys()];
-  if (!paths.includes(projectPaths.projects)) return new Map();
-  const projects = projectsFromData(
-    parseToml(git(root, ["show", `${tree}:${projectPaths.projects}`])),
-    projectPaths.projects,
-  );
-  const taskPaths = paths.filter((path) => /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(path));
-  const blobs = readGitObjects(
-    root,
-    taskPaths.map((path) => entries.get(path)?.oid ?? ""),
-  );
-  const result = new Map<string, SnapshotTask>();
-  for (const project of projects) {
-    for (const path of taskPaths) {
-      const digits = /TSK-([0-9A-Z]+)\.md$/.exec(path)?.[1];
-      if (
-        !digits ||
-        `${project.path === "." ? "" : project.path + "/"}workbench/${relativeRecordPath("TSK", digits).replaceAll("\\", "/")}` !==
-          path
-      )
-        continue;
-      const contents = blobs.get(entries.get(path)?.oid ?? "")?.toString();
-      if (contents === undefined) throw new InvalidInput(`Missing task: ${path}`);
-      const number = normalizedNumber(digits);
-      const parsed = parseProseRecord(contents, path),
-        workDigest = createHash("sha256")
-          .update(
-            JSON.stringify([
-              Object.fromEntries(Object.entries(parsed.metadata).filter(([key]) => key !== "status")),
-              parsed.body,
-              [...entries]
-                .filter(([file]) => file.startsWith(path.slice(0, -3) + "/"))
-                .map(([file, entry]) => [file, entry.mode, entry.oid]),
-            ]),
-          )
-          .digest("hex");
-      result.set(`${project.id}:TSK-${number}`, {
-        path,
-        status: recordDocument("TSK", contents, path).metadata.status,
-        digest: taskDigest(contents),
-        workDigest,
-        mode: entries.get(path)?.mode ?? "",
-      });
-    }
-  }
-  return result;
-}
 export function checkAgentCommit(root: string, tree?: string): void {
   const selected = tree ?? stagedReviewTree(root);
   const base = hasHead(root) ? reviewTree(root, "HEAD") : emptyReviewTree(root);
@@ -390,14 +332,14 @@ function checkTaskDecisions(
   associated: string[] = [],
   baseline?: string,
 ): void {
-  const previous = baseline ? treeTasks(root, baseline) : new Map<string, SnapshotTask>();
+  const previous = baseline ? treeTasks(root, baseline) : undefined;
   const tasks = treeTasks(root, tree),
     decisions = readTaskDecisions(root);
   for (const reference of associated)
     if (!tasks.has(reference))
       throw new InvalidInput(`${reference}: associated task is missing from the reviewed snapshot.`);
   for (const [reference, task] of tasks) {
-    const prior = previous.get(reference);
+    const prior = previous?.get(reference);
     if (
       !associated.includes(reference) &&
       ((prior?.digest === task.digest && prior.workDigest === task.workDigest) ||
@@ -409,24 +351,27 @@ function checkTaskDecisions(
     if (associated.includes(reference) && !["Approved", "Accepted"].includes(task.status))
       throw new InvalidInput(`${reference}: approve the plan before committing associated implementation.`);
     if (task.status === "Planned" || task.status === "Canceled") continue;
-    if (
-      !["Approved", "Accepted"].includes(prior?.status ?? "") &&
-      !decisions.some((decision) => decision.reference === reference && decision.status === "Approved")
-    )
+    const approval = decisions.find((decision) => decision.reference === reference && decision.status === "Approved");
+    if (approval?.source === "developer-requested-review") {
+      const requested = readTaskPlanApproval(root, approval);
+      if (!requested || taskPlanApprovalDigest(requested.contents, requested.files) !== task.planScope())
+        throw new InvalidInput(`${reference}: the project review scope changed; obtain approval of the revised plan.`);
+    }
+    if (!["Approved", "Accepted"].includes(prior?.status ?? "") && !approval)
       throw new InvalidInput(
         `${reference}: human plan approval is required; use 'workbench task approve' or the task page.`,
       );
     if (task.status === "Accepted" || publishing) {
       if (task.status !== "Accepted")
         throw new InvalidInput(`${reference}: human acceptance is required before publishing implementation.`);
+      const version = task.outcome();
       if (
         !decisions.some(
           (decision) =>
             decision.reference === reference &&
             decision.status === "Accepted" &&
             decision.digest === task.digest &&
-            decision.tree !== undefined &&
-            acceptedTaskOutcome(root, reference, task, decision.tree),
+            acceptedTaskVersion(root, decision) === version,
         )
       )
         throw new InvalidInput(
@@ -535,14 +480,6 @@ export function checkAgentUnit(root: string, base: string, tree: string): void {
     throw new InvalidInput(
       "Agent change review and verification are required for this commit; use workbench review changes --commit <revision> --record",
     );
-}
-
-function acceptedTaskOutcome(root: string, reference: string, current: SnapshotTask, tree: string): boolean {
-  if (!gitRevision(root, `${tree}^{tree}`)) return false;
-  const accepted = treeTasks(root, tree).get(reference);
-  return (
-    accepted?.status === "Accepted" && accepted.digest === current.digest && accepted.workDigest === current.workDigest
-  );
 }
 
 function retainedChangeContexts(root: string): Set<string> {

@@ -7,10 +7,24 @@ import { badge } from "./components.js";
 import { recordURL } from "../routes/locations.js";
 import { referenceLink } from "./record-links.js";
 import type { WorkspaceView } from "../workspace/workspace-service.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { reviewLocation, workflowRecordURL } from "../review/review-navigation.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
+import { TaskLifecycle } from "../../core/tasks/task-workflow.js";
 
-export function recordStatus(record: BrowserRecord): JSX.Element | null {
+export function recordStatus(
+  record: Pick<BrowserRecord, "id" | "type" | "status">,
+  context: WorkspaceView,
+): JSX.Element | null {
+  if (record.type === "TSK") {
+    const state = context.taskState(record.id);
+    if (state === TaskLifecycle.AwaitingApproval)
+      return (
+        <a class="badge pending" href={workflowRecordURL(context, record.id)}>
+          {state}
+        </a>
+      );
+    if (state) return badge(state, state === TaskLifecycle.AwaitingAcceptance ? "pending" : undefined);
+  }
   if (!record.status) return null;
   return badge(
     record.type === "EXP" && experimentIsResult(record.status)
@@ -28,49 +42,60 @@ export function timeTag(value: string): JSX.Element {
 export function addedAtTag(value?: string): JSX.Element | null {
   return value ? <span class="badge">Added {timeTag(value)}</span> : null;
 }
-export function recordList(records: BrowserRecord[], context: WorkspaceView, headingLevel: 2 | 3 = 2): JSX.Element {
+export function recordRow(
+  record: BrowserRecord,
+  context: WorkspaceView,
+  headingLevel: 2 | 3,
+  href: string,
+): JSX.Element {
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  return (
+    <article key={record.id} class="record-row" data-card="" data-record-id={record.id} tabIndex={-1}>
+      {badge(record.id)}
+      {record.type === "CHARTER" && record.collection && badge("Collection charter · context")}
+      {record.local && badge("Local collection · read only")}
+      {recordStatus(record, context)}
+      {addedAtTag(record.addedAt)}
+      {!record.local && context.hasPendingReview(record.path) && (
+        <a class="badge pending" aria-label={record.id + ": Needs review"} href={reviewLocation(context, record)}>
+          Needs review
+        </a>
+      )}
+      {record.citationPresence &&
+        ("error" in record.citationPresence
+          ? badge("Document status unavailable", "pending")
+          : badge(
+              record.citationPresence.present
+                ? String(record.citationPresence.present) +
+                    "/" +
+                    String(record.citationPresence.total) +
+                    " documents present"
+                : "No local document",
+              record.citationPresence.present ? "approved" : "pending",
+            ))}
+      {record.adaptation && badge(record.adaptation === "modified" ? "Adapted" : "Added to collection", "pending")}
+      <Heading>
+        <a data-card-link="" href={href}>
+          {record.title}
+        </a>
+      </Heading>
+      {record.summary && <p class="muted">{record.summary}</p>}
+      {record.previewError && (
+        <p class="notice error" data-preview-error="">
+          Preview unavailable: {record.previewError}
+        </p>
+      )}
+    </article>
+  );
+}
+export function recordList(
+  records: BrowserRecord[],
+  context: WorkspaceView,
+  headingLevel: 2 | 3 = 2,
+  location: (record: BrowserRecord) => string = (record) => recordURL(record.id),
+): JSX.Element {
   return records.length ? (
-    <div class="panel">
-      {records.map((record) => (
-        <article class="record-row" data-card="" data-record-id={record.id} tabIndex={-1}>
-          {badge(record.id)}
-          {record.type === "CHARTER" && record.collection && badge("Collection charter · context")}
-          {record.local && badge("Local collection · read only")}
-          {recordStatus(record)}
-          {addedAtTag(record.addedAt)}
-          {!record.local && context.hasPendingReview(record.path) && (
-            <a class="badge pending" aria-label={record.id + ": Needs review"} href={reviewLocation(context, record)}>
-              Needs review
-            </a>
-          )}
-          {record.citationPresence &&
-            ("error" in record.citationPresence
-              ? badge("Document status unavailable", "pending")
-              : badge(
-                  record.citationPresence.present
-                    ? String(record.citationPresence.present) +
-                        "/" +
-                        String(record.citationPresence.total) +
-                        " documents present"
-                    : "No local document",
-                  record.citationPresence.present ? "approved" : "pending",
-                ))}
-          {record.adaptation && badge(record.adaptation === "modified" ? "Adapted" : "Added to collection", "pending")}
-          <Heading>
-            <a data-card-link="" href={recordURL(record.id)}>
-              {record.title}
-            </a>
-          </Heading>
-          {record.summary && <p class="muted">{record.summary}</p>}
-          {record.previewError && (
-            <p class="notice error" data-preview-error="">
-              Preview unavailable: {record.previewError}
-            </p>
-          )}
-        </article>
-      ))}
-    </div>
+    <div class="panel">{records.map((record) => recordRow(record, context, headingLevel, location(record)))}</div>
   ) : (
     <p class="empty">No matching records.</p>
   );

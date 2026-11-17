@@ -10,6 +10,8 @@ import { totalBytes } from "../../core/runtime/byte-size.js";
 import type { CacheSize } from "../../core/storage/cache-size.js";
 import { cacheQuantity } from "./cache-quantity.js";
 import type { CacheMeasurement } from "./size-protocol.js";
+import type { Quantity } from "./cache-quantity.js";
+import type { ProjectCacheSizeUpdate } from "./inventory-protocol.js";
 
 function groupByOwner<T>(entries: readonly T[], owner: (entry: T) => string | undefined): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -156,4 +158,44 @@ export function projectQuantities(
       shared.map((entry) => entry.directory),
     ),
   };
+}
+
+export function ownershipAccountingUnknown(data: InventoryView): boolean {
+  return data.issues.some((issue) => ["builds", "builders", "registry"].includes(issue.component));
+}
+
+/** A directory completion only revisits totals that depend on that directory. */
+export class ProjectCacheSizes {
+  private readonly sizes: Map<string, CacheSize>;
+  private readonly groups = new Map<string, { cell: string; quantity: Quantity; pending: Set<string> }[]>();
+
+  constructor(data: InventoryView) {
+    this.sizes = new Map(data.sizes.map((size) => [size.directory, size]));
+    const unknown = ownershipAccountingUnknown(data);
+    for (const view of projectCacheViews(new InventoryIndex(data), data.projects, "caches")) {
+      for (const [name, quantity] of Object.entries(projectQuantities(view, this.sizes, unknown))) {
+        if (quantity.uncertain) continue;
+        const pending = new Set(quantity.directories.filter((path) => this.sizes.get(path)?.state !== "ready"));
+        const group = { cell: `${view.id}-${name}`, quantity, pending };
+        for (const directory of quantity.directories) {
+          const members = this.groups.get(directory);
+          if (members) members.push(group);
+          else this.groups.set(directory, [group]);
+        }
+      }
+    }
+  }
+
+  update(size: CacheSize): Omit<ProjectCacheSizeUpdate, "revision">[] {
+    this.sizes.set(size.directory, size);
+    const updates = [];
+    for (const { cell, quantity, pending } of this.groups.get(size.directory) ?? []) {
+      if (size.state === "ready") pending.delete(size.directory);
+      else pending.add(size.directory);
+      if (pending.size) continue;
+      const { text, title } = cacheQuantity(true, this.sizes, quantity.directories, quantity.extra);
+      updates.push({ cell, text, title });
+    }
+    return updates;
+  }
 }

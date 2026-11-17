@@ -178,8 +178,16 @@ measurements. Workflow comparisons include the work needed for their end-to-end 
 
 Tasks have four shared states: **Planned**, **Approved**, **Accepted**, and **Canceled**. Approving authorizes the
 current plan; accepting confirms that its outcome meets the developer's expectations. A plan can stay Planned while it
-is refined. Material changes require renewed approval. Task records contain a human-readable overview followed by
-proportionate implementation details and verification evidence.
+is refined. Material changes require renewed approval.
+
+Use these peer Markdown headings in plans and task records. Add sections as the work needs them.
+
+- `## Review summary` explains why the work matters, what it delivers, and how the approach works. Put
+  `### Decisions before approval` first within the summary when choices remain. A `### Delivery checklist` can track
+  distinct deliveries when the task spans several steps or commits.
+- `## Implementation account` records delivered behavior, significant decisions, and relevant verification once
+  implementation begins. Keep the planned scope outside this section.
+- `## Implementing-agent detail` holds supporting design and planned verification when the work warrants more detail.
 
 Keep unresolved recommendations distinct from agreed requirements. Record significant implementation decisions and their
 reasons, distinguishing agent choices from human direction and retaining important rejected or deferred alternatives.
@@ -199,8 +207,12 @@ implementation, material departures from the plan, and verification results. Pre
 a conversation transcript. Move useful planning documents into the task or its supporting directory instead of
 maintaining duplicate accounts under `docs/`; keep current user and architecture guidance in the normal guides.
 
-Keep delivery updates under `Implementation account`, with planned scope outside it. Updating that account or checking
-off delivery steps does not itself revise the approved plan.
+Updating the implementation account or checking off delivery steps does not itself revise the approved plan.
+
+CLI and browser plan review format the selected document before presenting it. Approval survives prose reflow and
+equivalent list spacing; wording, links, deliberate breaks, code, and supporting-file changes remain significant. The
+exact approved version remains the comparison baseline. Personal drafts need no formatting validation or formatting gate
+on the planning branch.
 
 The task schema allows one parent and multiple dependencies, rejects missing relationships and cycles, and keeps task
 state authoritative over its checklist. The default task view and generated map preserve nesting; state history and the
@@ -214,7 +226,9 @@ parents in another phase; the selected execution queue retains its explicit run 
 `--project <id>` for a scope, and `--json` for structured output. `workbench task show <reference>` reads the full
 record; `task show <reference> --diff` compares it with the retained approved plan. Human decisions use
 `workbench task approve`, `accept`, `replan`, or `cancel` followed by the task reference. `--expected <sha256>` binds a
-decision to the digest returned by `task show --json`. Cancellation requires `--reason "Why work stopped"`.
+decision to the digest returned by `task show --json`. Supply an optional `--reason "Why work stopped"` when canceling.
+Pass several scoped references to `task approve` or `task accept` for one terminal confirmation. When supplying digests,
+repeat `--expected` in reference order. `task approve` also accepts scoped named plans.
 
 Future plans can remain outside implementation history. `workbench task plan configure --branch workbench/plans` enables
 an independent planning branch; the branch name is configurable and storage is disabled by default. An optional
@@ -246,13 +260,14 @@ saves exact bytes to a new file and refuses to replace an existing file. Later c
 `task plan rename service background-service --expected <digest>` updates saved relationships and queue references
 together. Related edits checkpoint together; unrelated drafts remain uncommitted.
 
-Unapproved plans appear by Added date, oldest first. Approval appends the plan to the local work queue; revised approval
-preserves its position and progress. There is no separate plan-selection step. Starting requires approval and satisfied
-prerequisites. `queue start plan/service` assigns a numeric task ID and copies the plan, its supporting files, and
-approval into implementation. Starting a child also preserves its ancestor context without approving that context or
-starting siblings. The numeric task becomes authoritative. After its first implementation commit is verified, Workbench
-retires the saved plan and updates remaining references. `task plan recover` resumes interrupted transfers, renames, and
-checkpoints while preserving intervening edits.
+Plans orders the backlog by Added date, oldest first. Approval appends work to the local queue. A task awaiting revised
+approval moves to Reviews and retains its queue position and completed work. `workbench queue --ready` lists eligible
+started tasks before unstarted work. Starting requires approval and satisfied prerequisites. `queue start plan/service`
+assigns a numeric task ID and copies the plan, its supporting files, and approval into implementation. Starting a child
+also preserves its ancestor context without approving that context or starting siblings. The numeric task becomes
+authoritative. After its first implementation commit is verified, Workbench retires the saved plan and updates remaining
+references. `task plan recover` resumes interrupted transfers, renames, and checkpoints while preserving intervening
+edits.
 
 Create future plans and checkpoint drafts through the CLI. The browser supports editing, approval, cancellation, and
 deletion of existing plans. Approval checkpoints the approved version when planning storage is enabled.
@@ -270,9 +285,10 @@ its output identifies a recovery reference.
 `task revert REFERENCE --reason TEXT` instead prepares an inverse change, retaining the task account and later unrelated
 work. Applying it stages files without committing and returns the outcome to verification: review and commit normally,
 then obtain human acceptance of the revised result. Mixed task commits must be separated first. Both operations retain
-recovery references; `task recover` resumes an interrupted application. The browser offers the same previews and
-explicit confirmations. Cancellation preserves existing work; accepted work must be reopened or explicitly reverted.
-Active queued work must be released or blocked before cancellation.
+recovery references; `task recover` resumes an interrupted application. To cancel a task with committed work, open its
+task actions in the browser and choose whether to remove the commits locally or add an inverse commit. The preview
+shows the affected files and any known publication. Release or block active work before cancellation. Reopen or revert
+accepted work from its task page.
 
 Use `workbench commit history --branches` to list local branches, or `commit history BRANCH` to read its retained
 first-parent history. `--from REVISION` continues an older page; `--diff` and optional `--file PATH` show one commit's
@@ -290,18 +306,23 @@ authorize a particular batch to run in parallel; that permission applies only to
 `queue --ready --json` shows approved tasks with satisfied prerequisites. There is no separate `next` command or command
 abbreviation.
 
-The web task workflow presents Plans, Work, and Outcomes on one page. Plans await human approval; Work shows approved
-tasks and their local execution progress; Outcomes await human acceptance. Document reviews and the task record browser
-remain separate from this workflow.
+The browser separates Plans, Work, and Reviews. Plans await human approval; Work shows approved tasks and local
+execution progress; Reviews combines document acknowledgments with completed-task acceptance. Record browsing remains
+separate.
 
 Use `queue start <reference>` to claim work; `queue implemented <reference> --evidence "Checks and outcome"` records a
 verified result pending acceptance. `queue block <reference> "Reason"` suspends work; `queue release <reference>`
 returns it to queued and discards its local evidence. `queue remove <reference>` removes inactive work from the
 selection. Agents maintain this execution progress through the CLI. The browser shows progress and blockers and provides
-human approval, ordering, and acceptance; it does not dispatch agents or change their execution progress. Shared-state
-changes retain a bounded recovery record while publishing record files, regenerated maps, queue progress, and human
-decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer human decisions stop
-recovery with a diagnostic rather than overwriting them.
+human approval, ordering, and acceptance; it does not dispatch agents or change their execution progress.
+
+When a change needs revised plan approval, pause implementation and run `workbench task replan <reference>`. This
+sends the task to Reviews, releases its active claim, and keeps its queue position. Approval makes the task eligible
+to resume once its other prerequisites are satisfied. Use `queue block` for an independent obstacle.
+
+Shared-state changes retain a bounded recovery record while publishing record files, regenerated maps, queue progress,
+and human decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer human
+decisions stop recovery with a diagnostic rather than overwriting them.
 
 The queue persists under the native Workbench state directory, is never committed, and survives cache cleanup. These
 commands coordinate work; they do not launch agents or commit, squash, or push changes. Publication restrictions are
@@ -371,6 +392,9 @@ Keep supporting files beside their owning record in a directory with the same fi
 `workbench/decisions/ADR-00.md` may link a diagram at `ADR-00/design.svg`; the directory is
 `workbench/decisions/ADR-00/`. This convention applies to every record type. Supporting files are not discovered as
 records. Acquired citation PDFs and published release artifacts retain their separately configured storage.
+
+For illustrations shared with a user guide, live project records can embed an SVG from `docs/images/` with a relative
+Markdown image link. Keep evidence that belongs to a particular decision, plan, or outcome with that record.
 
 After publishing immutable artifacts, `workbench record add release SPECIFICATION_PATH` computes their sizes and SHA-256
 digests and creates a `REL` record. `workbench sync` derives `workbench/release-index.tsv`; setup does not use that
@@ -608,12 +632,11 @@ associations when it observes the covered work at the destination. Human acknowl
 separately.
 
 With human task decisions enabled, task approval and acceptance require confirmation through the interactive task CLI or
-task page. Local implementation commits may precede acceptance. Acceptance captures the current project files through a
-private Git index and preserves the real index. The acceptance applies to the exact task record and supporting files.
-An unchanged outcome remains accepted across commits, squashes, and rebases. Update the task record when the delivered
-outcome changes so the new version receives human acceptance. Agent review still covers the outgoing project snapshot.
-Planning records can be published before implementation approval. Review receipts attest the reviewer's assessment;
-they do not authenticate a human identity or prove review quality.
+task page. Local implementation commits may precede acceptance. Task acceptance covers the exact record and supporting
+files, including their names and executable modes. An unchanged outcome remains accepted across commits, squashes, and
+rebases. Update the task record when the delivered outcome changes so the new version receives human acceptance.
+Agent review still covers the outgoing project snapshot. Planning records can be published before implementation approval.
+Review receipts attest the reviewer's assessment; they do not authenticate a human identity or prove review quality.
 
 ## Archived-record storage
 
@@ -699,8 +722,8 @@ block finalization; no command here pushes a branch.
 
 Fold accepted task-state changes into their owning delivery before finalizing, rather than adding approval-only commits.
 For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that
-revision in a disposable checkout. Integration preserves accepted comparison authority without inventing private review
-receipts.
+revision in a disposable checkout. During integration, finalized Git history can carry a document review forward when
+the versions on both sides of the comparison still match. The original local receipt is optional in that case.
 
 ### Git recovery references
 

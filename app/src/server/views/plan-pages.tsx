@@ -1,17 +1,24 @@
+import { recordPane } from "./record-pane.js";
+import { taskWorkflowNavigation, workflowParent } from "./workflow-navigation.js";
+import { sourceQuery, sourceURL } from "../routes/sources.js";
 import { planDeletion } from "../../core/tasks/planning/plan-disposition.js";
 import type { ComponentChildren } from "preact";
 import { planningPaths, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
 import { WebError } from "../http/errors.js";
 import { Route, type RouteQuery } from "../routes/routes.js";
 import { routeURL } from "../routes/locations.js";
-import { DifferenceLayout } from "../routes/navigation-state.js";
+import { DifferenceLayout, differenceLayout } from "../routes/navigation-state.js";
 import { shell } from "./page-frame.js";
 import { badge, panel, submitButton, confirmationActions } from "./components.js";
 import { mutationForm } from "./action-forms.js";
 import { linkButton, diffLayout } from "./render-links.js";
 import { markdown } from "./markdown-view.js";
 import { sourceDiffView } from "./diff-view.js";
-import { addedAtTag } from "./record-content.js";
+import { addedAtTag, recordStatus } from "./record-content.js";
+import { taskDecisionActions } from "./task-decision-actions.js";
+import { TaskLifecycle } from "../../core/tasks/task-workflow.js";
+import { reviewPreparationForm } from "./review-page.js";
+import { PreparationState } from "../review/review-state.js";
 import type { ViewContext } from "../workspace/view-context.js";
 import { isSvg } from "../documents/document-image.js";
 import type { PlanningRecord } from "../../core/tasks/planning/planning-read-model.js";
@@ -27,14 +34,23 @@ export function planPage(
   if (!plan) throw new WebError(404, "Plan not found");
   if (plan.implementation && parameters.view === "edit")
     throw new WebError(409, "Edit the implementation task; this saved plan is read only");
-  const back = routeURL(Route.Plan, { id: plan.reference, scope: plan.scope });
+  const location = (values: Omit<RouteQuery<typeof Route.Plan>, "id"> = {}) =>
+    sourceURL(context, routeURL(Route.Plan, { id: plan.reference, ...values }));
+  const back = location();
+  const navigation = taskWorkflowNavigation(context, plan.reference);
+  const state = context.taskState(plan.reference);
+  const active = navigation.active ?? "plans";
+  const planActions = !plan.approval;
+  const cancelLabel = planActions ? "Cancel plan" : "Cancel task";
+  const workflow = navigation.phase ? navigation.parents : [workflowParent(context, Route.Plans)];
+  const parents = [...workflow, { label: plan.title, href: back }];
   if (parameters.view === "cancel") {
     if (plan.implementation || plan.status === "Canceled" || plan.problem || plan.conflict)
       throw new WebError(409, "This plan cannot be canceled in its current state");
     return shell(
       context,
-      "Cancel plan",
-      "queue",
+      cancelLabel,
+      active,
       <>
         <p>{plan.title}</p>
         {mutationForm({
@@ -57,6 +73,7 @@ export function planPage(
           ),
         })}
       </>,
+      { parents },
     );
   }
   if (parameters.view === "delete") {
@@ -64,7 +81,7 @@ export function planPage(
     return shell(
       context,
       "Delete plan",
-      "queue",
+      active,
       <>
         <p>{proposal.title}</p>
         <ul>
@@ -92,16 +109,19 @@ export function planPage(
         )}
         {proposal.problems.length > 0 && linkButton("Back", back, true)}
       </>,
+      { parents },
     );
   }
   const changed = !!plan.approval && (plan.approval.contents !== plan.contents || plan.changedFiles.length > 0);
+  const indexedPath = context.index.byId.get(plan.reference)?.path;
+  const needsPreparation =
+    indexedPath !== undefined &&
+    context.index.snapshot.reviewPreparation.files.get(indexedPath)?.state === PreparationState.Required;
   const view = parameters.view ?? (changed ? "changes" : "read"),
     split = parameters.layout === DifferenceLayout.Split,
     url = (view: "changes" | "edit") =>
-      routeURL(Route.Plan, {
-        id: plan.reference,
+      location({
         view,
-        scope: context.scope,
         ...(view === "changes" ? { layout: split ? DifferenceLayout.Split : DifferenceLayout.Inline } : {}),
       }),
     record = {
@@ -110,16 +130,20 @@ export function planPage(
       title: plan.title,
       type: "TSK" as const,
       scope: plan.scope,
+      fileSource: sourceQuery(context),
       planFiles: { reference: plan.reference, files: attachmentBlobs(plan.files) },
     };
   const approvedBlobs = attachmentBlobs(plan.approval?.files ?? []);
   const fileLink = (name: string, version?: "approved", image?: string) =>
-    routeURL(Route.PlanFile, {
-      id: plan.reference,
-      path: name,
-      ...(version ? { version } : {}),
-      ...(image ? { image } : {}),
-    });
+    sourceURL(
+      context,
+      routeURL(Route.PlanFile, {
+        id: plan.reference,
+        path: name,
+        ...(version ? { version } : {}),
+        ...(image ? { image } : {}),
+      }),
+    );
   let body: ComponentChildren;
   if (view === "edit")
     body = mutationForm({
@@ -162,11 +186,11 @@ export function planPage(
   return shell(
     context,
     plan.title,
-    "queue",
+    active,
     <>
       <p class="record-location">
         <span class="file-path">{plan.name}</span>
-        {badge(plan.status)}
+        {recordStatus({ id: plan.reference, type: "TSK", status: plan.status }, context)}
         {addedAtTag(plan.addedAt)}
         {plan.draft && badge("Draft")}
       </p>
@@ -191,27 +215,37 @@ export function planPage(
           The draft and planning branch changed independently. Reconcile both versions before approval.
         </p>
       )}
-      {panel(body, {
-        tools:
-          view !== "edit" ? (
-            <>
-              {view === "changes" && diffLayout(url("changes"), split)}
-              {!plan.implementation && linkButton("Edit", url("edit"), true)}
-            </>
-          ) : null,
-      })}
+      {recordPane(
+        panel(body, {
+          tools:
+            view !== "edit" ? (
+              <>
+                {view === "changes" && diffLayout(url("changes"), split)}
+                {!plan.implementation && linkButton("Edit", url("edit"), true)}
+              </>
+            ) : null,
+        }),
+        navigation,
+      )}
       {plan.changedFiles.length > 0 && plan.approval && (
         <ul aria-label="Supporting file changes">
           {plan.changedFiles.map((file) => (
             <li key={file.name}>
               {file.name}: {file.change}{" "}
               {file.change !== "added" && (
-                <a href={routeURL(Route.PlanFile, { id: plan.reference, path: file.name, version: "approved" })}>
+                <a
+                  href={sourceURL(
+                    context,
+                    routeURL(Route.PlanFile, { id: plan.reference, path: file.name, version: "approved" }),
+                  )}
+                >
                   Previous
                 </a>
               )}{" "}
               {file.change !== "removed" && (
-                <a href={routeURL(Route.PlanFile, { id: plan.reference, path: file.name })}>Current</a>
+                <a href={sourceURL(context, routeURL(Route.PlanFile, { id: plan.reference, path: file.name }))}>
+                  Current
+                </a>
               )}
               {view === "changes" && isSvg(file.name) && (
                 <div class="document">
@@ -265,7 +299,7 @@ export function planPage(
           <ul>
             {plan.files.map((file) => (
               <li key={file.name}>
-                <a href={routeURL(Route.PlanFile, { id: plan.reference, path: file.name })}>
+                <a href={sourceURL(context, routeURL(Route.PlanFile, { id: plan.reference, path: file.name }))}>
                   {planningPaths.files + file.name}
                 </a>
               </li>
@@ -275,39 +309,58 @@ export function planPage(
       )}
       {view !== "edit" && !plan.implementation && (
         <section aria-label="Plan actions" class="task-workflow">
-          {!plan.problem && !plan.conflict && plan.status !== "Canceled" && !plan.approval?.current && (
-            <div class="task-actions">
-              {mutationForm({
-                action: Route.PlanApprove,
-                context,
-                csrf: context.csrf,
-                fields: { reference: plan.reference, expected: plan.digest },
-                children: () => submitButton(plan.approval ? "Approve revised plan" : "Approve plan"),
-              })}
-            </div>
-          )}
-          <details>
-            <summary>Plan actions</summary>
-            <div class="task-actions">
-              {linkButton(
-                "Delete plan",
-                routeURL(Route.Plan, { id: plan.reference, view: "delete", scope: plan.scope }),
-                true,
-              )}
-              {!plan.problem &&
+          {taskDecisionActions(
+            planActions ? "plan" : "task",
+            !plan.problem &&
+              !plan.conflict &&
+              (state === TaskLifecycle.Planned || state === TaskLifecycle.AwaitingApproval)
+              ? needsPreparation
+                ? reviewPreparationForm(
+                    context,
+                    {
+                      owner: indexedPath,
+                      layout: differenceLayout(parameters),
+                      task: { reference: plan.reference, expected: plan.digest },
+                      ...(parameters.view === "read" || parameters.view === "changes"
+                        ? { recordView: parameters.view }
+                        : {}),
+                    },
+                    "Review plan",
+                  )
+                : mutationForm({
+                    action: Route.PlanApprove,
+                    context,
+                    csrf: context.csrf,
+                    fields: { reference: plan.reference, expected: plan.digest },
+                    children: () => submitButton("Approve plan"),
+                  })
+              : null,
+            [
+              planActions && linkButton("Delete plan", location({ view: "delete" }), true),
+              !plan.problem &&
                 !plan.conflict &&
-                plan.status !== "Canceled" &&
-                linkButton(
-                  "Cancel plan",
-                  routeURL(Route.Plan, { id: plan.reference, view: "cancel", scope: plan.scope }),
-                  true,
-                )}
-            </div>
-          </details>
+                state !== TaskLifecycle.Canceled &&
+                linkButton(cancelLabel, location({ view: "cancel" }), true),
+              !plan.problem &&
+                !plan.conflict &&
+                (state === TaskLifecycle.Canceled || state === TaskLifecycle.AwaitingImplementation) &&
+                mutationForm({
+                  action: Route.PlanApprove,
+                  context,
+                  csrf: context.csrf,
+                  fields: { reference: plan.reference, expected: plan.digest, intent: "revise" },
+                  children: () =>
+                    submitButton(
+                      state === TaskLifecycle.Canceled ? (planActions ? "Reopen plan" : "Reopen task") : "Revise plan",
+                      { secondary: true },
+                    ),
+                }),
+            ],
+          )}
         </section>
       )}
     </>,
-    { parents: [{ label: "Workflow", href: routeURL(Route.TaskQueue, { scope: plan.scope }) }] },
+    { parents: workflow },
   );
 }
 
@@ -319,7 +372,9 @@ export function planFilePage(
   const id = parameters.id ?? "",
     path = parameters.path ?? "";
   const plan = context.index.snapshot.tasks.plans.find((plan) => plan.reference === id);
+  const navigation = taskWorkflowNavigation(context, id);
   const record = {
+    fileSource: sourceQuery(context),
     directory: context.root,
     path,
     ...(plan ? { scope: plan.scope } : {}),
@@ -337,7 +392,7 @@ export function planFilePage(
   return shell(
     context,
     path,
-    "queue",
+    navigation.active ?? "plans",
     <>
       {panel(
         contents === undefined ? (
@@ -354,8 +409,8 @@ export function planFilePage(
     </>,
     {
       parents: [
-        { label: "Workflow", href: routeURL(Route.TaskQueue, { scope: context.scope }) },
-        { label: id, href: routeURL(Route.Plan, { id }) },
+        ...(navigation.phase ? navigation.parents : [workflowParent(context, Route.Plans)]),
+        { label: plan?.title ?? id, href: sourceURL(context, routeURL(Route.Plan, { id })) },
       ],
     },
   );

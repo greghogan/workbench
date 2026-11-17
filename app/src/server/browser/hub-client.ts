@@ -4,8 +4,10 @@ import type { Browser } from "./browser-session.js";
 import { cacheQuantity } from "../cache/cache-quantity.js";
 import {
   decodeInventoryPatch as decodePatch,
+  decodeProjectCacheSize,
   isInventorySection,
   type InventoryPatch,
+  type ProjectCacheSizeUpdate,
 } from "../cache/inventory-protocol.js";
 import { decodeCacheMeasurement as decodeSize } from "../cache/size-protocol.js";
 import { startCachePreviews } from "./cache-previews.js";
@@ -36,6 +38,8 @@ export function startHubUpdates(browser: Browser): () => void {
   const stopPreviews = startCachePreviews(browser);
   let failures = 0;
   const sizes = new Map<string, CacheMeasurement>();
+  const projectSizes = new Map<string, ProjectCacheSizeUpdate>();
+  let inventoryRevision = 0;
   const reviewCounts = new Map<string, ReviewCountUpdate>();
   const reviewLinks = new Map<string, Set<HTMLElement>>();
   function showReviewCount(value: ReviewCountUpdate) {
@@ -73,13 +77,17 @@ export function startHubUpdates(browser: Browser): () => void {
   }
   const memberships = new Map<HTMLElement, string[]>();
   const cellsByDirectory = new Map<string, Set<HTMLElement>>();
+  const cellsById = new Map<string, HTMLElement>();
   const changedDirectories = new Set<string>();
   let frame: number | undefined;
   function indexCells() {
     memberships.clear();
     cellsByDirectory.clear();
-    for (const cell of document.querySelectorAll<HTMLElement>("[data-cache-members]")) {
-      const members: unknown = JSON.parse(cell.dataset.cacheMembers ?? "[]");
+    cellsById.clear();
+    for (const cell of document.querySelectorAll<HTMLElement>("[data-cache-cell]")) {
+      if (cell.dataset.cacheCell) cellsById.set(cell.dataset.cacheCell, cell);
+      if (cell.dataset.cacheMembers === undefined) continue;
+      const members: unknown = JSON.parse(cell.dataset.cacheMembers);
       if (!Array.isArray(members) || !members.every((member: unknown) => typeof member === "string")) continue;
       memberships.set(cell, members);
       for (const member of members) {
@@ -150,6 +158,17 @@ export function startHubUpdates(browser: Browser): () => void {
       delete cell.dataset.cachePending;
     }
   }
+  function showProjectSize(update: ProjectCacheSizeUpdate) {
+    const preview = update.cell.replace(/-(owned|eligible|retained|tools|shared)$/, "-preview-$1");
+    for (const id of [update.cell, preview]) {
+      const cell = cellsById.get(id);
+      if (!cell) continue;
+      const label = cell.querySelector("a") ?? cell;
+      if (label.textContent !== update.text) label.textContent = update.text;
+      cell.title = update.title;
+      delete cell.dataset.cachePending;
+    }
+  }
   function publish(patch: InventoryPatch) {
     const current = content();
     if (!current || stopped()) return;
@@ -190,7 +209,12 @@ export function startHubUpdates(browser: Browser): () => void {
             nextDisclosure = next.querySelector<HTMLDetailsElement>("details[data-worktree-list]");
           if (disclosure && nextDisclosure) nextDisclosure.open = disclosure.open;
           if (next.innerHTML === cell.innerHTML) continue;
-          if (next.dataset.cachePending === "true" && cell.textContent !== "Calculating…") continue;
+          if (
+            next.dataset.cachePending === "true" &&
+            next.textContent === "Calculating…" &&
+            cell.textContent !== "Calculating…"
+          )
+            continue;
           if (cell.contains(document.activeElement)) {
             postponed = true;
             continue;
@@ -237,6 +261,10 @@ export function startHubUpdates(browser: Browser): () => void {
     indexReviews();
     for (const directory of sizes.keys()) if (!cellsByDirectory.has(directory)) sizes.delete(directory);
     updateSizes();
+    inventoryRevision = Math.max(inventoryRevision, patch.revision ?? 0);
+    for (const [cell, value] of projectSizes)
+      if (value.revision <= inventoryRevision) projectSizes.delete(cell);
+      else showProjectSize(value);
     deferred = postponed ? patch : undefined;
   }
   async function refresh() {
@@ -309,6 +337,8 @@ export function startHubUpdates(browser: Browser): () => void {
     connection++;
     activeRead?.abort();
     deferred = undefined;
+    inventoryRevision = 0;
+    projectSizes.clear();
     reviewCounts.clear();
     for (const links of reviewLinks.values()) for (const link of links) link.dataset.reviewRevision = "0";
     schedule();
@@ -328,6 +358,17 @@ export function startHubUpdates(browser: Browser): () => void {
       if (!cellsByDirectory.has(measurement.id)) return;
       remember([measurement]);
       scheduleSizes();
+    } catch {
+      schedule();
+    }
+  });
+  events.addEventListener("project-size", (event) => {
+    try {
+      const value = decodeProjectCacheSize(JSON.parse((event as MessageEvent<string>).data) as unknown);
+      const last = projectSizes.get(value.cell)?.revision ?? inventoryRevision;
+      if (value.revision <= last) return;
+      projectSizes.set(value.cell, value);
+      showProjectSize(value);
     } catch {
       schedule();
     }

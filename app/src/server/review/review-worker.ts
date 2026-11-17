@@ -10,6 +10,8 @@ import { formatPendingReviews } from "../../core/review/review-formatting.js";
 
 import { decodeReviewRequest, type ReviewRequest } from "./review-protocol.js";
 import { WebAction } from "../../core/diagnostics/diagnostics.mjs";
+import { prepareTaskReview } from "../../core/tasks/task-formatting.js";
+import { changeTaskStatus } from "../../core/tasks/task-service.js";
 
 /** A single admitted review operation owns its worker until exit, including after a client disconnect. */
 export function runReviewWorker(request: ReviewRequest, bundle?: string): Promise<void> {
@@ -51,8 +53,14 @@ export async function serveReviewWorker(input: unknown): Promise<void> {
   try {
     const request = decodeReviewRequest(input);
     switch (request.operation) {
+      case WebAction.Task: {
+        const { root, reference, state, expected, reason } = request;
+        changeTaskStatus(root, reference, state, expected, true, reason);
+        break;
+      }
       case WebAction.ReviewPrepare:
-        await formatPendingReviews(request.root, join(request.root, request.path));
+        if (request.task) await prepareTaskReview(request.root, request.task.reference, request.task.expected);
+        else await formatPendingReviews(request.root, join(request.root, request.path));
         break;
       case WebAction.Review:
         approvePresentedReview(request.root, request.version, request.digest, request.humanWritten);

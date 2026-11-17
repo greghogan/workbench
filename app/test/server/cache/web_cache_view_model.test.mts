@@ -1,14 +1,14 @@
 import { resolve } from "node:path";
 import { expect, test } from "vitest";
-import { InventoryIndex, projectCacheViews } from "../../../src/server/cache/cache-view-model.js";
+import { InventoryIndex, projectCacheViews, projectQuantities } from "../../../src/server/cache/cache-view-model.js";
 import { emptyInventory } from "../../../src/server/cache/cache-inventory.js";
 import type { InventoryView } from "../../../src/server/cache/inventory-service.js";
 import type { ToolCacheEntry } from "../../../src/core/toolchains/tool-cache.js";
 import type { RegisteredProject } from "../../../src/core/projects/project-registry.js";
 import { inventoryPresentation, inventoryPatch } from "../../../src/server/views/hub-pages.tsx";
 import { decodeInventoryPatch } from "../../../src/server/cache/inventory-protocol.js";
-import { cacheQuantity } from "../../../src/server/cache/cache-quantity.js";
 import { parseDOM } from "../../fixtures/dom.mjs";
+import { formatBytes } from "../../../src/core/runtime/byte-size.js";
 
 test.each(["projects", "caches"] as const)(
   "%s orders display names without regard to case, with paths breaking ties and registry order preserved",
@@ -121,17 +121,69 @@ test("indexed ownership and version families agree with independent catalog scan
   const patch = decodeInventoryPatch(
       JSON.parse(JSON.stringify(inventoryPatch(inventoryPresentation(data, projects, "csrf", "projects")))),
     ),
-    measured = new Map(patch.sizes.map((size) => [size.id, size])),
     document = parseDOM(`<table>${patch.sections.projects ?? ""}</table>`).window.document;
-  // Public measurement identifiers preserve live totals without repeating private cache paths in every quantity.
   for (const entry of [...data.inventory.entries, ...entries])
     expect(JSON.stringify(patch)).not.toContain(entry.directory);
-  for (const cell of document.querySelectorAll<HTMLElement>("[data-cache-members]")) {
-    const members = JSON.parse(cell.dataset.cacheMembers ?? "[]") as string[];
-    for (const id of members) expect(measured.has(id)).toBe(true);
-    expect(cell.textContent).toBe(
-      cacheQuantity(true, measured, members, Number(cell.dataset.cacheExtraBytes ?? 0)).text,
-    );
+  expect(document.querySelector("[data-cache-members]")).toBeNull();
+  expect(patch.sizes).toHaveLength(0);
+  const measured = new Map(data.sizes.map((size) => [size.directory, size]));
+  for (const row of rows.slice(0, 2)) {
+    const displayed = document.querySelector(`[data-cache-cell="${row.id}-owned"]`);
+    expect(displayed?.textContent).toBe(projectQuantities(row, measured, false).owned.text);
   }
-  expect(patch.sizes).toHaveLength(4); // Two owned roots, and two referenced tools; unrelated caches stay off this page.
+});
+
+test("cache pages load bounded details while totals and continuation cover the complete inventory", () => {
+  const path = resolve("fixture/project"),
+    projects: RegisteredProject[] = [
+      { id: "fixture", path, name: "Fixture", state: "registered", updated: "2026-01-01T00:00:00Z" },
+    ],
+    data: InventoryView = { ...emptyInventory(), projects, complete: true, refreshing: false, problem: "" };
+  data.inventory.entries = Array.from({ length: 140 }, (_, n) => ({
+    kind: "builds",
+    directory: resolve("fixture/builds", String(n)),
+    bytes: 1,
+    identity: {
+      checkout: path,
+      root: `root-${String(n).padStart(3, "0")}`,
+      environment: "native",
+      fingerprint: "fixture",
+    },
+  }));
+  data.sizes = data.inventory.entries.map(({ directory }) => ({
+    directory,
+    state: "ready",
+    bytes: 1000,
+    measuredAt: "2026-01-01T00:00:00Z",
+  }));
+  const first = inventoryPresentation(data, projects, "csrf", "caches", path),
+    patch = inventoryPatch(first),
+    dom = parseDOM(`<table>${patch.sections.roots ?? ""}</table>`).window.document;
+  expect(dom.body.textContent).toContain("root-000");
+  expect(dom.body.textContent).not.toContain("root-139");
+  const totals = parseDOM(`<table>${patch.sections.projects ?? ""}</table>`).window.document;
+  expect(totals.querySelector('[data-cache-cell$="-owned"]')?.textContent).toBe(formatBytes(140_000));
+  const next = new URL(
+    dom.querySelector<HTMLAnchorElement>("nav a")?.getAttribute("href") ?? "",
+    "https://example.invalid",
+  );
+  expect(next.searchParams.get("project")).toBe("fixture");
+  let last = next;
+  for (let i = 0; i < 2; i++) {
+    const current = inventoryPresentation(data, projects, "csrf", "caches", path, undefined, undefined, {
+      section: "roots",
+      offset: last.searchParams.get("offset") ?? "0",
+    });
+    const recalculate = new URL(current.recalculateURL, last);
+    expect(recalculate.searchParams.get("project")).toBe("fixture");
+    expect(recalculate.searchParams.get("section")).toBe("roots");
+    expect(recalculate.searchParams.get("offset")).toBe(last.searchParams.get("offset"));
+    expect(recalculate.searchParams.get("refresh-sizes")).toBe("1");
+    const detail = inventoryPatch(current),
+      table = parseDOM(`<table>${detail.sections.roots ?? ""}</table>`).window.document;
+    expect(detail.sizes.length).toBeLessThanOrEqual(patch.sizes.length);
+    if (i === 1) expect(table.body.textContent).toContain("root-139");
+    const nextPage = table.querySelector<HTMLAnchorElement>("nav a:last-child")?.getAttribute("href");
+    if (nextPage) last = new URL(nextPage, last);
+  }
 });

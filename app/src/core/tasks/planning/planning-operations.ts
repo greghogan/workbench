@@ -293,8 +293,8 @@ export function approvePlanDraft(
     if (!humanReviewed) throw new InvalidInput("Human confirmation is required for plan approval");
     const current = currentPlan(root, identity, expected);
     if (!current) throw new InvalidInput("Plan not found");
-    if (current.approval?.current) return current;
-    return setDraft(root, identity, approvedEntries(root, current), current);
+    if (!current.approval?.current)
+      transaction(root, draftCommands(root, identity, approvedEntries(root, current), current));
   });
   if (planningSettings(root).branch) checkpointPlans(root, [identity]);
   changeTaskQueue(root, { action: "add", references: [identity.reference] });

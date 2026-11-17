@@ -181,11 +181,12 @@ test("task, queue, and experiment actions honor shared options without changing 
       queue.entries.map((entry) => entry.reference),
       ["api:TSK-0"],
     );
-    run("queue", "remove", "TSK-0", "--project", "api", "--json");
+    run("queue", "start", "TSK-0", "--project", "api", "--json");
     assert.deepEqual(JSON.parse(run("task", "replan", "TSK-0", "--project", "api", "--json")), {
       reference: "api:TSK-0",
       status: "Planned",
     });
+    assert.match(readFileSync(join(root, "api/workbench/tasks/TSK-00.md"), "utf8"), /status: Planned/);
     assert.match(readFileSync(join(root, "workbench/tasks/TSK-00.md"), "utf8"), /status: Approved/);
     for (const args of [
       ["experiment", "--project", "api", "--json", "show", "EXP-0"],

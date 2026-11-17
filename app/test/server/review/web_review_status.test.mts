@@ -106,8 +106,8 @@ test("staged-only changes are absent from the UI and cannot bypass commit review
   if (!candidate) throw new Error("Missing staged fixture");
   writeFileSync(join(root, adr), original);
   const web = await fixture.start(root);
-  const queue = await readWebPage(web, "/review");
-  expect(queue.html).toContain("No protected changes.");
+  const queue = await readWebPage(web, "/reviews");
+  expect(parseDOM(queue.html).window.document.querySelector("[data-review-source]")).toBeNull();
   expect((await readWebPage(web, `/review?path=${adr}`)).response.status).toBe(404);
   expect((await readWebPage(web, `/review?path=${adr}&review_source=staged`)).response.status).toBe(400);
   const listing = await readWebPage(web, "/records?type=ADR");
@@ -250,7 +250,7 @@ test("completed files leave the queue and later edits return them without losing
   writeFileSync(join(root, note), "Review the evidence.\n");
   writeFileSync(join(root, adr), text("Review this decision."));
   const web = await fixture.start(root);
-  const queue = async () => parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const queue = async () => parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   const entries = (document: Document) =>
     [...document.querySelectorAll<HTMLAnchorElement>("a[data-card-link]")].map((link) =>
       link.closest("[data-record-id]")?.getAttribute("data-record-id"),
@@ -279,7 +279,7 @@ test("completed files leave the queue and later edits return them without losing
   ).toEqual([note]);
   approve(root, note);
   expect(entries(await queue())).toEqual([]);
-  expect((await queue()).querySelector(".empty")?.textContent).toBe("No protected changes.");
+  expect((await queue()).querySelector(".empty")?.textContent).toBe("No reviews awaiting attention.");
   writeFileSync(join(root, adr), text("A new decision edit."));
   expect(entries(await queue())).toEqual(["demo:ADR-0"]);
   writeFileSync(join(root, "workbench/CHARTER.md"), "# Charter\n\nChanged human intent.\n");

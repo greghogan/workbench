@@ -61,19 +61,22 @@ test("prose record references receive scoped links and preview metadata without 
   );
 });
 
-test("record navigation stays beside the pane, follows record identity, and keeps collections separate", async () => {
+test("record lists and pane navigation follow newest IDs first and keep collections separate", async () => {
   adopt();
   for (const number of [1, 2])
     writeFileSync(
       join(root, `workbench/decisions/ADR-0${String(number)}.md`),
       `---\nsummary: Decision ${String(number)}.\n---\n\n# ADR-${String(number)}: Decision ${String(number)}\n\nDecision contents.\n`,
     );
+  const listing = await get("/records?type=ADR");
+  expect(recordIds(listing.html)).toEqual(["demo:ADR-2", "demo:ADR-1", "demo:ADR-0"]);
+  expect(listing.html).not.toContain("matching record(s).");
   const page = parseDOM((await get("/records/demo:ADR-1")).html).window.document;
-  expect(page.querySelector('.record-pane a[rel="prev"]')?.getAttribute("href")).toContain("/records/demo:ADR-0");
-  expect(page.querySelector('.record-pane a[rel="next"]')?.getAttribute("href")).toContain("/records/demo:ADR-2");
+  expect(page.querySelector('.record-pane a[rel="prev"]')?.getAttribute("href")).toContain("/records/demo:ADR-2");
+  expect(page.querySelector('.record-pane a[rel="next"]')?.getAttribute("href")).toContain("/records/demo:ADR-0");
   expect(page.querySelector(".record-pane-content > .panel")).not.toBeNull();
   expect(page.querySelector('[aria-label="Previous record"]')).not.toBeNull();
-  const first = parseDOM((await get("/records/demo:ADR-0")).html).window.document;
+  const first = parseDOM((await get("/records/demo:ADR-2")).html).window.document;
   expect(first.querySelector('.record-step:disabled[aria-label="Previous record"]')).not.toBeNull();
   const collection = parseDOM((await get("/records/company:ADR-0")).html).window.document;
   expect(collection.querySelector('.record-pane a[rel="next"]')).toBeNull();
@@ -99,9 +102,9 @@ test("project records and each collection have separate browsing and a unified r
     "company",
   );
   git(root, "add", "workbench");
-  const queue = await get("/review");
+  const queue = await get("/reviews");
   expect(reviewIds(queue.html)).toContain("company:ADR-0");
-  const collectionQueue = await get("/review?collection=company");
+  const collectionQueue = await get("/reviews?collection=company");
   expect(collectionQueue.response.status).toBe(200);
   expect(reviewIds(collectionQueue.html)).toEqual(["company:CHARTER", "company:ADR-0"]);
   expect((await get("/records?collection=missing")).response.status).toBe(404);
@@ -130,7 +133,7 @@ test("the web collection preview accepts all imported records in one submission"
     [...accept.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((input) => [input.name, input.value]),
   );
   expect((await postWebForm(web, accept.getAttribute("action") ?? "", fields)).status).toBe(200);
-  const queue = await get("/review");
+  const queue = await get("/reviews");
   expect(reviewIds(queue.html)).not.toContain("company:ADR-0");
   expect((await get("/records/company:ADR-0")).html).toContain("Use a bounded retry budget.");
   expect(git(root, "diff", "--cached", "--name-only")).toBe("");
@@ -318,7 +321,7 @@ test("record batches use stable base-36 cursors and detect a changed list", asyn
     );
   const first = await get("/records?type=TSK&status=Planned");
   expect(parseDOM(first.html).window.document.querySelectorAll("[data-record-id]")).toHaveLength(100);
-  const next = parseDOM(first.html).window.document.querySelector("[data-load-more]")?.getAttribute("href");
+  const next = parseDOM(first.html).window.document.querySelector("[data-task-more]")?.getAttribute("href");
   if (!next) throw new Error("missing load more link");
   const second = await get(next);
   expect(parseDOM(second.html).window.document.querySelectorAll("[data-record-id]")).toHaveLength(20);
@@ -330,7 +333,7 @@ test("record batches use stable base-36 cursors and detect a changed list", asyn
   expect((await get(next)).response.status).toBe(409);
 });
 
-test("all tasks group every state in ascending ID order and state pages show descending history", async () => {
+test("tasks use one descending ID order and a lifecycle filter", async () => {
   mkdirSync(join(root, "workbench/tasks"));
   const states = ["Approved", "Planned", "Accepted", "Canceled"];
   for (const [index, state] of states.entries()) {
@@ -345,21 +348,19 @@ test("all tasks group every state in ascending ID order and state pages show des
   expect(document.querySelector('nav[aria-label="Main navigation"] a[aria-current="page"]')?.textContent).toBe(
     "Tasks8",
   );
-  expect(
-    [...document.querySelectorAll("section[data-task-group]")].map((section) => section.getAttribute("aria-label")),
-    document.querySelector("main > section p")?.textContent ?? "",
-  ).toEqual(states);
-  expect(recordIds(main.html)).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((id) => `demo:TSK-${String(id)}`));
-  for (const [index, state] of states.entries()) {
-    const page = await get(`/records?type=TSK&status=${state}`);
+  expect(recordIds(main.html)).toEqual([8, 7, 6, 5, 4, 3, 2, 1].map((id) => `demo:TSK-${String(id)}`));
+  const displayed = ["Awaiting implementation", "Planned", "Accepted", "Canceled"];
+  for (const [index, state] of displayed.entries()) {
+    const page = await get(`/records?type=TSK&status=${encodeURIComponent(state)}`);
     expect(recordIds(page.html)).toEqual(
       [2 * index + 2, 2 * index + 1].map((id) => `demo:TSK-${id.toString(36).toUpperCase()}`),
     );
     const nav = parseDOM(page.html).window.document.querySelector('nav[aria-label="Task views"]');
     expect(nav?.querySelector('[aria-current="page"]')?.textContent).toBe(state);
-    expect(nav?.querySelectorAll("a")).toHaveLength(5);
   }
-  expect(recordIds((await get("/records?type=TSK&q=Task")).html)).toHaveLength(8);
+  expect(recordIds((await get("/records?type=TSK&q=Task")).html)).toEqual(
+    [8, 7, 6, 5, 4, 3, 2, 1].map((id) => `demo:TSK-${String(id)}`),
+  );
   expect((await get("/records?type=ADR&status=Active")).response.status).toBe(400);
   expect((await get("/records?type=TSK&status=Unknown")).response.status).toBe(400);
   writeFileSync(join(root, "workbench/tasks/TSK-0Z.md"), "# Invalid task\n\nMissing metadata.\n");

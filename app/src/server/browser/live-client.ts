@@ -3,9 +3,27 @@ import { decodeCompatibilityVersions, decodeReviewVersions } from "../review/rev
 import { Notice, type BrowserSession } from "./browser-session.js";
 import { captureFocus, restoreFocus } from "./focus.js";
 import { workspaceProblemText } from "../workspace/workspace-problem.js";
+import { startWorkflowNotifications } from "./workflow-notifications.js";
+
+const liveRegions = [
+  "main",
+  'nav[aria-label="Main navigation"]',
+  "[data-source-navigation]",
+  ".topbar .project-switch",
+  ".topbar .project-context",
+] as const;
+
+/** Compare server markup before enhancements add state such as rendered diagrams or expanded navigation. */
+export function captureLiveRegions(document: Document) {
+  return new Map(liveRegions.map((selector) => [selector, document.querySelector(selector)?.outerHTML]));
+}
 
 /** Own live connection and refresh publication; check draft ownership again after every asynchronous read. */
-export function startLiveUpdates(session: BrowserSession, afterPublish: () => void): () => void {
+export function startLiveUpdates(
+  session: BrowserSession,
+  regions: ReturnType<typeof captureLiveRegions>,
+  afterPublish: () => void,
+): () => void {
   const { browser, document } = session;
   const eventsUrl = document.body.dataset.eventsUrl;
   if (!eventsUrl) {
@@ -13,6 +31,7 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
     return () => undefined;
   }
   const events = new browser.EventSource(eventsUrl);
+  const closeNotifications = startWorkflowNotifications(session, events);
   let problem = document.body.dataset.workspaceProblem ?? "";
   if (problem) session.notify(workspaceProblemText(problem), Notice.Workspace);
   let revision = document.body.dataset.revision ?? "";
@@ -91,7 +110,19 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
         session.clearNotice(Notice.Refresh);
         return;
       }
-      const response = await browser.fetch(url.href, { headers: { Accept: "text/html" }, signal: session.signal });
+      const request = () => browser.fetch(url.href, { headers: { Accept: "text/html" }, signal: session.signal });
+      let response = await request();
+      let resetWindow = false;
+      if (response.status === 409 && document.querySelector('[data-task-window^="workflow-"]')) {
+        for (const key of ["phase", "after", "before", "through", "task_windows"]) {
+          if (url.searchParams.has(key)) resetWindow = true;
+          url.searchParams.delete(key);
+        }
+        if (resetWindow) {
+          await response.body?.cancel();
+          response = await request();
+        }
+      }
       if (!response.ok) throw await responseProblem(response);
       const page = new browser.DOMParser().parseFromString(await response.text(), "text/html");
       if (session.isStopped()) return;
@@ -103,20 +134,22 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
         session.preserveDraft();
         return;
       }
-      const next = page.querySelector("main"),
-        current = document.querySelector("main");
-      const focused = captureFocus(document);
-      const top = browser.scrollY;
-      if (next && current) {
-        current.replaceWith(document.importNode(next, true));
-        for (const selector of [
-          'nav[aria-label="Main navigation"]',
-          "[data-source-navigation]",
-          ".topbar .project-switch",
-          ".topbar .project-context",
-        ]) {
-          const replacement = page.querySelector(selector);
-          if (replacement) document.querySelector(selector)?.replaceWith(document.importNode(replacement, true));
+      const main = document.querySelector("main");
+      if (main && page.querySelector("main")) {
+        const active = document.activeElement,
+          focus = captureFocus(document),
+          top = browser.scrollY;
+        if (resetWindow) browser.history.replaceState(browser.history.state, "", url.href);
+        let published = false;
+        for (const [selector, previous] of regions) {
+          const replacement = page.querySelector(selector),
+            current = document.querySelector(selector);
+          if (!replacement || !current) continue;
+          const markup = replacement.outerHTML;
+          if (markup === previous && !(resetWindow && selector === "main")) continue;
+          current.replaceWith(document.importNode(replacement, true));
+          regions.set(selector, markup);
+          published = true;
         }
         document.title = page.title;
         for (const key of ["revision", "reviewStatusUrl", "compatibilityStatusUrl", "workspaceProblem"] as const) {
@@ -124,9 +157,9 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
           if (value === undefined) Reflect.deleteProperty(document.body.dataset, key);
           else document.body.dataset[key] = value;
         }
-        afterPublish();
-        restoreFocus(document, focused);
-        browser.scrollTo(0, top);
+        if (published) afterPublish();
+        if (!active?.isConnected) restoreFocus(document, focus);
+        if (!main.isConnected) browser.scrollTo(0, top);
       }
       session.clearNotice(Notice.Refresh);
     } catch (error) {
@@ -177,6 +210,7 @@ export function startLiveUpdates(session: BrowserSession, afterPublish: () => vo
     session.notify("Live connection interrupted. Reconnecting; you can also refresh this page.", Notice.Connection);
   };
   return () => {
+    closeNotifications();
     events.close();
   };
 }

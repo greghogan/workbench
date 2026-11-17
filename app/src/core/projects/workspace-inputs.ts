@@ -5,11 +5,12 @@ export { inputStamp } from "../runtime/file-identity.js";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { reviewGit } from "../review/review-service.js";
+import { required } from "../runtime/invariants.js";
 
 /** Observe Git's actual configuration origins, including worktree and conditional includes, without retaining values. */
 export function observeGitInputs(root: string, observe: (path: string) => void): string {
   let indexPath = "";
-  for (const name of [
+  const names = [
     "HEAD",
     "packed-refs",
     "shallow",
@@ -18,8 +19,17 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
     "config.worktree",
     "info/exclude",
     "workbench/review.json",
-  ]) {
-    const path = resolve(root, reviewGit(root, ["rev-parse", "--git-path", name]).trim());
+  ];
+  const paths = reviewGit(root, ["rev-parse", ...names.flatMap((name) => ["--git-path", name])])
+    .trimEnd()
+    .split("\n");
+  for (const [index, name] of names.entries()) {
+    const path = resolve(
+      root,
+      paths.length === names.length
+        ? required(paths[index], "Missing Git input path")
+        : reviewGit(root, ["rev-parse", "--git-path", name]).trim(),
+    );
     observe(path);
     if (name === "index") indexPath = path;
   }

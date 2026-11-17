@@ -17,3 +17,10 @@ export function parseDOM(html: string, options?: ConstructorOptions): JSDOM {
 export function renderDOM(contents: ComponentChildren): Document {
   return parseDOM(renderToString(createElement(Fragment, null, contents))).window.document;
 }
+
+export function breadcrumbLinks(document: Document) {
+  return [...document.querySelectorAll('nav[aria-label="Breadcrumb"] a')].map((link) => [
+    link.textContent,
+    link.getAttribute("href"),
+  ]);
+}

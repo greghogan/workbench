@@ -150,7 +150,7 @@ export function describeRecord(record: BrowserRecord, contents: string): void {
   } else if (["ADR", "TSK", "EXP", "ENV"].includes(type)) {
     const { metadata, body } = parseProseRecord(contents, record.path);
     if (typeof metadata.summary === "string") record.summary = markdownExcerpt(metadata.summary);
-    else record.summary = markdownExcerpt(body);
+    else record.summary = markdownExcerpt(body, type === "TSK" ? ["Overview", "Review summary"] : []);
     if (typeof metadata.status === "string") record.status = metadata.status;
     if (recordTimestamp(metadata.added_at)) record.addedAt = metadata.added_at;
   }

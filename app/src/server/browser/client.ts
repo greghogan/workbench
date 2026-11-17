@@ -6,7 +6,7 @@ import { BrowserSession, type Browser } from "./browser-session.js";
 import { startFormActions } from "./form-client.js";
 import { startHubUpdates } from "./hub-client.js";
 import { startRecordLoading } from "./list-client.js";
-import { startLiveUpdates } from "./live-client.js";
+import { captureLiveRegions, startLiveUpdates } from "./live-client.js";
 import { startReferencePreviews } from "./reference-client.js";
 import { startSourceNavigation } from "./source-client.js";
 import { startCardNavigation } from "./card-client.js";
@@ -18,7 +18,11 @@ interface DraftState {
   formDraft: boolean;
   staleDraft: boolean;
 }
-function startPage(browser: Browser, state: { draft?: DraftState }): () => void {
+function startPage(
+  browser: Browser,
+  state: { draft?: DraftState },
+  regions: ReturnType<typeof captureLiveRegions>,
+): () => void {
   const closeTimes = startLocalTimes(browser);
   if (browser.document.body.hasAttribute("data-project-hub")) {
     const closeHub = startHubUpdates(browser);
@@ -38,15 +42,16 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
   const differences = startFileDifferences(session);
   const sources = startSourceNavigation(session);
   const diagrams = startDiagrams(browser);
-  const closeLive = startLiveUpdates(session, () => {
+  const forms = startFormActions(session);
+  const closeLive = startLiveUpdates(session, regions, () => {
     records.watch();
     taskTree.watch();
     commits.watch();
     differences.watch();
     sources.refresh();
     diagrams.watch();
+    forms.watch();
   });
-  const closeForms = startFormActions(session);
   const closeReferences = startReferencePreviews(session);
   const closeCards = startCardNavigation(session);
   return () => {
@@ -59,21 +64,22 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
     taskTree.close();
     commits.close();
     differences.close();
-    closeForms();
+    forms.close();
     closeReferences();
     closeCards();
     diagrams.close();
   };
 }
 export function startBrowser(browser: Browser): () => void {
-  const state: { draft?: DraftState } = {};
-  let cleanup: (() => void) | undefined = startPage(browser, state);
+  const state: { draft?: DraftState } = {},
+    regions = captureLiveRegions(browser.document);
+  let cleanup: (() => void) | undefined = startPage(browser, state, regions);
   const hide = () => {
     cleanup?.();
     cleanup = undefined;
   };
   const show = () => {
-    cleanup ??= startPage(browser, state);
+    cleanup ??= startPage(browser, state, regions);
   };
   browser.addEventListener("pagehide", hide);
   browser.addEventListener("pageshow", show);

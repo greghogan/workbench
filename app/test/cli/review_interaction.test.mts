@@ -1,7 +1,11 @@
 import { promised } from "../fixtures/promised.mjs";
 import { required } from "../../src/core/runtime/invariants.ts";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { Command } from "commander";
+import { registerTaskDecisionCommands } from "../../src/cli/task-decisions.js";
+import { readTaskGraph, taskReference } from "../../src/core/tasks/task-model.js";
+import { readTaskDecisions } from "../../src/core/tasks/task-decisions.js";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { reviewInteractively, reviewStatus } from "../../src/cli/review.js";
@@ -40,6 +44,39 @@ vi.mock("node:child_process", async (original) => {
 });
 
 const fixture = reviewFixtures(state);
+
+test("one task approval confirmation binds every selected version before recording any decisions", async () => {
+  const { root } = fixture;
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, ".git/state"));
+  const folder = join(root, "workbench/tasks"),
+    second = join(folder, "TSK-01.md");
+  mkdirSync(folder);
+  writeFileSync(join(folder, "TSK-00.md"), "---\nstatus: Planned\n---\n\n# TSK-0: Review note paths\n");
+  const plan = "---\nstatus: Planned\n---\n\n# TSK-1: Review note previews\n";
+  writeFileSync(second, plan);
+  const approve = () => {
+    const cli = new Command(),
+      tasks = cli.command("task");
+    registerTaskDecisionCommands(tasks, root, (value) => taskReference(root, value));
+    const versions = readTaskGraph(root).tasks.flatMap((task) => ["--expected", task.reviewDigest ?? task.digest]);
+    return cli.parseAsync(["task", "approve", "test:TSK-0", "test:TSK-1", ...versions], { from: "user" });
+  };
+  state.question.mockImplementationOnce(() => {
+    writeFileSync(second, plan + "\nAnother requirement appeared.\n");
+    return Promise.resolve("yes");
+  });
+  await expect(approve()).rejects.toThrow(/TSK-1: changed since inspection/);
+  expect(readTaskDecisions(root)).toEqual([]);
+  expect(state.question).toHaveBeenCalledOnce();
+  state.question.mockClear();
+  state.answers = ["yes"];
+  await approve();
+  expect(state.question).toHaveBeenCalledOnce();
+  expect(readTaskDecisions(root).map(({ reference, status }) => [reference, status])).toEqual([
+    ["test:TSK-0", "Approved"],
+    ["test:TSK-1", "Approved"],
+  ]);
+});
 
 test.each(["", "no", "yes"])("interactive answer %j records only explicit approval", async (answer) => {
   state.answers = [answer];

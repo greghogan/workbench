@@ -11,17 +11,16 @@ export interface Breadcrumb {
 export interface PageTrail {
   parents?: Breadcrumb[];
   scope?: string;
-  current?: string;
 }
-export function breadcrumbs(context: WorkspaceView, { parents = [], scope, current }: PageTrail = {}): JSX.Element {
+export function breadcrumbs(context: WorkspaceView, { parents = [], scope }: PageTrail = {}): JSX.Element {
   const selected = scope ? context.projects.find((project) => project.id === scope) : context.selectedProject;
   const projects = selected ? context.index.hierarchy.lineage(selected) : context.projects.slice(0, 1);
   const trail: Breadcrumb[] = projects.map((project) => ({
     label: projectName(project),
-    href: routeURL(Route.Overview, { scope: project.id }),
+    href: routeURL(Route.Charters, { scope: project.id }),
   }));
   if (context.selection)
-    trail.push({ label: context.selection, href: routeURL(Route.Overview, { collection: context.selection }) });
+    trail.push({ label: context.selection, href: routeURL(Route.Charters, { collection: context.selection }) });
   trail.push(...parents);
   return (
     <nav class="breadcrumbs" aria-label="Breadcrumb">
@@ -31,11 +30,6 @@ export function breadcrumbs(context: WorkspaceView, { parents = [], scope, curre
             <a href={projectPath(item.href)}>{item.label}</a>
           </li>
         ))}
-        {current && (
-          <li aria-current="page">
-            <span>{current}</span>
-          </li>
-        )}
       </ol>
     </nav>
   );

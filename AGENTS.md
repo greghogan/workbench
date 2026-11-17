@@ -27,9 +27,9 @@ human review is optional at the discretion of the agent.
   ADRs relevant to your task.
 
 - [workbench:ADR-7](workbench/decisions/ADR-07.md): Obtain human approval of a concrete plan before implementing a major
-  feature or materially expanding its approved scope. Record significant implementation decisions and their reasons,
-  distinguishing agent choices from human direction. Update the owning task records in every retained commit delivering
-  task work.
+  feature or materially expanding its approved scope. Use the local task queue to record when tracked work starts,
+  pauses, and is verified. Record significant implementation decisions and their reasons, distinguishing agent choices
+  from human direction. Update the owning task records in every retained commit delivering task work.
 
 - [workbench:ADR-8](workbench/decisions/ADR-08.md): Obtain human review of completed experiments, environment records,
   and their supporting files before commit. Before recommending rejection, evaluate plausible improvements to the

@@ -51,7 +51,7 @@ path="a"
   writeFileSync(join(root, "a", path), text("Subproject revision."));
   rmSync(join(root, "a/kernel", path));
   const web = await fixture.start(root);
-  const queue = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   const sections = [...queue.querySelectorAll("main [data-review-source]")];
   expect(sections.map((section) => section.querySelector("h2")?.textContent)).toEqual([
     "Main",
@@ -78,7 +78,7 @@ path="a"
   }
   const finished = parseDOM((await readWebPage(web, location)).html).window.document;
   expect(finished.querySelector("[data-review-source]")).toBeNull();
-  expect(finished.querySelector("main")?.textContent).toContain("No protected changes");
+  expect(finished.querySelector("main")?.textContent).toContain("No reviews awaiting attention");
 });
 test("working approval carries over only when the exact reviewed contents are staged", () => {
   const root = fixture.project();
@@ -197,7 +197,7 @@ test("review shows current contents independently of the staged commit", async (
   git(root, "add", path);
   writeFileSync(join(root, path), text("Working sentence."));
   const web = await fixture.start(root);
-  let { html } = await readWebPage(web, "/review");
+  let { html } = await readWebPage(web, "/reviews");
   const dom = parseDOM(html, { url: web.url }).window.document;
   const rows = [...dom.querySelectorAll("article.record-row")];
   expect(rows).toHaveLength(1);
@@ -271,7 +271,7 @@ test("staging a permission change does not create a web review, while the commit
   const root = fixture.project();
   git(root, "update-index", "--chmod=+x", path);
   const web = await fixture.start(root);
-  expect((await readWebPage(web, "/review")).html).toContain("No protected changes.");
+  expect((await readWebPage(web, "/reviews")).html).toContain("No reviews awaiting attention.");
   expect((await readWebPage(web, `/review?path=${path}`)).response.status).toBe(404);
   expect(reviewStatus(root, ReviewSource.Staged).changes[0]?.approved).toBe(false);
   expect(() => {
@@ -296,9 +296,7 @@ test("ADR review compares the last acknowledgment in two complete, navigable lay
   expect(first.querySelector("details.source-comparison")).toBeNull();
   expect(first.querySelector('main a[href*="/review-file"]')).toBeNull();
   expect(first.querySelector("h1")?.textContent).toBe("ADR-0: Files");
-  expect(
-    [...first.querySelectorAll("main a")].filter((link) => link.textContent.includes("Review queue")),
-  ).toHaveLength(1);
+  expect([...first.querySelectorAll("main a")].filter((link) => link.textContent.includes("Reviews"))).toHaveLength(1);
   const paragraph = first.querySelector(".document-diff p")?.cloneNode(true) as Element;
   for (const added of paragraph.querySelectorAll("ins,.diff-separator")) added.remove();
   expect(paragraph.textContent.trim()).toBe("A reviewed version.");
@@ -331,7 +329,7 @@ test("review headings identify the exact version once, with a linked queue paren
   ]);
   expect(document.querySelector(".document-diff ins")?.textContent).toContain("Working");
   const links = [...document.querySelectorAll('nav[aria-label="Breadcrumb"] a')];
-  expect(links.map((link) => link.textContent)).toEqual(["demo", "Review queue"]);
+  expect(links.map((link) => link.textContent)).toEqual(["demo", "Reviews"]);
   expect(new URL(links.at(-1)?.getAttribute("href") ?? "", web.url).searchParams.has("path")).toBe(false);
 });
 
@@ -370,7 +368,7 @@ test.each([false, true])(
       expect(workingChange(root, expected).approved).toBe(true);
       if (expected !== last) expect(new URL(location, web.url).searchParams.get("layout")).toBe("split");
     }
-    expect(new URL(location, web.url).pathname).toBe("/review");
+    expect(new URL(location, web.url).pathname).toBe("/reviews");
     expect(new URL(location, web.url).searchParams.has("path")).toBe(false);
   },
 );
@@ -388,7 +386,7 @@ test("supporting file reviews offer only applicable views and keep binary inspec
   ] as const;
   for (const [file, bytes] of files) writeFileSync(join(root, file), bytes);
   const web = await fixture.start(root);
-  const queue = parseDOM((await readWebPage(web, "/review")).html, { url: web.url }).window.document;
+  const queue = parseDOM((await readWebPage(web, "/reviews")).html, { url: web.url }).window.document;
   const links = [...queue.querySelectorAll("article.record-row a[data-card-link]")];
   expect(links).toHaveLength(1);
   const document = parseDOM((await readWebPage(web, links[0]?.getAttribute("href") ?? "")).html, { url: web.url })
@@ -435,7 +433,7 @@ test("a supporting-only change opens its unchanged record and retains exact per-
   git(root, "commit", "-qm", "Protocol baseline");
   writeFileSync(join(root, supporting), "Revised notes.\n");
   const web = await fixture.start(root);
-  const queue = parseDOM((await readWebPage(web, "/review")).html, { url: web.url }).window.document;
+  const queue = parseDOM((await readWebPage(web, "/reviews")).html, { url: web.url }).window.document;
   const href = queue.querySelector("article.record-row a[data-card-link]")?.getAttribute("href") ?? "";
   const document = parseDOM((await readWebPage(web, href)).html, { url: web.url }).window.document;
   expect(document.querySelector(".document")?.textContent).toContain("The unchanged protocol.");

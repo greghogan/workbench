@@ -6,21 +6,23 @@ import type { WorkspaceView } from "../workspace/workspace-service.js";
 import { projectPath } from "../routes/project-paths.js";
 import { routeURL } from "../routes/locations.js";
 import { type SourceQuery, Route } from "../routes/routes.js";
-import type { TaskStatus } from "../../core/records/record-document.js";
+import type { TaskLifecycle } from "../../core/tasks/task-workflow.js";
 
 import type { PageKey } from "../workspace/view-context.js";
 
 /** Links select one declared scope; the filesystem determines ancestry, never the displayed labels. */
-export function sourceNavigation(context: WorkspaceView, active: PageKey, taskStatus?: TaskStatus): JSX.Element {
+export function sourceNavigation(context: WorkspaceView, active: PageKey, taskStatus?: TaskLifecycle): JSX.Element {
   const browsing = active !== "collections";
   const destination =
     active === "review"
-      ? Route.Review
-      : active === "queue"
-        ? Route.TaskQueue
-        : active === "records" || recordTypes.some((type) => type === active)
-          ? Route.Records
-          : Route.Overview;
+      ? Route.Reviews
+      : active === "plans"
+        ? Route.Plans
+        : active === "work"
+          ? Route.Work
+          : active !== "CHARTER" && (active === "records" || recordTypes.some((type) => type === active))
+            ? Route.Records
+            : Route.Charters;
   const href = (source: SourceQuery) => {
     const type = recordTypes.find((type) => type === active);
     if (destination === Route.Records)
@@ -29,7 +31,10 @@ export function sourceNavigation(context: WorkspaceView, active: PageKey, taskSt
         ...(type && (!source.collection || type === "ADR" || type === "CHARTER") ? { type } : {}),
         ...(type === "TSK" && taskStatus && !source.collection ? { status: taskStatus } : {}),
       });
-    return routeURL(destination, source);
+    return routeURL(
+      source.collection && (active === "plans" || active === "work") ? Route.Reviews : destination,
+      source,
+    );
   };
   const link = (label: string, url: string, current: boolean, title?: string) => (
     <a class="source-link" href={url} aria-current={current ? "page" : undefined} title={title}>
@@ -51,6 +56,7 @@ export function sourceNavigation(context: WorkspaceView, active: PageKey, taskSt
   const branch = (project: Project): JSX.Element => {
     const descendants = context.index.hierarchy.children(project);
     const id = "source-branch-" + project.id;
+    const pending = context.index.subprojectReviewCounts.get(project.id) ?? 0;
     const toggle = descendants.length ? (
       <button
         type="button"
@@ -78,6 +84,16 @@ export function sourceNavigation(context: WorkspaceView, active: PageKey, taskSt
             href({ scope: project.id }),
             browsing && !context.selection && (context.all ? project.path === "." : context.scope === project.id),
             projectName(project) + " (" + project.id + ")",
+          )}
+          {pending > 0 && (
+            <a
+              class="nav-count source-review-count"
+              href={routeURL(Route.Reviews, { scope: project.id })}
+              aria-label={`${String(pending)} pending ${pending === 1 ? "review" : "reviews"} in ${context.index.hierarchy.breadcrumb(project)}`}
+              data-source-review-count={project.id}
+            >
+              {pending}
+            </a>
           )}
         </div>
         {descendants.length > 0 && <ul id={id}>{descendants.map(branch)}</ul>}

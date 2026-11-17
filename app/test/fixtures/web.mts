@@ -5,9 +5,18 @@ import { rmSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export function webFixture(): string {
+export function webFixture(
+  initialize = (root: string) => {
+    git(root, "init", "-q");
+  },
+): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-web-")));
-  git(root, "init", "-q");
+  try {
+    initialize(root);
+  } catch (error) {
+    rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
   mkdirSync(join(root, "workbench/decisions"), { recursive: true });
   writeFileSync(
     join(root, "workbench/config.toml"),
@@ -51,8 +60,8 @@ export function webServers() {
     }
   });
   return {
-    project: () => {
-      const root = webFixture();
+    project: (initialize?: (root: string) => void) => {
+      const root = webFixture(initialize);
       roots.push(root);
       return root;
     },

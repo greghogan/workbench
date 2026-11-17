@@ -14,6 +14,11 @@ test("an empty project guides a human through charter creation without staging o
   rmSync(path);
   const web = await servers.start(root);
   const home = await readWebPage(web, "/");
+  const landing = parseDOM(home.html).window.document;
+  expect(landing.querySelector("main h1")?.textContent).toBe("Charters");
+  const navigation = landing.querySelector('[aria-label="Main navigation"]');
+  expect(navigation?.querySelector('a[aria-current="page"] > span')?.textContent).toBe("Charters");
+  expect(navigation?.textContent).not.toContain("Overview");
   expect(home.html).toContain("Get started");
   expect(home.html).toContain("Create charter for demo");
   expect(home.html).toContain("workbench init --records-only");
@@ -46,6 +51,7 @@ test("an empty project guides a human through charter creation without staging o
   expect(existsSync(join(root, ".git/workbench/review.json"))).toBe(false);
   expect((await readWebPage(web, "/charter/new?project=demo")).response.status).toBe(409);
   expect((await readWebPage(web, "/records/demo:CHARTER")).html).toContain("Human fixture charter");
+  expect((await readWebPage(web, "/")).html).toContain("Human fixture charter");
 });
 test("concurrent charter creation preserves the external file and the submitted draft", async () => {
   const root = servers.project(),
@@ -76,7 +82,7 @@ test("the unified review queue includes project-owned collection records", async
   applyCollection(root, request, previewCollection(root, request).digest);
   git(root, "add", "workbench");
   const web = await servers.start(root);
-  const page = await readWebPage(web, "/review");
+  const page = await readWebPage(web, "/reviews");
   expect(page.html).toContain('aria-label="Record sources"');
   expect(
     [...parseDOM(page.html).window.document.querySelectorAll("main article.record-row a[data-card-link]")].some(

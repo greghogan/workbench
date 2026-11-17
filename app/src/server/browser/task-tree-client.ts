@@ -13,7 +13,7 @@ export function startTaskTreeLoading(session: BrowserSession) {
     target.setAttribute("aria-busy", "true");
     try {
       const response = await browser.fetch(link.href, { headers: { Accept: "text/html" }, signal: session.signal });
-      if (!response.ok) throw new Error("Task tree changed or is unavailable; refresh before loading more.");
+      if (!response.ok) throw new Error("List changed or is unavailable; refresh before loading more.");
       const page = new browser.DOMParser().parseFromString(await response.text(), "text/html");
       if (session.isStopped()) return;
       const next = [...page.querySelectorAll<HTMLElement>("[data-task-window]")].find(
@@ -22,16 +22,13 @@ export function startTaskTreeLoading(session: BrowserSession) {
       const items = next?.querySelector<HTMLElement>(":scope > [data-task-items]"),
         current = target.querySelector<HTMLElement>(":scope > [data-task-items]");
       if (!next || !items || !current || next.dataset.listRevision !== target.dataset.listRevision)
-        throw new Error("Task tree changed; refresh before loading more.");
-      const rootGroups = target.dataset.taskWindow === "roots" && !!items.querySelector(":scope > [data-task-group]");
-      const rows = (container: HTMLElement) =>
-        rootGroups
-          ? [
-              ...container.querySelectorAll<HTMLElement>(
-                ":scope > [data-task-group] > [data-task-group-items] > [data-task-node]",
-              ),
-            ]
-          : [...container.children];
+        throw new Error("List changed; refresh before loading more.");
+      const rows = (container: Element): Element[] =>
+        [...container.children].flatMap((child) => {
+          if (!child.hasAttribute("data-task-group")) return [child];
+          const group = child.querySelector(":scope > [data-task-group-items]");
+          return group ? rows(group) : [];
+        });
       const nodes = rows(items);
       const added = nodes.reduce((count, node) => count + 1 + node.querySelectorAll("[data-task-node]").length, 0);
       if (document.querySelectorAll("[data-task-node]").length + added > recordWindowLimit) {
@@ -40,29 +37,29 @@ export function startTaskTreeLoading(session: BrowserSession) {
       }
       const seen = new Set(rows(current).map((node) => (node as HTMLElement).dataset.taskNode));
       if (nodes.some((node) => seen.has((node as HTMLElement).dataset.taskNode)))
-        throw new Error("Repeated task in the next batch");
+        throw new Error("Repeated item in the next batch");
       const focused = document.activeElement === link;
+      const groupItems = (group: HTMLElement | null): HTMLElement => {
+        if (!group || !items.contains(group)) return current;
+        const parent = groupItems(group.parentElement?.closest<HTMLElement>("[data-task-group]") ?? null);
+        let existing = [...parent.querySelectorAll<HTMLElement>(":scope > [data-task-group]")].find(
+          (candidate) => candidate.dataset.taskGroup === group.dataset.taskGroup,
+        );
+        if (!existing) {
+          existing = document.importNode(group, true);
+          existing.querySelector(":scope > [data-task-group-items]")?.replaceChildren();
+          parent.append(existing);
+        }
+        const list = existing.querySelector<HTMLElement>(":scope > [data-task-group-items]");
+        if (!list) throw new Error("Missing task group items");
+        return list;
+      };
       let first: HTMLElement | null = null;
       for (const node of nodes) {
-        let destination = current;
-        if (rootGroups) {
-          const group = node.closest<HTMLElement>("[data-task-group]");
-          if (!group) throw new Error("Missing task state group");
-          let existing = [...current.querySelectorAll<HTMLElement>(":scope > [data-task-group]")].find(
-            (candidate) => candidate.dataset.taskGroup === group.dataset.taskGroup,
-          );
-          if (!existing) {
-            existing = document.importNode(group, true);
-            existing.querySelector("[data-task-group-items]")?.replaceChildren();
-            current.append(existing);
-          }
-          const list = existing.querySelector<HTMLElement>("[data-task-group-items]");
-          if (!list) throw new Error("Missing task state list");
-          destination = list;
-        }
+        const destination = groupItems(node.closest<HTMLElement>("[data-task-group]"));
         const copy = document.importNode(node, true);
         destination.append(copy);
-        first ??= copy.querySelector<HTMLElement>("[data-record-id]");
+        first ??= copy.querySelector<HTMLElement>("[data-record-id], [data-card-link]");
       }
       if (next.dataset.taskThrough) target.dataset.taskThrough = next.dataset.taskThrough;
       remember();
@@ -70,7 +67,7 @@ export function startTaskTreeLoading(session: BrowserSession) {
       if (loader) target.querySelector(":scope > [data-task-loader]")?.replaceWith(document.importNode(loader, true));
       if (focused) first?.focus({ preventScroll: true });
       const status = document.getElementById("task-loading-status");
-      if (status) status.textContent = `Loaded ${String(nodes.length)} tasks.`;
+      if (status) status.textContent = `Loaded ${String(nodes.length)} items.`;
       session.clearNotice(Notice.List);
       watch();
     } catch (error) {

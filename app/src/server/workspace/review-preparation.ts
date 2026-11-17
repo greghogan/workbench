@@ -4,6 +4,8 @@ import { ReviewFormatter } from "../../core/review/review-formatting.js";
 import type { WorkspaceSnapshot } from "./workspace-service.js";
 import { retainedBytes } from "../../core/runtime/retained-bytes.js";
 import { PreparationState, type ReviewPreparation } from "../review/review-state.js";
+import { relative } from "node:path";
+import { planningPaths, planPrefix } from "../../core/tasks/planning/plan-model.js";
 
 /** Read-only acquisition reports preparation needs without substituting formatted file contents. */
 export async function checkReviewFormatting(
@@ -39,6 +41,18 @@ export async function checkReviewFormatting(
             : { state: PreparationState.Required },
         );
     }
+  }
+  const taskInputs = [
+    ...snapshot.tasks.records
+      .filter((task) => !task.archived && ["Planned", "Approved"].includes(task.metadata.status))
+      .map((task) => ({ path: relative(snapshot.root, task.path).replaceAll("\\", "/"), contents: task.contents })),
+    ...snapshot.tasks.plans
+      .filter((plan) => !plan.implementation && !plan.problem && !plan.conflict && plan.status !== "Canceled")
+      .map((plan) => ({ path: planPrefix(plan) + planningPaths.document, contents: plan.contents })),
+  ];
+  for (const task of taskInputs) {
+    const result = await formatter.prepare(task.path, Buffer.from(task.contents), snapshot.reviewPreparation.width);
+    if (result.state === "changed") files.set(task.path, { state: PreparationState.Required });
   }
   const publication = {
     ...snapshot,
