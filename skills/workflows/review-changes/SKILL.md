@@ -21,10 +21,10 @@ including whether internal mechanisms have become unnecessary user-facing work. 
 review.
 
 For user-facing work, exercise the affected running interface as a complete workflow, using the reviewed version.
-Inspect the resulting presentation and materially different states and transitions; test results and generated
-screenshots alone do not establish that review. Include affected records, help, and other delivered text in this
-assessment. Resolve ordinary design refinements within the approved direction; refer consequential product choices to
-the developer.
+Use the plan's wireframes and acceptance scenarios to inspect the delivered interactions, states, and transitions.
+Test results and generated screenshots alone do not establish that review. Include affected records, help, and other
+delivered text. Resolve ordinary design refinements within the approved direction and refer consequential product
+choices to the developer.
 
 For substantial tasks, use a fresh-context reviewer when available and authorized. Supply the intended outcome,
 applicable authority, source, and evidence without coaching toward the author's verdict. Otherwise report the

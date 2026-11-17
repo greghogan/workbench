@@ -13,7 +13,7 @@ import {
 } from "../storage/cache-lock.js";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
-import { syncMaps } from "../records/maps.js";
+import { syncRecordOutputs } from "../records/record-outputs.js";
 import { ownedPath } from "../runtime/paths.js";
 import { ProjectEdits } from "../projects/project-edits.js";
 import { projectQueueKey } from "../projects/project-registry.js";
@@ -77,6 +77,16 @@ export function writeTaskQueue(root: string, queue: TaskQueue): void {
 export function queueDigest(queue: TaskQueue): string {
   return taskDigest(JSON.stringify(queue));
 }
+export function taskStarted(entry?: TaskQueueEntry): boolean {
+  return !!entry && (entry.started === true || entry.state === TaskExecution.Active || !!entry.planDigest);
+}
+export function taskNeedsPlanApproval(task: TaskRecord): boolean {
+  return (
+    task.metadata.status === "Planned" ||
+    task.approval?.current === false ||
+    !!(task.planning && (!task.planning.approved || task.planning.problem))
+  );
+}
 export const TaskBlockerKind = {
   State: "state",
   Active: "active",
@@ -86,8 +96,9 @@ export const TaskBlockerKind = {
   Child: "child",
   Missing: "missing",
 } as const;
+export type TaskBlockerKind = (typeof TaskBlockerKind)[keyof typeof TaskBlockerKind];
 export interface TaskBlocker {
-  kind: (typeof TaskBlockerKind)[keyof typeof TaskBlockerKind];
+  kind: TaskBlockerKind;
   message: string;
   reference?: string;
 }
@@ -168,7 +179,10 @@ export function inspectQueue(readiness: TaskReadiness) {
       blockers: blockers.map((blocker) => blocker.message),
     };
   });
-  const ready = entries.filter((entry) => entry.ready).map((entry) => entry.reference);
+  const ready = entries
+    .filter((entry) => entry.ready)
+    .sort((left, right) => Number(taskStarted(right)) - Number(taskStarted(left)))
+    .map((entry) => entry.reference);
   return { ...queue, digest: queueDigest(queue), entries, ready };
 }
 export function inspectTaskQueue(root: string) {
@@ -213,12 +227,14 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
         queue.entries.splice(index, 1);
       } else {
         const task = graph.require(reference);
+        if (taskStarted(entry)) entry.started = true;
         if (change.action === "start") {
           if (task.planning)
             throw new StateConflict("Transfer the approved plan into an implementation task before starting it");
           const reasons = new TaskReadiness(graph, queue).blockers(task).map((blocker) => blocker.message);
           if (reasons.length) throw new StateConflict(`${reference}: ${reasons.join("; ")}`);
           entry.state = TaskExecution.Active;
+          entry.started = true;
           delete entry.evidence;
           delete entry.reason;
           entry.planDigest = task.planDigest;
@@ -226,7 +242,7 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
           if (entry.state !== TaskExecution.Active && entry.state !== TaskExecution.Implemented)
             throw new StateConflict("Start the task before reporting it implemented");
           if (!change.detail?.trim()) throw new InvalidInput("Supply verification evidence for implemented work");
-          if (task.metadata.status !== "Approved")
+          if (task.metadata.status !== "Approved" || taskNeedsPlanApproval(task))
             throw new StateConflict("Task approval was revoked during implementation");
           const dependencies = new TaskReadiness(graph, {
             ...queue,
@@ -347,7 +363,10 @@ export function recoverTaskTransition(root: string, queuePath: string): void {
   started ||= pending.decisions !== undefined && decisionChangeApplied(root, pending.decisions);
   if (started) {
     edits.apply();
-    syncMaps(root);
+    syncRecordOutputs(
+      root,
+      pending.files.map((file) => file.path),
+    );
     if (queueDigest(pending.before) !== queueDigest(pending.after)) writeTaskQueue(root, pending.after);
     if (pending.decisions) applyTaskDecisionChange(root, pending.decisions);
   }
@@ -374,7 +393,7 @@ export function publishTaskTransition(
   });
   // ProjectEdits rolls back synchronous publication failures. The journal survives interruption or map failure.
   edits.apply();
-  syncMaps(root);
+  syncRecordOutputs(root, [...edits.files.keys()]);
   if (queueDigest(before) !== queueDigest(after)) writeTaskQueue(root, after);
   if (decisions) applyTaskDecisionChange(root, decisions);
   rmSync(path);

@@ -1,4 +1,4 @@
-import { ProjectHierarchy, projectName } from "../../core/projects/project-hierarchy.js";
+import { ProjectHierarchy } from "../../core/projects/project-hierarchy.js";
 import type { Project } from "../../core/projects/project-model.js";
 import { compareRecordNumbers, normalizedNumber } from "../../core/records/record-identity.js";
 import { reviewOwner } from "./review-membership.js";
@@ -81,11 +81,7 @@ export class ReviewQueue {
       this.byDigest.set(change.digest, group);
     }
     const sections = new Map<string, ReviewSection>();
-    const ordered = hierarchy.ordered(
-      (a, b) =>
-        projectName(a).localeCompare(projectName(b), undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id),
-    );
-    for (const project of ordered)
+    for (const project of hierarchy.ordered())
       sections.set(`project:${project.id}`, {
         key: `project:${project.id}`,
         title: hierarchy.breadcrumb(project),

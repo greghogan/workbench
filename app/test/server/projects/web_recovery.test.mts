@@ -48,7 +48,7 @@ test("count events avoid inventory fetches and late row patches cannot undo a ne
   vi.useFakeTimers();
   const id = "a".repeat(24);
   const row = (revision: number, count: number) =>
-    `<td data-cache-cell="reviews"><a data-project-reviews="${id}" data-review-revision="${String(revision)}" data-review-count="${String(count)}" href="/projects/${id}/review">${String(count)}</a></td>`;
+    `<td data-cache-cell="reviews"><a data-project-reviews="${id}" data-review-revision="${String(revision)}" data-review-count="${String(count)}" href="/projects/${id}/reviews">${String(count)}</a></td>`;
   const web = inventory(true, row(1, 7));
   web.event("reviews", { id, revision: 3, count: 2 });
   expect(web.document.querySelector("td a")?.textContent).toBe("2");
@@ -66,7 +66,7 @@ test("count events avoid inventory fetches and late row patches cannot undo a ne
   web.event("reviews", { id, revision: 4, count: 0 });
   web.event("reviews", { id, revision: 3, count: 2 });
   expect(web.document.querySelector("td a")?.textContent).toBe("0");
-  expect(web.document.querySelector("td a")?.getAttribute("href")).toBe(`/projects/${id}/review`);
+  expect(web.document.querySelector("td a")?.getAttribute("href")).toBe(`/projects/${id}/reviews`);
   expect(web.fetch).toHaveBeenCalledOnce();
   let release!: (response: Response) => void;
   const patch = (revision: number, count: number) =>
@@ -148,7 +148,7 @@ test("server recovery destinations survive workers and are followed by failed fo
   const session = new BrowserSession(browser),
     stop = startFormActions(session);
   cleanups.push(() => {
-    stop();
+    stop.close();
     session.close();
     dom.window.close();
   });

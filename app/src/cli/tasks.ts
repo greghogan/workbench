@@ -1,22 +1,19 @@
 import { taskDisposition, applyTaskDisposition } from "../core/tasks/task-disposition.js";
 import { changeWorkQueue } from "../core/tasks/planning/plan-transfer.js";
 import { createPatch } from "diff";
-import { InvalidInput, StateConflict } from "../core/runtime/input-errors.js";
+import { InvalidInput } from "../core/runtime/input-errors.js";
 import { workReference } from "../core/tasks/planning/work-plans.js";
 import { registerTaskPlanCommands } from "./task-plans.js";
+import { registerTaskDecisionCommands } from "./task-decisions.js";
 import { Option, type Command } from "commander";
-import { createInterface } from "node:readline/promises";
 import { terminalTable } from "../core/diagnostics/terminal-table.js";
-import { currentProject, readConfig, selectProject } from "../core/projects/project-configuration.js";
+import { currentProject, selectProject } from "../core/projects/project-configuration.js";
 import { taskStatuses, terminalTask, type TaskStatus } from "../core/records/record-document.js";
 import type { TaskRecord } from "../core/tasks/task-model.js";
 import { readTaskGraph, taskReference, type TaskNode } from "../core/tasks/task-model.js";
 import { inspectTaskQueue, readTaskQueue, TaskReadiness, type QueueChange } from "../core/tasks/task-queue.js";
-import { changeTaskStatus, taskTransitionProblem } from "../core/tasks/task-service.js";
+import { authorizeProjectReview, changeTaskStatus } from "../core/tasks/task-service.js";
 import { registerCommand } from "./commands.js";
-import { terminalAvailable } from "./terminal/terminal-choice.js";
-import { prepareTaskReview } from "../core/tasks/task-formatting.js";
-import { safeOutput } from "../core/diagnostics/terminal-output.js";
 
 interface TaskOptions {
   json?: boolean;
@@ -135,9 +132,14 @@ export function registerTaskCommands(program: Command, root: string): void {
                 : ""),
       );
     });
+  registerTaskDecisionCommands(tasks, root, (value, command) =>
+    workReference(
+      root,
+      value,
+      command.optsWithGlobals<TaskOptions>().project ?? (value.includes(":") ? undefined : currentProject(root)),
+    ),
+  );
   for (const [name, status, description] of [
-    ["approve", "Approved", "Record human approval of the current plan"],
-    ["accept", "Accepted", "Record human acceptance of the delivered outcome"],
     ["replan", "Planned", "Return a task to planning and revoke local execution evidence"],
     ["cancel", "Canceled", "Cancel a task while retaining its record"],
   ] as const)
@@ -147,40 +149,24 @@ export function registerTaskCommands(program: Command, root: string): void {
       .argument("<reference>")
       .option("--expected <sha256>", "Reject a task changed since inspection")
       .option("--reason <text>", "Reason for canceling work")
-      .action(async (value: string, options: { expected?: string; reason?: string }, command: Command) => {
+      .action((value: string, options: { expected?: string; reason?: string }, command: Command) => {
         const id = reference(value, command);
-        const guarded = readConfig(root).review?.task_approvals === true && ["Approved", "Accepted"].includes(status);
-        let expected = options.expected;
-        if (guarded) {
-          if (!terminalAvailable())
-            throw new Error("Human task decisions require an interactive terminal or the task page");
-          const original = readTaskGraph(root).require(id);
-          expected = await prepareTaskReview(root, id, expected ?? original.reviewDigest ?? original.digest);
-          const graph = readTaskGraph(root),
-            task = graph.require(id);
-          const problem = taskTransitionProblem(task, new TaskReadiness(graph, readTaskQueue(root)), status);
-          if (problem) throw new StateConflict(problem);
-          console.log(safeOutput(task.contents));
-          const prompt = createInterface({ input: process.stdin, output: process.stdout });
-          try {
-            if (
-              !/^(?:y|yes)$/i.test(
-                (
-                  await prompt.question(
-                    `${status === "Approved" ? "Approve this plan" : "Accept this delivered result"}? [y/N] `,
-                  )
-                ).trim(),
-              )
-            )
-              return;
-          } finally {
-            prompt.close();
-          }
-        }
-        changeTaskStatus(root, id, status, expected, guarded, options.reason);
+        changeTaskStatus(root, id, status, options.expected, false, options.reason);
         if (command.optsWithGlobals<TaskOptions>().json) console.log(JSON.stringify({ reference: id, status }));
         else console.log(`${id}: ${status}`);
       });
+  tasks
+    .command("authorize-review")
+    .description("Record the developer's explicit request to queue a scoped project review")
+    .argument("<reference>")
+    .requiredOption("--expected <digest>", "Task version containing the requested scope")
+    .action((value: string, options: { expected: string }, command: Command) => {
+      const id = reference(value, command);
+      authorizeProjectReview(root, id, options.expected);
+      if (command.optsWithGlobals<TaskOptions>().json)
+        console.log(JSON.stringify({ reference: id, source: "developer-requested-review" }));
+      else console.log(`${id}: queued at the developer's request`);
+    });
   for (const kind of ["delete", "revert"] as const)
     tasks
       .command(kind)
@@ -237,8 +223,9 @@ export function registerTaskCommands(program: Command, root: string): void {
     .option("--ready", "Show approved tasks with satisfied prerequisites");
   const inspect = (options: TaskOptions) => {
     const state = inspectTaskQueue(root);
+    const byReference = new Map(state.entries.map((entry) => [entry.reference, entry]));
     const entries = options.ready
-      ? state.entries.filter((entry) => state.ready.includes(entry.reference))
+      ? state.ready.flatMap((reference) => byReference.get(reference) ?? [])
       : state.entries;
     if (options.json) console.log(JSON.stringify({ ...state, entries }, null, 2));
     else {

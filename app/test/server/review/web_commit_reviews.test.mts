@@ -4,12 +4,13 @@ import { expect, test } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
-import { parseDOM } from "../../fixtures/dom.mjs";
+import { breadcrumbLinks, parseDOM } from "../../fixtures/dom.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { committedReview } from "../../../src/core/review/review-units.ts";
 import { updatedReviewTree, writeReviewBlobs } from "../../../src/core/git/git-snapshot.ts";
 import { ReviewInventory } from "../../../src/server/projects/review-inventory.ts";
 import { taskCommits } from "../../../src/core/git/history.ts";
+import { changeTaskQueue } from "../../../src/core/tasks/task-queue.ts";
 
 const fixtures = webServers();
 
@@ -89,7 +90,13 @@ test("task acceptance links only its deliveries, preserving scope, literal diffs
   const split = parseDOM((await readWebPage(web, splitURL)).html).window.document;
   expect(displayedSource(split, "before")).toContain("old()");
   expect(displayedSource(split, "after")).toContain("new()");
-  expect(split.querySelector(".breadcrumbs")?.textContent).toContain("Deliver application");
+  expect(breadcrumbLinks(split).slice(0, 4)).toEqual([
+    ["demo", "/?scope=demo"],
+    ["api", "/?scope=api"],
+    ["Tasks", "/records?type=TSK&scope=api"],
+    ["TSK-0: Deliver application", "/records/api:TSK-0?scope=api"],
+  ]);
+  expect(breadcrumbLinks(split).at(-1)?.[0]).toBe("Commits");
   expect((await readWebPage(web, commitURL.replace(second, unrelated))).response.status).toBe(404);
   expect((await readWebPage(web, "/history")).response.status).toBe(400);
   expect(git(root, "rev-parse", "HEAD")).toBe(second);
@@ -128,7 +135,7 @@ test("task history pages follow renames without crossing reused task identities 
   expect(taskCommits(root, renamed).commits[0]?.subject).toBe("Later delivery");
   expect(() => taskCommits(root, renamed, first.tip, -1)).toThrow("Invalid task history page");
 });
-test("review queue lists every pending record version under its commit and counts supporting files once", async () => {
+test("standalone reviews retain every pending commit version and count supporting files once", async () => {
   const root = fixtures.project(),
     firstPath = "workbench/decisions/ADR-00.md",
     secondPath = "workbench/decisions/ADR-01.md";
@@ -143,7 +150,7 @@ test("review queue lists every pending record version under its commit and count
   mkdirSync(join(root, "workbench/decisions/ADR-00"));
   writeFileSync(join(root, "workbench/decisions/ADR-00/evidence.txt"), "Supporting evidence.\n");
   mkdirSync(join(root, "workbench/tasks"));
-  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "---\nstatus: Approved\n---\n\n# TSK-0: Policy adoption\n");
+  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "---\nstatus: Canceled\n---\n\n# TSK-0: Policy adoption\n");
   git(root, "add", ".");
   git(root, "commit", "-qm", "First retained choices\n\nWorkbench-Provisional: true");
   const first = git(root, "rev-parse", "HEAD");
@@ -153,11 +160,11 @@ test("review queue lists every pending record version under its commit and count
   );
   git(root, "add", ".");
   git(root, "commit", "-qm", "Second retained choice\n\nWorkbench-Provisional: true");
-  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "---\nstatus: Approved\n---\n\n# TSK-0: Later task title\n");
+  writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "---\nstatus: Canceled\n---\n\n# TSK-0: Later task title\n");
   const second = git(root, "rev-parse", "HEAD"),
     web = await fixtures.start(root),
     inventory = new ReviewInventory(root),
-    page = parseDOM((await readWebPage(web, "/review")).html).window.document,
+    page = parseDOM((await readWebPage(web, "/reviews")).html).window.document,
     firstUnit = page.querySelector(`[data-review-commit="${first}"]`),
     secondUnit = page.querySelector(`[data-review-commit="${second}"]`);
   expect(web.monitor.index?.select({}).pendingReviews).toBe(3);
@@ -183,7 +190,21 @@ test("review queue lists every pending record version under its commit and count
   expect(displayed.querySelector("main")?.textContent).toContain("First version.");
   expect(displayed.querySelector("main")?.textContent).not.toContain("Revised version.");
   expect(displayed.querySelector(".commit-review-context")?.textContent).toContain("demo:TSK-0: Policy adoption");
-  expect(displayed.querySelector(".commit-review-context")?.textContent).toContain(first.slice(0, 12));
+  const commitLink = displayed.querySelector(".commit-review-context a");
+  expect(commitLink?.textContent).toBe(`Commit ${first.slice(0, 12)}`);
+  const commitHref = commitLink?.getAttribute("href");
+  if (!commitHref) throw new Error("Missing commit inspection link");
+  expect(Object.fromEntries(new URL(commitHref, web.url).searchParams)).toMatchObject({
+    commit: first,
+    scope: "demo",
+    view: "files",
+  });
+  const inspection = await readWebPage(web, commitHref);
+  expect(inspection.response.status).toBe(200);
+  const commitDocument = parseDOM(inspection.html).window.document;
+  expect(commitDocument.querySelector(`[data-commit-file="${firstPath}"]`)).not.toBeNull();
+  expect(commitDocument.querySelector(`[data-commit-file="${secondPath}"]`)).not.toBeNull();
+  expect(commitDocument.querySelector("form[data-review]")).toBeNull();
   expect(
     [...displayed.querySelectorAll("summary")].some((element) => element.textContent.includes("changed files")),
   ).toBe(false);
@@ -194,7 +215,7 @@ test("review queue lists every pending record version under its commit and count
   expect(confirmation.status).toBe(200);
   expect(confirmation.headers.get("server-timing")).toMatch(/action;dur=\d+\.\d+/);
   expect(confirmation.headers.get("server-timing")).toMatch(/workspace;dur=\d+\.\d+/);
-  const updated = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const updated = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   expect(updated.querySelectorAll("[data-review-record]")).toHaveLength(3);
   expect(committedReview(root, first).changes.find((change) => change.path === firstPath)?.approved).toBe(true);
   expect(committedReview(root, second).changes.find((change) => change.path === firstPath)?.approved).toBe(false);
@@ -217,7 +238,7 @@ test("review queue lists every pending record version under its commit and count
     ]),
   );
   expect((await postWebForm(web, supportForm.getAttribute("action") ?? "", supportValues)).status).toBe(200);
-  const remaining = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const remaining = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   expect(remaining.querySelectorAll("[data-review-record]")).toHaveLength(2);
   expect(remaining.querySelector(`[data-review-commit="${first}"] [data-review-record="${firstPath}"]`)).toBeNull();
   expect(web.monitor.index?.select({}).pendingReviews).toBe(2);
@@ -237,7 +258,7 @@ test("browser reviews immutable commit versions independently and advances throu
     second = commit("Second retained choice.");
   writeFileSync(join(root, path), "---\nsummary: Current work.\n---\n\n# ADR-0: Files\n\nUncommitted third choice.\n");
   const web = await fixtures.start(root);
-  const queue = (await readWebPage(web, "/review")).html;
+  const queue = (await readWebPage(web, "/reviews")).html;
   expect(queue).toContain(first);
   expect(queue).toContain(second);
   const blob = writeReviewBlobs(root, [
@@ -374,12 +395,41 @@ test("scoped commit reviews keep traversal, progress and confirmation within the
   git(root, "commit", "-qm", "Mixed-scope policies\n\nWorkbench-Provisional: true");
   const commit = git(root, "rev-parse", "HEAD"),
     web = await fixtures.start(root);
-  const queue = parseDOM((await readWebPage(web, "/review?scope=api")).html).window.document;
+  const fullQueue = parseDOM((await readWebPage(web, "/reviews?scope=demo")).html).window.document;
+  expect(
+    [...fullQueue.querySelectorAll("[data-review-record]")].map((item) => item.getAttribute("data-review-record")),
+  ).toEqual([paths[2], paths[0], paths[1]]);
+  const projectHistory = parseDOM((await readWebPage(web, `/history?scope=demo&commit=${commit}`)).html).window
+    .document;
+  expect(projectHistory.querySelector<HTMLInputElement>('input[name="path"]')?.value).toBe(paths[2]);
+  const projectNext = projectHistory.querySelector('a[rel="next"]')?.getAttribute("href") ?? "";
+  const projectReview = parseDOM((await readWebPage(web, projectNext)).html).window.document;
+  expect(projectReview.querySelector<HTMLInputElement>('input[name="path"]')?.value).toBe(paths[0]);
+  expect(breadcrumbLinks(projectReview)).toEqual([
+    ["demo", "/?scope=demo"],
+    ["Reviews", "/reviews?scope=demo"],
+  ]);
+  const queue = parseDOM((await readWebPage(web, "/reviews?scope=api")).html).window.document;
   expect(queue.querySelectorAll("[data-review-record]")).toHaveLength(2);
-  const sourcePage = await readWebPage(web, `/history?scope=api&commit=${commit}&path=api%2Fsrc%2Fmain.ts`);
+  const sourcePage = await readWebPage(
+      web,
+      `/history?scope=api&commit=${commit}&path=api%2Fsrc%2Fmain.ts&layout=split`,
+    ),
+    sourceDocument = parseDOM(sourcePage.html).window.document;
   expect(sourcePage.response.status).toBe(200);
-  expect(parseDOM(sourcePage.html).window.document.querySelector("h1")?.textContent).toBe("Mixed-scope policies");
-  expect(parseDOM(sourcePage.html).window.document.querySelector("main")?.textContent).toContain("Hello from the API");
+  expect(sourceDocument.querySelector("h1")?.textContent).toBe("Mixed-scope policies");
+  expect(sourceDocument.querySelector("main")?.textContent).toContain("Hello from the API");
+  const policyLink = [...sourceDocument.querySelectorAll<HTMLAnchorElement>(".commit-navigation a")]
+    .find((link) => link.title === paths[0])
+    ?.getAttribute("href");
+  if (!policyLink) throw new Error("Missing policy comparison link");
+  const filesURL = new URL(policyLink, web.url),
+    filesPage = parseDOM((await readWebPage(web, policyLink)).html).window.document;
+  expect(Object.fromEntries(filesURL.searchParams)).toEqual({ commit, layout: "split", scope: "api", view: "files" });
+  expect(filesPage.querySelectorAll("[data-commit-file]")).toHaveLength(4);
+  expect(filesPage.getElementById(filesURL.hash.slice(1))?.getAttribute("data-commit-file")).toBe(paths[0]);
+  expect(filesPage.querySelector(".file-diff-split")).not.toBeNull();
+  expect(filesPage.querySelector("form[data-review]")).toBeNull();
   const unscopedSource = await readWebPage(web, `/history?commit=${commit}&path=api%2Fsrc%2Fmain.ts`);
   expect(unscopedSource.response.status).toBe(200);
   const nextLink = (path: string) => `/history?scope=api&commit=${commit}&path=${encodeURIComponent(path)}`;
@@ -405,37 +455,192 @@ test("scoped commit reviews keep traversal, progress and confirmation within the
   expect(committedReview(root, commit).changes.find((change) => change.path === paths[2])?.approved).toBe(false);
 });
 
-test("task outcomes expose related protected reviews outside the selected subproject", async () => {
+test("cross-scope reviews stay with the task across commits and return to the selected queue", async () => {
   const root = fixtures.project(),
-    taskPath = "app/workbench/tasks/TSK-00.md",
-    adrPath = "workbench/decisions/ADR-00.md";
+    taskPath = "app/workbench/tasks/TSK-01.md",
+    adrPath = "workbench/decisions/ADR-00.md",
+    appPath = "app/workbench/decisions/ADR-00.md",
+    nextPath = "app/workbench/decisions/ADR-01.md";
   mkdirSync(join(root, "app/workbench/tasks"), { recursive: true });
   writeFileSync(
     join(root, "workbench/projects.toml"),
     '[[project]]\nid="demo"\npath="."\n[[project]]\nid="app"\npath="app"\n',
   );
+  const earlierTask = "app/workbench/tasks/TSK-00.md";
+  writeFileSync(join(root, earlierTask), "---\nstatus: Approved\n---\n\n# TSK-0: Earlier outcome\n");
+  git(root, "add", "workbench/projects.toml", earlierTask);
+  git(root, "commit", "-qm", "Deliver earlier outcome");
   writeFileSync(join(root, "app/workbench/CHARTER.md"), "# Charter\n\nApplication intent.\n");
-  writeFileSync(join(root, taskPath), "---\nstatus: Approved\n---\n\n# TSK-0: Shared policy change\n");
+  mkdirSync(join(root, "app/workbench/decisions"));
+  writeFileSync(join(root, appPath), "---\nsummary: Application policy.\n---\n\n# ADR-0: API\n\nApplication policy.\n");
+  writeFileSync(join(root, taskPath), "---\nstatus: Approved\n---\n\n# TSK-1: Shared policy change\n");
   writeFileSync(
     join(root, adrPath),
     "---\nsummary: Changed shared policy.\n---\n\n# ADR-0: Files\n\nA changed shared policy.\n",
   );
   git(root, "add", ".");
   git(root, "commit", "-qm", "Deliver shared policy\n\nWorkbench-Provisional: true");
+  const first = git(root, "rev-parse", "HEAD");
+  writeFileSync(
+    join(root, nextPath),
+    "---\nsummary: Related application policy.\n---\n\n# ADR-1: Outcome\n\nRelated application policy.\n",
+  );
+  writeFileSync(join(root, taskPath), readFileSync(join(root, taskPath), "utf8") + "\nDeliver application policy.\n");
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Deliver application policy\n\nWorkbench-Provisional: true");
+  const second = git(root, "rev-parse", "HEAD");
+  changeTaskQueue(root, { action: "add", references: ["app:TSK-0", "app:TSK-1"] });
+  changeTaskQueue(root, { action: "start", reference: "app:TSK-0" });
+  changeTaskQueue(root, { action: "implemented", reference: "app:TSK-0", detail: "Earlier outcome verified." });
+  changeTaskQueue(root, { action: "start", reference: "app:TSK-1" });
+  changeTaskQueue(root, { action: "implemented", reference: "app:TSK-1", detail: "Shared policy verified." });
+  writeFileSync(
+    join(root, "workbench/decisions/ADR-01.md"),
+    "---\nsummary: A root-only review.\n---\n\n# ADR-1: Root-only review\n",
+  );
   const web = await fixtures.start(root),
-    page = parseDOM((await readWebPage(web, "/records/app:TSK-0")).html).window.document;
-  const reviews = page.querySelector('[aria-label="Pending document reviews"]');
-  const link = [...(reviews?.querySelectorAll<HTMLAnchorElement>("a") ?? [])].find(
-    (link) => link.textContent === adrPath,
+    page = parseDOM((await readWebPage(web, "/reviews?scope=app")).html).window.document;
+  const group = page.querySelector('[data-task-group="task:app:TSK-1"]');
+  expect(
+    [...(group?.querySelectorAll(":scope > [data-task-group-items] > [data-task-node] > [data-record-id]") ?? [])].map(
+      (item) => item.getAttribute("data-record-id"),
+    ),
+  ).toEqual(["demo:ADR-0", "app:CHARTER", "app:ADR-0", "app:ADR-1", "app:TSK-1"]);
+  const project = parseDOM((await readWebPage(web, "/reviews?scope=demo")).html).window.document;
+  const sections = [...project.querySelectorAll("[data-review-source]")];
+  expect(sections.map((section) => section.getAttribute("data-review-source"))).toEqual([
+    "project:demo",
+    "project:app",
+  ]);
+  expect(sections[0]?.querySelector('[data-record-id="demo:ADR-1"]')).not.toBeNull();
+  expect(sections[1]?.querySelector('[data-task-group="task:app:TSK-1"]')).not.toBeNull();
+  expect(
+    [...page.querySelectorAll("[data-review-source]")].map((section) => section.getAttribute("data-review-source")),
+  ).toEqual(["project:app"]);
+  expect(project.querySelectorAll(`[data-review-record="${adrPath}"]`)).toHaveLength(1);
+  expect(
+    project
+      .querySelector(`[data-review-record="${adrPath}"]`)
+      ?.closest("[data-task-group]")
+      ?.getAttribute("data-task-group"),
+  ).toBe("task:app:TSK-1");
+  const badge = project.querySelector('[data-source-review-count="app"]');
+  expect(badge?.getAttribute("aria-label")).toBe("2 pending reviews in demo/app");
+  expect(badge?.getAttribute("href")).toBe("/reviews?scope=app");
+  const earlier = parseDOM((await readWebPage(web, "/reviews?scope=app&phase=reviews&before=app%3ATSK-1")).html).window
+    .document;
+  const earlierGroup = earlier.querySelector('[data-task-group="task:app:TSK-1"]');
+  expect(earlierGroup?.querySelector(".panel-heading h3")?.textContent).toContain("Shared policy change");
+  expect(earlierGroup?.querySelector('[data-record-id="demo:ADR-0"]')).not.toBeNull();
+  const read = async (href: string) => parseDOM((await readWebPage(web, href)).html).window.document;
+  const step = (current: Document, direction: "next" | "prev") => {
+    const href = current.querySelector<HTMLAnchorElement>(`a[rel="${direction}"]`)?.getAttribute("href");
+    if (!href) throw new Error(`Missing ${direction} review`);
+    return href;
+  };
+  const earlierOutcome = page.querySelector('[data-record-id="app:TSK-0"] a[data-card-link]')?.getAttribute("href");
+  if (!earlierOutcome) throw new Error("Missing first outcome link");
+  const firstFile = step(await read(earlierOutcome + "&layout=split"), "next");
+  expect(Object.fromEntries(new URL(firstFile, web.url).searchParams)).toMatchObject({
+    task: "app:TSK-1",
+    commit: first,
+    path: adrPath,
+    scope: "app",
+    layout: "split",
+  });
+  const shared = await read(firstFile);
+  expect(shared.querySelector(".page-heading h1")?.textContent).toBe("demo:ADR-0: Files");
+  const inspected = shared.querySelector(".commit-review-context a")?.getAttribute("href");
+  if (!inspected) throw new Error("Missing task commit inspection link");
+  const inspectionURL = new URL(inspected, web.url);
+  expect(inspectionURL.pathname).toBe("/records/app:TSK-1/history");
+  expect(Object.fromEntries(inspectionURL.searchParams)).toEqual({
+    commit: first,
+    tip: first,
+    scope: "app",
+    workflow: "1",
+    layout: "split",
+  });
+  const inspection = await read(inspected);
+  expect(inspection.querySelector(".page-heading h1")?.textContent).toBe("Deliver shared policy");
+  expect(inspection.querySelector(`[data-commit-file="${adrPath}"] .file-diff-split`)).not.toBeNull();
+  expect(inspection.querySelector(`[data-commit-file="${appPath}"]`)).not.toBeNull();
+  expect(inspection.querySelector("form[data-review]")).toBeNull();
+  const backToEarlier = new URL(step(shared, "prev"), web.url);
+  expect(backToEarlier.pathname).toBe("/records/app:TSK-0");
+  expect(Object.fromEntries(backToEarlier.searchParams)).toEqual({ workflow: "1", scope: "app", layout: "split" });
+  const charter = step(shared, "next");
+  expect(new URL(charter, web.url).searchParams.get("path")).toBe("app/workbench/CHARTER.md");
+  const appPolicy = step(await read(charter), "next");
+  expect(new URL(appPolicy, web.url).searchParams.get("path")).toBe(appPath);
+  const appDocument = await read(appPolicy);
+  expect(appDocument.querySelector(".page-heading h1")?.textContent).toBe("app:ADR-0: API");
+  const nextPolicy = step(appDocument, "next");
+  expect(new URL(nextPolicy, web.url).searchParams.get("path")).toBe(nextPath);
+  const taskOutcome = step(await read(nextPolicy), "next");
+  expect(new URL(taskOutcome, web.url).pathname).toBe("/records/app:TSK-1");
+  expect(step(await read(taskOutcome), "prev")).toBe(nextPolicy);
+  const link = group?.querySelector<HTMLAnchorElement>(
+    '[data-review-record="workbench/decisions/ADR-00.md"] a[data-card-link]',
   );
   expect(link).toBeDefined();
   const href = link?.getAttribute("href") ?? "";
-  expect(new URL(href, web.url).searchParams.get("all")).toBe("1");
+  const query = new URL(href, web.url).searchParams;
+  expect(Object.fromEntries(query)).toEqual({ scope: "app", task: "app:TSK-1", commit: first, path: adrPath });
   const review = await readWebPage(web, href);
   expect(review.response.status).toBe(200);
-  expect(parseDOM(review.html).window.document.querySelector("main")?.textContent).toContain(
-    "A changed shared policy.",
-  );
+  const document = parseDOM(review.html).window.document;
+  expect(document.querySelector("main")?.textContent).toContain("A changed shared policy.");
+  expect(breadcrumbLinks(document)).toEqual([
+    ["demo", "/?scope=demo"],
+    ["app", "/?scope=app"],
+    ["Reviews", "/reviews?scope=app"],
+    ["TSK-1: Shared policy change", "/records/app:TSK-1?workflow=1&scope=app"],
+  ]);
+  const commitContext = document.querySelector(".commit-review-context");
+  expect(commitContext?.textContent).toContain("Deliver shared policy");
+  expect(commitContext?.textContent).not.toContain("Shared policy change");
+  expect(commitContext?.textContent).toContain("File 1 of 4");
+  expect(commitContext?.textContent).toContain(first.slice(0, 12));
+  expect(document.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).not.toContain(first.slice(0, 8));
+  const next = document.querySelector('a[rel="next"]')?.getAttribute("href");
+  if (!next) throw new Error("Missing next task review");
+  expect(Object.fromEntries(new URL(next, web.url).searchParams)).toMatchObject({
+    scope: "app",
+    task: "app:TSK-1",
+    commit: first,
+    path: "app/workbench/CHARTER.md",
+  });
+  const confirm = async (pageURL: string) => {
+    const reviewed = parseDOM((await readWebPage(web, pageURL)).html).window.document,
+      form = reviewed.querySelector("form[data-review]");
+    if (!form) throw new Error("Missing scoped confirmation");
+    const values = Object.fromEntries(
+      [...form.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((input) => [input.name, input.value]),
+    );
+    const response = await postWebForm(web, form.getAttribute("action") ?? "", values);
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { redirect: string }).redirect;
+  };
+  expect(await confirm(href)).toBe(next);
+  const following = await confirm(next);
+  expect(new URL(following, web.url).searchParams.get("path")).toBe(appPath);
+  const last = await confirm(following);
+  expect(Object.fromEntries(new URL(last, web.url).searchParams)).toMatchObject({ commit: second, path: nextPath });
+  const splitLast = new URL(last, web.url);
+  splitLast.searchParams.set("layout", "split");
+  const finalDocument = splitLast.pathname + splitLast.search;
+  const outcomeLink = step(await read(finalDocument), "next");
+  expect(await confirm(finalDocument)).toBe(outcomeLink);
+  expect(Object.fromEntries(new URL(outcomeLink, web.url).searchParams)).toEqual({
+    workflow: "1",
+    layout: "split",
+    scope: "app",
+  });
+  expect((await readWebPage(web, href)).response.status).toBe(404);
+  const remaining = parseDOM((await readWebPage(web, "/reviews?scope=demo")).html).window.document;
+  expect(remaining.querySelector(`[data-review-record="${adrPath}"]`)).toBeNull();
+  expect(remaining.querySelector('[data-task-group="task:app:TSK-1"] [data-record-id="app:TSK-1"]')).not.toBeNull();
 });
 
 test("inline task commits list every file with budgeted initial previews and batched small diffs", async () => {

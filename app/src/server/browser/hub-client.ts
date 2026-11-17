@@ -190,7 +190,12 @@ export function startHubUpdates(browser: Browser): () => void {
             nextDisclosure = next.querySelector<HTMLDetailsElement>("details[data-worktree-list]");
           if (disclosure && nextDisclosure) nextDisclosure.open = disclosure.open;
           if (next.innerHTML === cell.innerHTML) continue;
-          if (next.dataset.cachePending === "true" && cell.textContent !== "Calculating…") continue;
+          if (
+            next.dataset.cachePending === "true" &&
+            next.textContent === "Calculating…" &&
+            cell.textContent !== "Calculating…"
+          )
+            continue;
           if (cell.contains(document.activeElement)) {
             postponed = true;
             continue;

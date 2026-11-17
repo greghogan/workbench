@@ -189,28 +189,33 @@ async function main() {
     await editor.press(macOS ? "Meta+ArrowDown" : "Control+End");
     await editor.press("Enter");
     await editor.pressSequentially("Screen reader fixture edit.");
+    const focused = page.locator(":focus");
+    await tab();
+    await page.getByRole("link", { name: "Cancel", exact: true }).and(focused).waitFor();
     await tab();
     const save = page.getByRole("button", { name: "Save draft", exact: true });
     // Native key dispatch can finish before the browser applies the focus transition.
-    await page.waitForFunction(() => document.activeElement?.textContent === "Save draft");
+    await save.and(focused).waitFor();
     await focus(save);
     await capture("save-draft-button", /Save draft/i);
     await page.keyboard.press("Enter");
     await page.getByText(/Saved to the working file/).waitFor();
     assert(await page.getByText("Screen reader fixture edit.", { exact: true }).count());
     const reviewTitle = "ADR-0: Notes stay in ordinary files";
-    await page.goto(url + "/review");
-    await page.getByRole("heading", { name: "Review queue", exact: true }).waitFor();
-    await heading("review-queue-heading", /Review queue/i);
+    await page.goto(url + "/reviews");
+    await page.getByRole("heading", { name: "Reviews", exact: true }).waitFor();
+    await heading("reviews-heading", /Reviews/i);
     await page.getByRole("link", { name: reviewTitle, exact: true }).click();
     await heading("review-heading", /ADR-0/i);
     const confirm = page.getByRole("button", { name: "Confirm changes", exact: true });
     await focus(confirm);
     await capture("confirm-review-button", /Confirm changes/i);
-    const presentedURL = page.url();
-    await Promise.all([page.waitForURL((current) => current.href !== presentedURL), page.keyboard.press("Enter")]);
-    assert.match(new URL(page.url()).pathname, /\/review$/);
-    await page.goto(url + "/review");
+    await Promise.all([
+      page.waitForURL((current) => current.pathname.endsWith("/records/demo:EXP-0/review")),
+      page.keyboard.press("Enter"),
+    ]);
+    await heading("next-review-heading", /EXP-0/i);
+    await page.goto(url + "/reviews");
     assert.equal(await page.getByRole("link", { name: reviewTitle, exact: true }).count(), 0);
     passed = true;
   } catch (error) {

@@ -99,9 +99,9 @@ test("project records and each collection have separate browsing and a unified r
     "company",
   );
   git(root, "add", "workbench");
-  const queue = await get("/review");
+  const queue = await get("/reviews");
   expect(reviewIds(queue.html)).toContain("company:ADR-0");
-  const collectionQueue = await get("/review?collection=company");
+  const collectionQueue = await get("/reviews?collection=company");
   expect(collectionQueue.response.status).toBe(200);
   expect(reviewIds(collectionQueue.html)).toEqual(["company:CHARTER", "company:ADR-0"]);
   expect((await get("/records?collection=missing")).response.status).toBe(404);
@@ -130,7 +130,7 @@ test("the web collection preview accepts all imported records in one submission"
     [...accept.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((input) => [input.name, input.value]),
   );
   expect((await postWebForm(web, accept.getAttribute("action") ?? "", fields)).status).toBe(200);
-  const queue = await get("/review");
+  const queue = await get("/reviews");
   expect(reviewIds(queue.html)).not.toContain("company:ADR-0");
   expect((await get("/records/company:ADR-0")).html).toContain("Use a bounded retry budget.");
   expect(git(root, "diff", "--cached", "--name-only")).toBe("");

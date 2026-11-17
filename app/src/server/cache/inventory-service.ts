@@ -253,6 +253,7 @@ export class InventoryService {
       .finally(() => {
         this.measuring.delete(directory);
         this.measureChanged();
+        if (!this.closed && !this.refreshing) this.notify();
       });
   }
   close(): void {

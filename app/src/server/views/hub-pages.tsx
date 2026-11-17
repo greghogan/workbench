@@ -1,3 +1,4 @@
+import { WebError } from "../http/errors.js";
 import { cell } from "./cache-quantity.js";
 import { ProjectCacheRow } from "./project-cache-row.js";
 import type { ProjectDirectoryView } from "../projects/project-directory.js";
@@ -68,7 +69,7 @@ export interface InventoryPresentation {
   refreshing: boolean;
   sizes: InventoryPatch["sizes"];
   page: "projects" | "caches";
-  owner: string | null | undefined;
+  recalculateURL: string;
   csrf: string;
 }
 export function inventoryPresentation(
@@ -79,6 +80,7 @@ export function inventoryPresentation(
   owner?: string | null,
   reviews: ReadonlyMap<string, ProjectReviewCount> = new Map(),
   metadata?: ProjectDirectoryView,
+  navigation: { section?: InventorySection; offset?: string } = {},
 ): InventoryPresentation {
   const sizes = new Map(data.sizes.map((entry) => [entry.directory, entry]));
   const index = new InventoryIndex(data);
@@ -86,13 +88,51 @@ export function inventoryPresentation(
   const accountingUnknown = data.issues.some((issue) => ["builds", "builders", "registry"].includes(issue.component));
   const rows: InventoryPresentation["rows"] = {};
   const models = projectCacheViews(index, projects, page, owner, metadata);
-  const measured = new Set(
-    models.flatMap((model) => [
-      ...model.owned.map((entry) => entry.directory),
-      ...model.tools.map((entry) => entry.directory),
-    ]),
+  const measured = new Set<string>();
+  const registered = projects.find(
+    (project) => owner && projectPathComparison(project.path) === projectPathComparison(owner),
   );
-  rows.projects = models.map((model) => (
+  const ownerQuery = registered ? { project: registered.id } : owner ? { owner } : {};
+  const offset = Number(navigation.offset ?? "0");
+  if (navigation.offset !== undefined && (!navigation.section || !/^\d+$/.test(navigation.offset)))
+    throw new WebError(400, "Invalid cache table position");
+  const pageSize = 60;
+  const windowRows = <T,>(
+    section: InventorySection,
+    data: readonly T[],
+    columns: number,
+    render: (item: T) => JSX.Element,
+  ) => {
+    if (page === "projects") return data.map(render);
+    const start =
+      navigation.section === section
+        ? Math.min(offset, Math.max(0, Math.floor((data.length - 1) / pageSize) * pageSize))
+        : 0;
+    const end = Math.min(start + pageSize, data.length);
+    const result = data.slice(start, end).map(render);
+    if (data.length <= pageSize) return result;
+    const link = (index: number) =>
+      routeURL(Route.Caches, { ...ownerQuery, section, offset: String(index) }) + "#cache-" + section;
+    result.push(
+      <tr data-cache-row={"page-" + section}>
+        <td data-cache-cell={"page-" + section} colSpan={columns}>
+          <nav class="actions" aria-label={section + " pages"}>
+            {start > 0 && <a href={link(Math.max(0, start - pageSize))}>Previous</a>}
+            <span>
+              {String(start + 1)}–{String(end)} of {String(data.length)}
+            </span>
+            {end < data.length && <a href={link(end)}>Next</a>}
+          </nav>
+        </td>
+      </tr>,
+    );
+    return result;
+  };
+  const measure = (directory: string) => {
+    measured.add(directory);
+    return [directory];
+  };
+  rows.projects = windowRows("projects", models, 8, (model) => (
     <ProjectCacheRow
       model={model}
       sizes={sizes}
@@ -103,7 +143,7 @@ export function inventoryPresentation(
     />
   ));
   if (page === "caches") {
-    rows.operations = cacheOperations(data.inventory).map((entry) => {
+    rows.operations = windowRows("operations", cacheOperations(data.inventory), 5, (entry) => {
       const id = key("operation-", entry.directory);
       return (
         <tr data-cache-row={id}>
@@ -112,7 +152,7 @@ export function inventoryPresentation(
           </td>
           <td data-cache-cell={id + "-kind"}>{entry.action}</td>
           {entry.measurement ? (
-            cell(id + "-size", quantity(data.complete, sizes, [entry.measurement.directory]))
+            cell(id + "-size", quantity(data.complete, sizes, measure(entry.measurement.directory)))
           ) : (
             <td>{formatBytes(entry.bytes)}</td>
           )}
@@ -135,14 +175,14 @@ export function inventoryPresentation(
         </tr>
       );
     });
-    rows.roots = entries.map((entry) => {
+    rows.roots = windowRows("roots", entries, 6, (entry) => {
       const id = key("root-", entry.directory);
       return (
         <tr data-cache-row={id}>
           <td class="file-path">{entry.identity.root}</td>
           <td>{entry.kind}</td>
           <td>{entry.identity.environment}</td>
-          {cell(id + "-size", quantity(data.complete, sizes, [entry.directory]))}
+          {cell(id + "-size", quantity(data.complete, sizes, measure(entry.directory)))}
           <td data-cache-cell={id + "-status"}>{entry.blockedBy?.length ? entry.blockedBy : "Removable"}</td>
           <td data-cache-cell={id + "-actions"}>
             {mutationForm({
@@ -168,7 +208,7 @@ export function inventoryPresentation(
         </tr>
       );
     });
-    rows.tools = (data.inventory.tools?.entries ?? []).map((tool) => {
+    rows.tools = windowRows("tools", data.inventory.tools?.entries ?? [], 6, (tool) => {
       const id = key("tool-", tool.id),
         consumers = data.consumers[tool.id] ?? [];
       const state = tool.protections.some((reason) => reason.kind === "active")
@@ -185,7 +225,7 @@ export function inventoryPresentation(
             {tool.tool} {tool.version}
             {older && badge("Older")}
           </td>
-          {cell(id + "-size", quantity(data.complete, sizes, [tool.directory]))}
+          {cell(id + "-size", quantity(data.complete, sizes, measure(tool.directory)))}
           <td data-cache-cell={id + "-state"}>
             {state}
             {data.prunable.includes(tool.id) ? " · removable" : ""}
@@ -205,9 +245,11 @@ export function inventoryPresentation(
         </tr>
       );
     });
-    rows.builders = (data.inventory.builders?.entries ?? [])
-      .filter((entry) => !owner || entry.checkout === owner)
-      .map((entry) => {
+    rows.builders = windowRows(
+      "builders",
+      (data.inventory.builders?.entries ?? []).filter((entry) => !owner || entry.checkout === owner),
+      3,
+      (entry) => {
         const id = key("builder-", entry.key);
         return (
           <tr data-cache-row={id}>
@@ -216,10 +258,13 @@ export function inventoryPresentation(
             <td data-cache-cell={id + "-status"}>{entry.blockedBy ?? "Eligible"}</td>
           </tr>
         );
-      });
-    rows.images = (data.inventory.images?.entries ?? [])
-      .filter((entry) => !owner || entry.checkout === owner)
-      .map((entry) => {
+      },
+    );
+    rows.images = windowRows(
+      "images",
+      (data.inventory.images?.entries ?? []).filter((entry) => !owner || entry.checkout === owner),
+      4,
+      (entry) => {
         const id = key("image-", entry.key);
         return (
           <tr data-cache-row={id}>
@@ -229,7 +274,8 @@ export function inventoryPresentation(
             <td>Reclaimed layer bytes unknown</td>
           </tr>
         );
-      });
+      },
+    );
   }
   const problems = [
     ...new Set([
@@ -239,20 +285,14 @@ export function inventoryPresentation(
       ...(data.problem ? [data.problem] : []),
     ]),
   ];
-  const registered = projects.find(
-    (project) => owner && projectPathComparison(project.path) === projectPathComparison(owner),
-  );
-  const location = routeURL(Route.Inventory, {
-    view: page,
-    ...(registered ? { project: registered.id } : owner ? { owner } : {}),
-  });
+  const location = routeURL(Route.Inventory, { view: page, ...ownerQuery, ...navigation });
   return {
     rows,
     problems,
     refreshing: data.refreshing,
-    sizes: data.sizes.filter((size) => page !== "projects" || measured.has(size.directory)).map(cacheMeasurement),
+    sizes: data.sizes.filter((size) => measured.has(size.directory)).map(cacheMeasurement),
     page,
-    owner,
+    recalculateURL: routeURL(Route.Caches, { ...ownerQuery, ...navigation, refresh: "1", "refresh-sizes": "1" }),
     csrf,
     location,
   };
@@ -267,9 +307,9 @@ export function inventoryPatch(view: InventoryPresentation): InventoryPatch {
   };
 }
 export function inventoryContent(view: InventoryPresentation): JSX.Element {
-  const { rows, page, owner, problems } = view;
+  const { rows, page, problems } = view;
   const projectTable = (
-    <div class="table-scroll">
+    <div class="table-scroll" id="cache-projects">
       <table>
         <thead>
           <tr>
@@ -298,7 +338,7 @@ export function inventoryContent(view: InventoryPresentation): JSX.Element {
   );
   const tables = page === "caches" && (
     <>
-      <section data-cache-section="operations" hidden={!rows.operations?.length}>
+      <section id="cache-operations" data-cache-section="operations" hidden={!rows.operations?.length}>
         <h2>Incomplete cache operations</h2>
         <div class="table-scroll">
           <table>
@@ -316,11 +356,9 @@ export function inventoryContent(view: InventoryPresentation): JSX.Element {
         </div>
       </section>
       <p>
-        <a href={routeURL(Route.Caches, { refresh: "1", "refresh-sizes": "1", ...(owner ? { owner } : {}) })}>
-          Recalculate sizes
-        </a>
+        <a href={view.recalculateURL}>Recalculate sizes</a>
       </p>
-      <h2>Build roots</h2>
+      <h2 id="cache-roots">Build roots</h2>
       <p>Roots can serve multiple subprojects. Shared workspace builds are cleared together. Sizes are estimates.</p>
       <div class="table-scroll">
         <table>
@@ -337,7 +375,7 @@ export function inventoryContent(view: InventoryPresentation): JSX.Element {
           <tbody data-cache-rows="roots">{rows.roots}</tbody>
         </table>
       </div>
-      <h2>Shared tool installations</h2>
+      <h2 id="cache-tools">Shared tool installations</h2>
       <p>
         Referenced footprints overlap between projects. Unavailable requirements protect tools without claiming every
         installation as a consumer.
@@ -363,7 +401,7 @@ export function inventoryContent(view: InventoryPresentation): JSX.Element {
           <tbody data-cache-rows="tools">{rows.tools}</tbody>
         </table>
       </div>
-      <h2>Builder stores</h2>
+      <h2 id="cache-builders">Builder stores</h2>
       <div class="table-scroll">
         <table>
           <thead>
@@ -376,7 +414,7 @@ export function inventoryContent(view: InventoryPresentation): JSX.Element {
           <tbody data-cache-rows="builders">{rows.builders}</tbody>
         </table>
       </div>
-      <h2>Prepared images</h2>
+      <h2 id="cache-images">Prepared images</h2>
       <p>
         Logical sizes include shared layers. Removing an image tag may reclaim less space; reclaimable layer bytes are
         unknown.

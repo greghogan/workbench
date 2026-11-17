@@ -84,6 +84,23 @@ test("only approved work can enter the queue and a failed batch never partially 
   expect(() => queue({ action: "add", references: ["TSK-9"] })).toThrow(/not found/);
 });
 
+test("started work remains queued for revised approval and resumes ahead of unstarted work", () => {
+  task(0);
+  const path = task(1, "Planned");
+  queue({ action: "add", references: ["TSK-0"] });
+  changeTaskStatus(root, "TSK-1", "Approved", undefined, true);
+  queue({ action: "start", reference: "TSK-1" });
+  writeFileSync(path, readFileSync(path, "utf8").replace("A useful outcome.", "A different outcome."));
+  expect(inspectTaskQueue(root).ready).toEqual(["demo:TSK-0"]);
+  expect(() => queue({ action: "implemented", reference: "TSK-1", detail: "Tests passed." })).toThrow(/revoked/);
+  changeTaskStatus(root, "TSK-1", "Approved", undefined, true);
+  expect(inspectTaskQueue(root).entries.map((entry) => entry.reference)).toEqual(["demo:TSK-0", "demo:TSK-1"]);
+  expect(inspectTaskQueue(root).ready).toEqual(["demo:TSK-1", "demo:TSK-0"]);
+  queue({ action: "start", reference: "TSK-1" });
+  queue({ action: "release", reference: "TSK-1" });
+  expect(inspectTaskQueue(root).ready).toEqual(["demo:TSK-1", "demo:TSK-0"]);
+});
+
 test("local verified dependencies unlock a batch, but acceptance requires shared accepted dependencies", () => {
   task(0);
   task(1, "Approved", "depends_on: [demo:TSK-0]\n");
@@ -359,8 +376,7 @@ test("changed supporting requirements need renewed approval and verification bef
   }).toThrow(/approve the current plan/);
   changeTaskStatus(root, "TSK-0", "Approved", undefined, true);
   expect(() => queue({ action: "start", reference: "TSK-1" })).toThrow(/Waiting/);
-  expect(inspectTaskQueue(root).entries[0]?.blockers.join(" ")).toMatch(/changed after verification/);
-  queue({ action: "release", reference: "TSK-0" });
+  expect(inspectTaskQueue(root).ready).toEqual(["demo:TSK-0"]);
   queue({ action: "start", reference: "TSK-0" });
   queue({ action: "implemented", reference: "TSK-0", detail: "Verified revised service." });
   queue({ action: "start", reference: "TSK-1" });

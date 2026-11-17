@@ -7,12 +7,17 @@ summary: Shared plan approval, local execution queues, source-bound evidence, an
 Human plan approval and outcome acceptance follow workbench:ADR-7. Queue selection and ordering are personal execution
 choices; neither grants approval. Protected-document acknowledgment remains a separate decision under ADR-6.
 
-Task workflow views distinguish plans awaiting human approval, approved work and its execution progress, and outcomes
-awaiting human acceptance. Keep record browsing separate from this workflow.
+Task workflow views distinguish initial and revised approval, approved work and its progress, and outcomes awaiting
+human acceptance. Plans includes numbered tasks awaiting revised approval. These tasks retain their identity, queue
+position, and completed work. Keep record browsing separate from this workflow.
 
-List plans awaiting approval by date added, oldest first. Approval appends work to the local execution queue unless
-already present; revised approval preserves its position and progress. The execution queue has an explicit personal
-order. Neither approval nor queue ordering starts implementation.
+Present revised approvals for started work ahead of initial approvals. Keep started tasks awaiting approval visible in
+Work. Append newly authorized work, including requested project reviews, to the end of the local queue. Resume eligible
+started work first and preserve queue order within each priority unless the developer directs independent work.
+
+Present completed tasks with their associated record changes in one review entry. Bind each human decision to the
+version reviewed. Retain the source of developer-requested review authorization separately from plan approval and
+outcome acceptance.
 
 The browser provides human decisions and queue ordering, with execution progress and blockers shown for inspection.
 Executing agents maintain local progress. Workbench identifies blockers from recorded prerequisites.
@@ -48,7 +53,7 @@ stateDiagram-v2
 
 Execution states remain local; acceptance and cancellation follow the shared task lifecycle.
 
-A queued task is ready only when its plan is approved and its prerequisites are satisfied. Implementation evidence
+A queued task is ready when its current scope is authorized and its prerequisites are satisfied. Implementation evidence
 applies to the plan and source version actually verified. It establishes implementation at that version, without
 verifying later edits or granting human acceptance.
 

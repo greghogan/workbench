@@ -7,15 +7,15 @@ import { yamlMetadata } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import type { RecordLookup } from "../../core/records/record-lookup.js";
 import { recordURL, routeURL } from "../routes/locations.js";
-import { Route } from "../routes/routes.js";
+import { Route, type SourceQuery } from "../routes/routes.js";
 import { metadataSections } from "./record-content.js";
 import { referenceAttributes } from "./record-links.js";
 import { normalizedNumber } from "../../core/records/record-identity.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
-import { isDocumentationSvg } from "../documents/document-image.js";
 import { required } from "../../core/runtime/invariants.js";
-import { diagramView, diagramComparisonView } from "./diagram-view.js";
 import { markdownHeadingId } from "../../core/records/markdown-links.js";
+import { diagramView, diagramComparisonView } from "./diagram-view.js";
+import { isDocumentationSvg } from "../documents/document-image.js";
 const documentPrefix = "document-";
 
 /** Raw HTML remains visible text; local links resolve only to registered records or their owned files. */
@@ -25,6 +25,7 @@ export type MarkdownRecord = Pick<BrowserRecord, "directory" | "path"> & {
   type?: BrowserRecord["type"];
   history?: { commit: string; paths: ReadonlySet<string>; location?: (path: string) => string };
   planFiles?: { reference: string; names: readonly string[]; version?: "approved"; base?: string };
+  fileSource?: SourceQuery & { workflow?: "1" };
 };
 export function markdownParser(
   record: MarkdownRecord | undefined,
@@ -103,6 +104,7 @@ export function markdownParser(
       return {
         href:
           routeURL(Route.PlanFile, {
+            ...record.fileSource,
             id: record.planFiles.reference,
             path: name,
             ...(record.planFiles.version ? { version: record.planFiles.version } : {}),
@@ -132,8 +134,11 @@ export function markdownParser(
     if (owner)
       return {
         href:
-          routeURL(Route.File, { id: owner.id, path: relative(owner.directory, target).replaceAll("\\", "/") }) +
-          fragment,
+          routeURL(Route.File, {
+            ...record.fileSource,
+            id: owner.id,
+            path: relative(owner.directory, target).replaceAll("\\", "/"),
+          }) + fragment,
       };
     return undefined;
   };

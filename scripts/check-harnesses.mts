@@ -181,7 +181,7 @@ async function check(harness: string, nested: boolean) {
     mkdirSync(configuration);
     writeFileSync(
       join(configuration, "config.toml"),
-      `[skills]\nenabled = ${JSON.stringify([name, "workbench-explicit-probe", "review-project"])}\n`,
+      `[skills]\nenabled = ${JSON.stringify([name, "workbench-explicit-probe", "workbench-review-project"])}\n`,
     );
     process.env.WORKBENCH_CONFIG_HOME = configuration;
     skills.syncSkills(checkout, distribution);
@@ -347,7 +347,10 @@ async function check(harness: string, nested: boolean) {
     assert.ok(initial.includes(name), "applicable skill was not discovered");
     assert.ok(!initial.includes(bodyToken), "skill body was loaded before invocation");
     assert.ok(!initial.includes("workbench-explicit-probe"), "explicit-only skill leaked into implicit discovery");
-    assert.ok(!initial.includes("review-project"), "packaged project review must require explicit invocation");
+    assert.ok(
+      !initial.includes("workbench-review-project"),
+      "packaged project review must require explicit invocation",
+    );
     assert.ok(JSON.stringify(requests.slice(1)).includes(bodyToken), "invoked skill body did not reach model context");
     for (const [directory, pattern] of [
       [env.CODEX_HOME, /(^|\/)(sessions\/.*\.jsonl|history\.jsonl)$/],

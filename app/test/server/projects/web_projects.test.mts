@@ -95,7 +95,7 @@ test("record bookmarks cold-load across service restarts and checkout relocation
   expect(document.querySelector('nav[aria-label="Difference layout"] [aria-current="page"]')?.textContent).toBe(
     "Unified",
   );
-  expect(document.body.dataset.eventsUrl).toBe(`/projects/${id}/events`);
+  expect(document.body.dataset.eventsUrl).toBe(`/projects/${id}/events?scope=demo`);
 });
 
 test("linked worktrees share one dashboard entry while retaining independent navigation and cache ownership", async () => {
@@ -334,10 +334,17 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
   const declaredName = readProjects(join(distribution, "demo"))[0]?.name;
   if (!declaredName) throw new Error("Missing demonstration display name");
   expect(parseDOM(html).window.document.querySelector(".project-switch-name")?.textContent).toBe(declaredName);
-  const queue = parseDOM(await (await fetch(web.url + "/review")).text(), { url: web.url }).window.document;
-  const reviewLinks = [...queue.querySelectorAll("article.record-row a[data-card-link]")];
+  const queue = parseDOM(await (await fetch(web.url + "/reviews")).text(), { url: web.url }).window.document;
+  const reviewLinks = [
+    ...queue.querySelectorAll('.review-group:not([data-task-group^="task:"]) article.record-row a[data-card-link]'),
+  ];
   const paths = reviewLinks.map((link) => link.closest("[data-record-id]")?.getAttribute("data-record-id"));
-  expect(paths).toEqual(["demo:ADR-0", "demo:EXP-0", "demo:EXP-1"]);
+  expect(paths).toEqual(["demo:ADR-0", "demo:EXP-0"]);
+  expect(
+    [...queue.querySelectorAll('[data-task-group="task:demo:TSK-7"] [data-record-id]')].map((node) =>
+      node.getAttribute("data-record-id"),
+    ),
+  ).toEqual(["demo:ADR-1", "demo:TSK-7"]);
   const pdfPage = await (await fetch(web.url + "/records/demo:CIT-0")).text();
   expect(pdfPage).toContain("File present locally");
   const href = [...parseDOM(pdfPage).window.document.querySelectorAll(".citation-source .actions a")]
@@ -432,7 +439,7 @@ test("scoped link helpers include PDF routes and tabs without leaking URL contex
         return renderToString(
           createElement(Fragment, null, [
             linkButton("PDF", "/records/demo:CIT-0/document"),
-            tabs([{ label: "Review", href: "/review", current: false }], "Views"),
+            tabs([{ label: "Review", href: "/reviews", current: false }], "Views"),
             linkButton("Projects", "/projects"),
             linkButton("External", "https://example.invalid/page"),
           ]),
@@ -441,7 +448,7 @@ test("scoped link helpers include PDF routes and tabs without leaking URL contex
     ),
   );
   expect(first).toContain('href="/projects/first/records/demo:CIT-0/document"');
-  expect(first).toContain('href="/projects/first/review"');
+  expect(first).toContain('href="/projects/first/reviews"');
   expect(first).toContain('href="/projects"');
   expect(first).toContain('href="https://example.invalid/page"');
   expect(second).toContain('href="/projects/second/records/demo:CIT-0/document"');
@@ -514,7 +521,7 @@ test("project review counts load independently of cache sizes, group supporting 
     return parseDOM(`<table><tbody>${update.sections.projects}</tbody></table>`).window.document;
   };
   const count = (document: Document, root: string) =>
-    document.querySelector(`[data-cache-cell$="-reviews"] a[href="/projects/${projectIdentity(root)}/review"]`)
+    document.querySelector(`[data-cache-cell$="-reviews"] a[href="/projects/${projectIdentity(root)}/reviews"]`)
       ?.textContent;
   await vi.waitFor(
     async () => {

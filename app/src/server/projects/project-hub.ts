@@ -327,6 +327,10 @@ export async function startProjectHub(
               owner,
               reviews.read(availableProjects(metadata)),
               metadata,
+              {
+                ...(query.section ? { section: query.section } : {}),
+                ...(query.offset === undefined ? {} : { offset: query.offset }),
+              },
             ),
           ),
         );
@@ -508,7 +512,12 @@ export async function startProjectHub(
           "text/html",
           layout(
             "Caches",
-            inventoryContent(inventoryPresentation(data, projects, csrf, "caches", owner, undefined, metadata)),
+            inventoryContent(
+              inventoryPresentation(data, projects, csrf, "caches", owner, undefined, metadata, {
+                ...(query.section ? { section: query.section } : {}),
+                ...(query.offset === undefined ? {} : { offset: query.offset }),
+              }),
+            ),
             {
               active: "caches",
             },

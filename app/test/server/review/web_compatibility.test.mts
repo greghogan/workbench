@@ -58,7 +58,7 @@ test("a stale compatibility assessment requests agent work without entering the 
   const root = localProject(),
     web = await fixtures.start(root);
   expect(policyCompatibility(root).status).toBe("review-required");
-  const queue = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   expect(queue.querySelector("[data-compatibility-item]")).toBeNull();
   const local = (await readWebPage(web, "/collections")).html;
   expect(local).toContain("An agent compatibility assessment is needed.");
@@ -71,7 +71,7 @@ test("reported incompatibilities join document reviews; approval records a resol
     web = await fixtures.start(root);
   const before = readFileSync(join(root, "workbench/decisions/ADR-00.md"), "utf8"),
     index = git(root, "ls-files", "--stage");
-  const queue = parseDOM((await readWebPage(web, "/review")).html).window.document;
+  const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
   const links = [...queue.querySelectorAll("main [data-card-link]")];
   expect(links.map((link) => link.textContent)).toEqual(["Resolve policy incompatibilities"]);
   const page = await readWebPage(web, links[0]?.getAttribute("href") ?? "");
@@ -98,7 +98,7 @@ test("reported incompatibilities join document reviews; approval records a resol
   expect(readFileSync(join(root, "workbench/decisions/ADR-00.md"), "utf8")).toBe(before);
   expect(git(root, "ls-files", "--stage")).toBe(index);
   expect(existsSync(join(root, ".git/workbench/review.json"))).toBe(false);
-  expect((await readWebPage(web, "/review")).html).not.toContain("data-compatibility-item");
+  expect((await readWebPage(web, "/reviews")).html).not.toContain("data-compatibility-item");
   writeFileSync(
     join(root, "workbench/decisions/ADR-00.md"),
     before + "\nCommands may run through the host scheduler.\n",

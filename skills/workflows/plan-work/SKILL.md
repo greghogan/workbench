@@ -22,9 +22,11 @@ sections or a fixed sequence. Link authoritative requirements rather than copyin
 Separate a human-reviewable overview of why, what, and how from proportionate implementing-agent detail; use visuals
 where they help understanding.
 
-For user-facing work, make the intended workflow and consequential choices assessable before implementation, including
-how the completed experience will be verified. Use the established product direction to resolve ordinary presentation
-details; bring choices affecting intent or constraints to the developer.
+For changes to interface layout or interaction, include an SVG wireframe with representative content in the human-facing
+plan. Show the actual arrangement of controls and content. Annotate the action, what changes, what stays available, and
+any state that must survive navigation or reload. Use flow diagrams for material branching or state transitions. Tie
+visuals to observable acceptance scenarios. Resolve ordinary presentation details within the established design and
+surface consequential choices for approval.
 
 Distinguish planning acceptance, readiness to execute, verified implementation, and any reserved developer completion
 acceptance using the project's supported lifecycle. Explain dependency constraints and preferred order separately;
@@ -42,11 +44,13 @@ coherent work, using checklist steps or linked tasks according to independent sc
 necessary discoveries within the authorized outcome from proposed scope expansion. Refer material unresolved choices to
 the developer while continuing independent work; honor decisions and delegation already given.
 
-Before implementing a major feature, obtain human approval of the concrete current plan. Make significant changes to
+Before asking for human approval, apply `review-plan` to the current draft. Resolve findings within the agreed scope and
+bring remaining product decisions to the developer. Repeat for material revisions that require renewed approval.
+
+Obtain human approval of the concrete current plan before implementing a major feature. Make significant changes to
 public behavior, interfaces, data, or architecture explicit. Record the actual approval and its scope; plan readiness,
-agent review, and passing checks do not establish approval. Renew approval for material changes to that scope or its
-constraints, while adapting ordinary steps within existing authorization. Preserve authorized small audit fixes and
-refinement of the current implementation rather than treating every improvement as a new feature.
+agent review, and passing checks do not establish approval. Adapt ordinary steps within existing authorization and
+preserve authorized small audit fixes and refinements of the current implementation.
 
 Report the current direction, important changes, and remaining questions with a link to the plan. Record readiness
 honestly without manufacturing approval. A planning request does not itself authorize implementation, staging, commits,

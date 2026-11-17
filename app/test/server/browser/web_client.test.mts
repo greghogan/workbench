@@ -122,6 +122,61 @@ test("routine freshness events never change the reading view or announce timesta
   expect(web.fetch).not.toHaveBeenCalled();
   expect(web.document.body.textContent).not.toContain("checked at");
 });
+
+test("desktop notifications use browser permission after an interaction and deduplicate workflow decisions", () => {
+  const web = fixture('<button type="button">Continue</button><output id="workflow-notice"></output>');
+  const shown: TestNotification[] = [];
+  class TestNotification {
+    static permission = "default";
+    static requestPermission = vi.fn(() => {
+      TestNotification.permission = "granted";
+      return Promise.resolve("granted");
+    });
+    onclick?: () => void;
+    close = vi.fn();
+    constructor(
+      readonly title: string,
+      readonly options: NotificationOptions,
+    ) {
+      shown.push(this);
+    }
+  }
+  Object.defineProperty(web.window, "isSecureContext", { value: true });
+  Object.defineProperty(web.window, "Notification", { value: TestNotification });
+  const activation = { isActive: false };
+  Object.defineProperty(web.window.navigator, "userActivation", { value: activation });
+  const open = vi.spyOn(web.window, "open").mockImplementation(() => null);
+  const control = web.document.querySelector<HTMLButtonElement>("button");
+  if (!control) throw new Error("Missing ordinary interaction control");
+  control.click();
+  expect(TestNotification.requestPermission).not.toHaveBeenCalled();
+  activation.isActive = true;
+  TestNotification.permission = "denied";
+  control.click();
+  expect(TestNotification.requestPermission).not.toHaveBeenCalled();
+  TestNotification.permission = "default";
+  control.click();
+  expect(TestNotification.requestPermission).toHaveBeenCalledTimes(1);
+  const announce = () =>
+    web.events[0]?.dispatchEvent(
+      new web.window.MessageEvent("attention", {
+        data: JSON.stringify({
+          revision: "two",
+          count: 1,
+          items: [
+            { key: "plan:demo:TSK-1", title: "Preview scope", href: "/records/demo:TSK-1?workflow=1", kind: "plan" },
+          ],
+        }),
+      }),
+    );
+  announce();
+  announce();
+  expect(web.document.getElementById("workflow-notice")?.textContent).toContain("needs approval");
+  expect(shown).toHaveLength(1);
+  expect(shown[0]?.options.body).toBe("Preview scope");
+  shown[0]?.onclick?.();
+  expect(open).toHaveBeenCalledWith("http://localhost:8080/records/demo:TSK-1?workflow=1", "_blank", "noopener");
+});
 test("workspace recovery preserves a separately owned draft notice", () => {
   const web = fixture("<form data-editor><textarea>Human draft</textarea></form>");
   web.change();
@@ -325,6 +380,44 @@ test("opening review starts preparation once and leaves a failed preparation ret
   const leaving = new web.window.Event("beforeunload", { cancelable: true });
   web.window.dispatchEvent(leaving);
   expect(leaving.defaultPrevented).toBe(false);
+});
+
+test("live pages automatically prepare each newly presented version once", async () => {
+  const web = fixture("<p>Current task</p>"),
+    preparation = (version: string) =>
+      `<form data-action data-review-prepare action="/actions/review-prepare"><input name="path" type="hidden" value="workbench/tasks/TSK-00.md"><input name="expected" type="hidden" value="${version}"><button>Review plan</button></form>`;
+  const unavailable = () =>
+    new Response(JSON.stringify({ error: "Preparation failed; retry review" }), { status: 409 });
+  web.fetch.mockResolvedValueOnce(updated(preparation("first"))).mockResolvedValueOnce(unavailable());
+  web.change();
+  await vi.waitFor(() => {
+    expect(web.fetch).toHaveBeenCalledTimes(2);
+  });
+  expect(web.fetch.mock.calls[1]?.[1]?.method).toBe("POST");
+  const request = web.fetch.mock.calls[1]?.[1]?.body;
+  if (!(request instanceof URLSearchParams)) throw new Error("Missing preparation version");
+  expect(request.get("expected")).toBe("first");
+  await vi.waitFor(() => {
+    expect(web.document.querySelector("button")?.disabled).toBe(false);
+  });
+  web.fetch.mockResolvedValueOnce(
+    new Response(`<body data-revision="three"><main>${preparation("first")}</main></body>`),
+  );
+  web.events[0]?.dispatchEvent(new web.window.MessageEvent("revision", { data: "three" }));
+  await vi.waitFor(() => {
+    expect(web.document.body.dataset.revision).toBe("three");
+  });
+  expect(web.fetch).toHaveBeenCalledTimes(3);
+  web.fetch
+    .mockResolvedValueOnce(new Response(`<body data-revision="four"><main>${preparation("second")}</main></body>`))
+    .mockResolvedValueOnce(unavailable());
+  web.events[0]?.dispatchEvent(new web.window.MessageEvent("revision", { data: "four" }));
+  await vi.waitFor(() => {
+    expect(web.fetch).toHaveBeenCalledTimes(5);
+  });
+  const changed = web.fetch.mock.calls[4]?.[1]?.body;
+  if (!(changed instanceof URLSearchParams)) throw new Error("Missing updated version");
+  expect(changed.get("expected")).toBe("second");
 });
 
 test("a failed stateless action does not invent unsaved edits", async () => {
@@ -695,6 +788,42 @@ test("task loading appends batches, preserves expanded parents and focus, and re
   expect(JSON.parse(url.searchParams.get("task_windows") ?? "{}")).toEqual({ "demo:TSK-0": "demo:TSK-2" });
 });
 
+test("review continuation appends within a task and adds the next project section in order", async () => {
+  const group = (name: string, rows: string) =>
+    `<section data-task-group="${name}"><div data-task-group-items>${rows}</div></section>`;
+  const row = (id: string) => `<div data-task-node="${id}">${id}</div>`;
+  const reviewWindow = (rows: string, through: string, loader = "") =>
+    `<div data-task-window="workflow-reviews" data-list-revision="review" data-task-through="${through}">
+      <div data-task-items>${rows}</div><div data-task-loader>${loader}</div>
+    </div>`;
+  const web = fixture(
+    reviewWindow(
+      group("root", group("task-1", row("document"))),
+      "document",
+      '<a data-task-more href="/reviews?phase=reviews&after=document">Load more</a>',
+    ),
+  );
+  const document = web.document.querySelector('[data-task-node="document"]');
+  web.fetch.mockResolvedValue(
+    updated(
+      reviewWindow(group("root", group("task-1", row("outcome"))) + group("app", group("working", row("adr"))), "adr"),
+    ),
+  );
+  web.document
+    .querySelector("[data-task-more]")
+    ?.dispatchEvent(new web.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => {
+    const root = web.document.querySelector('[data-task-group="root"]');
+    expect(root?.querySelectorAll('[data-task-group="task-1"]')).toHaveLength(1);
+    expect(root?.querySelector('[data-task-node="document"]')).toBe(document);
+    expect(root?.querySelector('[data-task-node="outcome"]')).not.toBeNull();
+    expect(root?.nextElementSibling?.querySelector('[data-task-node="adr"]')).not.toBeNull();
+  });
+  expect(JSON.parse(new URL(web.window.location.href).searchParams.get("task_windows") ?? "{}")).toEqual({
+    "workflow-reviews": "adr",
+  });
+});
+
 test.each(["siblings", "nested"])(
   "a task batch beyond the remaining DOM budget leaves a working ordinary navigation link (%s)",
   async (shape) => {
@@ -775,7 +904,7 @@ test("completion of one form preserves unsaved entries in another form", async (
   if (!input) throw new Error("Missing second form input");
   input.value = "Human reasoning still being written";
   input.dispatchEvent(new web.window.Event("input", { bubbles: true }));
-  response.finish(new Response(JSON.stringify({ redirect: "/queue" })));
+  response.finish(new Response(JSON.stringify({ redirect: "/work" })));
   await vi.waitFor(() => {
     expect(web.document.getElementById("live-status")?.textContent).toContain(
       "Other unsaved form entries are preserved",
@@ -932,9 +1061,10 @@ test("file filtering searches complete paths and reveals matching folders withou
 
 test("file diff expansion preserves neighboring files, navigation, cold URLs, focus, and retry after a failed request", async () => {
   const body =
-      '<details class="commit-navigation" open><label hidden data-commit-filter>Filter<input data-commit-file-filter></label><ul><li data-commit-file-path="Alpha.ts">Alpha</li><li data-commit-file-path="Beta.md">Beta</li></ul></details><div data-file-diff data-file-path="Alpha.ts" data-file-commit="one"><a data-file-diff-link href="/collections?commit=one&path=Alpha.ts&context=0%3A0%3A20">Expand context</a><p>Old source</p></div><div id="neighbor">Other open file</div>',
+      '<nav class="commit-navigation"><label hidden data-commit-filter>Filter<input data-commit-file-filter></label><div class="commit-navigation-list"><ul><li data-commit-file-path="Alpha.ts">Alpha</li><li data-commit-file-path="Beta.md">Beta</li></ul></div></nav><div data-file-diff data-file-path="Alpha.ts" data-file-commit="one"><a data-file-diff-link href="/collections?commit=one&path=Alpha.ts&context=0%3A0%3A20">Expand context</a><p>Old source</p></div><div id="neighbor">Other open file</div>',
     web = fixture(body),
     neighbor = web.document.getElementById("neighbor"),
+    navigation = web.document.querySelector(".commit-navigation-list"),
     link = web.document.querySelector<HTMLAnchorElement>("[data-file-diff-link]");
   web.window.history.replaceState({}, "", "/collections?commit=one&path=Alpha.ts");
   const input = web.document.querySelector<HTMLInputElement>("[data-commit-file-filter]");
@@ -959,7 +1089,8 @@ test("file diff expansion preserves neighboring files, navigation, cold URLs, fo
     expect(web.document.querySelector("[data-file-diff]")?.textContent).toBe("Expanded source");
   });
   expect(web.document.getElementById("neighbor")).toBe(neighbor);
-  expect(web.document.querySelector(".commit-navigation[open]")).not.toBeNull();
+  expect(navigation).not.toBeNull();
+  expect(web.document.querySelector(".commit-navigation-list")).toBe(navigation);
   expect(web.document.activeElement?.className).toBe("file-diff-scroll");
   expect(new URL(web.window.location.href).searchParams.get("context")).toBe("0:0:20");
   expect(web.document.getElementById("live-status")?.hidden).toBe(true);

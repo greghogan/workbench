@@ -8,9 +8,9 @@ export function referenceAttributes(record: BrowserRecord): Record<string, strin
     "data-record-summary": record.summary.slice(0, 1200),
   };
 }
-export function referenceLink(record: BrowserRecord, label: string): JSX.Element {
+export function referenceLink(record: BrowserRecord, label: string, location = recordURL(record.id)): JSX.Element {
   return (
-    <a href={recordURL(record.id)} {...referenceAttributes(record)}>
+    <a href={location} {...referenceAttributes(record)}>
       {label}
     </a>
   );

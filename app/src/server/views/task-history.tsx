@@ -3,10 +3,11 @@ import type { BrowserRecord } from "../../core/records/record-service.js";
 import { taskCommits } from "../../core/git/history.js";
 import { WebError } from "../http/errors.js";
 import { Route, type RouteQuery } from "../routes/routes.js";
-import { recordURL, routeURL } from "../routes/locations.js";
+import { routeURL } from "../routes/locations.js";
 import { sourceURL } from "../routes/sources.js";
 import type { ViewContext } from "../workspace/view-context.js";
 import type { ReviewVersions } from "../review/review-versions.js";
+import { taskRecordTrail } from "./workflow-navigation.js";
 import { historyPage } from "./history-page.js";
 import { shell } from "./page-frame.js";
 
@@ -15,7 +16,10 @@ function taskLocation(
   record: BrowserRecord,
   query: Omit<RouteQuery<typeof Route.TaskHistory>, "id">,
 ) {
-  return sourceURL(context, routeURL(Route.TaskHistory, { ...query, id: record.id }));
+  return sourceURL(
+    context,
+    routeURL(Route.TaskHistory, { ...query, id: record.id, ...(context.workflow ? { workflow: "1" } : {}) }),
+  );
 }
 
 function commitList(context: ViewContext, record: BrowserRecord, query: RouteQuery<typeof Route.TaskHistory>) {
@@ -78,13 +82,14 @@ export function taskHistoryPage(
   );
   if (!record) throw new WebError(404, "Task is unavailable in the selected scope");
   const list = commitList(context, record, query),
-    parents = [{ label: record.title, href: sourceURL(context, recordURL(record.id)) }];
+    { parents, active } = taskRecordTrail(context, record);
   if (!query.commit)
-    return shell(context, "Commits", "queue", <section class="panel">{list.contents}</section>, { parents });
+    return shell(context, "Commits", active, <section class="panel">{list.contents}</section>, { parents });
   if (!list.history.commits.some((commit) => commit.revision === query.commit))
     throw new WebError(404, "Commit is not part of this task history page");
   return historyPage(context, query, versions, {
     location: list.location,
+    active,
     parents: [
       ...parents,
       {

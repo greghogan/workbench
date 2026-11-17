@@ -11,6 +11,9 @@ import { WorkspaceCollector, WorkspaceIndex } from "../../../src/server/workspac
 import { checkReviewFormatting } from "../../../src/server/workspace/review-preparation.ts";
 import { ReviewFormatter, formatPendingReviews } from "../../../src/core/review/review-formatting.ts";
 import { approveReviewFiles, reviewStatus, ReviewSource } from "../../../src/core/review/review-service.ts";
+import { changeTaskQueue } from "../../../src/core/tasks/task-queue.ts";
+import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
+import { readTaskGraph } from "../../../src/core/tasks/task-model.ts";
 
 const fixtures = webServers();
 test("lightweight counts agree with document queues across supporting files, acknowledgments, formatting and baseline changes", async () => {
@@ -50,6 +53,43 @@ test("lightweight counts agree with document queues across supporting files, ack
   writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "unrelated oversized task\n".repeat(100_000));
   writeFileSync(join(root, "workbench/decisions/ADR-01.md"), original.replaceAll("ADR-0", "ADR-1"));
   expect((await reader.collect()).count).toBe(1);
+});
+
+test("cold and open review counts follow task outcomes, revised approval and supporting-file invalidation", async () => {
+  const root = fixtures.project(),
+    reader = new ReviewInventory(root),
+    directory = join(root, "workbench/tasks");
+  mkdirSync(directory);
+  const path = join(directory, "TSK-00.md");
+  writeFileSync(path, "---\nstatus: Planned\n---\n\n# TSK-0: Recover work\n\nKeep progress after restart.\n");
+  const approve = () => {
+    changeTaskStatus(root, "TSK-0", "Approved", readTaskGraph(root).tasks[0]?.reviewDigest, true);
+  };
+  const compare = async (expected: number) => {
+    const snapshot = await checkReviewFormatting(new WorkspaceCollector(root).collect(), new ReviewFormatter());
+    expect(new WorkspaceIndex(snapshot).select({}).pendingReviews).toBe(expected);
+    expect((await reader.collect()).count).toBe(expected);
+  };
+  await compare(0);
+  approve();
+  changeTaskQueue(root, { action: "start", reference: "TSK-0" });
+  changeTaskQueue(root, { action: "implemented", reference: "TSK-0", detail: "Recovery verified." });
+  await compare(1);
+  mkdirSync(join(directory, "TSK-00"));
+  mkdirSync(join(directory, "TSK-00/details"));
+  await compare(1);
+  writeFileSync(join(directory, "TSK-00/details/requirement.md"), "Preserve pending work.\n");
+  await compare(0);
+  approve();
+  changeTaskQueue(root, { action: "start", reference: "TSK-0" });
+  changeTaskQueue(root, { action: "implemented", reference: "TSK-0", detail: "Supporting requirement verified." });
+  await compare(1);
+  // Invalid unrelated records do not hide independently actionable outcomes.
+  writeFileSync(join(directory, "TSK-01.md"), "invalid task\n");
+  await compare(1);
+  writeFileSync(join(directory, "TSK-01.md"), "---\nstatus: Planned\n---\n\n# TSK-1: Future work\n");
+  changeTaskStatus(root, "TSK-0", "Accepted", undefined, true);
+  await compare(0);
 });
 
 class ControlledWorker extends EventEmitter {

@@ -10,13 +10,14 @@ import { headerSearch, workbenchBrand } from "./components.js";
 import { pageDocument } from "./page-document.js";
 import { projectPath } from "../routes/project-paths.js";
 import { sourceNavigation } from "./source-navigation.js";
-import { sourceURL } from "../routes/sources.js";
+import { sourceQuery, sourceURL } from "../routes/sources.js";
 import { workspaceProblemText } from "../workspace/workspace-problem.js";
 import type { ViewContext, PageKey, SearchType } from "../workspace/view-context.js";
 import { type TaskStatus } from "../../core/records/record-document.js";
 interface PageOptions extends PageTrail {
   search?: { query: string; type: SearchType };
   taskStatus?: TaskStatus;
+  workflowList?: "plans" | "work" | "reviews";
 }
 export function shell(
   context: ViewContext,
@@ -47,8 +48,9 @@ export function shell(
     <nav aria-label="Main navigation">
       <div class="nav-group">
         <p class="nav-group-label">Workflow</p>
-        {navigation(Route.Review, "Review queue", "review", pending)}
-        {navigation(Route.TaskQueue, "Task queue", "queue", context.taskWorkflowCount)}
+        {!context.selection && navigation(Route.Plans, "Plans", "plans", context.workflowPlans.length)}
+        {!context.selection && navigation(Route.Work, "Work", "work", context.workCount)}
+        {navigation(Route.Reviews, "Reviews", "review", pending)}
       </div>
       <div class="nav-group">
         <p class="nav-group-label">Records</p>
@@ -80,7 +82,10 @@ export function shell(
     title: title + (context.demonstration ? " · Demonstration" : ""),
     attributes: {
       "data-project-base": context.basePath ?? "",
-      "data-events-url": routeURL(Route.Events, {}),
+      "data-events-url": routeURL(Route.Events, {
+        ...sourceQuery(context),
+        ...(options.workflowList ? { workflow: options.workflowList } : {}),
+      }),
       "data-review-status-url": routeURL(Route.ReviewStatus, context.reviewTarget ?? {}),
       "data-compatibility-status-url": routeURL(Route.ReviewStatus, { compatibility: "1" }),
       "data-revision": context.revision,
@@ -122,6 +127,7 @@ export function shell(
 
             {body}
           </main>
+          <output id="workflow-notice" class="sr-only" aria-live="polite"></output>
         </div>
       </>
     ),

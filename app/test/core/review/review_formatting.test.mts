@@ -93,8 +93,8 @@ test.each([false, true])(
   "web review formats before display and confirmation preserves later edits (%s)",
   async (changed) => {
     const web = await servers.start(root);
-    const queue = parseDOM((await readWebPage(web, "/review")).html).window.document;
-    expect(queue.querySelector("h1")?.textContent).toBe("Review queue");
+    const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+    expect(queue.querySelector("h1")?.textContent).toBe("Reviews");
     expect(readFileSync(charter, "utf8")).toBe(original);
     const pending = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md&layout=split")).html).window
       .document;

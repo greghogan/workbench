@@ -5,6 +5,9 @@ import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
 import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
 import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
 import { savePlanDraft, approvePlanDraft } from "../../core/tasks/planning/planning-operations.js";
+import { readPlan } from "../../core/tasks/planning/planning-store.js";
+import { readWorkGraph } from "../../core/tasks/planning/work-plans.js";
+import { taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
 import { StateConflict } from "../../core/runtime/input-errors.js";
 import { recordURL, routeURL } from "../routes/locations.js";
 import { CompatibilityDecision } from "../../core/collections/policy-findings.js";
@@ -18,8 +21,7 @@ import { WebError } from "../http/errors.js";
 import { decodeCollectionRequest, type CollectionPreview } from "./protocol.js";
 import { Route, actionDefinition, queueOperations, type ActionResult } from "../routes/routes.js";
 import type { ReviewTarget } from "../review/review-request.js";
-import { changeTaskStatus } from "../../core/tasks/task-service.js";
-import { type QueueChange } from "../../core/tasks/task-queue.js";
+import { readTaskQueue, type QueueChange } from "../../core/tasks/task-queue.js";
 import { taskStatuses } from "../../core/records/record-document.js";
 import { ReviewVersions } from "../review/review-versions.js";
 
@@ -82,11 +84,33 @@ export class WebActions {
     const result = (redirect: string): ActionResult => ({ redirect, ...definition });
     switch (path) {
       case Route.ReviewPrepare: {
-        if (!preparation) throw new WebError(400, "resolve a protected record before preparing review");
+        if (!preparation) throw new WebError(400, "resolve a record before preparing review");
         await this.operation("review", () =>
-          this.reviewRunner({ root: this.root, operation: WebAction.ReviewPrepare, path: preparation.path }),
+          this.reviewRunner({
+            root: this.root,
+            operation: WebAction.ReviewPrepare,
+            path: preparation.path,
+            ...(preparation.task ? { task: preparation.task } : {}),
+          }),
         );
-        return { ...result(routeURL(Route.Review, preparation)), reviewTarget: preparation };
+        if (preparation.task)
+          return result(
+            recordURL(preparation.task.reference, {
+              layout: preparation.layout,
+              ...(preparation.workflow ? { workflow: preparation.workflow } : {}),
+              ...(preparation.recordView ? { view: preparation.recordView } : {}),
+            }),
+          );
+        return {
+          ...result(
+            routeURL(Route.Review, {
+              path: preparation.path,
+              layout: preparation.layout,
+              ...(preparation.view ? { view: preparation.view } : {}),
+            }),
+          ),
+          reviewTarget: preparation,
+        };
       }
       case Route.PolicyResolution: {
         const outcome = Object.values(CompatibilityDecision).find((value) => value === form.get("decision"));
@@ -117,19 +141,40 @@ export class WebActions {
           form.get("reason") ?? "",
         );
         return result(routeURL(Route.Plan, { id: form.get("reference") ?? "" }));
-      case Route.PlanDelete:
-        deletePlan(this.root, parsePlanReference(form.get("reference") ?? ""), form.get("expected") ?? "");
-        return result(Route.TaskQueue);
+      case Route.PlanDelete: {
+        const identity = parsePlanReference(form.get("reference") ?? ""),
+          plan = readPlan(this.root, identity);
+        deletePlan(this.root, identity, form.get("expected") ?? "");
+        return result(
+          plan.document?.metadata.status === "Approved" && plan.approval?.current ? Route.Work : Route.Plans,
+        );
+      }
       case Route.TaskDisposition: {
         const kind = form.get("kind");
         if (kind !== "delete" && kind !== "revert") throw new WebError(400, "Select deletion or reversion");
+        const reference = form.get("reference") ?? "",
+          task = readWorkGraph(this.root).require(reference),
+          phase = taskPhase(
+            task,
+            readTaskQueue(this.root).entries.find((entry) => entry.reference === reference),
+          );
         applyTaskDisposition(this.root, {
           reference: form.get("reference") ?? "",
           kind,
           reason: form.get("reason") ?? "",
           expected: form.get("expected") ?? "",
         });
-        return result(kind === "revert" ? recordURL(form.get("reference") ?? "") : Route.TaskQueue);
+        return result(
+          kind === "revert"
+            ? recordURL(reference, { workflow: "1" })
+            : phase === TaskPhase.Plans
+              ? Route.Plans
+              : phase === TaskPhase.Work
+                ? Route.Work
+                : phase === TaskPhase.Reviews
+                  ? Route.Reviews
+                  : routeURL(Route.Records, { type: "TSK" }),
+        );
       }
       case Route.PlanRename: {
         const identity = parsePlanReference(form.get("reference") ?? ""),
@@ -143,7 +188,10 @@ export class WebActions {
           expected = form.get("expected") ?? "";
         if (!expected) throw new WebError(400, "Supply the inspected plan version");
         if (path === Route.PlanSave) savePlanDraft(this.root, identity, form.get("contents") ?? "", { expected });
-        else approvePlanDraft(this.root, identity, expected, true);
+        else {
+          approvePlanDraft(this.root, identity, expected, true);
+          return result(Route.Work);
+        }
         return result(routeURL(Route.Plan, { id: identity.reference, scope: identity.scope }));
       }
 
@@ -154,9 +202,22 @@ export class WebActions {
         if (!expected) throw new WebError(400, "Supply the reviewed record version");
         const state = taskStatuses.find((state) => state === selected);
         if (!state) throw new WebError(400, "Unknown task state");
-        changeTaskStatus(this.root, reference, state, expected, true, form.get("reason") ?? "");
+        await this.operation("review", () =>
+          this.reviewRunner({
+            root: this.root,
+            operation: WebAction.Task,
+            reference,
+            expected,
+            state,
+            reason: form.get("reason") ?? "",
+          }),
+        );
         return result(
-          selected === "Approved" || selected === "Accepted" ? Route.TaskQueue : recordURL(form.get("reference") ?? ""),
+          selected === "Approved"
+            ? Route.Work
+            : selected === "Accepted"
+              ? Route.Reviews
+              : recordURL(form.get("reference") ?? ""),
         );
       }
       case Route.QueueChange: {
@@ -171,7 +232,7 @@ export class WebActions {
         else throw new WebError(400, "Unknown queue operation");
         if (!form.get("expected")) throw new WebError(400, "Supply the queue version");
         await changeWorkQueue(this.root, change, form.get("expected") ?? "");
-        return result(Route.TaskQueue);
+        return result(Route.Work);
       }
       case Route.CreateCharter: {
         if (form.get("human_written") !== "yes") throw new WebError(400, "confirm that you wrote the charter text");
@@ -215,7 +276,7 @@ export class WebActions {
           }),
         );
         if (commit) return result(routeURL(Route.History, { commit }));
-        return result(Route.Review);
+        return result(Route.Reviews);
       }
       case Route.Preview: {
         const id = form.get("id");
@@ -275,7 +336,7 @@ export class WebActions {
         }
         this.applications.set(applied.id, applied);
         this.proposals.delete(token);
-        return result(routeURL(Route.Review, { collection_applied: applied.id }));
+        return result(routeURL(Route.Reviews, { collection_applied: applied.id }));
       }
       default:
         throw new WebError(404, "Action not found.");

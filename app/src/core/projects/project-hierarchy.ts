@@ -65,7 +65,10 @@ export class ProjectHierarchy {
     this.labels.set(project.id, label);
     return label;
   }
-  ordered(compare: (a: Project, b: Project) => number): Project[] {
+  ordered(
+    compare: (a: Project, b: Project) => number = (a, b) =>
+      projectName(a).localeCompare(projectName(b), undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id),
+  ): Project[] {
     const result: Project[] = [];
     const visit = (nodes: readonly Project[]) => {
       for (const project of [...nodes].sort(compare)) {

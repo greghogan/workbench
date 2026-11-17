@@ -15,9 +15,15 @@ import {
   checkAgentPush,
   finishAgentCommit,
 } from "../../../src/core/review/agent-review.ts";
-import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
+import { authorizeProjectReview, changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
+import { readTaskGraph } from "../../../src/core/tasks/task-model.ts";
 import { changeTaskQueue, readTaskQueue, taskQueuePath } from "../../../src/core/tasks/task-queue.ts";
-import { readTaskDecisions, taskDecisionPath } from "../../../src/core/tasks/task-decisions.ts";
+import {
+  applyTaskDecisionChange,
+  prepareTaskDecisionChange,
+  readTaskDecisions,
+  taskDecisionPath,
+} from "../../../src/core/tasks/task-decisions.ts";
 import { changeExperimentStatus } from "../../../src/core/experiments/experiment-workflow.ts";
 import { requiredExperimentProtocol } from "../../../src/core/records/record-content.ts";
 import { syncMaps } from "../../../src/core/records/maps.ts";
@@ -282,8 +288,9 @@ test("human task decisions gate publication while allowing implementation commit
   const before = f.git(["write-tree"]);
   changeTaskStatus(f.root, "TSK-0", "Accepted", undefined, true);
   expect(f.git(["write-tree"])).toBe(before);
-  const accepted = workingReviewTree(f.root);
-  expect(readTaskDecisions(f.root).find((d) => d.status === "Accepted")?.tree).toBe(accepted);
+  expect(readTaskDecisions(f.root).find((decision) => decision.status === "Accepted")?.outcome).toBe(
+    readTaskGraph(f.root).require("demo:TSK-0").reviewDigest,
+  );
   f.git(["add", "."]);
   f.review();
   checkAgentCommit(f.root);
@@ -326,6 +333,15 @@ test("a squash preserves reviewed outcomes and requires fresh agent review of th
   f.review(AgentReviewKind.Task, { base: f.base });
   checkAgentPush(f.root, "HEAD", f.base);
 
+  // Model a receipt issued before outcome digests were stored directly.
+  const prior = prepareTaskDecisionChange(f.root, "demo:TSK-0", (decisions) =>
+    decisions.map((decision) => {
+      if (decision.status !== "Accepted") return decision;
+      delete decision.outcome;
+      return { ...decision, tree };
+    }),
+  );
+  applyTaskDecisionChange(f.root, prior);
   writeFileSync(join(f.root, "source.ts"), "export const value=2;\n");
   f.git(["add", "source.ts"]);
   f.git(["-c", "core.hooksPath=/dev/null", "commit", "--amend", "--no-edit"]);
@@ -348,6 +364,34 @@ test("a squash preserves reviewed outcomes and requires fresh agent review of th
   expect(() => {
     checkAgentPush(f.root, "HEAD", f.base);
   }).toThrow(/acceptance does not cover.*supporting files/);
+});
+
+test("a developer-requested review can be committed within its scope before the developer accepts its outcome", () => {
+  const f = fixture(),
+    path = join(f.root, "workbench/tasks/TSK-00.md");
+  const plan = "---\nstatus: Planned\n---\n\n# TSK-0: Review ownership\n\n## Review summary\n\nAudit note ownership.\n";
+  writeFileSync(path, plan);
+  const task = readTaskGraph(f.root).require("demo:TSK-0");
+  authorizeProjectReview(f.root, task.reference, task.reviewDigest ?? task.digest);
+  expect(readTaskDecisions(f.root)).toMatchObject([{ source: "developer-requested-review", status: "Approved" }]);
+  const result =
+    readFileSync(path, "utf8") +
+    "\n## Implementation account\n\nFixed one stale path. A larger proposal awaits discussion.\n";
+  writeFileSync(path, result);
+  f.git(["add", "."]);
+  f.review();
+  checkAgentCommit(f.root);
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "Review ownership"]);
+  f.review(AgentReviewKind.Task, { base: f.base });
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/human acceptance/i);
+  writeFileSync(path, result.replace("Audit note ownership.", "Replace the storage design."));
+  f.git(["add", "."]);
+  f.review();
+  expect(() => {
+    checkAgentCommit(f.root);
+  }).toThrow(/scope changed/);
 });
 
 test("delegated work can use uncommitted project approval without inheriting execution state or accepting other source", () => {

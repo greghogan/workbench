@@ -3,8 +3,14 @@ import { decodeRecovery } from "../projects/recovery.js";
 import { Notice, type BrowserSession } from "./browser-session.js";
 
 /** Own form interaction and unsaved changes; mutations drain independently of navigation cleanup. */
-export function startFormActions(session: BrowserSession): () => void {
+export function startFormActions(session: BrowserSession): { watch: () => void; close: () => void } {
   const { browser, document } = session;
+  let attemptedPreparation = "";
+  const fields = (form: HTMLFormElement) => {
+    const body = new URLSearchParams();
+    for (const [key, value] of new browser.FormData(form)) if (typeof value === "string") body.append(key, value);
+    return body;
+  };
   const input = (event: Event) => {
     if (!(event.target instanceof browser.Element)) return;
     const form = event.target.closest<HTMLFormElement>("main form");
@@ -24,8 +30,7 @@ export function startFormActions(session: BrowserSession): () => void {
     );
     if (buttons.some((button) => button.disabled)) return;
     const retry = form.hasAttribute("data-workspace-retry");
-    const body = new URLSearchParams();
-    for (const [key, value] of new browser.FormData(form)) if (typeof value === "string") body.append(key, value);
+    const body = fields(form);
     const restore: (() => void)[] = [];
     session.pendingActions.add(form);
     form.setAttribute("aria-busy", "true");
@@ -110,14 +115,24 @@ export function startFormActions(session: BrowserSession): () => void {
   document.addEventListener("input", input);
   document.addEventListener("submit", submitted);
   browser.addEventListener("beforeunload", unload);
-  const preparation = document.querySelector<HTMLFormElement>("form[data-review-prepare]");
-  if (preparation)
-    browser.queueMicrotask(() => {
-      if (!session.isStopped()) preparation.requestSubmit();
-    });
-  return () => {
-    document.removeEventListener("input", input);
-    document.removeEventListener("submit", submitted);
-    browser.removeEventListener("beforeunload", unload);
+  const watch = () => {
+    const preparation = document.querySelector<HTMLFormElement>("form[data-review-prepare]");
+    if (preparation)
+      browser.queueMicrotask(() => {
+        if (session.isStopped() || !preparation.isConnected) return;
+        const version = preparation.action + "?" + fields(preparation).toString();
+        if (version === attemptedPreparation) return;
+        attemptedPreparation = version;
+        preparation.requestSubmit();
+      });
+  };
+  watch();
+  return {
+    watch,
+    close: () => {
+      document.removeEventListener("input", input);
+      document.removeEventListener("submit", submitted);
+      browser.removeEventListener("beforeunload", unload);
+    },
   };
 }

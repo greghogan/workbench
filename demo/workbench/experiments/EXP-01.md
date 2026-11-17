@@ -1,5 +1,5 @@
 ---
-status: Inconclusive
+status: Planned
 environment: demo:ENV-1
 ---
 
@@ -33,14 +33,5 @@ Read three linked notes and locate the source for each claim using only the keyb
 Record completion, focus loss, and navigation steps. Any inaccessible step blocks the candidate. Assess usability with
 real participants before drawing conclusions.
 
-## Execution provenance
-
-This is a fictional protocol. No participants or measurements are represented.
-
-## Evidence
-
-The [session checklist](EXP-01/session-notes.txt) lists observations to collect.
-
-## Decision
-
-Planned. The [blocked task](../tasks/TSK-02.md) awaits representative feedback.
+The [session checklist](EXP-01/session-notes.txt) lists observations to collect. The
+[preview assessment](../tasks/TSK-02.md) awaits agreement on participant sessions.

@@ -21,9 +21,9 @@ export function overview(context: ViewContext): string {
         <section class="panel">
           <div class="panel-body">
             <h2>Review project changes</h2>
-            <p>Review each changed record and its supporting files.</p>
-            <a class="button" href={sourceURL(context, "/review")}>
-              Open review queue{pending ? " (" + String(pending) + ")" : ""}
+            <p>Review records and completed work.</p>
+            <a class="button" href={sourceURL(context, "/reviews")}>
+              Open reviews{pending ? " (" + String(pending) + ")" : ""}
             </a>
           </div>
         </section>

@@ -6,8 +6,15 @@ import { InvalidInput } from "../../core/runtime/input-errors.js";
 import { validation, type Validation } from "../../core/runtime/validation.js";
 
 export type ReviewRequest = { root: string } & (
-  | { operation: typeof WebAction.ReviewPrepare; path: string }
+  | { operation: typeof WebAction.ReviewPrepare; path: string; task?: { reference: string; expected: string } }
   | { operation: typeof WebAction.Review; version: PresentedReview; digest: string; humanWritten: boolean }
+  | {
+      operation: typeof WebAction.Task;
+      reference: string;
+      expected: string;
+      state: TaskStatus;
+      reason: string;
+    }
   | {
       operation: typeof WebAction.PolicyResolution;
       policyDigest: string;
@@ -34,8 +41,35 @@ export function decodeReviewRequest(value: unknown): ReviewRequest {
       );
   };
   switch (value.operation) {
+    case WebAction.Task: {
+      fields("reference", "expected", "state", "reason");
+      const state = taskStatuses.find((status) => "state" in value && value.state === status);
+      check(state, "state", "must be a task state");
+      check(
+        "reference" in value &&
+          typeof value.reference === "string" &&
+          value.reference.length <= 1024 &&
+          !value.reference.includes("\0"),
+        "reference",
+        "must identify a task",
+      );
+      check(
+        "expected" in value && typeof value.expected === "string" && /^[a-f0-9]{64}$/.test(value.expected),
+        "expected",
+        "must identify the inspected task version",
+      );
+      check("reason" in value && typeof value.reason === "string", "reason", "must be text");
+      return {
+        root,
+        operation: value.operation,
+        reference: value.reference,
+        expected: value.expected,
+        state,
+        reason: value.reason,
+      };
+    }
     case WebAction.ReviewPrepare:
-      fields("path");
+      fields("path", "task");
       check(
         "path" in value &&
           typeof value.path === "string" &&
@@ -43,8 +77,37 @@ export function decodeReviewRequest(value: unknown): ReviewRequest {
           value.path.length <= 4096 &&
           !value.path.includes("\0"),
         "path",
-        "must identify a protected record",
+        "must identify a record",
       );
+      if ("task" in value) {
+        const task = value.task;
+        check(task && typeof task === "object", "task", "must identify the presented plan");
+        check(
+          Object.keys(task).every((field) => ["reference", "expected"].includes(field)),
+          "task",
+          "contains unknown fields",
+        );
+        check(
+          "reference" in task &&
+            typeof task.reference === "string" &&
+            task.reference.length > 0 &&
+            task.reference.length <= 1024 &&
+            !task.reference.includes("\0"),
+          "task.reference",
+          "must identify a task or plan",
+        );
+        check(
+          "expected" in task && typeof task.expected === "string" && /^[a-f0-9]{64}$/.test(task.expected),
+          "task.expected",
+          "must identify the inspected plan version",
+        );
+        return {
+          root,
+          operation: value.operation,
+          path: value.path,
+          task: { reference: task.reference, expected: task.expected },
+        };
+      }
       return { root, operation: value.operation, path: value.path };
     case WebAction.Review:
       fields("version", "digest", "humanWritten");
@@ -84,3 +147,4 @@ export function decodeReviewRequest(value: unknown): ReviewRequest {
       throw new InvalidInput("Unknown review operation");
   }
 }
+import { taskStatuses, type TaskStatus } from "../../core/records/record-document.js";

@@ -34,6 +34,7 @@ test("plans and refinements need no approval; completed records and supporting e
   const support = join(root, "workbench/experiments/EXP-00/measurements.json");
   mkdirSync(join(root, "workbench/experiments/EXP-00"));
   writeFileSync(support, '{"samples":[1,2,3]}\n');
+  syncMaps(root);
   expect(changes()).toEqual([]);
   changeExperimentStatus(root, "EXP-0", "Running");
   expect(syncMaps(root, true)).toEqual([]);
@@ -86,9 +87,11 @@ test("execution validates protocol completeness and stale requests cannot overwr
 
 test("agent execution needs no plan approval and the browser only reviews the completed outcome", async () => {
   const web = await servers.start(root);
-  const initial = parseDOM((await readWebPage(web, "/queue")).html).window.document;
-  expect(initial.querySelector('[aria-label="Work"]')?.textContent).toContain("Compare parsers");
-  expect(initial.querySelector('[aria-label="Plans"]')?.textContent).not.toContain("Compare parsers");
+  const initial = parseDOM((await readWebPage(web, "/work")).html).window.document;
+  expect(initial.querySelector("main")?.textContent).toContain("Compare parsers");
+  expect(
+    parseDOM((await readWebPage(web, "/plans")).html).window.document.querySelector("main")?.textContent,
+  ).not.toContain("Compare parsers");
   const page = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect(page.querySelector('form[action$="/actions/task-state"]')).toBeNull();
   expect(page.body.textContent).not.toContain("Approve plan");
@@ -96,8 +99,8 @@ test("agent execution needs no plan approval and the browser only reviews the co
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Running");
   writeFileSync(path, readFileSync(path, "utf8") + evidence);
   changeExperimentStatus(root, "EXP-0", "Inconclusive");
-  const outcomes = parseDOM((await readWebPage(web, "/queue")).html).window.document;
-  expect(outcomes.querySelector('[aria-label="Outcomes"]')?.textContent).toContain("Compare parsers");
+  const outcomes = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  expect(outcomes.querySelector("[data-review-source]")?.textContent).toContain("Compare parsers");
   const completedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect(completedPage.querySelector('form[action$="/actions/task-state"]')).toBeNull();
   const reviewURL = [...completedPage.querySelectorAll("a")]
@@ -121,8 +124,8 @@ test("agent execution needs no plan approval and the browser only reviews the co
   expect(await transition.text()).toContain("Expected a task reference");
   expect(readFileSync(path, "utf8")).toBe(completed.contents);
   expect((await postWebForm(web, approval.getAttribute("action") ?? "", fields)).status).toBe(200);
-  const accepted = parseDOM((await readWebPage(web, "/queue")).html).window.document;
-  expect(accepted.querySelector('[aria-label="Outcomes"]')?.textContent).not.toContain("Compare parsers");
+  const accepted = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  expect(accepted.querySelector('[data-record-id="demo:EXP-0"]')).toBeNull();
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Inconclusive");
   const reviewedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect([...reviewedPage.querySelectorAll("a")].some((link) => link.textContent === "Review outcome")).toBe(false);

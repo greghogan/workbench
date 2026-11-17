@@ -11,6 +11,7 @@ export interface TaskQueueEntry {
   reference: string;
   state: TaskExecution;
   updated: string;
+  started?: true;
   reason?: string;
   evidence?: string;
   planDigest?: string;
@@ -37,7 +38,7 @@ export function decodeQueue(input: unknown): TaskQueue {
     const entry = record(input, "Invalid task queue entry");
     if (
       Object.keys(entry).some(
-        (key) => !["reference", "state", "updated", "reason", "evidence", "planDigest"].includes(key),
+        (key) => !["reference", "state", "updated", "started", "reason", "evidence", "planDigest"].includes(key),
       )
     )
       throw new InvalidInput("Unknown task queue entry field");
@@ -47,7 +48,8 @@ export function decodeQueue(input: unknown): TaskQueue {
       references.has(reference) ||
       !Object.values(TaskExecution).includes(entry.state as TaskExecution) ||
       typeof entry.updated !== "string" ||
-      !Number.isFinite(Date.parse(entry.updated))
+      !Number.isFinite(Date.parse(entry.updated)) ||
+      (entry.started !== undefined && entry.started !== true)
     )
       throw new InvalidInput("Invalid or duplicate task queue entry");
     references.add(reference);
@@ -68,6 +70,7 @@ export function decodeQueue(input: unknown): TaskQueue {
       reference,
       state: entry.state as TaskExecution,
       updated: entry.updated,
+      ...(entry.started === true ? { started: true as const } : {}),
       ...(entry.reason === undefined ? {} : { reason: string(entry.reason, "Invalid queue reason") }),
       ...(entry.evidence === undefined ? {} : { evidence: string(entry.evidence, "Invalid queue evidence") }),
       ...(entry.planDigest === undefined ? {} : { planDigest: string(entry.planDigest, "Invalid queue planDigest") }),

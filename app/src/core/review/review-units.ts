@@ -3,7 +3,7 @@ import { gitRevision } from "../git/refs.js";
 import { provisionalCommits, retainedProvisionalCommits, provisionalMessage } from "../git/commit-history.js";
 import { InvalidInput, MissingResource } from "../runtime/input-errors.js";
 import { recordOwnerPath } from "../records/staged-records.js";
-import { captureReviews, proposedReview, reviewedChanges, ReviewSource } from "./review-service.js";
+import { captureReviews, proposedReview, reviewedChanges, reviewChangeStatus, ReviewSource } from "./review-service.js";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { retainedBytes } from "../runtime/retained-bytes.js";
 import { resolve } from "node:path";
@@ -56,7 +56,7 @@ function inspectReviewCommit(root: string, revision: string) {
   return { snapshot, comparison: { ...unit, changes, digest, head: snapshot.head, source: ReviewSource.Staged } };
 }
 
-export function committedReview(root: string, revision: string) {
+export function committedReview(root: string, revision: string, statusFor?: ReturnType<typeof reviewChangeStatus>) {
   const commit = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision)
     ? revision
     : gitRevision(root, `${revision}^{commit}`);
@@ -69,7 +69,7 @@ export function committedReview(root: string, revision: string) {
     comparisons.set(key, comparison, retainedBytes(comparison, 32 * 1024 * 1024));
   }
   const captured = comparison,
-    status = reviewedChanges(root, captured.changes);
+    status = statusFor ? statusFor(captured.changes) : reviewedChanges(root, captured.changes);
   return {
     ...captured,
     ...status,
@@ -86,7 +86,7 @@ export function captureCommittedReview(root: string, revision: string) {
 }
 export function pendingCommitReviews(root: string, tip = "HEAD") {
   if (!gitRevision(root, `${tip}^{commit}`)) return [];
-  return provisionalCommits(root, tip).map((revision) => committedReview(root, revision));
+  return reviewUnits(root, provisionalCommits(root, tip));
 }
 
 export function reviewRecordGroups(paths: readonly string[]): { path: string; paths: string[] }[] {
@@ -108,7 +108,14 @@ export function reviewRecordCount(paths: readonly string[]): number {
 export function allCommitReviews(root: string) {
   const current = gitRevision(root, "HEAD") ? provisionalCommits(root) : [],
     selected = new Set(current);
-  return [...current, ...retainedProvisionalCommits(root).filter((revision) => !selected.has(revision))].map(
-    (revision) => committedReview(root, revision),
-  );
+  return reviewUnits(root, [
+    ...current,
+    ...retainedProvisionalCommits(root).filter((revision) => !selected.has(revision)),
+  ]);
+}
+
+function reviewUnits(root: string, revisions: string[]) {
+  if (!revisions.length) return [];
+  const status = reviewChangeStatus(root);
+  return revisions.map((revision) => committedReview(root, revision, status));
 }

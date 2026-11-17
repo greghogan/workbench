@@ -38,6 +38,7 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
   const differences = startFileDifferences(session);
   const sources = startSourceNavigation(session);
   const diagrams = startDiagrams(browser);
+  const forms = startFormActions(session);
   const closeLive = startLiveUpdates(session, () => {
     records.watch();
     taskTree.watch();
@@ -45,8 +46,8 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
     differences.watch();
     sources.refresh();
     diagrams.watch();
+    forms.watch();
   });
-  const closeForms = startFormActions(session);
   const closeReferences = startReferencePreviews(session);
   const closeCards = startCardNavigation(session);
   return () => {
@@ -59,7 +60,7 @@ function startPage(browser: Browser, state: { draft?: DraftState }): () => void 
     taskTree.close();
     commits.close();
     differences.close();
-    closeForms();
+    forms.close();
     closeReferences();
     closeCards();
     diagrams.close();
