@@ -13,9 +13,26 @@ workbench serve --demo
 Open the printed URL and enter the username and generated password in the browser's sign-in prompt. The credential
 expires when the server stops. Links and forms continue to work with JavaScript disabled.
 
-The listener defaults to `127.0.0.1:8080`. Use `--host ::1` for IPv6 loopback or `--port 0` to select an available port.
-If you are working on a remote host, configure forwarding and open the forwarded URL in your browser. Ctrl-C stops
-admission, cancels read-only cache scans, and waits for admitted collection changes and cache deletions to finish.
+On Linux and macOS, running `workbench serve` again prints the active service's sign-in instructions and exits. This
+also works with `--demo` to open the demonstration on the active listener. Stop the active service before changing its
+listener address or Workbench release.
+
+With `workbench serve --daemon`, the private server continues after the CLI exits. Stop it with `kill PID`, using the
+printed server PID. A supervisor can run `workbench serve --service` in the foreground. Use a separate `workbench serve`
+invocation to get sign-in instructions for that listener. A supervised server waits for an existing private listener
+to stop before taking over.
+
+When a shared Linux service is running, `workbench serve` prints sign-in for the shared listener. Each signed-in account
+sees its own projects and settings. System sign-in remains valid for 30 days by default, including across a server
+restart at the same address. Each account retains its 32 most recent active sign-ins. Use **Sign out** on Projects to
+revoke the browser's credential. The administrator can configure `daemon.system_port`, `daemon.worker_idle_seconds`,
+and `daemon.session_seconds`. Forwarding must preserve the loopback address and port printed by the CLI.
+
+The private listener starts at `127.0.0.1:8080` by default and uses the first available port in the next 32 ports,
+including the starting port. Set `daemon.private_port` in your global configuration or pass `--port` to change the
+start. Use `--host ::1` for IPv6 loopback or `--port 0` to let the OS choose the port. If you are working on a remote
+host, configure forwarding and open the forwarded URL in your browser. Ctrl-C stops admission, cancels read-only cache
+scans, and waits for admitted collection changes and cache deletions to finish.
 
 The dashboard lists registered consuming projects, including Workbench itself when registered. Open a project to browse
 its records; **Projects** returns to the dashboard. Project records and adopted collections remain separate sources

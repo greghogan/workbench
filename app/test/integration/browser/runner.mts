@@ -163,6 +163,7 @@ export async function runBrowserIntegration(repo: string, script: string): Promi
       WORKBENCH_STORAGE_ROOT: join(workspace, "cache"),
       WORKBENCH_STORAGE_EXTERNAL: "true",
       WORKBENCH_LOCAL_CONFIG_ROOT: root,
+      WORKBENCH_SYSTEM_RUNTIME_DIRECTORY: join(workspace, "system-runtime"),
       WORKBENCH_EPHEMERAL_CHECKOUT: "0",
       XDG_DATA_DIRS: join(workspace, "system"),
       RUSTUP_HOME: join(workspace, "rustup"),

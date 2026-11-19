@@ -25,11 +25,12 @@ import type { InventoryView } from "../cache/inventory-service.js";
 import { pageDocument } from "./page-document.js";
 import type { ProjectReviewCount } from "../projects/project-reviews.js";
 import { cacheOperations } from "../../core/storage/cache-operation-contract.js";
+import { systemSignOutPath } from "../http/browser-auth.js";
 
 export const hubLayout = (
   title: string,
   body: ComponentChildren,
-  options: { active?: "projects" | "caches"; interactive?: boolean } = {},
+  options: { active?: "projects" | "caches"; interactive?: boolean; systemSignOut?: boolean } = {},
 ): string =>
   pageDocument({
     title,
@@ -49,6 +50,11 @@ export const hubLayout = (
             <a href="/caches" aria-current={options.active === "caches" ? "page" : undefined}>
               Caches
             </a>
+            {options.systemSignOut && (
+              <form action={systemSignOutPath} method="post">
+                <button type="submit">Sign out</button>
+              </form>
+            )}
           </nav>
         </header>
         <main id="main" tabIndex={-1}>
@@ -467,6 +473,7 @@ export function projectDashboard(
   csrf: string,
   reviews: ReadonlyMap<string, ProjectReviewCount> = new Map(),
   metadata?: ProjectDirectoryView,
+  systemSignOut = false,
 ): string {
   return hubLayout(
     "Projects",
@@ -502,7 +509,7 @@ export function projectDashboard(
         })}
       </section>
     </>,
-    { active: "projects" },
+    { active: "projects", systemSignOut },
   );
 }
 export function cleanupPage(

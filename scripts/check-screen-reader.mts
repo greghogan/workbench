@@ -39,6 +39,7 @@ async function main() {
   const cancellation = processCancellation(),
     service = new AbortController();
   const env = { ...process.env };
+  env.WORKBENCH_SYSTEM_RUNTIME_DIRECTORY = join(temporary, "system-runtime");
   isolateFixtureGit(env);
   for (const name of ["TMP", "TEMP", "TMPDIR"]) env[name] = temporary;
   for (const key of [

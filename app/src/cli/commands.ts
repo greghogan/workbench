@@ -188,6 +188,8 @@ const commands: Record<string, Admission> = {
 
   "vcpkg-prepare": { internal: true, policy: true },
 
+  "web-account": { internal: true, explicitRoot: true },
+
   "web-collection": { internal: true },
 
   "web-demo": { internal: true },

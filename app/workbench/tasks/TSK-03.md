@@ -112,7 +112,7 @@ Uninstall removes registration without removing user data.
 ### Delivery checklist
 
 - [x] Protect private browser access with native sign-in.
-- [ ] Coordinate shared and private startup, and route authenticated requests to isolated workers.
+- [x] Coordinate shared and private startup, and route authenticated requests to isolated workers.
 - [ ] Install and manage Linux services with systemd and verify native lifecycle and identity boundaries.
 - [ ] Install and manage macOS services with launchd and verify native lifecycle and identity boundaries.
 - [ ] Install and manage Windows services with SCM and verify native lifecycle and identity boundaries.
@@ -123,19 +123,36 @@ Uninstall removes registration without removing user data.
 ### Private browser sign-in
 
 The private listener challenges requests for project pages, events, and actions. It accepts a generated credential only
-for the server process that issued it. The demonstration uses a separate credential for the connection between the hub
-and its child. The hub fixes the child's network address at startup, keeping request paths from redirecting requests or
-exposing that credential. Chromium exercised sign-in, form submission, and reload with JavaScript disabled. The browser
-checks scope credentials to the service origin. Cache verification uses Chromium's stored sign-in after the initial
-challenge, keeping its cache enabled. Retained service and fixture diagnostics redact the generated password.
+for the server process that issued it. Sign-in uses the OS username. The demonstration uses separate credentials for the
+connection between the hub and its child. The hub fixes the child's network address at startup, keeping request paths
+from redirecting requests or exposing that credential. Chromium exercised sign-in, form submission, and reload with
+JavaScript disabled. The browser checks scope credentials to the service origin. Cache verification uses Chromium's
+stored sign-in after the initial challenge, keeping its cache enabled. Retained service and fixture diagnostics redact
+the generated password. An SSH tunnel to a different local port preserved the private listener's sign-in challenge and
+authorized access.
 
-### Native lifecycle qualification
+### Private listener discovery
 
-On Linux, transient systemd user and system units exercised the first privilege boundaries. An ordinary account could
-not bind the system unit's protected loopback port before startup, during service, or after shutdown. Kernel Unix socket
-peer credentials identified each of two callers independently of the request contents. Node workers launched under those
-two identities with no effective capabilities and without the supervisor's supplementary group. Each could read its own
-fixture file, and access to the other account's file was denied. The test removed its transient units and files.
+On Linux and macOS, an account-owned Unix socket returns the active server's sign-in to local CLI callers. An exclusive
+lease covers startup, listening, and shutdown. The socket stays on the local filesystem so long or remote state paths
+work. Its authority is independent of the browser port, and credentials stay in the listener's memory.
+
+Explicit background startup runs the same release and waits for its private listening socket. The CLI exits after
+printing sign-in and the listener's PID. A supervisor can run the private listener in the foreground with sign-in
+available through a separate CLI invocation. Discovery returns the listener's URL even when it omits the default HTTP
+port. A waiting supervisor can stop without affecting the existing listener.
+
+### Shared Linux listener
+
+The system service binds a port protected by the host and waits for private listeners before accepting browser traffic.
+Local sign-in verifies the requesting account through its ownership of a one-use filesystem entry. The supervisor keeps
+browser credential digests in protected state and forwards authenticated requests over Unix sockets to workers running
+as their respective accounts. Browser sign-in uses the OS account. Idle workers can be recreated without renewing
+browser sign-in.
+
+An isolated Linux environment exercised both directions of private and shared startup, cancellation while waiting,
+separate project visibility for two OS accounts, and sign-in across service restart. Signing out revoked only the
+selected credential. An ordinary account could not claim the shared port while the service was stopped.
 
 ## Implementing-agent detail
 

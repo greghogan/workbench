@@ -173,11 +173,12 @@ export function createCLI(root: string = projectRoot()) {
       action.getOptionValue("plain") as boolean | undefined,
       preferences["terminal.plain"] === true,
     );
+    const serverLogs = action.name() === "serve" || action.name() === "web-account";
     const { level, fileLevel, format, persist } = resolveDiagnosticOptions(
       cli,
       process.env,
       preferences,
-      action.name() === "serve" ? "server" : "cli",
+      serverLogs ? "server" : "cli",
     );
     configureDiagnostics({ level, format });
     process.env.WORKBENCH_LOG_LEVEL = persist ? minimumLogLevel(level, fileLevel) : level;
@@ -186,12 +187,12 @@ export function createCLI(root: string = projectRoot()) {
     if (
       persist &&
       !diagnosticSession &&
-      !commandAdmission(commandPath(action)).internal &&
+      (serverLogs || !commandAdmission(commandPath(action)).internal) &&
       !["completion", "help"].includes(commandPath(action).split(" ")[0] ?? "")
     )
       diagnosticSession = await startDiagnosticSession(
         fileLevel,
-        action.name() === "serve" ? LogScope.Server : LogScope.Cli,
+        serverLogs ? LogScope.Server : LogScope.Cli,
         userConfigValues(preferences),
       ).catch((error: unknown) => {
         diagnostic(
@@ -204,7 +205,6 @@ export function createCLI(root: string = projectRoot()) {
         );
         return undefined;
       });
-    if (diagnosticSession && action.name() === "serve") console.log(`Server logs: ${diagnosticSession.directory}`);
     recordCommand(DiagnosticOutcome.Started);
     if (
       !suppliedRoot &&
@@ -276,7 +276,7 @@ export function createCLI(root: string = projectRoot()) {
   registerExperimentCommands(program, root);
   registerReleaseCommands(program, root);
   registerFeedbackCommands(program, root);
-  registerServerCommands(program, root);
+  registerServerCommands(program, root, () => diagnosticSession?.directory);
   const review = registerCommand(program, "review")
     .description("Review protected records or record agent change and task review")
     .option("--commit <revision>", "Review protected files in one retained commit")

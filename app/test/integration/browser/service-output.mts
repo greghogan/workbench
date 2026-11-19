@@ -27,7 +27,7 @@ export function captureBrowserService(service: AbortController) {
         if (stream !== stdout || !ready) return;
         const output = stdoutLog.rawText();
         const url = /^Workbench web UI: (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)(?=\r?\n)/m.exec(output)?.[1];
-        const username = /^Sign-in username: ([a-z]+)(?=\r?\n)/m.exec(output)?.[1];
+        const username = /^Sign-in username: ([^\r\n:]+)(?=\r?\n)/m.exec(output)?.[1];
         const password = /^Sign-in password: ([A-Za-z0-9_-]{43})(?=\r?\n)/m.exec(output)?.[1];
         if (url && username && password) {
           ready({ url, httpCredentials: { username, password, origin: new URL(url).origin } });

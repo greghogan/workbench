@@ -86,7 +86,8 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
   // The selected application owns registration state; an outer launcher must not write another release's schema.
   if (!recovery && root && existsSync(join(root, projectPaths.projects))) {
     const inspection = args.some((argument) => ["--help", "-h", "--help-all"].includes(argument));
-    if (command && admission.registration && !inspection && !(command === "serve" && args.includes("--demo")))
+    const independentService = command === "serve" && (args.includes("--demo") || args.includes("--service"));
+    if (command && admission.registration && !inspection && !independentService)
       await approveProjectRegistration(original ?? root);
     else if (
       projectRegistration(original ?? root) === Registration.Declined &&

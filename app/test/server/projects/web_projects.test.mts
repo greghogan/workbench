@@ -37,7 +37,10 @@ import { ProjectDirectory, availableProjects } from "../../../src/server/project
 import { WorkerGeneration } from "../../../src/server/workspace/worker-generation.ts";
 import { WorkspaceMonitor } from "../../../src/server/workspace/live.ts";
 import { configureDiagnostics, type DiagnosticEvent } from "../../../src/core/diagnostics/diagnostics.mjs";
-import { get } from "node:http";
+import { createServer, get } from "node:http";
+import { once } from "node:events";
+import { updateUserOption } from "../../../src/core/configuration/user-config.ts";
+import { closeLocalServer } from "../../../src/server/http/http-listener.ts";
 const distribution = resolve(import.meta.dirname, "../../../..");
 const roots: string[] = [];
 const servers: Awaited<ReturnType<typeof startProjectHub>>[] = [];
@@ -80,6 +83,34 @@ function browse(url: string | URL, options: RequestInit = {}) {
 function post(url: string, values: Record<string, string>) {
   return browse(url, { method: "POST", body: new URLSearchParams(values), redirect: "manual" });
 }
+test("the private hub skips an occupied port in the user's configured range", async () => {
+  const reservation = createServer((_request, response) => response.end("unrelated listener"));
+  try {
+    reservation.listen(0, "127.0.0.1");
+    await once(reservation, "listening");
+    let address = reservation.address();
+    while (address && typeof address !== "string" && address.port === 65535) {
+      await closeLocalServer(reservation);
+      reservation.listen(0, "127.0.0.1");
+      await once(reservation, "listening");
+      address = reservation.address();
+    }
+    if (!address || typeof address === "string") throw new Error("Expected a loopback port");
+    const startingPort = address.port;
+    updateUserOption("daemon.private_port", () => startingPort);
+
+    const server = await startProjectHub(distribution);
+    servers.push(server);
+    const selected = Number(new URL(server.url).port);
+    expect(selected).toBeGreaterThan(startingPort);
+    expect(selected - startingPort).toBeLessThan(32);
+    expect((await browse(server.url)).status).toBe(200);
+    expect(await (await fetch(`http://127.0.0.1:${String(startingPort)}`)).text()).toBe("unrelated listener");
+  } finally {
+    await closeLocalServer(reservation);
+  }
+});
+
 test("private sign-in protects reads, events, and actions and expires on restart", async () => {
   const root = await project(),
     id = projectIdentity(root),

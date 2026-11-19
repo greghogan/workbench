@@ -10,6 +10,26 @@ import { PreparationStore } from "../execution/environments/managed/managed-cont
 import { withCacheLockSync } from "../storage/cache-lock.js";
 
 export const userOptions = {
+  "daemon.private_port": {
+    type: "integer",
+    local: false,
+    description: "Starting port for the private browser listener (default: 8080)",
+  },
+  "daemon.system_port": {
+    type: "integer",
+    local: false,
+    description: "Fixed port for the installed system browser listener (default: 80)",
+  },
+  "daemon.worker_idle_seconds": {
+    type: "integer",
+    local: false,
+    description: "System account worker idle interval; zero disables idle shutdown (default: 3600)",
+  },
+  "daemon.session_seconds": {
+    type: "integer",
+    local: false,
+    description: "System browser sign-in lifetime (default: 2592000)",
+  },
   "server.project_idle_seconds": {
     type: "integer",
     local: false,
@@ -192,6 +212,18 @@ export function validateUserOption(key: string, value: unknown): asserts key is 
       throw new Error(`${key} requires a positive integer`);
     return;
   }
+  if (key === "daemon.private_port" || key === "daemon.system_port") {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 65535)
+      throw new Error(`${key} requires an integer from 1 to 65535`);
+    return;
+  }
+  if (key === "daemon.session_seconds" || key === "daemon.worker_idle_seconds") {
+    const minimum = key === "daemon.session_seconds" ? 1 : 0;
+    const maximum = key === "daemon.session_seconds" ? Math.floor(Number.MAX_SAFE_INTEGER / 2000) : 2_147_483;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum)
+      throw new Error(`${key} requires an integer from ${String(minimum)} to ${String(maximum)}`);
+    return;
+  }
   if (userOptions[key as UserOption].type === "integer") {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
       throw new Error(`${key} requires a nonnegative integer`);
@@ -251,6 +283,10 @@ export function readUserConfig(): Values {
 
 export function userConfigValues(preferences = readUserConfig()): Record<UserOption, UserValue | undefined> {
   return {
+    "daemon.private_port": 8080,
+    "daemon.system_port": 80,
+    "daemon.worker_idle_seconds": 3600,
+    "daemon.session_seconds": 2592000,
     "server.project_idle_seconds": 1800,
     "preparation.nix_store": PreparationStore.Disabled,
     "preparation.guix_store": PreparationStore.Disabled,
