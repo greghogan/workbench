@@ -1,9 +1,24 @@
-import { type Command } from "commander";
+import { Option, type Command } from "commander";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { syncLocalContextIndex } from "../core/collections/local-context.js";
 import { executingToolPin, readToolPin } from "../core/distribution/launcher-identity.js";
+import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
+import {
+  installArchiveRelease,
+  recoverArchiveRelease,
+  updateArchiveRelease,
+} from "../core/distribution/installed-release.js";
+import {
+  activateSystemdRelease,
+  installSystemdService,
+  recoverSystemdRelease,
+  removeSystemdService,
+  serviceScopes,
+  type ServiceScope,
+} from "../core/distribution/systemd-service.js";
+import { updateWorkbench } from "../core/distribution/update.js";
 import { distributionRoot } from "../core/projects/project-context.js";
 import { ownedPath } from "../core/runtime/paths.js";
 import { toolSpecification, type ToolPin } from "../core/toolchains/tool-pin.js";
@@ -11,6 +26,32 @@ import { registerCommand } from "./commands.js";
 import { detectedCompletionShell, installCompletion } from "./completion.js";
 
 const marker = "// Workbench-owned launcher.\n";
+function launchDirectory(directory?: string): string {
+  return resolve(
+    directory ??
+      (process.platform === "win32"
+        ? join(
+            process.env.LOCALAPPDATA ??
+              (() => {
+                throw new Error("LOCALAPPDATA is required");
+              })(),
+            "workbench/bin",
+          )
+        : join(homedir(), ".local/bin")),
+  );
+}
+
+function finishInstallation(file: string, selected?: string): void {
+  syncLocalContextIndex();
+  console.log(`Installed ${file}${selected ? ` (${selected})` : ""}.`);
+  const directory = dirname(file);
+  if (!(process.env.PATH ?? "").split(delimiter).some((entry) => resolve(entry) === directory))
+    console.log(`Add ${directory} to PATH to use workbench.`);
+  const shell = detectedCompletionShell();
+  if (shell) installCompletion(shell);
+  else console.log("Install completion for your shell with: workbench completion install SHELL");
+}
+
 export function installLauncher(
   root: string,
   options: { directory?: string; repository?: string; revision?: string },
@@ -23,18 +64,7 @@ export function installLauncher(
   if (!!options.repository !== !!options.revision || !pin)
     throw new Error("supply --repository and --revision, or install using a project-pinned Workbench");
   toolSpecification(pin);
-  const directory = resolve(
-    options.directory ??
-      (process.platform === "win32"
-        ? join(
-            process.env.LOCALAPPDATA ??
-              (() => {
-                throw new Error("LOCALAPPDATA is required");
-              })(),
-            "workbench/bin",
-          )
-        : join(homedir(), ".local/bin")),
-  );
+  const directory = launchDirectory(options.directory);
   const file = ownedPath(directory, process.platform === "win32" ? "workbench.cjs" : "workbench");
   mkdirSync(directory, { recursive: true });
   if (
@@ -56,23 +86,120 @@ export function installLauncher(
   );
   if (process.platform !== "win32") chmodSync(file, 0o755);
   if (shim) writeFileSync(shim, shimContents);
-  syncLocalContextIndex();
-  console.log(`Installed ${file} (${toolSpecification(pin)}).`);
-  if (!(process.env.PATH ?? "").split(delimiter).some((entry) => resolve(entry) === directory))
-    console.log(`Add ${directory} to PATH to use workbench.`);
-  const shell = detectedCompletionShell();
-  if (shell) installCompletion(shell);
-  else console.log("Install completion for your shell with: workbench completion install SHELL");
+  finishInstallation(file, toolSpecification(pin));
   return file;
 }
 export function registerInstallationCommands(program: Command, root: string): void {
   registerCommand(program, "install")
-    .description("Install a user launcher; projects select their own exact executable revision")
+    .description("Install Workbench from a verified release archive or an exact Git commit")
     .option("--user", "Install for this user (default)")
     .option("--directory <path>", "Select the executable directory; system locations need administrator access")
     .option("--repository <url>", "Default Git repository URL (HTTPS or SSH)")
     .option("--revision <commit>", "Default full Git commit")
-    .action((options: { directory?: string; repository?: string; revision?: string }) => {
-      installLauncher(root, options);
+    .addOption(
+      new Option("--archive <path>", "Install a verified release archive").conflicts([
+        "repository",
+        "revision",
+        "service",
+      ]),
+    )
+    .option("--sha256 <checksum>", "Expected SHA-256 of the selected release archive")
+    .addOption(
+      new Option("--repair", "Restore the launcher for an existing verified archive installation").conflicts([
+        "repository",
+        "revision",
+        "service",
+      ]),
+    )
+    .addOption(
+      new Option("--service <scope>", "Register this installed release with the native service manager")
+        .choices(serviceScopes)
+        .conflicts(["user", "directory", "repository", "revision", "archive", "sha256"]),
+    )
+    .option("--port <port>", "Set the installed service's loopback port", Number)
+    .action(
+      async (options: {
+        directory?: string;
+        repository?: string;
+        revision?: string;
+        service?: ServiceScope;
+        port?: number;
+        archive?: string;
+        sha256?: string;
+        repair?: boolean;
+      }) => {
+        if (options.service) {
+          const distribution = distributionRoot(root);
+          const result = installSystemdService(distribution, options.service, options.port);
+          console.log("Registered " + result.path);
+          console.log("Start it with " + result.command);
+          return;
+        }
+        if (options.port !== undefined) throw new Error("--port requires --service");
+        if (options.archive || options.sha256 || options.repair) {
+          if (!options.archive || !options.sha256) throw new Error("Supply both --archive and --sha256");
+          const file = await installArchiveRelease(
+            launchDirectory(options.directory),
+            resolve(options.archive),
+            options.sha256,
+            options.repair,
+          );
+          if (options.repair) console.log(`Repaired ${file}.`);
+          else finishInstallation(file);
+          return;
+        }
+        installLauncher(root, options);
+      },
+    );
+  registerCommand(program, "update")
+    .description("Activate a verified application release; collection updates are separate")
+    .argument("[revision]", "Full Git commit for a checkout-managed executable pin")
+    .addOption(new Option("--archive <path>", "Activate a verified release archive").conflicts(["rollback", "recover"]))
+    .addOption(
+      new Option("--sha256 <checksum>", "Expected SHA-256 of the release archive").conflicts(["rollback", "recover"]),
+    )
+    .addOption(new Option("--rollback", "Select the previous verified release").conflicts("recover"))
+    .option("--recover", "Restore the verified release after an interrupted update")
+    .action(
+      async (
+        revision: string | undefined,
+        options: { archive?: string; sha256?: string; rollback?: boolean; recover?: boolean },
+      ) => {
+        if (!process.env[archiveInstallationEnvironment]) {
+          if (options.archive || options.sha256 || options.rollback || options.recover)
+            throw new Error("Run the installed Workbench launcher to replace a release archive");
+          await updateWorkbench(root, revision);
+          return;
+        }
+        if (revision || (!options.rollback && !options.recover && (!options.archive || !options.sha256)))
+          throw new Error("Supply --archive and --sha256, or use --rollback or --recover");
+        const { assertReleaseServicesIdle } = await import("../server/runtime.js");
+        if (options.recover) {
+          const restored = await recoverArchiveRelease((launcher, restore, service) => {
+            recoverSystemdRelease(launcher, restore, service, assertReleaseServicesIdle);
+          });
+          console.log(`Active Workbench release ${toolSpecification(restored)}.`);
+          return;
+        }
+        const release = options.rollback
+          ? "rollback"
+          : { source: resolve(options.archive ?? ""), sha256: options.sha256 ?? "" };
+        const distribution = distributionRoot(root);
+        const selected = await updateArchiveRelease(distribution, release, (transition) => {
+          activateSystemdRelease(transition, assertReleaseServicesIdle);
+        });
+        console.log(`Active Workbench release ${toolSpecification(selected)}.`);
+      },
+    );
+  registerCommand(program, "uninstall")
+    .description("Remove an owned native service registration")
+    .addOption(
+      new Option("--service <scope>", "Remove the selected native service registration")
+        .choices(serviceScopes)
+        .makeOptionMandatory(),
+    )
+    .action(({ service }: { service: ServiceScope }) => {
+      const path = removeSystemdService(service);
+      console.log(path ? "Removed " + path : `Workbench ${service} service is already unregistered.`);
     });
 }

@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
 interface Admission {
   internal?: boolean;
   project?: boolean;
@@ -180,6 +181,8 @@ const commands: Record<string, Admission> = {
 
   update: { project: true, registration: true, policy: true, explicitRoot: true },
 
+  uninstall: { explicitRoot: true },
+
   "update-prepare": { internal: true, policy: true, explicitRoot: true },
 
   "registration-check": { internal: true, explicitRoot: true },
@@ -200,11 +203,12 @@ export function commandAdmission(path: string) {
   let selected = { ...base };
   for (let depth = 1; depth <= rest.length; depth++)
     selected = { ...selected, ...base.children?.[rest.slice(0, depth).join(" ")] };
+  const installedUpdate = top === "update" && Boolean(process.env[archiveInstallationEnvironment]);
   return {
     internal: selected.internal === true,
-    project: selected.project === true,
-    registration: selected.registration === true,
-    policy: selected.policy === true,
+    project: !installedUpdate && selected.project === true,
+    registration: !installedUpdate && selected.registration === true,
+    policy: !installedUpdate && selected.policy === true,
     explicitRoot: selected.explicitRoot === true,
   };
 }

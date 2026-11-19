@@ -7,6 +7,7 @@ import { diagnosticOptions } from "../core/diagnostics/diagnostic-contract.mjs";
 import { clipped, formatDiagnosticMessage } from "../core/diagnostics/diagnostic-text.mjs";
 import { writeDiagnosticText } from "../core/diagnostics/diagnostics.mjs";
 import { npmWorkbench } from "../core/distribution/launcher-acquisition.js";
+import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
 import { executingToolPin, readToolPin, toolProjectRoot } from "../core/distribution/launcher-identity.js";
 import { ownsStartupRuntime } from "../core/distribution/launcher-runtime.js";
 import { projectRegistration, Registration } from "../core/projects/project-registry.js";
@@ -59,9 +60,9 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
     status: args.includes("--status"),
   });
   const admission = commandAdmission([command, child].filter(Boolean).join(" "));
-  const canSelectProject = !recovery && root;
+  const canSelectProject = !process.env[archiveInstallationEnvironment] && !recovery && root;
   const pin =
-    command === "install" || command === "project" || command === "update"
+    command === "install" || command === "uninstall" || command === "project" || command === "update"
       ? defaultPin
       : ((canSelectProject ? readToolPin(root) : undefined) ?? defaultPin);
   const [major = 0, minor = 0, patch = 0] = minimumCliNode.split(".").map(Number);

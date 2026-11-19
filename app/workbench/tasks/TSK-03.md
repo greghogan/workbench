@@ -113,7 +113,7 @@ Uninstall removes registration without removing user data.
 
 - [x] Protect private browser access with native sign-in.
 - [x] Coordinate shared and private startup, and route authenticated requests to isolated workers.
-- [ ] Install and manage Linux services with systemd and verify native lifecycle and identity boundaries.
+- [x] Install and manage Linux services with systemd and verify native lifecycle and identity boundaries.
 - [ ] Install and manage macOS services with launchd and verify native lifecycle and identity boundaries.
 - [ ] Install and manage Windows services with SCM and verify native lifecycle and identity boundaries.
 - [ ] Verify coherent updates, rollback, repair, and removal across installed releases.
@@ -153,6 +153,54 @@ browser sign-in.
 An isolated Linux environment exercised both directions of private and shared startup, cancellation while waiting,
 separate project visibility for two OS accounts, and sign-in across service restart. Signing out revoked only the
 selected credential. An ordinary account could not claim the shared port while the service was stopped.
+
+### Native lifecycle qualification
+
+On Linux, transient systemd user and system units exercised the first privilege boundaries. An ordinary account could
+not bind the system unit's protected loopback port before startup, during service, or after shutdown. Kernel Unix socket
+peer credentials identified each of two callers independently of the request contents. Node workers launched under those
+two identities with no effective capabilities and without the supervisor's supplementary group. Each could read its own
+fixture file, and access to the other account's file was denied. The test removed its transient units and files.
+
+A transient systemd user unit ran the Workbench private listener. A second CLI invocation discovered it and opened the
+browser workflow. The journal contained no sign-in password, and stopping the unit released the listener's lease.
+
+A verified archive registered a user service through the installed command. Repeating registration preserved an existing
+definition with different settings. Native systemd started the test unit, the installed CLI obtained sign-in, and the
+browser request succeeded. The test removed its own unit.
+
+The system installer registered a verified release for native systemd. A temporary OS account signed in through the
+installed CLI and retained its credentials across restart. The user service required fresh sign-in after restart. Both
+installers preserved a modified registration. Removing the owned units preserved application files and durable state.
+The native tests used isolated releases and accounts, and checked that sign-in stayed out of the journal. GitHub-hosted
+Linux preparation runs both scopes against the built candidate.
+
+Two ordinary accounts signed in through the installed system service. Each saw only its own registered project and could
+still access it after its idle worker stopped. An open event stream kept its worker alive. Signing out left the other
+account signed in. Starting a worker required the saved sign-in to match the current OS account. Changing its home
+directory while idle caused the original sign-in to be refused.
+
+### Installed release selection
+
+Archive installation verifies the checksum and starts the candidate CLI before recording it as active. The CLI and
+registered systemd service use the same launcher, which selects the stored release by its archive digest. The launcher
+takes precedence over a consuming project's executable pin. Both native service tests used the archive installation and
+the OS account for sign-in.
+
+Archive updates verify the replacement and the retained rollback release. An active systemd service drains before the
+launcher switches releases. The new service reports readiness after its browser and local sign-in listeners bind. If
+startup fails, Workbench restores the previous selection and starts that release. An active manual listener defers the
+switch. Native user and system units exercised an update, a failed replacement startup, an explicit rollback, and
+manual-listener deferral.
+
+Before stopping a managed service, Workbench saves its selected and replacement releases and the registered unit. The
+stable launcher can run recovery from the previous verified release while the replacement is unconfirmed. Native user
+and system tests killed the updater after the launcher switched and before the replacement became ready. Recovery
+restored the previous selection and restarted the service. Repeating recovery left that service running.
+
+The external installer restores a missing or damaged launcher from the verified archive and preserves damaged launcher
+bytes before replacement. Native user and system tests repaired an unusable launcher with the selected service still
+running. The service process and retained state were preserved.
 
 ## Implementing-agent detail
 

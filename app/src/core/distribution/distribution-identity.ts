@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { readBoundedFile } from "../runtime/file-reads.js";
 
 export const distributionSourceFile = "workbench-source.json";
-
+export const archiveInstallationEnvironment = "WORKBENCH_ARCHIVE_INSTALLATION";
 export interface DistributionSource {
   repository: string;
   revision: string;

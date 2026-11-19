@@ -22,7 +22,7 @@ printed server PID. A supervisor can run `workbench serve --service` in the fore
 invocation to get sign-in instructions for that listener. A supervised server waits for an existing private listener
 to stop before taking over.
 
-When a shared Linux service is running, `workbench serve` prints sign-in for the shared listener. Each signed-in account
+On an installed Linux system service, `workbench serve` prints sign-in for the shared listener. Each signed-in account
 sees its own projects and settings. System sign-in remains valid for 30 days by default, including across a server
 restart at the same address. Each account retains its 32 most recent active sign-ins. Use **Sign out** on Projects to
 revoke the browser's credential. The administrator can configure `daemon.system_port`, `daemon.worker_idle_seconds`,

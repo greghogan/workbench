@@ -2,6 +2,6 @@ export { applyCollectionForReview, previewCollection } from "./projects/collecti
 export { serveDemonstration } from "./projects/demo-service.js";
 export { projectHubEnvironment, startProjectHub } from "./projects/project-hub.js";
 export { decodeCollectionWorkerRequest } from "./projects/protocol.js";
-export { privateServiceReady, runPrivateService } from "./http/private-service.js";
+export { assertReleaseServicesIdle, privateServiceReady, runPrivateService } from "./http/private-service.js";
 export { startSystemService } from "./http/system-service.js";
 export { serveAccountWorker } from "./http/system-workers.js";

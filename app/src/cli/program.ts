@@ -25,7 +25,6 @@ import { configurePresentation } from "../core/diagnostics/presentation.js";
 import { terminalColumns } from "../core/diagnostics/terminal-text.js";
 import { executableIdentity } from "../core/distribution/executable-identity.js";
 import { prepareUpdate } from "../core/distribution/update-prepare.js";
-import { updateWorkbench } from "../core/distribution/update.js";
 import { checkAdvisories } from "../core/execution/checks/advisories.js";
 import { ChecksCancelled } from "../core/execution/checks/check-cancellation.js";
 import { observeCommand } from "../core/execution/checks/test-timing.js";
@@ -289,12 +288,6 @@ export function createCLI(root: string = projectRoot()) {
       checkRecordRetention(resolve(repository));
       checkReview(resolve(repository));
       checkAgentCommit(resolve(repository), process.env.WORKBENCH_REVIEW_TREE);
-    });
-  registerCommand(program, "update")
-    .description("Prepare and validate an executable-pin update; collection updates are separate")
-    .argument("<revision>", "Full Git commit for the executable; collection updates are separate")
-    .action((revision?: string) => {
-      return updateWorkbench(root, revision);
     });
   registerCommand(program, "update-prepare", { hidden: true }).action(async () => {
     if (!process.env.WORKBENCH_UPDATE_PREPARATION || realpathSync(process.env.WORKBENCH_UPDATE_PREPARATION) !== root)

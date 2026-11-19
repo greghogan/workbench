@@ -29,6 +29,7 @@ export async function snapshotCIProject(
     "clone",
     "--quiet",
     "--no-hardlinks",
+    "--dissociate",
     "--no-checkout",
     "--no-recurse-submodules",
     "--",

@@ -49,6 +49,14 @@ jobs:
       - uses: ./.github/actions/prepare-runtime
         with:
           artifact: ${{ inputs.candidate }}
+      - name: Qualify installed Linux services
+        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ""
+        run: |
+          bash scripts/check-linux-service.sh user "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+          bash scripts/check-linux-service.sh system "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
       - id: plan
         env:
           CI_MATRIX: ${{ inputs.platform }}

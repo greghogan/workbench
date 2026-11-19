@@ -7,6 +7,8 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { settleCleanup } from "../../core/diagnostics/diagnostic-errors.mjs";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../../core/diagnostics/diagnostics.mjs";
+import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
+import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
 import {
@@ -21,7 +23,7 @@ import { startProjectHub } from "../projects/project-hub.js";
 import { demonstrationBase } from "../projects/project-mounts.js";
 import { localBrowserUsername } from "./browser-auth.js";
 import { discoverSystemService, serviceRelease, systemServicePending } from "./system-service.js";
-import { markPrivateListener } from "./system-ownership.js";
+import { activePrivateListenerProcesses, markPrivateListener } from "./system-ownership.js";
 
 type Hub = Awaited<ReturnType<typeof startProjectHub>>;
 type Options = NonNullable<Parameters<typeof startProjectHub>[1]> & {
@@ -78,6 +80,27 @@ function servicePaths(stateHome = userDirectory("state")) {
 
 function windowsPrivateLease(): string {
   return join(userDirectory("state"), "daemon", "windows-private");
+}
+
+/** A manual server must stop before the application can switch its installed release. */
+export function assertReleaseServicesIdle(exceptPid?: number, managedState?: string): void {
+  const active =
+    process.platform === "linux"
+      ? activePrivateListenerProcesses(process.geteuid?.() === 0 ? undefined : process.geteuid?.()).some(
+          (pid) => pid !== exceptPid,
+        )
+      : process.platform === "win32"
+        ? inspectCacheMetadataLock(windowsPrivateLease()).state !== CacheLockState.Unlocked
+        : [...new Set([userDirectory("state"), managedState])].some((directory) => {
+            const lock = inspectCacheMetadataLock(servicePaths(directory).lease);
+            return (
+              lock.state === CacheLockState.Uncertain ||
+              (lock.state === CacheLockState.Active && lock.owner.pid !== exceptPid)
+            );
+          });
+  if (active) throw new Error("Stop the manual Workbench server before switching installed releases.");
+  if (process.geteuid?.() === 0 && exceptPid === undefined && systemServicePending())
+    throw new Error("Stop the unmanaged shared Workbench server before switching installed releases.");
 }
 
 function verifySocket(path: string, uid: number): boolean {
@@ -254,6 +277,7 @@ async function serveOwned(
   let yielded = false;
   try {
     abandon = markPrivateListener(paths.directory);
+    checkInstalledServiceStart(distribution, options.mode === "service" && systemdServiceProcess());
     yielded = systemServicePending();
     if (!yielded) {
       hub = await startProjectHub(distribution, options);
@@ -261,6 +285,7 @@ async function serveOwned(
       const access = { url: hub.url, signIn: hub.signIn, pid: process.pid, logs: options.logs };
       control = await openControl(paths, access, release);
       signal.throwIfAborted();
+      if (options.mode === "service") notifySystemdServiceReady();
       present(access, true);
       await untilStopped([hub.server, control.server], signal);
     }
@@ -316,6 +341,7 @@ export async function runPrivateService(distribution: string, options: Options, 
       await withCacheLocksSync(
         [lease],
         async () => {
+          checkInstalledServiceStart(distribution, false);
           const hub = await startProjectHub(distribution, options);
           try {
             if (!signal.aborted)

@@ -29,6 +29,8 @@ import { closeLocalServer, createLocalServer, listenLocal, listenUnix, localEndp
 import { requestOrigin, secureResponse, send } from "./http.js";
 import { WebMetrics } from "./observability.js";
 import { activePrivateListenerProcesses } from "./system-ownership.js";
+import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
+import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
 import { AccountWorkers, linuxAccount, type LinuxAccount } from "./system-workers.js";
 
 const passwordPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -302,6 +304,7 @@ export async function startSystemService(distribution: string, options: { host?:
         signIn.maxConnections = 16;
         try {
           const signal = cancellation.signal;
+          checkInstalledServiceStart(distribution, systemdServiceProcess());
           if (activePrivateListenerProcesses().length) {
             diagnostic(
               LogLevel.Info,
@@ -317,6 +320,7 @@ export async function startSystemService(distribution: string, options: { host?:
           await listenLocal(browser, host, port);
           await listenUnix(signIn, control);
           chmodSync(control, 0o666);
+          notifySystemdServiceReady();
           console.log(`Workbench web UI: ${origin}`);
           if (!cancellation.signal.aborted)
             await new Promise<void>((resolve, reject) => {
