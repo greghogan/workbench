@@ -3,6 +3,16 @@ import { InvalidInput } from "../runtime/input-errors.js";
 import { dirname, join, resolve } from "node:path";
 import { gitBytes } from "./git-snapshot.js";
 
+// The durable markers whose removal can release deferred operations.
+export const gitOperationMarkers = [
+  "rebase-merge",
+  "rebase-apply",
+  "MERGE_HEAD",
+  "CHERRY_PICK_HEAD",
+  "REVERT_HEAD",
+  "sequencer",
+];
+
 export function validateBranch(root: string, branch: string): void {
   const result = spawnSync("git", ["-C", root, "check-ref-format", "refs/heads/" + branch], { encoding: "utf8" });
   if (result.error || result.status !== 0 || branch === "HEAD")

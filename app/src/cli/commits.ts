@@ -1,6 +1,7 @@
 import { historyBranches, historyCommits, historyFiles } from "../core/git/history.js";
 import { Option, type Command } from "commander";
 import { finalizationPlan, finalizeHistory } from "../core/git/finalization.js";
+import { pendingFinalizationStatus } from "../core/git/finalization-requests.js";
 import { pendingCommitReviews } from "../core/review/review-units.js";
 import { terminalTable } from "../core/diagnostics/terminal-table.js";
 import { resolve } from "node:path";
@@ -154,30 +155,34 @@ export function registerCommitCommands(program: Command, root: string): void {
         console.log(
           options.json
             ? JSON.stringify(result, null, 2)
-            : `Finalized ${String(result.replacements.length)} commits.\nRecovery: ${result.recovery}`,
+            : `Finalized ${String(result.finalized ?? result.replacements.length)} commit(s).\nRecovery: ${result.recovery}`,
         );
       } else {
         const plan = finalizationPlan(root);
+        const waiting = pendingFinalizationStatus(root);
         if (options.json) {
-          console.log(JSON.stringify(plan, null, 2));
+          console.log(JSON.stringify({ ...plan, ...(waiting ? { automatic: { waiting } } : {}) }, null, 2));
           return;
         }
+        if (waiting) console.log(`Automatic finalization is pending. ${waiting}\n`);
         if (!plan.units.length) {
           console.log("No provisional commits.");
           return;
         }
         console.log(
           terminalTable(
-            ["COMMIT", "PENDING", "FILES", "SUBJECT"],
+            ["COMMIT", "STATUS", "PENDING", "FILES", "SUBJECT"],
             plan.units.map((unit) => [
               unit.revision.slice(0, 12),
+              unit.ready ? "Ready" : "Waiting",
               String(unit.pending),
               String(unit.files),
               unit.subject,
             ]),
           ),
         );
-        console.log(plan.problems.length ? `\n${plan.problems.join("\n\n")}` : "\nReady to finalize.");
+        console.log(`\n${String(plan.eligible.length)} of ${String(plan.units.length)} commits ready to finalize.`);
+        if (plan.problems.length) console.log(`\n${plan.problems.join("\n\n")}`);
         console.log(`\nFinalization digest:\n${plan.digest}`);
       }
     });

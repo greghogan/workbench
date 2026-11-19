@@ -143,7 +143,8 @@ test("empty planning retention protects local queues and unpushed saves, then re
   git(root, "commit", "--allow-empty", "-qm", "Local checkpoint\n\nWorkbench-Provisional: true");
   const blocked = invoke(root, "push", "backup", "HEAD:application");
   expect(blocked.status).not.toBe(0);
-  expect(blocked.stderr).toContain("provisional commits");
+  expect(blocked.stderr).toMatch(/\bprovisional commits?\b/);
+  expect(gitRevision(remote, "refs/heads/application")).toBeUndefined();
 });
 
 test("cancel and delete retain reasons, reject stale previews and incoming relationships, and preserve explicit recovery", () => {

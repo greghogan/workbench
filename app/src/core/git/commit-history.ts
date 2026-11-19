@@ -1,5 +1,8 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { InvalidInput } from "../runtime/input-errors.js";
+import { readBoundedFile } from "../runtime/file-reads.js";
 
 export const provisionalTrailer = "Workbench-Provisional";
 export const provisionalEnvironment = "WORKBENCH_PROVISIONAL_TREE";
@@ -41,6 +44,34 @@ function parsedProvisionalTrailers(trailers: string): boolean {
 
 export function provisionalMessage(root: string, message: string): boolean {
   return parsedProvisionalTrailers(git(root, ["interpret-trailers", "--parse"], message));
+}
+
+/** Preserve the message and other trailers verbatim when removing Workbench's marker. */
+export function removeProvisionalTrailer(root: string, message: string): string {
+  const line = new RegExp(`^${provisionalTrailer}[ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]+)*true[ \\t]*(?:\\r?\\n|$)`, "gim");
+  for (const marker of [...message.matchAll(line)].reverse()) {
+    const before = message.slice(0, marker.index),
+      after = message.slice(marker.index + marker[0].length);
+    const without = (after === "" ? before.replace(/(\r?\n)\r?\n$/, "$1") : before) + after;
+    // A matching line in the message body or patch can coexist with the actual Git trailer.
+    if (!provisionalMessage(root, without)) return without;
+  }
+  throw new InvalidInput(
+    `Cannot remove the reserved ${provisionalTrailer} trailer without changing the commit message`,
+  );
+}
+
+/** Read the second and subsequent parents of an in-progress merge in Git's order. */
+export function pendingMergeParents(root: string): string[] {
+  const location = resolve(root, git(root, ["rev-parse", "--git-path", "MERGE_HEAD"]).trim());
+  if (!existsSync(location)) return [];
+  const parents = readBoundedFile(location, 16 * 1024, "merge parents")
+    .toString()
+    .trim()
+    .split(/\r?\n/);
+  if (parents.length >= 256 || parents.some((parent) => !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(parent)))
+    throw new InvalidInput("Invalid Git merge parents");
+  return parents;
 }
 
 /** A page of history is one Git read, without opening one process per commit. */
@@ -160,9 +191,11 @@ export function checkProvisionalPush(root: string, tip: string, remote: string):
   );
   if (pending.length)
     throw new InvalidInput(
-      `Cannot push ${String(pending.length)} provisional commit(s): ${pending
+      `Cannot push ${String(pending.length)} provisional ${pending.length === 1 ? "commit" : "commits"}: ${pending
         .slice(0, 10)
         .map((entry) => entry.commit.slice(0, 12))
-        .join(", ")}. Complete human review and consolidate or rewrite all provisional commits before pushing.`,
+        .join(
+          ", ",
+        )}. Complete review and inspect local finalization with 'workbench commit finalize'. Retry the push after those commits have been finalized.`,
     );
 }

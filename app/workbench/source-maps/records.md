@@ -111,8 +111,13 @@
   Git-tree transitions using Git checkout conversions and index locking while preserving unrelated edits and centralize
   branch-name validation.
 
-- `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`, `src/core/git/finalization.ts`: Capture
-  parent-bound commit reviews and activate reviewed replacement history through recoverable reference updates.
+- `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`: Capture and retain reviews bound to the result
+  and its ordered parent trees.
+- `src/core/git/finalization.ts`, `src/core/git/finalization-selection.ts`, `src/core/git/finalization-refs.ts`: Select
+  complete reviewed ancestry and activate replacement commits and tags in a recoverable Git ref transaction.
+- `src/core/git/finalization-requests.ts`: Retains pending finalization for the reviewed branch and rechecks it on
+  subsequent review and Git handoffs.
+- `src/core/git/signatures.ts`: Verify signing keys and recreate signed tag annotations without changing live refs.
 - `src/core/git/identity-reconciliation.ts`: Prove mechanical task renumbering before preserving real plan and document
   approvals, and update related personal plan references without granting new consent.
 

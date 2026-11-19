@@ -28,6 +28,7 @@ import { prepareUpdate } from "../core/distribution/update-prepare.js";
 import { checkAdvisories } from "../core/execution/checks/advisories.js";
 import { ChecksCancelled } from "../core/execution/checks/check-cancellation.js";
 import { observeCommand } from "../core/execution/checks/test-timing.js";
+import { finalizationCommand, resumeFinalization, wakeFinalization } from "../core/git/finalization-requests.js";
 import { inspectCICache, type CacheInspectionRequest } from "../core/execution/ci/ci-cache-inspection.js";
 import { readConfig } from "../core/projects/project-configuration.js";
 import { distributionRoot, projectRoot } from "../core/projects/project-context.js";
@@ -121,6 +122,16 @@ export function createCLI(root: string = projectRoot()) {
       console.log(JSON.stringify(inspectCICache(root, JSON.parse(request) as CacheInspectionRequest)));
     });
   program.name("workbench").description("Shared agentic software-development context and workflows");
+  registerCommand(program, finalizationCommand, { hidden: true }).action(async () => {
+    if (process.connected && process.send)
+      await new Promise<void>((ready, reject) => {
+        process.send?.(finalizationCommand, (error) => {
+          if (error) reject(error);
+          else ready();
+        });
+      });
+    resumeFinalization(root);
+  });
   program.helpCommand(false).enablePositionalOptions();
   function isGateCommand(command: Command): boolean {
     return command.parent === program && ["check", "pre-commit", "pre-push"].includes(command.name());
@@ -186,7 +197,7 @@ export function createCLI(root: string = projectRoot()) {
     if (
       persist &&
       !diagnosticSession &&
-      (serverLogs || !commandAdmission(commandPath(action)).internal) &&
+      (serverLogs || activeCommand === finalizationCommand || !commandAdmission(commandPath(action)).internal) &&
       !["completion", "help"].includes(commandPath(action).split(" ")[0] ?? "")
     )
       diagnosticSession = await startDiagnosticSession(
@@ -213,6 +224,11 @@ export function createCLI(root: string = projectRoot()) {
       !["workbench", "help", "update", "update-prepare"].includes(action.name())
     )
       readConfig(root);
+  });
+  program.hook("postAction", (_program, action) => {
+    const path = commandPath(action);
+    if (["rebase", "merge", "task show", "queue", "queue implemented", "queue release", "queue block"].includes(path))
+      void wakeFinalization(root);
   });
   registerProjectCommands(program);
   registerCommand(program, "registration-check", { hidden: true }).action(() => {

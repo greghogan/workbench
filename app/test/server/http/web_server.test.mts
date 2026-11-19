@@ -10,6 +10,7 @@ import { request as httpRequest, type IncomingMessage, type ServerResponse } fro
 import type { startWebServer } from "../../../src/server/http/server.ts";
 import { ReviewSource, reviewStatus, presentedReviewDigest } from "../../../src/core/review/review-service.ts";
 import { checkReview } from "../../../src/core/review/review-check.js";
+import { commitVersion, committedReview } from "../../../src/core/review/review-units.js";
 import { webServers, readWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { markdown as markdownView } from "../../../src/server/views/markdown-view.js";
@@ -29,6 +30,48 @@ async function get(path: string) {
 function post(path: string, values: Record<string, string>, headers: Record<string, string> = {}) {
   return postWebForm(web, path, values, headers);
 }
+test("a browser merge review presents the parent comparison that first-parent history misses", async () => {
+  const path = "workbench/decisions/ADR-00.md",
+    base = git(root, "rev-parse", "HEAD"),
+    branch = git(root, "branch", "--show-current");
+  git(root, "switch", "-qc", "side");
+  writeFileSync(join(root, path), "# Side recommendation\n");
+  git(root, "commit", "-qam", "Propose another decision");
+  const side = git(root, "rev-parse", "HEAD");
+  git(root, "switch", "-q", branch);
+  const merge = git(
+    root,
+    "commit-tree",
+    `${base}^{tree}`,
+    "-p",
+    base,
+    "-p",
+    side,
+    "-m",
+    "Keep the baseline decision\n\nWorkbench-Provisional: true",
+  );
+  git(root, "update-ref", `refs/heads/${branch}`, merge, base);
+
+  const page = await get(`/history?commit=${merge}&path=${encodeURIComponent(path)}`);
+  expect(page.response.status).toBe(200);
+  const document = parseDOM(page.html).window.document;
+  const headings = [...document.querySelectorAll(".record-pane h2")].map((element) => element.textContent);
+  expect(headings).toEqual(expect.arrayContaining([`Parent 1 ${base.slice(0, 12)}`, `Parent 2 ${side.slice(0, 12)}`]));
+  expect(document.querySelector(".record-pane")?.textContent).toContain("Matches the merge result");
+  expect(document.querySelector(".record-pane")?.textContent).toContain("Side recommendation");
+  const response = await post("/actions/approve", {
+    csrf: hiddenValue(page.html, "csrf"),
+    digest: hiddenValue(page.html, "digest"),
+    path,
+    review_commit: merge,
+    reviewed: "yes",
+  });
+  expect(response.status).toBe(200);
+  expect(committedReview(root, merge).pending).toBe(0);
+  await expect.poll(() => git(root, "rev-parse", "HEAD"), { timeout: 15000 }).not.toBe(merge);
+  expect(commitVersion(root, "HEAD")).toMatchObject({ provisional: false, tree: commitVersion(root, merge).tree });
+});
+
 test("record browsing, full text search, typed filters, offline assets, and source differences", async () => {
   mkdirSync(join(root, "workbench/tasks"));
   writeFileSync(

@@ -1,4 +1,5 @@
-import { committedReview } from "../core/review/review-units.js";
+import { committedReview, stagedMergeReview } from "../core/review/review-units.js";
+import { requestAutomaticFinalization, wakeFinalization } from "../core/git/finalization-requests.js";
 import { spawnSync } from "node:child_process";
 import { relative } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -18,6 +19,29 @@ import { terminalAvailable } from "./terminal/terminal-choice.js";
 
 function presentation(root: string, source: ReviewSource, snapshot: GitSnapshot, changes: ReviewChange[]) {
   const captured = captureReviews(root, changes, source, snapshot);
+  const merge = changes[0]?.merge;
+  if (merge) {
+    const comparisons = merge.parents.map(({ tree }, index) => {
+      const baseline = updatedReviewTree(
+        root,
+        tree,
+        changes.map((change) => ({
+          path: change.path,
+          entry: reviewEntry(change.merge?.parents[index]?.file ?? change.before),
+        })),
+      );
+      return {
+        label: `Parent ${String(index + 1)} of ${String(merge.parents.length)}`,
+        baseline,
+        tree: updatedReviewTree(
+          root,
+          baseline,
+          changes.map((change) => ({ path: change.path, entry: reviewEntry(change.after) })),
+        ),
+      };
+    });
+    return { captured, comparisons };
+  }
   const previous = reviewedBaselines(root, snapshot.head);
   const prior = changes.flatMap((change) => {
     const review = previous.get(change.path);
@@ -40,47 +64,54 @@ function presentation(root: string, source: ReviewSource, snapshot: GitSnapshot,
   );
   return {
     captured,
-    baseline,
-    tree: updatedReviewTree(
-      root,
-      baseline,
-      changes.map((change) => ({ path: change.path, entry: reviewEntry(change.after) })),
-    ),
+    comparisons: [
+      {
+        label: undefined,
+        baseline,
+        tree: updatedReviewTree(
+          root,
+          baseline,
+          changes.map((change) => ({ path: change.path, entry: reviewEntry(change.after) })),
+        ),
+      },
+    ],
   };
 }
 
 export function reviewStatus(root: string, source: ReviewSource = ReviewSource.Working, commit?: string): void {
-  const snapshot =
-    commit !== undefined
-      ? committedReview(root, commit).snapshot
-      : new GitSnapshot(root, { staged: source === ReviewSource.Staged });
-  const { changes, digest, receipt } = fileReviewStatus(root, source, snapshot);
+  const unit = commit === undefined ? stagedMergeReview(root) : committedReview(root, commit);
+  const snapshot = unit?.snapshot ?? new GitSnapshot(root, { staged: source === ReviewSource.Staged });
+  const { changes, digest, receipt } = unit ?? fileReviewStatus(root, source, snapshot);
   if (!changes.length) {
     console.log("No protected record changes.");
     return;
   }
-  const { baseline, tree } = presentation(root, source, snapshot, changes);
-  process.stdout.write(
-    git(root, [
-      "diff",
-      baseline,
-      tree,
-      "--no-ext-diff",
-      "--no-textconv",
-      "--",
-      ...changes.map((change) => change.path),
-    ]),
-  );
+  const { comparisons } = presentation(root, unit?.source ?? source, snapshot, changes);
+  for (const { label, baseline, tree } of comparisons) {
+    if (label) console.log(label);
+    process.stdout.write(
+      git(root, [
+        "diff",
+        baseline,
+        tree,
+        "--no-ext-diff",
+        "--no-textconv",
+        "--",
+        ...changes.map((change) => change.path),
+      ]),
+    );
+  }
   console.log(`Review digest: ${digest}\nReceipt: ${receipt}`);
   if (changes.some((change) => change.charter)) console.log("Charter content must be written by a human.");
 }
 
 /** Terminal approval is deliberately unavailable through flags or redirected input. */
 export async function reviewInteractively(root: string, recordPath?: string, commit?: string): Promise<void> {
-  if (commit === undefined) await formatPendingReviews(root, recordPath);
-  const source = commit !== undefined ? ReviewSource.Staged : ReviewSource.Working;
-  const snapshot = commit ? committedReview(root, commit).snapshot : new GitSnapshot(root, { staged: false });
-  const pending = fileReviewStatus(root, source, snapshot);
+  const unit = commit === undefined ? stagedMergeReview(root) : committedReview(root, commit);
+  if (!unit) await formatPendingReviews(root, recordPath);
+  const source = unit?.source ?? ReviewSource.Working;
+  const snapshot = unit?.snapshot ?? new GitSnapshot(root, { staged: false });
+  const pending = unit ?? fileReviewStatus(root, source, snapshot);
   const record = recordPath ? relative(root, recordPath).replaceAll("\\", "/").replace(/\.md$/, "") : undefined;
   const changes = pending.changes.filter(
     (change) => !change.approved && (!record || change.path === record + ".md" || change.path.startsWith(record + "/")),
@@ -91,31 +122,35 @@ export async function reviewInteractively(root: string, recordPath?: string, com
   }
   if (!terminalAvailable() || !pending.changes.length) {
     reviewStatus(root, source, commit);
+    void wakeFinalization(root);
     return;
   }
   if (pending.changes.every((change) => change.approved)) {
     console.log("Protected record changes are already approved.");
     return;
   }
-  const { captured, baseline, tree } = presentation(root, source, snapshot, changes);
-  const diff = spawnSync(
-    "git",
-    [
-      "-C",
-      root,
-      plainOutput() ? "--no-pager" : "--paginate",
-      "diff",
-      baseline,
-      tree,
-      colorDisabled() ? "--color=never" : "--color=auto",
-      "--no-ext-diff",
-      "--no-textconv",
-      "--",
-      ...changes.map((change) => change.path),
-    ],
-    { stdio: "inherit" },
-  );
-  if (diff.error || diff.status !== 0) throw new Error("cannot display captured review diff");
+  const { captured, comparisons } = presentation(root, source, snapshot, changes);
+  for (const { label, baseline, tree } of comparisons) {
+    if (label) console.log(label);
+    const diff = spawnSync(
+      "git",
+      [
+        "-C",
+        root,
+        plainOutput() ? "--no-pager" : "--paginate",
+        "diff",
+        baseline,
+        tree,
+        colorDisabled() ? "--color=never" : "--color=auto",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--",
+        ...changes.map((change) => change.path),
+      ],
+      { stdio: "inherit" },
+    );
+    if (diff.error || diff.status !== 0) throw new Error("cannot display captured review diff");
+  }
   const prompt = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -141,6 +176,7 @@ export async function reviewInteractively(root: string, recordPath?: string, com
     }
     approveCapturedReviews(root, captured, charters);
     console.log("Recorded acknowledgment for the presented record changes.");
+    requestAutomaticFinalization(root, commit ? { revision: commit } : undefined);
   } finally {
     prompt.close();
   }

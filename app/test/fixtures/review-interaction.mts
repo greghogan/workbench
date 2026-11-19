@@ -9,6 +9,7 @@ import { consumer, distribution, provider, git as fixtureGit } from "./adoption.
 import { installSelectedCollections } from "../../src/core/collections/collection-install.ts";
 import { approveLocalPolicy, reviewLocalPolicy } from "../../src/core/collections/local-policy.ts";
 import { policyCompatibility } from "../../src/core/collections/policy-compatibility.ts";
+import * as finalization from "../../src/core/git/finalization-requests.ts";
 
 interface ReviewState {
   answers: string[];
@@ -25,6 +26,8 @@ export function reviewFixtures(state: ReviewState) {
     expect(result.status, result.stderr).toBe(0);
   };
   beforeEach(() => {
+    vi.spyOn(finalization, "requestAutomaticFinalization").mockImplementation(() => undefined);
+    vi.spyOn(finalization, "wakeFinalization").mockResolvedValue(undefined);
     root = mkdtempSync(join(tmpdir(), "workbench-review-terminal-"));
     mkdirSync(join(root, "workbench/decisions"), { recursive: true });
     writeFileSync(

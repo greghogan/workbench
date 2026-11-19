@@ -920,6 +920,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
   const address = server.address();
   if (options.listen !== false && (!address || typeof address === "string"))
     throw new Error("listener did not publish a local TCP address");
+  if (!options.demonstration) {
+    const resume = () => {
+      void actions.resumeFinalization();
+    };
+    monitor.on("change", resume);
+    resume();
+  }
   let closed: Promise<void> | undefined;
   const close = (): Promise<void> => {
     closed ??= (async () => {

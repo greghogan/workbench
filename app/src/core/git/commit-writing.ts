@@ -1,38 +1,38 @@
 import { spawnSync } from "node:child_process";
 import { StateConflict } from "../runtime/input-errors.js";
 import { commitVersion } from "../review/review-units.js";
-import { gitBytes } from "./git-snapshot.js";
-import { provisionalTrailer } from "./commit-history.js";
+import { provisionalTrailer, removeProvisionalTrailer } from "./commit-history.js";
 
-/** Rewritten history keeps authorship and message content; the new committer date is never backdated. */
-export function rewriteCommit(root: string, revision: string, parents: string[], provisional: boolean): string {
-  const unit = commitVersion(root, revision),
-    author = /^(.*) <([^<>]*)> (\d+ [+-]\d{4})$/.exec(unit.author);
-  if (!author) throw new StateConflict("Cannot preserve the commit author");
+export function commitSigningEnabled(root: string): boolean {
   const setting = spawnSync("git", ["-C", root, "config", "--bool", "--get", "commit.gpgSign"], { encoding: "utf8" });
   if (setting.error || (setting.status !== 0 && setting.status !== 1))
     throw new StateConflict("Cannot inspect commit signing policy");
-  const sign = setting.stdout.trim() === "true";
+  return setting.stdout.trim() === "true";
+}
+
+export const unattendedSigningConflict =
+  "Commit signing needs an interactive finalization from the developer's terminal";
+
+/** Rewritten history keeps authorship and message content; the new committer date is never backdated. */
+export function rewriteCommit(
+  root: string,
+  revision: string,
+  parents: string[],
+  provisional: boolean,
+  unattended = false,
+): string {
+  const unit = commitVersion(root, revision),
+    author = /^(.*) <([^<>]*)> (\d+ [+-]\d{4})$/.exec(unit.author);
+  if (!author) throw new StateConflict("Cannot preserve the commit author");
+  const sign = commitSigningEnabled(root);
+  if (unattended && (sign || unit.signed)) throw new StateConflict(unattendedSigningConflict);
   if (unit.signed && !sign) throw new StateConflict("Enable commit.gpgSign before rewriting a signed commit");
   const message = provisional
     ? unit.provisional
       ? unit.message
       : unit.message.trimEnd() + `\n\n${provisionalTrailer}: true\n`
     : unit.provisional
-      ? gitBytes(
-          root,
-          [
-            "-c",
-            "trailer.separators=:",
-            "interpret-trailers",
-            "--if-exists=replace",
-            "--if-missing=doNothing",
-            "--trim-empty",
-            "--trailer",
-            `${provisionalTrailer}:`,
-          ],
-          unit.message,
-        ).toString()
+      ? removeProvisionalTrailer(root, unit.message)
       : unit.message;
   const result = spawnSync(
     "git",

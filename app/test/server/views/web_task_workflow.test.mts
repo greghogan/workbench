@@ -20,6 +20,9 @@ import { changeTaskQueue, readTaskQueue } from "../../../src/core/tasks/task-que
 import { changeWorkQueue } from "../../../src/core/tasks/planning/plan-transfer.ts";
 import { readTaskDecisions } from "../../../src/core/tasks/task-decisions.ts";
 import { formatDocument } from "../../../src/core/records/formatting.ts";
+import { spawnSync } from "node:child_process";
+import { pendingFinalizationStatus } from "../../../src/core/git/finalization-requests.ts";
+import { checkProvisionalPush, provisionalCommits } from "../../../src/core/git/commit-history.ts";
 import { workflowWindows } from "../../../src/server/routes/workflow-window.ts";
 import { Route } from "../../../src/server/routes/routes.ts";
 import { recordWindowLimit } from "../../../src/server/routes/record-window.ts";
@@ -296,6 +299,71 @@ test("a revised implemented plan returns to Reviews, then needs new verification
   expect(await membership("/work")).toBe(0);
   expect(await membership("/reviews")).toBe(1);
 });
+
+test("browser acceptance during a merge resumes at a CLI handoff with the server stopped", async () => {
+  const configHome = join(root, ".git/local-config");
+  mkdirSync(configHome);
+  // This fixture owns Git state, while the detached CLI may finish writing diagnostics after its Git work is done.
+  writeFileSync(join(configHome, "config.toml"), "[logs]\ncli_max_bytes = 0\n");
+  vi.stubEnv("WORKBENCH_CONFIG_HOME", configHome);
+  const file = task(0, "Approved"),
+    branch = git(root, "branch", "--show-current");
+  git(root, "add", "workbench/tasks");
+  git(root, "commit", "-qm", "Approve the delivery");
+  const base = git(root, "rev-parse", "HEAD");
+  writeFileSync(file, readFileSync(file, "utf8") + "\n## Implementation account\n\nDelivered the feature.\n");
+  writeFileSync(join(root, "feature.txt"), "Reviewed feature.\n");
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Deliver feature\n\nWorkbench-Provisional: true");
+  const delivery = git(root, "rev-parse", "HEAD");
+  git(root, "switch", "-qc", "related", base);
+  writeFileSync(join(root, "related.txt"), "Reviewed related change.\n");
+  git(root, "add", "related.txt");
+  git(root, "commit", "-qm", "Prepare related change");
+  git(root, "switch", "-q", branch);
+  git(root, "merge", "--no-commit", "--no-ff", "related");
+  changeTaskQueue(root, { action: "add", references: ["TSK-0"] });
+  changeTaskQueue(root, { action: "start", reference: "TSK-0" });
+  changeTaskQueue(root, {
+    action: "implemented",
+    reference: "TSK-0",
+    detail: "Verified the feature and both merge sides.",
+  });
+
+  const web = await servers.start(root, { backgroundFinalization: true });
+  const accept = form(
+    (await readWebPage(web, "/records/demo:TSK-0")).html,
+    'form[action$="/actions/task-state"]:has(input[name="state"][value="Accepted"])',
+  );
+  const accepted = await postWebForm(web, accept.path, accept.values);
+  expect(accepted.status, await accepted.clone().text()).toBe(200);
+  expect(await accepted.json()).toMatchObject({ redirect: "/reviews?scope=demo" });
+  await expect.poll(() => pendingFinalizationStatus(root), { timeout: 15000 }).toMatch(/active Git operation/);
+  expect(readFileSync(file, "utf8")).toContain("status: Accepted");
+  expect(git(root, "rev-parse", "HEAD")).toBe(delivery);
+  await web.close();
+
+  git(root, "add", "workbench/tasks");
+  git(root, "commit", "-qm", "Retain accepted outcome");
+  const tree = git(root, "rev-parse", "HEAD^{tree}"),
+    working = git(root, "status", "--porcelain");
+  const handoff = spawnSync(process.execPath, [join(distribution, "bundle/main.cjs"), "review", "finish-commit"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, WORKBENCH_PROJECT_ROOT: root, WORKBENCH_DISTRIBUTION_ROOT: distribution },
+  });
+  expect(handoff.status, handoff.stderr).toBe(0);
+  await expect
+    .poll(() => ({ pending: pendingFinalizationStatus(root), provisional: provisionalCommits(root) }), {
+      timeout: 15000,
+    })
+    .toEqual({ pending: undefined, provisional: [] });
+  expect(git(root, "rev-parse", "HEAD^{tree}")).toBe(tree);
+  expect(git(root, "status", "--porcelain")).toBe(working);
+  expect(() => {
+    checkProvisionalPush(root, delivery, base);
+  }).toThrow(/Cannot push 1 provisional commit/);
+}, 35000);
 
 test("browser decisions bind approval to exact task versions and acceptance to verified work", async () => {
   const config = join(root, "workbench/config.toml");

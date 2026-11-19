@@ -6,6 +6,8 @@ import {
   taskDispositionKinds,
 } from "../../core/tasks/task-disposition.js";
 import { committedReview } from "../../core/review/review-units.js";
+import { reviewChangeDigest } from "../../core/review/review-snapshot.js";
+import { requestAutomaticFinalization, wakeFinalization } from "../../core/git/finalization-requests.js";
 import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
 import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
 import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
@@ -39,6 +41,7 @@ interface Proposal {
 export class WebActions {
   readonly reviews = new ReviewVersions();
   private readonly operations = new Map<Promise<unknown>, "review" | "collection">();
+  private readonly finalizations = new Set<Promise<void>>();
   private closed = false;
   private readonly applications = new Map<string, CollectionApplication>();
   application(id: string): CollectionApplication | undefined {
@@ -52,6 +55,15 @@ export class WebActions {
     private readonly reviewRunner: typeof runReviewWorker = (request) => runReviewWorker(request, bundle),
     bundle?: string,
   ) {}
+  resumeFinalization = async (root = this.root): Promise<void> => {
+    if (this.closed) return;
+    await wakeFinalization(root, (closed) => {
+      this.finalizations.add(closed);
+      void closed.then(() => {
+        this.finalizations.delete(closed);
+      });
+    });
+  };
   get activeOperations(): number {
     return this.operations.size;
   }
@@ -238,6 +250,8 @@ export class WebActions {
             reason: form.get("reason") ?? "",
           }),
         );
+        if (state === "Accepted")
+          requestAutomaticFinalization(this.root, { tasks: [reference] }, this.resumeFinalization);
         return result(
           selected === "Approved"
             ? Route.Work
@@ -283,10 +297,7 @@ export class WebActions {
         if (
           commit &&
           !committedReview(this.root, commit).changes.some(
-            (change) =>
-              change.path === presented.version.change.path &&
-              change.after === presented.version.change.after &&
-              change.before === presented.version.change.before,
+            (change) => change.digest === reviewChangeDigest(presented.version.change),
           )
         )
           throw new StateConflict("The selected commit does not contain this reviewed version");
@@ -299,6 +310,7 @@ export class WebActions {
             humanWritten: form.get("human_written") === "yes",
           }),
         );
+        requestAutomaticFinalization(this.root, commit ? { revision: commit } : undefined, this.resumeFinalization);
         if (commit) return result(routeURL(Route.History, { commit }));
         return result(Route.Reviews);
       }
@@ -369,6 +381,7 @@ export class WebActions {
   async close(): Promise<void> {
     this.closed = true;
     await Promise.allSettled([...this.operations.keys()]);
+    await Promise.all(this.finalizations);
     this.reviews.clear();
     this.proposals.clear();
     this.applications.clear();

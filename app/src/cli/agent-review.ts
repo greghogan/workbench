@@ -8,6 +8,7 @@ import {
   reviewIdentity,
 } from "../core/review/agent-review.js";
 import { taskReference } from "../core/tasks/task-model.js";
+import { wakeFinalization } from "../core/git/finalization-requests.js";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../core/diagnostics/diagnostics.mjs";
 
 export function registerAgentReviewCommands(review: Command, root: string): void {
@@ -61,11 +62,24 @@ export function registerAgentReviewCommands(review: Command, root: string): void
               options.expected,
               options.staged,
               options.commit,
+              options.amend,
             );
             console.log(`Recorded ${kind} review for ${pending.tree}.`);
+            void wakeFinalization(root);
           } else
             console.log(
-              JSON.stringify({ kind, base: pending.base, tree: pending.tree, tasks: pending.tasks, digest }, null, 2),
+              JSON.stringify(
+                {
+                  kind,
+                  base: pending.base,
+                  tree: pending.tree,
+                  parentTrees: pending.parentTrees,
+                  tasks: pending.tasks,
+                  digest,
+                },
+                null,
+                2,
+              ),
             );
         },
       );
@@ -84,6 +98,7 @@ export function registerAgentReviewCommands(review: Command, root: string): void
         "Commit saved; finish the planning handoff with workbench task plan recover",
       );
     }
+    await wakeFinalization(root);
   });
   review
     .command("check-push", { hidden: true })

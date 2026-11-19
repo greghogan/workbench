@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { commitVersion } from "./review-units.js";
-import { checkProvisionalPush, retainedProvisionalCommits } from "../git/commit-history.js";
+import { checkProvisionalPush, pendingMergeParents, retainedProvisionalCommits } from "../git/commit-history.js";
 import { gitBytes, readGitObjects, stagedReviewTree, workingReviewTree } from "../git/git-snapshot.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { record, records, string, strings } from "../runtime/values.mjs";
@@ -26,6 +26,7 @@ export interface AgentReview {
   kind: AgentReviewKind;
   base: string;
   tree: string;
+  parentTrees?: string[];
   tasks: string[];
   summary: string;
   verification: string;
@@ -41,9 +42,22 @@ const oid = (value: unknown) => {
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(text)) throw new InvalidInput("Invalid Git tree identity");
   return text;
 };
-export const reviewIdentity = (review: Pick<AgentReview, "kind" | "base" | "tree" | "tasks">) =>
+type ChangeContext = Pick<AgentReview, "base" | "tree" | "parentTrees">;
+const changeContextKey = ({ base, tree, parentTrees }: ChangeContext) =>
+  JSON.stringify([base, tree, ...(parentTrees ? [parentTrees] : [])]);
+const sameParents = (left?: string[], right?: string[]) => JSON.stringify(left) === JSON.stringify(right);
+
+export const reviewIdentity = (review: Pick<AgentReview, "kind" | "base" | "tree" | "tasks" | "parentTrees">) =>
   createHash("sha256")
-    .update(JSON.stringify([review.kind, review.base, review.tree, [...review.tasks].sort()]))
+    .update(
+      JSON.stringify([
+        review.kind,
+        review.base,
+        review.tree,
+        [...review.tasks].sort(),
+        ...(review.parentTrees ? [review.parentTrees] : []),
+      ]),
+    )
     .digest("hex");
 const git = (root: string, args: string[], input?: string) => gitBytes(root, args, input).toString().trim();
 export function reviewTree(root: string, revision: string): string {
@@ -56,10 +70,22 @@ export function emptyReviewTree(root: string): string {
 function hasHead(root: string): boolean {
   return spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", "HEAD"], { stdio: "ignore" }).status === 0;
 }
-function amendedBase(root: string): string {
-  if (!hasHead(root)) return emptyReviewTree(root);
-  const parent = git(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ")[1];
-  return parent ? reviewTree(root, parent) : emptyReviewTree(root);
+function proposedParents(root: string, amend = false): string[] {
+  if (!hasHead(root)) return [];
+  if (amend) return git(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1).map(oid);
+  const head = git(root, ["rev-parse", "--verify", "HEAD"]);
+  return [head, ...pendingMergeParents(root)];
+}
+function mergeParentTrees(root: string, parents: readonly string[]): string[] | undefined {
+  if (parents.length > 256) throw new InvalidInput("Too many merge parents to retain a review context");
+  return parents.length > 1 ? parents.map((parent) => reviewTree(root, parent)) : undefined;
+}
+function firstParentTree(root: string, parents: readonly string[]): string {
+  return parents[0] ? reviewTree(root, parents[0]) : emptyReviewTree(root);
+}
+function contextForParents(root: string, tree: string, parents: readonly string[]): ChangeContext {
+  const parentTrees = mergeParentTrees(root, parents);
+  return { base: parentTrees?.[0] ?? firstParentTree(root, parents), tree, ...(parentTrees ? { parentTrees } : {}) };
 }
 export function proposedAgentReview(
   root: string,
@@ -72,15 +98,16 @@ export function proposedAgentReview(
   )
     throw new InvalidInput("Select a retained commit or current files, without mixing review boundaries");
   const unit = options.commit !== undefined ? commitVersion(root, options.commit) : undefined;
+  const parents = kind === AgentReviewKind.Changes ? (unit?.parents ?? proposedParents(root, options.amend)) : [];
+  const parentTrees = mergeParentTrees(root, parents);
+  if (parentTrees && options.base !== undefined)
+    throw new InvalidInput("Review the merge against all of its parents without selecting a separate base");
   let base: string;
-  if (unit && kind === AgentReviewKind.Changes)
-    base = unit.parents[0] ? reviewTree(root, unit.parents[0]) : emptyReviewTree(root);
-  else if (options.base) base = reviewTree(root, options.base);
+  if (options.base) base = reviewTree(root, options.base);
+  else if (kind === AgentReviewKind.Changes) base = parentTrees?.[0] ?? firstParentTree(root, parents);
   else if (!hasHead(root)) base = emptyReviewTree(root);
-  else if (options.amend) base = amendedBase(root);
-  else if (kind === AgentReviewKind.Task)
-    throw new InvalidInput("Task review requires --base naming the start of the accumulated work");
-  else base = reviewTree(root, "HEAD");
+  else if (options.amend) base = firstParentTree(root, proposedParents(root, true));
+  else throw new InvalidInput("Task review requires --base naming the start of the accumulated work");
   const tree = unit?.tree ?? (options.staged ? stagedReviewTree(root) : workingReviewTree(root));
   const associated = [...(options.tasks ?? [])];
   if (kind !== AgentReviewKind.Task || !associated.length) {
@@ -103,13 +130,14 @@ export function proposedAgentReview(
     kind,
     base,
     tree,
+    ...(parentTrees ? { parentTrees } : {}),
     tasks: [...new Set(associated)].sort(),
     summary: "",
     verification: "",
     reviewed: new Date().toISOString(),
   };
 }
-function receiptPath(root: string): string {
+export function receiptPath(root: string): string {
   return resolve(root, git(root, ["rev-parse", "--git-path", "workbench/agent-reviews.json"]));
 }
 interface ReviewState {
@@ -139,7 +167,27 @@ function decode(input: unknown): ReviewState {
       !Number.isFinite(Date.parse(reviewed))
     )
       throw new InvalidInput("Invalid review assessment");
-    return { kind, base: oid(entry.base), tree: oid(entry.tree), tasks, summary, verification, reviewed };
+    const base = oid(entry.base);
+    const parentTrees =
+      entry.parentTrees === undefined ? undefined : strings(entry.parentTrees, "Invalid merge parent trees").map(oid);
+    if (
+      parentTrees &&
+      (kind !== AgentReviewKind.Changes ||
+        parentTrees.length < 2 ||
+        parentTrees.length > 256 ||
+        parentTrees[0] !== base)
+    )
+      throw new InvalidInput("Invalid merge review context");
+    return {
+      kind,
+      base,
+      tree: oid(entry.tree),
+      ...(parentTrees ? { parentTrees } : {}),
+      tasks,
+      summary,
+      verification,
+      reviewed,
+    };
   });
   if (new Set(reviews.map(reviewIdentity)).size !== reviews.length)
     throw new InvalidInput("Duplicate agent review kind");
@@ -180,12 +228,19 @@ export function recordAgentReview(
   expected: string,
   staged = false,
   commit?: string,
+  amend = false,
 ): void {
   if (reviewIdentity(review) !== expected)
     throw new StateConflict("Review snapshot changed; inspect it again before recording review");
-  const current =
-    commit !== undefined ? commitVersion(root, commit).tree : staged ? stagedReviewTree(root) : workingReviewTree(root);
+  const unit = commit !== undefined ? commitVersion(root, commit) : undefined;
+  const current = unit?.tree ?? (staged ? stagedReviewTree(root) : workingReviewTree(root));
   if (current !== review.tree) throw new StateConflict("Review contents changed; review the new snapshot");
+  if (
+    review.kind === AgentReviewKind.Changes &&
+    ((review.parentTrees && review.base !== review.parentTrees[0]) ||
+      !sameParents(review.parentTrees, mergeParentTrees(root, unit?.parents ?? proposedParents(root, amend))))
+  )
+    throw new StateConflict("Merge parents changed; review the new snapshot");
   const tasks = treeTasks(root, review.tree);
   for (const task of review.tasks)
     if (!tasks.has(task)) throw new InvalidInput(`Reviewed task not found in the selected snapshot: ${task}`);
@@ -201,7 +256,7 @@ export function recordAgentReview(
         reviewIdentity(entry) !== expected &&
         (entry.kind === AgentReviewKind.Task
           ? committed.has(entry.tree) || pending.has(entry.tree)
-          : retained.has(JSON.stringify([entry.base, entry.tree])) || pending.has(entry.tree)),
+          : retained.has(changeContextKey(entry)) || pending.has(entry.tree)),
     );
     entries.push(review);
     store(root).write({ ...state, reviews: entries });
@@ -242,11 +297,15 @@ export function finishAgentCommit(root: string): void {
   const retained = retainedChangeContexts(root);
   const committed = reviewTree(root, "HEAD"),
     tip = git(root, ["rev-parse", "HEAD"]),
+    parentTrees = mergeParentTrees(root, proposedParents(root, true)),
     scope = workScope(root);
   withCacheLocksSync([receiptPath(root)], () => {
     const state = store(root).read();
     const consumed = state.reviews.filter(
-      (entry) => entry.kind === AgentReviewKind.Changes && entry.tree === committed,
+      (entry) =>
+        entry.kind === AgentReviewKind.Changes &&
+        entry.tree === committed &&
+        sameParents(entry.parentTrees, parentTrees),
     );
     const tasks = [
       ...new Set([
@@ -260,7 +319,7 @@ export function finishAgentCommit(root: string): void {
     );
     if (tasks.length) state.pending.push({ scope, tip, tasks });
     state.reviews = state.reviews.filter(
-      (entry) => entry.kind === AgentReviewKind.Task || retained.has(JSON.stringify([entry.base, entry.tree])),
+      (entry) => entry.kind === AgentReviewKind.Task || retained.has(changeContextKey(entry)),
     );
     store(root).write(state);
   });
@@ -307,14 +366,16 @@ function requiredPolicy(
 }
 export function checkAgentCommit(root: string, tree?: string): void {
   const selected = tree ?? stagedReviewTree(root);
-  const base = hasHead(root) ? reviewTree(root, "HEAD") : emptyReviewTree(root);
-  const policy = requiredPolicy(root, base, selected);
+  const context = contextForParents(root, selected, proposedParents(root));
+  const policy = reviewContextPolicy(root, context);
   if (!policy.changes && !policy.task_approvals) return;
   let associated: string[] = [];
   if (policy.changes) {
-    const bases = new Set([base, amendedBase(root)]);
+    const contexts = new Set([changeContextKey(context)]);
+    if (!context.parentTrees)
+      contexts.add(changeContextKey(contextForParents(root, selected, proposedParents(root, true))));
     const matched = readReviews(root).filter(
-      (entry) => entry.kind === AgentReviewKind.Changes && entry.tree === selected && bases.has(entry.base),
+      (entry) => entry.kind === AgentReviewKind.Changes && contexts.has(changeContextKey(entry)),
     );
     if (!matched.length)
       throw new InvalidInput(
@@ -322,7 +383,23 @@ export function checkAgentCommit(root: string, tree?: string): void {
       );
     associated = [...new Set(matched.flatMap((entry) => entry.tasks))];
   }
-  if (policy.task_approvals) checkTaskDecisions(root, selected, false, associated, base);
+  if (policy.task_approvals) checkTaskDecisions(root, selected, false, associated, context.base);
+}
+
+function reviewContextPolicy(
+  root: string,
+  { base, tree, parentTrees }: ChangeContext,
+  cache = new Map<string, ReviewPolicy>(),
+): ReviewPolicy {
+  const policy = requiredPolicy(root, base, tree, cache);
+  for (const parent of parentTrees?.slice(1) ?? []) {
+    const other = cache.get(parent) ?? reviewPolicy(root, parent);
+    cache.set(parent, other);
+    policy.changes ||= other.changes;
+    policy.tasks ||= other.tasks;
+    policy.task_approvals ||= other.task_approvals;
+  }
+  return policy;
 }
 
 function checkTaskDecisions(
@@ -331,6 +408,7 @@ function checkTaskDecisions(
   publishing: boolean,
   associated: string[] = [],
   baseline?: string,
+  only?: ReadonlySet<string>,
 ): void {
   const previous = baseline ? treeTasks(root, baseline) : undefined;
   const tasks = treeTasks(root, tree),
@@ -339,6 +417,7 @@ function checkTaskDecisions(
     if (!tasks.has(reference))
       throw new InvalidInput(`${reference}: associated task is missing from the reviewed snapshot.`);
   for (const [reference, task] of tasks) {
+    if (only && !only.has(reference)) continue;
     const prior = previous?.get(reference);
     if (
       !associated.includes(reference) &&
@@ -386,12 +465,18 @@ export function checkAgentPush(root: string, tip: string, remote: string): void 
   checkAgentPublication(root, tip, remote);
 }
 
-export function checkAgentPublication(root: string, tip: string, remote: string): void {
+export function checkAgentPublication(
+  root: string,
+  tip: string,
+  remote: string,
+  finalizingTasks?: ReadonlySet<string>,
+): void {
   const policies = new Map<string, ReviewPolicy>();
   const tree = reviewTree(root, tip),
     base = /^0+$/.test(remote) ? emptyReviewTree(root) : reviewTree(root, remote);
   const rows = git(root, [
     "log",
+    "--no-show-signature",
     "--format=%H %T %P",
     tip,
     ...(/^0+$/.test(remote) ? ["--not", "--remotes"] : ["--not", remote]),
@@ -399,22 +484,16 @@ export function checkAgentPublication(root: string, tip: string, remote: string)
     .split("\n")
     .filter(Boolean)
     .map((row) => {
-      const [commit, contents, parent] = row.split(" ");
+      const [commit, contents, ...parents] = row.trim().split(" ");
       if (!commit || !contents) throw new InvalidInput("Invalid outgoing Git history");
-      return { commit, contents: oid(contents), parent };
+      return { commit, contents: oid(contents), parents };
     });
   if (!rows.length) return;
   const knownTrees = new Map(rows.map((row) => [row.commit, row.contents]));
-  const policyTrees = [
-    ...new Set([
-      base,
-      tree,
-      ...rows.flatMap((row) => [
-        row.contents,
-        ...(row.parent ? [knownTrees.get(row.parent) ?? reviewTree(root, row.parent)] : []),
-      ]),
-    ]),
-  ];
+  for (const parent of new Set(rows.flatMap((row) => row.parents)))
+    if (!knownTrees.has(parent)) knownTrees.set(parent, reviewTree(root, parent));
+  const empty = emptyReviewTree(root);
+  const policyTrees = [...new Set([base, tree, empty, ...knownTrees.values()])];
   const policyObjects = readGitObjects(
     root,
     policyTrees.map((value) => `${value}:${projectPaths.config}`),
@@ -428,11 +507,18 @@ export function checkAgentPublication(root: string, tip: string, remote: string)
   }
   const policy = requiredPolicy(root, base, tree, policies),
     receipts = readReviews(root),
-    associated = new Set<string>(pendingTasks(root, tip));
-  for (const { contents, parent } of rows) {
-    const before = parent ? (knownTrees.get(parent) ?? reviewTree(root, parent)) : emptyReviewTree(root);
-    if (parent) knownTrees.set(parent, before);
-    const required = requiredPolicy(root, before, contents, policies);
+    associated = new Set(finalizingTasks ?? pendingTasks(root, tip));
+  for (const { contents, parents } of rows) {
+    const parentTrees = parents.map((parent) => knownTrees.get(parent) ?? reviewTree(root, parent));
+    const required = reviewContextPolicy(
+      root,
+      {
+        base: parentTrees[0] ?? empty,
+        tree: contents,
+        ...(parentTrees.length > 1 ? { parentTrees } : {}),
+      },
+      policies,
+    );
     policy.tasks ||= required.tasks;
     policy.task_approvals ||= required.task_approvals;
   }
@@ -455,7 +541,7 @@ export function checkAgentPublication(root: string, tip: string, remote: string)
     }
     return snapshot.get(reference)?.workDigest === selectedTasks.get(reference)?.workDigest;
   };
-  for (const receipt of aggregate) for (const task of receipt.tasks) associated.add(task);
+  if (!finalizingTasks) for (const receipt of aggregate) for (const task of receipt.tasks) associated.add(task);
   const uncovered = [...associated].filter((reference) => !taskReviews.some((entry) => covers(entry, reference)));
   const wholeSnapshotReviewed = aggregate.some((entry) => !entry.tasks.length);
   if (policy.tasks && !wholeSnapshotReviewed && (!associated.size || uncovered.length))
@@ -464,29 +550,37 @@ export function checkAgentPublication(root: string, tip: string, remote: string)
         ? `Accumulated work review is required for ${uncovered.join(", ")}; review the delivered task and record workbench review task --base <start-revision> --record.`
         : "Accumulated work review is required for the outgoing snapshot. Record workbench review task --base <remote-or-start-revision> --record after reviewing the combined work; task records are optional.",
     );
-  if (policy.task_approvals) checkTaskDecisions(root, tree, true, [...associated], base);
+  if (policy.task_approvals || finalizingTasks?.size)
+    checkTaskDecisions(root, tree, true, [...associated], base, finalizingTasks);
 }
 
 /** Exact parent/tree evidence survives commit-ID rewrites, but never a changed project snapshot. */
-export function checkAgentUnit(root: string, base: string, tree: string): void {
-  const policy = requiredPolicy(root, base, tree);
+export function checkAgentUnit(
+  root: string,
+  unit: Pick<ReturnType<typeof commitVersion>, "parents" | "tree">,
+): string[] {
+  const context = contextForParents(root, unit.tree, unit.parents);
+  const key = changeContextKey(context);
+  const policy = reviewContextPolicy(root, context);
+  const matching = readReviews(root).filter(
+    (entry) => entry.kind === AgentReviewKind.Changes && changeContextKey(entry) === key,
+  );
   if (
     policy.changes &&
-    !acceptedAgentContext(root, base, tree) &&
-    !readReviews(root).some(
-      (entry) => entry.kind === AgentReviewKind.Changes && entry.base === base && entry.tree === tree,
-    )
+    !matching.length &&
+    (context.parentTrees || !acceptedAgentContext(root, context.base, context.tree))
   )
     throw new InvalidInput(
       "Agent change review and verification are required for this commit; use workbench review changes --commit <revision> --record",
     );
+  return [...new Set(matching.flatMap((entry) => entry.tasks))];
 }
 
 function retainedChangeContexts(root: string): Set<string> {
   return new Set(
     retainedProvisionalCommits(root).map((revision) => {
       const unit = commitVersion(root, revision);
-      return JSON.stringify([unit.parents[0] ? reviewTree(root, unit.parents[0]) : emptyReviewTree(root), unit.tree]);
+      return changeContextKey(contextForParents(root, unit.tree, unit.parents));
     }),
   );
 }

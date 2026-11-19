@@ -704,21 +704,32 @@ recovery. Successful integration does not replace semantic review, configured ch
 ### Review retained commits
 
 `workbench commit reviews` lists provisional review units in parent order. Review a unit with
-`workbench review --commit REVISION`, or open it from the browser review queue. Each unit compares immutable contents
-against its own parent. Current files are a separate unit. A later review does not approve an earlier intermediate
-version; amendments that change a reviewed version require another acknowledgment.
+`workbench review --commit REVISION`, or open it from the browser review queue. A merge shows a comparison against
+each parent in order, including files that match the first parent but differ from another. Current files are a
+separate unit. Each acknowledgment applies to its displayed versions, so an amendment that changes those versions
+requires another review. During a merge, `workbench review` presents the staged result against each parent.
 
 Agents inspect a retained unit with `workbench review changes --commit REVISION`. After reviewing it and verifying its
 source snapshot, record its printed digest with `--record --expected DIGEST --summary TEXT --verification TEXT`. Rebased
-units reuse document acknowledgments when both sides of the comparison remain the same. Changed project trees require
-renewed agent review and verification.
+units reuse document acknowledgments when both sides of the comparison remain the same. For merges, keeping the
+result tree and all parent trees in order preserves the acknowledgment even if the commit IDs change. Changed project
+trees require renewed agent review and verification.
 
-`workbench commit finalize` previews pending decisions and a finalization digest. After arranging commit boundaries and
-completing human review, task acceptance, and agent reviews, use `workbench commit finalize --apply --expected DIGEST`.
-It preserves source trees and author metadata, removes provisional markers in parent order, and leaves unrelated index
-and working changes intact. Original and prepared histories remain behind the reported recovery references.
+`workbench commit finalize` previews which commits are ready and reports why others are waiting. Use
+`workbench commit finalize --apply --expected DIGEST` to finalize the ready history. Only complete accepted task
+deliveries qualify. An independent reviewed side of a merge can qualify while another side waits. Finalization keeps
+waiting commits provisional, preserves source trees, authorship, and checkout files, and updates affected local branches
+and tags together. Original and prepared histories remain available through the reported recovery references.
 `workbench commit finalize --recover` resumes an interrupted activation. Published checkpoints and active Git operations
-block finalization; no command here pushes a branch.
+block finalization. When a tag would move, Workbench checks the configured remotes for that tag before applying.
+
+Task acceptance and document review schedule finalization in the background. When an outcome is accepted in the working
+files, finalization waits for that version to enter Git history. An active Git operation, active task, or signing that
+needs the terminal can also delay the rewrite. The server retries after observing the Git operation end. Workbench also
+checks after a commit or another handoff on the branch. `workbench commit finalize` reports any remaining wait.
+
+When a signed commit or tag would change, run finalization from your terminal with the original signing key. Workbench
+verifies the replacement signatures before updating references.
 
 Fold accepted task-state changes into their owning delivery before finalizing, rather than adding approval-only commits.
 For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that

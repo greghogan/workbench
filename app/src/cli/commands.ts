@@ -83,6 +83,8 @@ const commands: Record<string, Admission> = {
 
   feedback: { registration: true },
 
+  "finalization-run": { internal: true, explicitRoot: true },
+
   format: { project: true, registration: true },
 
   help: { explicitRoot: true },

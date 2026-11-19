@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { reviewAuthorityPath } from "../review/review-authority.js";
-import { gitReferenceInputs } from "../git/refs.js";
+import { gitOperationMarkers, gitReferenceInputs } from "../git/refs.js";
 export { inputStamp } from "../runtime/file-identity.js";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -19,6 +19,7 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
     "config.worktree",
     "info/exclude",
     "workbench/review.json",
+    ...gitOperationMarkers,
   ];
   const paths = reviewGit(root, ["rev-parse", ...names.flatMap((name) => ["--git-path", name])])
     .trimEnd()

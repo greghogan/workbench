@@ -1,9 +1,21 @@
-import { gitBytes, GitSnapshot } from "../git/git-snapshot.js";
+import { gitBytes, GitSnapshot, stagedReviewTree } from "../git/git-snapshot.js";
 import { gitRevision } from "../git/refs.js";
-import { provisionalCommits, retainedProvisionalCommits, provisionalMessage } from "../git/commit-history.js";
+import {
+  pendingMergeParents,
+  provisionalCommits,
+  retainedProvisionalCommits,
+  provisionalMessage,
+} from "../git/commit-history.js";
 import { InvalidInput, MissingResource } from "../runtime/input-errors.js";
 import { recordOwnerPath } from "../records/staged-records.js";
-import { captureReviews, proposedReview, reviewedChanges, reviewChangeStatus, ReviewSource } from "./review-service.js";
+import {
+  captureReviews,
+  proposedMergeReview,
+  proposedReview,
+  reviewedChanges,
+  reviewChangeStatus,
+  ReviewSource,
+} from "./review-service.js";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { retainedBytes } from "../runtime/retained-bytes.js";
 import { resolve } from "node:path";
@@ -44,7 +56,7 @@ export function commitVersion(root: string, revision: string): CommitVersion {
     author,
     message,
     provisional: provisionalMessage(root, message),
-    signed: headers.some((line) => line.startsWith("gpgsig ")),
+    signed: headers.some((line) => /^(?:gpgsig|gpgsig-sha256) /.test(line)),
   };
 }
 const comparisons = new WeightedCache<ReturnType<typeof inspectReviewCommit>["comparison"]>(32 * 1024 * 1024);
@@ -52,11 +64,15 @@ const comparisons = new WeightedCache<ReturnType<typeof inspectReviewCommit>["co
 function inspectReviewCommit(root: string, revision: string) {
   const unit = commitVersion(root, revision),
     snapshot = new GitSnapshot(root, { base: unit.parents[0] ?? "", tree: unit.tree }),
-    { changes, digest } = proposedReview(root, ReviewSource.Staged, snapshot);
+    { changes, digest } =
+      unit.parents.length > 1
+        ? proposedMergeReview(root, snapshot, unit.tree, unit.parents)
+        : proposedReview(root, ReviewSource.Staged, snapshot);
   return { snapshot, comparison: { ...unit, changes, digest, head: snapshot.head, source: ReviewSource.Staged } };
 }
 
-export function committedReview(root: string, revision: string, statusFor?: ReturnType<typeof reviewChangeStatus>) {
+/** Read immutable comparison identity independently of acknowledgment state. */
+export function committedReviewComparison(root: string, revision: string) {
   const commit = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision)
     ? revision
     : gitRevision(root, `${revision}^{commit}`);
@@ -68,15 +84,25 @@ export function committedReview(root: string, revision: string, statusFor?: Retu
     ({ comparison, snapshot } = inspectReviewCommit(root, commit));
     comparisons.set(key, comparison, retainedBytes(comparison, 32 * 1024 * 1024));
   }
-  const captured = comparison,
+  const captured = comparison;
+  return {
+    captured,
+    snapshot: () => {
+      snapshot ??= new GitSnapshot(root, { base: captured.parents[0] ?? "", tree: captured.tree });
+      return snapshot;
+    },
+  };
+}
+
+export function committedReview(root: string, revision: string, statusFor?: ReturnType<typeof reviewChangeStatus>) {
+  const { captured, snapshot } = committedReviewComparison(root, revision),
     status = statusFor ? statusFor(captured.changes) : reviewedChanges(root, captured.changes);
   return {
     ...captured,
     ...status,
     pending: status.changes.filter((change) => !change.approved).length,
     get snapshot(): GitSnapshot {
-      snapshot ??= new GitSnapshot(root, { base: captured.parents[0] ?? "", tree: captured.tree });
-      return snapshot;
+      return snapshot();
     },
   };
 }
@@ -84,6 +110,21 @@ export function captureCommittedReview(root: string, revision: string) {
   const unit = committedReview(root, revision);
   return { unit, captured: captureReviews(root, unit.changes, ReviewSource.Staged, unit.snapshot) };
 }
+
+export function stagedMergeReview(root: string, tree?: string) {
+  const others = pendingMergeParents(root);
+  if (!others.length) return undefined;
+  const result = tree ?? stagedReviewTree(root),
+    snapshot = new GitSnapshot(root, { tree: result }),
+    comparison = proposedMergeReview(root, snapshot, result, [snapshot.head, ...others]);
+  return {
+    ...comparison,
+    ...reviewedChanges(root, comparison.changes, comparison.receipt),
+    snapshot,
+    source: ReviewSource.Staged,
+  };
+}
+
 export function pendingCommitReviews(root: string, tip = "HEAD") {
   if (!gitRevision(root, `${tip}^{commit}`)) return [];
   return reviewUnits(root, provisionalCommits(root, tip));

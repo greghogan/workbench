@@ -1,11 +1,19 @@
 import { RecordLookup } from "../../core/records/record-lookup.js";
 import { isUtf8 } from "node:buffer";
 import { renderToString } from "preact-render-to-string";
-import { historyFiles, historyFile, historyFilePreviews } from "../../core/git/history.js";
+import {
+  historyBlobSizes,
+  historyFiles,
+  historyFile,
+  historyFilePreviews,
+  historyPreviewBlobs,
+} from "../../core/git/history.js";
+import { reviewEntry } from "../../core/git/git-snapshot.js";
 import { historicalRecords } from "../review/historical-records.js";
 import { recordPane } from "./record-pane.js";
 import { committedReview } from "../../core/review/review-units.js";
-import { presentedReviewDigest, reviewedBaselines } from "../../core/review/review-service.js";
+import { presentedReviewDigest, reviewedBaselines, type ReviewChange } from "../../core/review/review-service.js";
+import { reviewFileLimit } from "../../core/review/review-snapshot.js";
 import { fileModeChange } from "./diff-view.js";
 import { panel, submitButton, badge } from "./components.js";
 import { shell } from "./page-frame.js";
@@ -32,6 +40,36 @@ interface TaskHistoryContext {
   location: (values: RouteQuery<typeof Route.History>) => string;
   parents: Breadcrumb[];
   active: "plans" | "work" | "review" | "TSK";
+}
+
+function recordedFile(identity: string) {
+  return identity.startsWith("000000:") ? undefined : reviewEntry(identity);
+}
+
+function mergeHistoryFile(change: ReviewChange) {
+  const before = recordedFile(change.before),
+    after = recordedFile(change.after);
+  return { path: change.path, ...(before ? { before } : {}), ...(after ? { after } : {}) };
+}
+
+function mergePreviews(root: string, change: ReviewChange, merge: NonNullable<ReviewChange["merge"]>) {
+  const result = recordedFile(change.after),
+    parents = merge.parents.map(({ file }) => recordedFile(file)),
+    ids = [...new Set([result, ...parents].flatMap((entry) => (entry ? [entry.oid] : [])))],
+    capacity = reviewFileLimit * 8,
+    sizes = historyBlobSizes(root, ids),
+    size = (entry: ReturnType<typeof recordedFile>) => (entry ? (sizes.get(entry.oid) ?? 0) : 0),
+    renderedBytes = parents.reduce(
+      (sum, entry, index) => sum + (merge.parents[index]?.file === change.after ? 0 : size(entry) + size(result)),
+      0,
+    ),
+    tooLarge = [...sizes.values()].some((bytes) => bytes > reviewFileLimit) || renderedBytes > capacity,
+    blobs = tooLarge ? undefined : historyPreviewBlobs(root, ids, reviewFileLimit, capacity);
+  return {
+    tooLarge,
+    after: result && blobs?.get(result.oid),
+    parents: parents.map((entry) => entry && blobs?.get(entry.oid)),
+  };
 }
 
 export function historyPage(
@@ -125,13 +163,20 @@ export function historyPage(
       </>,
       { parents: trail },
     );
-  const file = historyFile(context.root, unit.revision, selectedPath, files),
-    change = review?.changes.find((change) => change.path === selectedPath),
+  const change = review?.changes.find((change) => change.path === selectedPath),
+    merge = change?.merge,
+    file = change && merge ? mergeHistoryFile(change) : historyFile(context.root, unit.revision, selectedPath, files),
     protectedReview = !!change,
-    maximum = protectedReview || query.load === "1" ? 2 * 1024 * 1024 : filePreviewByteLimit,
-    { before, after } = historyFilePreviews(context.root, file, maximum),
-    tooLarge = (!!file.before && before === undefined) || (!!file.after && after === undefined),
-    binary = [before, after].some((bytes) => bytes !== undefined && (bytes.includes(0) || !isUtf8(bytes))),
+    maximum = protectedReview || query.load === "1" ? reviewFileLimit : filePreviewByteLimit,
+    mergeFiles = change && merge ? mergePreviews(context.root, change, merge) : undefined,
+    { before, after } = mergeFiles
+      ? { before: mergeFiles.parents[0], after: mergeFiles.after }
+      : historyFilePreviews(context.root, file, maximum),
+    tooLarge =
+      mergeFiles?.tooLarge ?? ((!!file.before && before === undefined) || (!!file.after && after === undefined)),
+    binary = [...(mergeFiles?.parents ?? [before]), after].some(
+      (bytes) => bytes !== undefined && (bytes.includes(0) || !isUtf8(bytes)),
+    ),
     markdownFile = selectedPath.endsWith(".md") && !binary && !tooLarge,
     historical = protectedReview
       ? historicalRecords(context.root, after ? unit.revision : (unit.parents[0] ?? unit.revision), () =>
@@ -159,7 +204,9 @@ export function historyPage(
     }),
     reviewing = protectedReview && unit.provisional && !change.approved && pendingPaths.has(selectedPath) && !tooLarge,
     reviewed =
-      review && change ? reviewedBaselines(context.root, review.head, selectedPath).get(selectedPath) : undefined;
+      review && change && !merge
+        ? reviewedBaselines(context.root, review.head, selectedPath).get(selectedPath)
+        : undefined;
   const digest = review && change ? presentedReviewDigest(change, review.head) : "";
   if (reviewing && review)
     versions.retainBatch(
@@ -221,24 +268,65 @@ export function historyPage(
         <>
           <p class="file-path">
             {selectedPath}{" "}
-            {!file.before ? badge("New file", "pending") : !file.after ? badge("Deleted file", "pending") : null}
+            {!merge &&
+              (!file.before ? badge("New file", "pending") : !file.after ? badge("Deleted file", "pending") : null)}
           </p>
-          {mode && <p>{mode}</p>}
+          {!merge && mode && <p>{mode}</p>}
         </>
       )}
       {protectedReview ? (
         <div class="review-document">
           {recordPane(
             panel(
-              historyComparison(reviewed ? Buffer.from(reviewed.contents) : before, after, {
-                purpose: "record",
-                path: selectedPath,
-                record,
-                references: historical.references,
-                split,
-                tooLarge,
-              }),
-              { tools: !tooLarge && !binary && before && after && !same ? diffLayout(base, split) : null },
+              merge && mergeFiles ? (
+                tooLarge ? (
+                  <p class="notice">
+                    Review the complete comparison with{" "}
+                    <code>workbench review --commit {unit.revision.slice(0, 12)}</code>.
+                  </p>
+                ) : (
+                  <>
+                    {merge.parents.every(({ file }) => file !== change.after) && (
+                      <p>The merge result differs from every parent.</p>
+                    )}
+                    {merge.parents.map(({ file }, index) => {
+                      const parent = unit.parents[index] ?? "";
+                      const mode = fileModeChange(reviewEntry(file).mode, reviewEntry(change.after).mode);
+                      return (
+                        <section key={index}>
+                          <h2>
+                            Parent {index + 1} <code>{parent.slice(0, 12)}</code>
+                          </h2>
+                          {file === change.after ? (
+                            <p>Matches the merge result.</p>
+                          ) : (
+                            <>
+                              {mode && <p>{mode}</p>}
+                              {historyComparison(mergeFiles.parents[index], after, {
+                                purpose: "record",
+                                path: selectedPath,
+                                record,
+                                references: historical.references,
+                                split,
+                              })}
+                            </>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </>
+                )
+              ) : (
+                historyComparison(reviewed ? Buffer.from(reviewed.contents) : before, after, {
+                  purpose: "record",
+                  path: selectedPath,
+                  record,
+                  references: historical.references,
+                  split,
+                  tooLarge,
+                })
+              ),
+              { tools: !tooLarge && !binary && (merge || (before && after && !same)) ? diffLayout(base, split) : null },
             ),
             navigation,
           )}
@@ -269,11 +357,24 @@ export function historyPage(
       )}
       {protectedReview && !markdownFile && (
         <div class="actions">
-          {file.before && file.before.mode !== "160000" && (
-            <a href={routeURL(Route.HistoryFile, { commit: unit.revision, path: selectedPath, side: "before" })}>
-              Download previous file
-            </a>
-          )}
+          {merge
+            ? merge.parents.map(({ file }, index) => {
+                const parent = unit.parents[index];
+                return parent && recordedFile(file) ? (
+                  <a
+                    key={index}
+                    href={routeURL(Route.HistoryFile, { commit: parent, path: selectedPath, side: "after" })}
+                  >
+                    Download parent {index + 1}
+                  </a>
+                ) : null;
+              })
+            : file.before &&
+              file.before.mode !== "160000" && (
+                <a href={routeURL(Route.HistoryFile, { commit: unit.revision, path: selectedPath, side: "before" })}>
+                  Download previous file
+                </a>
+              )}
           {file.after && file.after.mode !== "160000" && (
             <a href={routeURL(Route.HistoryFile, { commit: unit.revision, path: selectedPath, side: "after" })}>
               Download current file
@@ -297,9 +398,18 @@ export function historyPage(
             human_written: change.charter ? "yes" : "no",
           },
           children: () =>
-            submitButton(!file.after ? "Confirm deletion" : !file.before ? "Confirm new file" : "Confirm changes", {
-              approve: true,
-            }),
+            submitButton(
+              merge
+                ? "Confirm merge changes"
+                : !file.after
+                  ? "Confirm deletion"
+                  : !file.before
+                    ? "Confirm new file"
+                    : "Confirm changes",
+              {
+                approve: true,
+              },
+            ),
         })}
     </>,
     { parents: trail },
