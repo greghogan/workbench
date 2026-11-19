@@ -2,16 +2,18 @@ import { required, isStringArray, record, records } from "../app/src/core/runtim
 import { guixImageDefinition } from "./pack-guix-image.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
 import { importManagedImage } from "./managed-image-import.mjs";
+import { guixBootstrapContract, guixBootstrapDockerfile, guixBootstrapProgram } from "./managed-files.mjs";
 import {
   PreparationStore,
   builderOwner,
   guixChannelFile,
   managedStorePin,
+  mountFields,
   type ManagedStorePin,
 } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
-import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, relative } from "node:path";
 
@@ -32,6 +34,29 @@ const architecture = process.env.WORKBENCH_IMAGE_ARCHITECTURE ?? process.arch;
 if (!["x64", "arm64"].includes(architecture)) throw new Error("Unsupported managed image architecture");
 // The manager remains native; binfmt executes foreign package builders.
 const platform = `linux/${process.arch === "x64" ? "amd64" : "arm64"}`;
+declare const __workbenchGuixBootstrapContract: string;
+
+function guixBootstrapContext(root: string, channels: string, context: string) {
+  const dockerfilePath = join(root, guixBootstrapDockerfile),
+    bootstrapPath = join(root, guixBootstrapProgram);
+  if (!existsSync(dockerfilePath) || !existsSync(bootstrapPath)) return;
+  const dockerfile = readFileSync(dockerfilePath);
+  const bootstrap = readFileSync(bootstrapPath);
+  const contract = guixBootstrapContract(dockerfile, bootstrap);
+  // Only the standard, reviewed recipe can build from these three files. Custom recipes keep the full build context.
+  if (typeof __workbenchGuixBootstrapContract !== "string" || contract !== __workbenchGuixBootstrapContract) return;
+  const definition = readFileSync(channels);
+  mkdirSync(join(context, "scripts"), { recursive: true });
+  writeFileSync(join(context, "Dockerfile"), dockerfile);
+  writeFileSync(join(context, "channels.scm"), definition);
+  writeFileSync(join(context, guixBootstrapProgram), bootstrap);
+  const channelDigest = createHash("sha256").update(definition).digest("hex");
+  const recipe = createHash("sha256")
+    .update(JSON.stringify([platform, contract, channelDigest]))
+    .digest("hex");
+  return { recipe, channelDigest };
+}
+
 await withManagedProcesses(async (scope) => {
   const run = (args: string[], capture = false, cleanup = false, executable = "docker") =>
     executable === "docker" && args[0] === "build"
@@ -78,38 +103,60 @@ await withManagedProcesses(async (scope) => {
   } else {
     const channels =
       builder === "guix" ? guixChannelFile(root, join(root, required(roots[0], "Missing managed root"))) : undefined;
-    scope.defer(async () => {
-      if (await run(["image", "ls", "--quiet", "--filter", `reference=${bootstrap}`], true, true))
-        await run(["image", "rm", bootstrap], false, true);
-    });
-    await run([
-      "build",
-      ...(builder === "guix" ? ["--no-cache-filter", "base"] : []),
-      "--platform",
-      platform,
-      "--network=host",
-      "--ulimit=nofile=65536:65536",
-      "--target",
-      "base",
-      "--file",
-      join(root, ".devcontainer", builder, "Dockerfile"),
-      "--tag",
-      bootstrap,
-      ...(channels ? ["--build-arg", `WORKBENCH_GUIX_CHANNELS=${relative(root, channels).replaceAll("\\", "/")}`] : []),
-      root,
-    ]);
-    const identity = await run(["image", "inspect", "--format", "{{.Id}}", bootstrap], true);
-    const managed = record(
+    const context = join(temporary, "guix-bootstrap");
+    const standard = channels ? guixBootstrapContext(root, channels, context) : undefined;
+    const recipe = standard?.recipe;
+    const resolveStore = async (identity?: string): Promise<unknown> =>
       JSON.parse(
         await run(
-          [join(distribution, "bin/workbench.mjs"), "managed-builder-store", builder, identity],
+          [
+            join(distribution, "bin/workbench.mjs"),
+            "managed-builder-store",
+            builder,
+            ...(identity ? [identity] : []),
+            ...(recipe ? ["--recipe", recipe] : []),
+          ],
           true,
           false,
           process.execPath,
         ),
-      ),
-      "Invalid managed builder store",
-    );
+      );
+    const reused = recipe && process.env.WORKBENCH_REFRESH_GUIX_BOOTSTRAP !== "1" ? await resolveStore() : null;
+    let bootstrapImage = bootstrap;
+    let selected = reused;
+    if (reused !== null) {
+      const reusedStore = record(reused, "Invalid reused Guix bootstrap");
+      if (typeof reusedStore.image !== "string" || !/^sha256:[a-f0-9]{64}$/.test(reusedStore.image))
+        throw new Error("Managed Guix reuse requires an immutable bootstrap image");
+      bootstrapImage = reusedStore.image;
+      console.log(`Reusing the verified Guix bootstrap ${bootstrapImage}`);
+    } else {
+      scope.defer(async () => {
+        if (await run(["image", "ls", "--quiet", "--filter", `reference=${bootstrap}`], true, true))
+          await run(["image", "rm", bootstrap], false, true);
+      });
+      await run([
+        "build",
+        ...(builder === "guix" ? ["--no-cache-filter", "base"] : []),
+        "--platform",
+        platform,
+        "--network=host",
+        "--ulimit=nofile=65536:65536",
+        "--target",
+        "base",
+        "--file",
+        recipe ? join(context, "Dockerfile") : join(root, ".devcontainer", builder, "Dockerfile"),
+        "--tag",
+        bootstrap,
+        ...(recipe ? ["--label", `org.workbench.guix-bootstrap=${recipe}`] : []),
+        ...(channels && !recipe
+          ? ["--build-arg", `WORKBENCH_GUIX_CHANNELS=${relative(root, channels).replaceAll("\\", "/")}`]
+          : []),
+        recipe ? context : root,
+      ]);
+      selected = await resolveStore(await run(["image", "inspect", "--format", "{{.Id}}", bootstrap], true));
+    }
+    const managed = record(selected, "Invalid managed builder store");
     const { key, directory } = managed;
     if (typeof key !== "string" || typeof directory !== "string") throw new Error("Invalid managed builder identity");
     console.log(`Preparing ${builder} image using the managed Docker store at ${directory}`);
@@ -138,11 +185,11 @@ await withManagedProcesses(async (scope) => {
       "--ulimit=nofile=65536:65536",
       ...mounts,
       "--mount",
-      `type=bind,src=${root},dst=/preparation,readonly`,
+      mountFields("type=bind", `src=${root}`, "dst=/preparation", "readonly"),
       "--mount",
-      `type=bind,src=${temporary},dst=/output`,
+      mountFields("type=bind", `src=${temporary}`, "dst=/output"),
       "--mount",
-      `type=bind,src=${distribution},dst=/workbench,readonly`,
+      mountFields("type=bind", `src=${distribution}`, "dst=/workbench", "readonly"),
       "--env",
       "WORKBENCH_PREPARATION_DISTRIBUTION=/workbench",
       "--env",
@@ -157,13 +204,14 @@ await withManagedProcesses(async (scope) => {
       `WORKBENCH_IMAGE_ARCHITECTURE=${architecture}`,
       "--env",
       `WORKBENCH_PRIVATE_BUILDER=${key}`,
+      ...(standard ? ["--env", `WORKBENCH_GUIX_BOOTSTRAP_CHANNELS=${standard.channelDigest}`] : []),
       "--env",
       `WORKBENCH_PREPARATION_OWNER=${process.env.WORKBENCH_PREPARATION_OWNER ?? builderOwner(root)}`,
       "--workdir",
       "/preparation",
       "--entrypoint",
       "/bin/sh",
-      bootstrap,
+      bootstrapImage,
       "/preparation/.devcontainer/managed-build.sh",
       builder,
     ]);

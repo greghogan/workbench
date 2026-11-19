@@ -315,17 +315,26 @@ export async function inspectBuildkitCache(
   checkout?: string,
   signal?: AbortSignal,
   measure = true,
+  discoverOwners?: (checkouts: string[]) => void,
 ): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
   const query = (args: string[]) => dockerQuery(args, signal);
   const report: BuilderCacheReport = { entries: [], issues: [] };
-  if (!existsSync(base())) return report;
+  const receipts: Receipt[] = [];
+  if (existsSync(base()))
+    for (const file of readdirSync(base()).filter((name) => /^workbench-buildkit-[a-f0-9]{24}\.json$/.test(name))) {
+      try {
+        const value = readReceipt(join(base(), file));
+        if (!checkout || value.checkout === checkout) receipts.push(value);
+      } catch (error) {
+        report.issues.push(describeError(error));
+      }
+    }
+  if (!report.issues.length) discoverOwners?.([...new Set(receipts.map((receipt) => receipt.checkout))]);
   let engine: string | undefined;
   let usage: DockerVolumeUsage[] | undefined;
-  for (const file of readdirSync(base()).filter((name) => /^workbench-buildkit-[a-f0-9]{24}\.json$/.test(name))) {
+  for (const value of receipts) {
     try {
-      const value = readReceipt(join(base(), file));
-      if (checkout && value.checkout !== checkout) continue;
       let blockedBy: string | undefined;
       let actual: Awaited<ReturnType<typeof verify>> = {};
       try {

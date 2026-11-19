@@ -23,6 +23,7 @@ export interface InventoryIssue {
 }
 export interface CacheInventory {
   pendingComponents?: InventoryIssue["component"][];
+  pendingBuildkitOwners?: string[];
   inventory: CacheReport;
   projects: RegisteredProject[];
   prunable: string[];
@@ -56,6 +57,13 @@ export function applyInventorySize(value: CacheInventory, size: CacheSize): Cach
       ...(value.inventory.tools?.operations ?? []),
     ]) {
       const directory = entry.measurement?.directory ?? entry.directory;
+      const group = entries.get(directory) ?? [];
+      group.push(entry);
+      entries.set(directory, group);
+    }
+    for (const entry of value.inventory.builders?.entries ?? []) {
+      if (!entry.measurement) continue;
+      const directory = entry.measurement.directory;
       const group = entries.get(directory) ?? [];
       group.push(entry);
       entries.set(directory, group);
@@ -102,7 +110,9 @@ export async function collectCacheInventory(
   const result = emptyInventory();
   result.pendingComponents = ["builders"];
   // Begin external discovery before synchronous filesystem metadata acquisition.
-  const builders = inspectBuilderCache(undefined, signal).then(
+  const builders = inspectBuilderCache(undefined, signal, "project", undefined, (checkouts) => {
+    result.pendingBuildkitOwners = checkouts;
+  }).then(
     (value) => ({ value }),
     (error: unknown) => ({ error }),
   );
@@ -195,7 +205,7 @@ export async function collectCacheInventory(
     const pending = [...sizes].sort(
       (left, right) => Number(preferred.has(right.directory)) - Number(preferred.has(left.directory)),
     );
-    measurements = measureSizes(pending, async (size) => {
+    const measure = async (size: CacheSize) => {
       signal.throwIfAborted();
       const measured = await measureCacheSize(size, force, signal);
       applyInventorySize(result, measured);
@@ -207,12 +217,17 @@ export async function collectCacheInventory(
           message: measured.problem,
         });
       if (measured !== size) progress?.({ kind: "size", size: measured });
-    });
+    };
+    measurements = measureSizes(pending, measure);
     void measurements.catch(() => undefined);
+    let sharedSizes: CacheSize[] = [];
     try {
       const discovered = await builders;
       if ("error" in discovered) throw discovered.error;
       result.inventory.builders = discovered.value;
+      sharedSizes = discovered.value.entries.flatMap((entry) => (entry.measurement ? [entry.measurement] : []));
+      result.sizes.push(...sharedSizes);
+      sizeIndexes.delete(result);
       for (const message of discovered.value.issues)
         result.issues.push({ component: "builders", phase: "discovery", message });
     } catch (error) {
@@ -224,8 +239,10 @@ export async function collectCacheInventory(
       result.issues.push({ component: "builders", phase: "discovery", message: describeError(error) });
     }
     delete result.pendingComponents;
+    delete result.pendingBuildkitOwners;
     progress?.({ kind: "metadata", value: result });
     await measurements;
+    await measureSizes(sharedSizes, measure);
     return result;
   } finally {
     cancellation.abort();

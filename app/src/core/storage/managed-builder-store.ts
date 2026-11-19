@@ -9,13 +9,14 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { dockerQuery } from "../artifacts/docker-query.js";
 import { imageDigest } from "../artifacts/image-contract.js";
 import {
   managedStoreCleanupActivity,
   managedStoreCleanupLabel,
   managedStoreDirectory,
+  mountFields,
   type StoreManager,
 } from "../execution/environments/managed/managed-contract.mjs";
 import { ownedPath } from "../runtime/paths.js";
@@ -25,6 +26,7 @@ import { measureCacheSize, savedSize } from "./cache-size.js";
 import type { BuilderCacheEntry } from "./builder-cache.js";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
+import { isRecord } from "../runtime/values.mjs";
 import { inspectProcessLock } from "./process-lock.js";
 
 const storeMarker = ".workbench-store.json";
@@ -47,10 +49,6 @@ function makeOwnedDirectory(path: string, role: string): void {
     throw new Error(`${path}: ${role} must be a real, user-owned directory with private write access`);
 }
 
-export function mountFields(...fields: string[]): string {
-  return fields.map((field) => `"${field.replaceAll('"', '""')}"`).join(",");
-}
-
 export function managedStoreGeneration(builder: StoreManager, key: string): string {
   if (!/^[a-f0-9]{24}$/.test(key)) throw new Error("Invalid managed store generation");
   const cache = userDirectory("cache");
@@ -63,6 +61,51 @@ export function managedStoreMaintenanceImage(directory: string): string {
     .trim();
   if (!imageDigest.test(image)) throw new Error(`${directory}: invalid managed store bootstrap`);
   return image;
+}
+
+/** Recipe evidence is written only after a trusted standard bootstrap builds and its private store mounts verify. */
+export async function managedGuixBootstrap(recipe: string, image?: string) {
+  if (!/^[a-f0-9]{64}$/.test(recipe)) throw new Error("Invalid Guix bootstrap recipe identity");
+  const root = managedStoreDirectory(userDirectory("cache"), "guix");
+  const path = ownedPath(root, `.recipes/${recipe}.json`);
+  const matches = async (identity: string) =>
+    imageDigest.test(identity) &&
+    (await dockerQuery([
+      "image",
+      "inspect",
+      "--format",
+      '{{index .Config.Labels "org.workbench.guix-bootstrap"}}',
+      identity,
+    ])) === recipe;
+  if (image !== undefined) {
+    if (!(await matches(image))) throw new Error("Guix bootstrap image does not match the built recipe");
+    const store = await prepareManagedBuilderStore("guix", image);
+    makeOwnedDirectory(dirname(path), "Guix bootstrap receipts");
+    writeAtomic(path, JSON.stringify({ version: 1, key: store.key, image }) + "\n", 0o600);
+    return { ...store, image };
+  }
+  try {
+    const info = lstatSync(path, { throwIfNoEntry: false });
+    if (!info?.isFile() || info.uid !== process.getuid?.() || info.mode & 0o022) return;
+    const receipt: unknown = JSON.parse(readBoundedFile(path, 4096, "Guix bootstrap receipt").toString());
+    if (
+      !isRecord(receipt) ||
+      receipt.version !== 1 ||
+      typeof receipt.key !== "string" ||
+      !/^[a-f0-9]{24}$/.test(receipt.key) ||
+      typeof receipt.image !== "string" ||
+      !imageDigest.test(receipt.image) ||
+      managedStoreMaintenanceImage(managedStoreGeneration("guix", receipt.key)) !== receipt.image ||
+      !(await matches(receipt.image))
+    )
+      return;
+    // This repeats the live engine, native architecture, immutable image, and trust/closure checks.
+    const store = await prepareManagedBuilderStore("guix", receipt.image, { expectedKey: receipt.key });
+    return { ...store, image: receipt.image };
+  } catch (error) {
+    if (error instanceof CacheBusy) throw error;
+    return;
+  }
 }
 
 /** A Unix socket may front a different engine. Prove it can see this process's cache before creating any mounts. */
@@ -196,7 +239,10 @@ export async function prepareManagedBuilderStore(
 }
 
 /** Host data remains visible even if Docker has already removed every volume registration. */
-export async function inspectManagedBuilderStores(signal?: AbortSignal, measure = true): Promise<BuilderCacheEntry[]> {
+export async function inspectManagedBuilderStores(
+  signal?: AbortSignal,
+  measure: boolean | "project" = true,
+): Promise<BuilderCacheEntry[]> {
   const entries: BuilderCacheEntry[] = [];
   const cache = userDirectory("cache");
   for (const builder of ["nix", "guix"]) {
@@ -206,7 +252,9 @@ export async function inspectManagedBuilderStores(signal?: AbortSignal, measure 
     const lock = inspectCacheMetadataLock(directory);
     const previous = savedSize(directory);
     const size =
-      measure && lock.state === CacheLockState.Unlocked ? await measureCacheSize(previous, false, signal) : previous;
+      measure === true && lock.state === CacheLockState.Unlocked
+        ? await measureCacheSize(previous, false, signal)
+        : previous;
     entries.push({
       key: `managed-${builder}`,
       builder,
@@ -214,6 +262,7 @@ export async function inspectManagedBuilderStores(signal?: AbortSignal, measure 
       directory,
       volumes: [],
       bytes: size.bytes,
+      ...(measure === "project" && lock.state === CacheLockState.Unlocked ? { measurement: size } : {}),
       blockedBy:
         lock.state === CacheLockState.Unlocked
           ? "shared store requires profile-aware pruning"

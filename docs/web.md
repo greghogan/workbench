@@ -60,6 +60,7 @@ sharing one Cargo workspace. **Clear root** clears that shared build root togeth
 preserved; image layers may remain after their owned tags are removed. Filesystem and builder sizes are estimates.
 Owned, eligible, and retained filesystem totals are shown separately from logical image footprints; shared image-layer
 reclamation remains unknown. A failed inventory component reports its cause while other components remain available.
+Docker volume accounting only delays totals for projects with a recorded BuildKit builder.
 
 Saved cache measurements survive server restarts and are reused while their directories are unchanged. Automatic
 inventory refreshes are spaced fifteen minutes apart; explicit refreshes and cache maintenance can refresh sooner.

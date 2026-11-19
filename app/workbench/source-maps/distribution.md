@@ -36,5 +36,8 @@
   identities.
 
 - `src/core/verification`: Runs installed-product rehearsals against disposable projects and distributions.
+- `src/core/artifacts/preparation-store.ts`, `src/core/storage/managed-builder-store.ts`: Select preparation backends,
+  verify Docker's access to local cache directories, and attach shared stores.
+
 
 - `resources/verification`: Provides the human-written charter used by disposable verification projects.

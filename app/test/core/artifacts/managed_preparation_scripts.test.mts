@@ -3,6 +3,7 @@ import { PreparationStore } from "../../../src/core/execution/environments/manag
 import { selectPreparationStore } from "../../../src/core/artifacts/preparation-store.ts";
 import { pendingManagedPreparations } from "../../../src/core/storage/managed-preparation.ts";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   mkdirSync,
@@ -44,10 +45,10 @@ test.skipIf(process.platform !== "linux")(
     expect(await selectPreparationStore("guix", root)).toBe(PreparationStore.Managed);
   },
 );
-function fixture() {
+function fixture(project = "project") {
   const base = mkdtempSync(join(tmpdir(), "workbench-managed-scripts-"));
   temporary.push(base);
-  const root = join(base, "project"),
+  const root = join(base, project),
     bin = join(base, "bin"),
     log = join(base, "calls.jsonl"),
     state = join(base, "state.json");
@@ -83,6 +84,10 @@ if(name==='guix'){
 if(name==='nix'){if(process.env.BROKEN_MANAGER)process.exit(7);const profile=a.indexOf('--profile');if(profile>=0){const target=p.join(${JSON.stringify(base)},'real-profile-'+fs.readFileSync(log,'utf8').split('\\n').length);fs.mkdirSync(target);fs.symlinkSync(target,a[profile+1]);}if(a.includes('--print-out-paths')){const image='/nix/store/fixture-image.tar';const out=a[a.indexOf('--out-link')+1];fs.symlinkSync(image,out);console.log(image);} process.exit(0);}
 if(name==='bash'){const child=spawnSync('docker',['load'],{input:'managed image archive',encoding:'utf8'});process.stdout.write(child.stdout);process.exit(child.status);}
 if(name!=='docker')throw Error('unexpected tool');
+const mounts=a.flatMap((arg,index)=>a[index-1]==='--mount'
+ ? [Array.from(arg.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^",]+))(?=,|$)/g), field=>field[1]?.replaceAll('""','"')??field[2])]
+ : []);
+const sourceOf=destination=>mounts.find(fields=>fields.includes('dst='+destination))?.find(field=>field.startsWith('src='))?.slice(4);
 const recipePath=p.join(process.env.WORKBENCH_CACHE_HOME,'fixture-bootstrap-recipe');
 if(a[0]==='buildx'&&a[1]==='build'){
  const recipe=a.find(x=>x.startsWith('org.workbench.guix-bootstrap='));
@@ -98,7 +103,7 @@ if(a[0]==='image'&&a[1]==='inspect'&&a.some(x=>x.includes('org.workbench.guix-bo
 }
 const bk=state+'.buildkit',owned=fs.existsSync(bk)?JSON.parse(fs.readFileSync(bk)):{};const save=()=>fs.writeFileSync(bk,JSON.stringify(owned));
 if(a[0]==='run'&&a.at(-1).startsWith('cat /workbench-store-probe/token;')){
- const mount=a[a.indexOf('--mount')+1],source=/"src=([^"]+)"/.exec(mount)[1];
+ const source=sourceOf('/workbench-store-probe');
  process.stdout.write(fs.readFileSync(p.join(source,'token')));
  console.log('default');
  if(a.at(-1).endsWith('/opt/workbench-guix'))console.log('/gnu/store/'+'a'.repeat(32)+'-guix');
@@ -126,7 +131,8 @@ else if(a[0]==='image'&&a[1]==='inspect'){console.log(a.includes('{{json .Config
 else if(a[0]==='create'&&a[a.indexOf('--name')+1].startsWith('workbench-finalize-')){console.log('finalize-container');}
 else if(a[0]==='create'){
  if(process.env.FAIL_MANAGED_CREATE)throw Error('fixture builder could not start');
- const mount=a.filter(x=>x.startsWith('type=bind,')).find(x=>x.includes('dst=/output'));fs.writeFileSync(state,JSON.stringify({output:mount.split('src=')[1].split(',')[0]}));
+ if(sourceOf('/preparation')!==process.env.WORKBENCH_PROJECT_ROOT)throw Error('wrong preparation directory');
+ fs.writeFileSync(state,JSON.stringify({output:sourceOf('/output')}));
 }
 else if(a[0]==='start'){const {output}=JSON.parse(fs.readFileSync(state));fs.writeFileSync(p.join(output,'image-path'),'/'+(process.env.FIXTURE_BUILDER==='guix'?'gnu':'nix')+'/store/fixture-image.tar');}
 else if(a[0]==='inspect')console.log('0');
@@ -196,6 +202,44 @@ async function run(
   };
 }
 
+test.skipIf(process.platform !== "linux").each([false, true])(
+  "Guix reuses the bootstrap manager for matching channels with foreign target %s",
+  async (foreign) => {
+    const f = fixture();
+    const selected = "authenticated bootstrap channels";
+    const manager = join(f.base, "manager"),
+      output = join(f.base, "output");
+    mkdirSync(join(manager, "bin"), { recursive: true });
+    mkdirSync(output);
+    for (const path of [join(f.bin, "guix"), join(manager, "bin", "guix")])
+      writeFileSync(path, readFileSync(f.tool), { mode: 0o755 });
+    writeFileSync(join(f.root, "channels.scm"), selected);
+    const independent = join(f.root, "other/channels.scm");
+    writeFileSync(independent, "different authenticated channels");
+    const roots = join(output, "roots.json");
+    writeFileSync(roots, JSON.stringify([".", "other"]));
+    Object.assign(f.env, {
+      WORKBENCH_ROOTS_FILE: roots,
+      WORKBENCH_MANAGED_OUTPUT: output,
+      WORKBENCH_GUIX_BOOTSTRAP_CHANNELS: createHash("sha256").update(selected).digest("hex"),
+      WORKBENCH_GUIX_TIME_MACHINE_PROFILE: manager,
+      WORKBENCH_IMAGE_ARCHITECTURE: foreign ? (process.arch === "arm64" ? "x64" : "arm64") : process.arch,
+    });
+    const result = await run(f, "guix", ["scripts/prepare-guix-profiles.mjs"]);
+    expect(result.code, result.output).toBe(0);
+    const lookups = result.calls.filter(({ args }) => args[0] === "time-machine");
+    expect(lookups.map(({ args }) => args[2])).toEqual([independent]);
+    const runtimeLookups = result.calls.filter(({ args }) => args[2] === "profile-for-system");
+    expect(runtimeLookups).toHaveLength(foreign ? 2 : 0);
+    const profiles = JSON.parse(readFileSync(join(output, "guix-profiles.json"), "utf8")) as {
+      manager: string;
+      runtime: string;
+    }[];
+    expect(profiles[0]?.manager).toBe(manager);
+    if (foreign) expect(profiles[0]?.runtime).not.toBe(manager);
+    else expect(profiles[0]?.runtime).toBe(manager);
+  },
+);
 test.skipIf(process.platform !== "linux").each(["system", "managed", "broken", "cleanup-fails"])(
   "preparation honors the selected %s store",
   async (condition) => {
@@ -315,7 +359,8 @@ test.skipIf(process.platform !== "linux").each(["nix", "guix"])(
   "%s projects with the same bootstrap share cache storage across target architectures",
   async (builder) => {
     const first = fixture(),
-      second = fixture();
+      second = fixture('second, project "mounted"');
+    first.env.WORKBENCH_CACHE_HOME = join(first.base, 'cache, "shared"');
     second.env.WORKBENCH_CACHE_HOME = first.env.WORKBENCH_CACHE_HOME;
     second.env.WORKBENCH_IMAGE_ARCHITECTURE = process.arch === "arm64" ? "x64" : "arm64";
     for (const source of [first, second]) {
@@ -349,6 +394,24 @@ test.skipIf(process.platform !== "linux").each(["nix", "guix"])(
       result.calls.flatMap(({ args }) => args.filter((arg) => arg.startsWith("WORKBENCH_PREPARATION_OWNER=")));
     expect(owner(original)).toHaveLength(1);
     expect(owner(reused)).not.toEqual(owner(original));
+    if (builder === "guix") {
+      const builds = (result: Awaited<ReturnType<typeof run>>) =>
+        result.calls.filter(({ name, args }) => name === "docker" && args[0] === "buildx" && args[1] === "build");
+      expect(builds(original)).toHaveLength(1);
+      expect(builds(reused)).toHaveLength(0);
+      expect(reused.output).toContain("Reusing the verified Guix bootstrap");
+      second.env.WORKBENCH_REFRESH_GUIX_BOOTSTRAP = "1";
+      const refreshed = await run(second, builder);
+      expect(refreshed.code, refreshed.output).toBe(0);
+      expect(builds(refreshed)).toHaveLength(1);
+      delete second.env.WORKBENCH_REFRESH_GUIX_BOOTSTRAP;
+      const recipe = join(second.root, ".devcontainer/guix/Dockerfile");
+      writeFileSync(recipe, readFileSync(recipe, "utf8") + "\n# Customized build context\n");
+      const custom = await run(second, builder);
+      expect(custom.code, custom.output).toBe(0);
+      expect(builds(custom).at(-1)?.args.at(-1)).toBe(second.root);
+      expect(builds(custom).at(-1)?.args).not.toContain("--label");
+    }
   },
 );
 

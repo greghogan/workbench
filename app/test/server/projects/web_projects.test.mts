@@ -1,7 +1,7 @@
 import { readProjects } from "../../../src/core/projects/project-configuration.ts";
 import { createElement, Fragment } from "preact";
 import { renderToString } from "preact-render-to-string";
-import { CacheTasks } from "../../../src/server/cache/cache-worker.ts";
+import { cacheTask, CacheTasks } from "../../../src/server/cache/cache-worker.ts";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { withProjectPaths } from "../../../src/server/routes/project-paths.ts";
 import { linkButton, tabs } from "../../../src/server/views/render-links.js";
@@ -567,6 +567,59 @@ test("inventory updates preserve current project navigation while cache discover
   for (const root of [first, second]) expect(update.sections.projects).toContain(`/projects/${projectIdentity(root)}/`);
   expect(update.sections.projects).toContain("Calculating…");
   expect(scan).toHaveBeenCalledOnce();
+});
+
+test("filesystem totals are available while another project's Docker usage is pending", async () => {
+  vi.stubEnv("WORKBENCH_STORAGE_EXTERNAL", "true");
+  const first = await project(),
+    second = await project();
+  for (const root of [first, second]) {
+    const paths = buildPaths(root, root, "native", {}, false);
+    prepareBuild(paths);
+    writeFileSync(join(paths.directory, "output"), Buffer.alloc(8000));
+  }
+
+  const builders = Promise.withResolvers<builderCache.BuilderCacheReport>();
+  vi.spyOn(builderCache, "inspectBuilderCache").mockImplementation((_checkout, _signal, _measure, _held, owners) => {
+    owners?.([second]);
+    return builders.promise;
+  });
+  vi.spyOn(CacheTasks.prototype, "run").mockImplementation((task, progress, signal) =>
+    cacheTask(task, progress, signal),
+  );
+  const web = await start();
+  const totals = async () => {
+    const response = await browse(web.url + "/inventory?view=projects");
+    const update = (await response.json()) as { sections: { projects: string }; refreshing: boolean };
+    const document = parseDOM(`<table><tbody>${update.sections.projects}</tbody></table>`).window.document;
+    return [first, second].map(
+      (root) =>
+        document
+          .querySelector(`a[href="/projects/${projectIdentity(root)}/"]`)
+          ?.closest("tr")
+          ?.querySelector('[data-cache-cell$="-owned"]')?.textContent,
+    );
+  };
+  try {
+    await vi.waitFor(async () => {
+      const [local, docker] = await totals();
+      expect(local).toMatch(/^\d+(?:\.\d+)? kB$/);
+      expect(docker).toBe("Calculating…");
+    });
+  } finally {
+    builders.resolve({
+      entries: [
+        { key: "docker", checkout: second, builder: "buildkit", volumes: [], bytes: 1_000_000 },
+        { key: "shared-profile", checkout: first, builder: "guix", volumes: [], bytes: undefined },
+      ],
+      issues: [],
+    });
+  }
+  await vi.waitFor(async () => {
+    const [local, docker] = await totals();
+    expect(local).toMatch(/^\d+(?:\.\d+)? kB$/);
+    expect(docker).toMatch(/^\d+(?:\.\d+)? MB$/);
+  });
 });
 
 test("project review counts load independently of cache sizes, group supporting files, and follow acknowledgments", async () => {

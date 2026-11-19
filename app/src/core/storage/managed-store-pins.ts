@@ -11,6 +11,7 @@ import {
   managedStoreCleanupLabel,
   managedStoreDirectory,
   managedStorePin,
+  mountFields,
   partialManagedStorePin,
   PreparationStore,
   storePrefix,
@@ -26,7 +27,6 @@ import {
   managedStoreGeneration,
   managedStoreMaintenanceImage,
   managedStoreVolumes,
-  mountFields,
   prepareManagedBuilderStore,
 } from "./managed-builder-store.js";
 import {

@@ -90,6 +90,10 @@ export function managedStoreDirectory(cacheRoot: string, builder: string): strin
 export const managedStoreCleanupLabel = "org.workbench.store-cleanup";
 export const managedStoreCleanupActivity = (cacheRoot: string, builder: StoreManager) =>
   `${managedStoreDirectory(cacheRoot, builder)}.cleanup`;
+/** Docker reads --mount fields as a CSV record. */
+export function mountFields(...fields: string[]): string {
+  return fields.map((field) => (/[",\r\n]/.test(field) ? `"${field.replaceAll('"', '""')}"` : field)).join(",");
+}
 export function builderDirectory(cacheRoot: string, checkout: string, builder: string): string {
   if (!["native", "guix", "nix"].includes(builder)) throw new Error("Invalid managed builder");
   return join(cacheRoot, "offline-builders", builderOwner(checkout), builder);

@@ -23,6 +23,7 @@ import {
   guixChannelFile,
   managedStoreDirectory,
   managedStorePin,
+  mountFields,
   type ManagedStorePin,
   PreparationStore,
 } from "../execution/environments/managed/managed-contract.mjs";
@@ -439,11 +440,14 @@ async function runImage(
       ...(config.containerUser ? ["--user", config.containerUser] : []),
       ...Object.entries(config.containerEnv ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
       "--mount",
-      `type=bind,src=${source},dst=${workspace}`,
+      mountFields("type=bind", `src=${source}`, `dst=${workspace}`),
       ...(options.distributionMount
-        ? ["--mount", `type=bind,src=${options.distributionMount},dst=${guestDistribution},readonly`]
+        ? [
+            "--mount",
+            mountFields("type=bind", `src=${options.distributionMount}`, `dst=${guestDistribution}`, "readonly"),
+          ]
         : []),
-      ...(options.reports ? ["--mount", `type=bind,src=${options.reports},dst=/reports`] : []),
+      ...(options.reports ? ["--mount", mountFields("type=bind", `src=${options.reports}`, "dst=/reports")] : []),
       ...(config.overrideCommand === false ? [] : ["--entrypoint", "/bin/sh"]),
       image,
       ...(config.overrideCommand === false ? [] : ["-c", "while :; do sleep 3600; done"]),
@@ -624,6 +628,7 @@ export async function prepareOfflineProfile(
     build?: boolean;
     pullOnly?: boolean;
     fresh?: boolean;
+    refreshBootstrap?: boolean;
     architecture?: string;
     assembleOnly?: boolean;
   } = {},
@@ -633,7 +638,9 @@ export async function prepareOfflineProfile(
   const architecture = options.architecture ?? process.arch;
   if (!["x64", "arm64"].includes(architecture)) throw new Error("Image architecture must be x64 or arm64");
   const profile = offlineProfile(root, name);
-  const build = options.build === true;
+  const build = [options.build, options.refreshBootstrap].includes(true);
+  if (options.refreshBootstrap && (profile.builder !== "guix" || !profile.offline.prepare))
+    throw new Error("Only managed Guix preparation supports --refresh-bootstrap");
   const emulated = architecture !== process.arch;
   if (emulated && profileRequiresBinfmt(architecture))
     throw new Error(
@@ -672,6 +679,8 @@ export async function prepareOfflineProfile(
       if (offlineInputs(source, profile, architecture) !== inputs)
         throw new Error("Offline inputs changed during preparation; preserving the previous profile");
       const config = await definition(root, profile, source);
+      if (options.refreshBootstrap && config.image)
+        throw new Error("Only managed Guix preparation supports --refresh-bootstrap");
       const { cli, env } = devcontainerCLI(root);
       const platform = `linux/${architecture === "x64" ? "amd64" : "arm64"}`;
       const reference = imageReferenceForInputs(root, profile, inputs, architecture);
@@ -710,6 +719,8 @@ export async function prepareOfflineProfile(
       } else if (config.image) await acquireRegistryImage(config.image, { platform, quiet: false });
       else if (profile.offline.prepare) {
         const store = await selectPreparationStore(profile.builder, root);
+        if (options.refreshBootstrap && store !== PreparationStore.Managed)
+          throw new Error("Only managed Guix preparation supports --refresh-bootstrap");
         const snapshotDistribution = materializeDistribution(root, source, "");
         const [command, ...args] = profile.offline.prepare.map((part) =>
           part.replaceAll("{image}", tag).replaceAll("{workbench}", snapshotDistribution),
@@ -734,6 +745,7 @@ export async function prepareOfflineProfile(
               WORKBENCH_PREPARATION_OWNER: managedProfileOwner(root, name),
               WORKBENCH_PREPARATION_PROFILE: store === PreparationStore.Managed ? name : undefined,
               WORKBENCH_PREPARATION_STORE: store,
+              WORKBENCH_REFRESH_GUIX_BOOTSTRAP: options.refreshBootstrap ? "1" : undefined,
               WORKBENCH_PREPARATION_RESULT: store === PreparationStore.Managed ? preparationResult : undefined,
               WORKBENCH_CONTAINER_CHECKOUT: root,
               WORKBENCH_LOCAL_CONFIG_ROOT: root,

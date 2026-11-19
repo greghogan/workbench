@@ -10,12 +10,14 @@ import { inspectManagedBuilderStores } from "./managed-builder-store.js";
 import { inspectManagedStorePins, retireManagedStorePin, type ManagedStoreCleanup } from "./managed-store-pins.js";
 import { acquireProcessLock } from "./process-lock.js";
 import { userDirectory } from "./storage.js";
+import type { CacheSize } from "./cache-size.js";
 
 export interface BuilderCacheEntry {
   key: string;
   builder: string;
   volumes: string[];
   bytes: number | undefined;
+  measurement?: CacheSize;
   directory?: string;
   checkout?: string;
   receipt?: string;
@@ -34,11 +36,12 @@ export interface BuilderCacheReport {
 export async function inspectBuilderCache(
   checkout?: string,
   signal?: AbortSignal,
-  measure = true,
+  measure: boolean | "project" = true,
   held: ReadonlySet<string> = new Set(),
+  discoverBuildkitOwners?: (checkouts: string[]) => void,
 ): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
-  const report = await inspectBuildkitCache(checkout, signal, measure);
+  const report = await inspectBuildkitCache(checkout, signal, measure !== false, discoverBuildkitOwners);
   if (!checkout) {
     try {
       report.entries.push(...(await inspectManagedBuilderStores(signal, measure)));

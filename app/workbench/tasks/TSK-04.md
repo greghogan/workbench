@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: Accepted
 added_at: 2026-11-19T13:03:31.091Z
 ---
 
@@ -55,7 +55,7 @@ unavailable, fail with its name and the startup command where known. For Guix on
 ### Delivery checklist
 
 - [x] Add Nix store reuse, durable profile pins, inventory, and pruning for system and managed stores.
-- [ ] Add Guix store reuse, durable profile pins, inventory, and pruning for system and managed stores.
+- [x] Add Guix store reuse, durable profile pins, inventory, and pruning for system and managed stores.
 
 ## Implementation account
 
@@ -70,7 +70,14 @@ protected preparation so the same build can be retried.
 Managed builds bind the selected manager's store under the Workbench cache. Matching bootstrap closures share one
 database across projects and target architectures. A manager-wide lock serializes changes through image import. Profile
 roots use separate project namespaces within the shared store. The Builders inventory measures the host directories
-independently of Docker volume registration.
+independently of Docker volume registration. Shared store measurements run separately from project totals. Profile pins
+represent usage of the shared store.
+
+Disposable Docker checks reopened real Nix and Guix storage after volume registrations were removed. The Guix check
+verified both the package store and the daemon database.
+
+Maintained tests cover profile-root ownership, interruption recovery, and preservation of neighboring and
+architecture-specific pins. The native daemon and offline image runs below exercised the real managers and Docker.
 
 Two independent Nix projects shared one managed store and verified their images offline. Removing the owned BuildKit
 data, an image, and the Docker mount left profile roots on disk. The next preparation reopened the same store. Nix
@@ -79,9 +86,14 @@ collection removed the verified staging archives and the superseded profile whil
 Native x64 and emulated ARM64 Nix builds shared the same native manager and store, retained distinct target pins, and
 ran the packaged program with networking disabled on both targets.
 
-A Nix daemon in a disposable container exercised the native `nix develop --profile` registrations used by system
-preparation. Both projects selected the same closure, and removing one project's dependency directory preserved the
-other roots.
+Two independent Guix projects and a replacement built and verified offline using the same managed store. Workbench
+reused the authenticated bootstrap and reopened the store after both Docker volume registrations were removed. Guix
+collected the superseded profile and staging archives while both current profiles remained runnable.
+
+The host Guix daemon registered environment, runtime, and manager roots for two independent owners. Releasing one
+owner's roots preserved the other owner's closure and the host's existing roots. A Nix daemon in a disposable container
+exercised the native `nix develop --profile` registrations used by system preparation. Both projects selected the same
+closure, and removing one project's dependency directory preserved the other roots.
 
 ## Implementing-agent detail
 

@@ -260,7 +260,11 @@ export function inventoryPresentation(
         return (
           <tr data-cache-row={id}>
             <td data-cache-cell={id + "-name"}>{entry.key}</td>
-            <td data-cache-cell={id + "-size"}>{formatBytes(entry.bytes)}</td>
+            {entry.measurement ? (
+              cell(id + "-size", quantity(data.complete, sizes, measure(entry.measurement.directory)))
+            ) : (
+              <td data-cache-cell={id + "-size"}>{formatBytes(entry.bytes)}</td>
+            )}
             <td data-cache-cell={id + "-status"}>{entry.blockedBy ?? "Eligible"}</td>
           </tr>
         );

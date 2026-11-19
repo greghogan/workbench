@@ -341,6 +341,10 @@ local import archives to avoid repeated compression. Docker handles registry lay
 image layouts expose the platform loader through `/lib` and `/lib64` for prebuilt development tools. Prepared Guix
 commands also expose the selected profile's library directories; mutable caches remain outside the immutable store.
 
+Managed Guix reuses a compatible standard bootstrap across projects with the same recipe and channel pins. Run
+`workbench development prepare PROFILE --refresh-bootstrap` to rebuild locally with a fresh bootstrap. `--fresh` repeats
+offline verification.
+
 Guix host checks keep the previous environment rooted until the replacement succeeds and its stable root is registered.
 An interrupted publication retains a pending root until retry or explicit dependency pruning.
 

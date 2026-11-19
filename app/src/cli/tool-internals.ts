@@ -14,7 +14,7 @@ import { executeManagedCommand } from "../core/execution/environments/managed-in
 import { distributionRoot } from "../core/projects/project-context.js";
 import { required } from "../core/runtime/invariants.js";
 import { withCacheSizeChanges } from "../core/storage/cache-size.js";
-import { prepareManagedBuilderStore } from "../core/storage/managed-builder-store.js";
+import { managedGuixBootstrap, prepareManagedBuilderStore } from "../core/storage/managed-builder-store.js";
 import { recordManagedPreparation } from "../core/storage/managed-preparation.js";
 import { compilerFamilies, type CompilerFamily } from "../core/toolchains/compiler-catalog.mjs";
 import { runMiri } from "../core/toolchains/miri.js";
@@ -68,11 +68,18 @@ export function registerToolInternals(program: Command, root: string): void {
     });
   registerCommand(program, "managed-builder-store", { hidden: true })
     .argument("<builder>")
-    .argument("<bootstrap-image>")
-    .action(async (builder: string, image: string) => {
-      const store = await prepareManagedBuilderStore(builder, image);
+    .argument("[bootstrap-image]")
+    .option("--recipe <digest>")
+    .action(async (builder: string, image: string | undefined, options: { recipe?: string }) => {
+      if (options.recipe && builder !== "guix") throw new Error("Only Guix supports bootstrap recipes");
+      const store = options.recipe
+        ? await managedGuixBootstrap(options.recipe, image)
+        : await prepareManagedBuilderStore(
+            builder,
+            required(image, "Managed store selection requires a bootstrap image"),
+          );
       const profile = process.env.WORKBENCH_PREPARATION_PROFILE;
-      if (profile)
+      if (store && profile)
         recordManagedPreparation({
           checkout: process.env.WORKBENCH_CONTAINER_CHECKOUT,
           profile,
@@ -81,7 +88,7 @@ export function registerToolInternals(program: Command, root: string): void {
           builder,
           key: store.key,
         });
-      console.log(JSON.stringify(store));
+      console.log(JSON.stringify(store ?? null));
     });
   registerCommand(program, "image-finalize", { hidden: true })
     .argument("<source>")

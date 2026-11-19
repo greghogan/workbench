@@ -102,6 +102,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
       command
         .option("--build", "Build locally without reusing a registry image")
         .option("--fresh", "Execute offline verification even when matching local evidence exists")
+        .option("--refresh-bootstrap", "Rebuild locally with a freshly acquired managed Guix bootstrap")
         .option(
           "--assemble-only",
           "Assemble without acceptance; offline verification is required before use or publication",
@@ -115,6 +116,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
           build?: boolean;
           pullOnly?: boolean;
           fresh?: boolean;
+          refreshBootstrap?: boolean;
           architecture?: string;
           assembleOnly?: boolean;
           destination?: string;
@@ -139,6 +141,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
     .argument("[image]")
     .option("--build")
     .option("--fresh")
+    .option("--refresh-bootstrap")
     .option("--assemble-only")
     .option("--pull-only")
     .addOption(new Option("--architecture <architecture>").choices(["x64", "arm64"]))
@@ -151,6 +154,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
           build?: boolean;
           pullOnly?: boolean;
           fresh?: boolean;
+          refreshBootstrap?: boolean;
           architecture?: string;
           assembleOnly?: boolean;
         },

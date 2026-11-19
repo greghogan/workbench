@@ -31,6 +31,7 @@ export class InventoryIndex {
   readonly builders;
   readonly images;
   readonly knownProjects;
+  private readonly pendingBuildkitOwners;
   readonly tools = new Map<string, ToolCacheEntry[]>();
   private readonly newest = new Map<string, string>();
   constructor(readonly data: InventoryView) {
@@ -38,6 +39,7 @@ export class InventoryIndex {
     this.builders = groupByOwner(data.inventory.builders?.entries ?? [], (entry) => entry.checkout);
     this.images = groupByOwner<PreparedImageEntry>(data.inventory.images?.entries ?? [], (entry) => entry.checkout);
     this.knownProjects = new Set(data.projects.map((project) => project.path));
+    this.pendingBuildkitOwners = data.pendingBuildkitOwners && new Set(data.pendingBuildkitOwners);
     for (const tool of data.inventory.tools?.entries ?? []) {
       for (const path of new Set(data.consumers[tool.id] ?? [])) {
         const tools = this.tools.get(path);
@@ -54,6 +56,21 @@ export class InventoryIndex {
     return (
       (this.newest.get(toolFamily(tool)) ?? tool.version).localeCompare(tool.version, undefined, { numeric: true }) > 0
     );
+  }
+  projectStorage(path: string, registered: boolean) {
+    const owned = this.owned.get(path) ?? [],
+      tools = this.tools.get(path) ?? [];
+    return {
+      owned,
+      tools,
+      builders: this.builders.get(path) ?? [],
+      complete: this.data.complete && (!registered || this.knownProjects.has(path)),
+      buildersReady:
+        !this.data.pendingComponents?.includes("builders") || this.pendingBuildkitOwners?.has(path) === false,
+      shared: tools.filter((tool) => (this.data.consumers[tool.id]?.length ?? 0) > 1),
+      removable: owned.filter((entry) => !entry.blockedBy),
+      retained: owned.filter((entry) => entry.blockedBy),
+    };
   }
 }
 
@@ -73,8 +90,7 @@ export function projectCacheViews(
   owner?: string | null,
   metadata?: ProjectDirectoryView,
 ) {
-  const data = index.data,
-    registered = new Set(projects.map((project) => project.path));
+  const registered = new Set(projects.map((project) => project.path));
   const unlisted =
     page === "caches"
       ? [...index.owned.keys()].filter((path) => (!owner || path === owner) && !registered.has(path))
@@ -91,39 +107,29 @@ export function projectCacheViews(
     page === "projects"
       ? (metadata?.groups ?? registeredProjectGroups(visible))
       : visible.map((project) => ({ project, worktrees: [] }));
-  return groups.map(({ project, worktrees }) => {
-    const owned = index.owned.get(project.path) ?? [],
-      builders = index.builders.get(project.path) ?? [],
-      images = index.images.get(project.path) ?? [],
-      tools = index.tools.get(project.path) ?? [];
-    return {
-      project,
-      worktrees: worktrees.map((project) => ({
-        ...project,
-        available: metadata ? metadata.available.includes(project.path) : existsSync(project.path),
-      })),
-      owned,
-      builders,
-      images,
-      tools,
-      id: cacheRowKey("project-", project.path),
-      available: metadata ? metadata.available.includes(project.path) : existsSync(project.path),
-      complete: data.complete && (!project.id || index.knownProjects.has(project.path)),
-      buildersReady: !data.pendingComponents?.includes("builders"),
-      shared: tools.filter((tool) => (data.consumers[tool.id]?.length ?? 0) > 1),
-      removable: owned.filter((entry) => !entry.blockedBy),
-      retained: owned.filter((entry) => entry.blockedBy),
-      href: `/caches?${project.id ? `project=${project.id}` : `owner=${encodeURIComponent(project.path)}`}`,
-    };
-  });
+  const available = metadata ? new Set(metadata.available) : undefined;
+  return groups.map(({ project, worktrees }) => ({
+    ...index.projectStorage(project.path, Boolean(project.id)),
+    project,
+    worktrees: worktrees.map((project) => ({
+      ...project,
+      available: available?.has(project.path) ?? existsSync(project.path),
+    })),
+    images: index.images.get(project.path) ?? [],
+    id: cacheRowKey("project-", project.path),
+    available: available?.has(project.path) ?? existsSync(project.path),
+    href: `/caches?${project.id ? `project=${project.id}` : `owner=${encodeURIComponent(project.path)}`}`,
+  }));
 }
 
 export function projectQuantities(
-  view: ReturnType<typeof projectCacheViews>[number],
+  view: ReturnType<InventoryIndex["projectStorage"]>,
   sizes: ReadonlyMap<string, CacheSize>,
   uncertain: boolean,
 ) {
-  const { complete, owned, builders, removable, retained, tools, shared } = view;
+  const { complete, owned, removable, retained, tools, shared } = view;
+  // Managed profiles reference shared store data. Only BuildKit volumes are project-specific.
+  const builders = view.builders.filter((entry) => entry.builder === "buildkit");
   const ownedComplete = complete && view.buildersReady;
   return {
     owned: cacheQuantity(
@@ -172,11 +178,18 @@ export class ProjectCacheSizes {
   constructor(data: InventoryView) {
     this.sizes = new Map(data.sizes.map((size) => [size.directory, size]));
     const unknown = ownershipAccountingUnknown(data);
-    for (const view of projectCacheViews(new InventoryIndex(data), data.projects, "caches")) {
-      for (const [name, quantity] of Object.entries(projectQuantities(view, this.sizes, unknown))) {
-        if (quantity.uncertain) continue;
+    const index = new InventoryIndex(data);
+    for (const path of new Set([...index.knownProjects, ...index.owned.keys()])) {
+      const id = cacheRowKey("project-", path);
+      const quantities = projectQuantities(
+        index.projectStorage(path, index.knownProjects.has(path)),
+        this.sizes,
+        unknown,
+      );
+      for (const [name, quantity] of Object.entries(quantities)) {
+        if (quantity.uncertain || !quantity.directories.length) continue;
         const pending = new Set(quantity.directories.filter((path) => this.sizes.get(path)?.state !== "ready"));
-        const group = { cell: `${view.id}-${name}`, quantity, pending };
+        const group = { cell: `${id}-${name}`, quantity, pending };
         for (const directory of quantity.directories) {
           const members = this.groups.get(directory);
           if (members) members.push(group);

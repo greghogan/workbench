@@ -24,6 +24,7 @@ export function runOfflineOperation(
     build?: boolean;
     pullOnly?: boolean;
     fresh?: boolean;
+    refreshBootstrap?: boolean;
     architecture?: string;
     assembleOnly?: boolean;
   } = {},
@@ -41,6 +42,7 @@ export function runOfflineOperation(
       ...(options.build ? ["--build"] : []),
       ...(options.pullOnly ? ["--pull-only"] : []),
       ...(options.fresh ? ["--fresh"] : []),
+      ...(options.refreshBootstrap ? ["--refresh-bootstrap"] : []),
       ...(options.assembleOnly ? ["--assemble-only"] : []),
       ...(options.architecture ? ["--architecture", options.architecture] : []),
     ],
