@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { projectField, projectOptionKeys } from "../core/configuration/config-schema.js";
 import { localUserOptionKeys, userOptions } from "../core/configuration/user-config.js";
+import { PreparationStore } from "../core/execution/environments/managed/managed-contract.mjs";
 import { writeAtomic } from "../core/runtime/file-publication.mjs";
 import { ownedPath } from "../core/runtime/paths.js";
 import { userDirectory } from "../core/storage/storage.js";
@@ -75,13 +76,18 @@ export function completionCandidates(program: Command, words: string[]): string[
       Object.entries(userOptions).find(([key]) => key === arguments_[0])?.[1].type === "boolean"
     )
       values = ["true", "false"];
-    else if (command.name() === "set" && arguments_.length === 1)
+    else if (command.name() === "set" && arguments_.length === 1) {
+      const key = arguments_[0] ?? "";
+      const option = Object.entries(userOptions).find(([name]) => name === key)?.[1];
       values =
-        arguments_[0] === "logs.compression"
+        option?.type === "log-compression"
           ? Object.values(LogCompressionPreference)
-          : arguments_[0] === "development.workspace"
-            ? ["host", "devcontainer"]
-            : (projectField(arguments_[0] ?? "")?.choices ?? []);
+          : option?.type === "preparation-store"
+            ? Object.values(PreparationStore)
+            : key === "development.workspace"
+              ? ["host", "devcontainer"]
+              : (projectField(key)?.choices ?? []);
+    }
     if (scope === "local" && arguments_[0] === "checks.environment")
       values = values.filter((value) => value !== "nix-docker");
   } else if ((command.name() === "completion" || command.parent?.name() === "completion") && !arguments_.length)

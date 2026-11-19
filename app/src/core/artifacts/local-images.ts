@@ -2,10 +2,18 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { ownedPath } from "../runtime/paths.js";
+import { isRecord } from "../runtime/values.mjs";
 import { userDirectory } from "../storage/storage.js";
+import { withCacheLockSync } from "../storage/cache-lock.js";
+import { publishManagedReceipt } from "../storage/managed-preparation.js";
 import { imageReference } from "./container-references.js";
 import { imageQuery as run } from "./image-process.js";
 import { keptCacheAssets } from "../projects/project-registry.js";
+import {
+  managedProfileOwner,
+  managedStorePin,
+  type ManagedStorePin,
+} from "../execution/environments/managed/managed-contract.mjs";
 import {
   imageHash as hash,
   imageDigest,
@@ -36,7 +44,19 @@ interface ImageRecord {
   published?: string;
   verificationHost?: string;
   verificationMethod?: ImageExecution;
+  storePin?: ManagedStorePin;
+  priorStorePins?: StorePinEvidence[];
 }
+interface StorePinEvidence {
+  profile: string;
+  platform: string;
+  image: string;
+  inputs: string;
+  verified?: string;
+  storePin: ManagedStorePin;
+}
+const profileName = /^[a-z][a-z0-9_-]*$/;
+const profilePlatforms = ["linux-x64", "linux-arm64"];
 
 /** GHCR uses this public repository annotation to associate images with their source repository. */
 export function preparedImageSource(root: string): string | undefined {
@@ -51,7 +71,7 @@ export function preparedImageSource(root: string): string | undefined {
   );
   return match ? `https://github.com/${match[1] ?? ""}/${match[2] ?? ""}` : undefined;
 }
-function catalogPath(value: ImageRecord): string {
+function catalogPath(value: Pick<ImageRecord, "checkout" | "reference">): string {
   return join(userDirectory("cache"), "prepared-images", hash(value.checkout), `${hash(value.reference)}.json`);
 }
 
@@ -62,16 +82,53 @@ export function recordPreparedImage(
   reference: string,
   receipt: Pick<
     ImageRecord,
-    "image" | "inputs" | "platform" | "verified" | "published" | "assembled" | "verificationHost" | "verificationMethod"
+    | "image"
+    | "inputs"
+    | "platform"
+    | "verified"
+    | "published"
+    | "assembled"
+    | "verificationHost"
+    | "verificationMethod"
+    | "storePin"
   >,
 ): void {
   const record: ImageRecord = { ...receipt, version: 1, checkout, profile, reference };
   const path = catalogPath(record);
-  if (existsSync(path) && !record.verified) {
-    const previous = readRecord(path);
-    if (previous.image === record.image && previous.verified) return;
-  }
-  writeAtomic(path, JSON.stringify(record, null, 2) + "\n", 0o600);
+  withCacheLockSync(path, () => {
+    if (existsSync(path)) {
+      const previous = readRecord(path);
+      if (previous.profile === profile && previous.image === record.image && previous.inputs === record.inputs) {
+        if (
+          !record.verified &&
+          previous.verified &&
+          (!record.storePin || JSON.stringify(previous.storePin) === JSON.stringify(record.storePin))
+        )
+          return;
+        if (!record.storePin && previous.storePin) record.storePin = previous.storePin;
+      }
+      const group = (pin: StorePinEvidence) =>
+        `${pin.profile}/${pin.storePin.builder}/${pin.storePin.key}/${pin.inputs}`;
+      const prior = new Map((previous.priorStorePins ?? []).map((pin) => [group(pin), pin]));
+      if (previous.storePin) {
+        const pin: StorePinEvidence = {
+          profile: previous.profile,
+          platform: previous.platform,
+          image: previous.image,
+          inputs: previous.inputs,
+          storePin: previous.storePin,
+          ...(previous.verified ? { verified: previous.verified } : {}),
+        };
+        prior.delete(group(pin));
+        prior.set(group(pin), pin);
+      }
+      if (record.storePin) prior.delete(group({ ...record, storePin: record.storePin }));
+      if (prior.size) record.priorStorePins = [...prior.values()];
+    }
+    const contents = JSON.stringify(record, null, 2) + "\n";
+    if (record.storePin) publishManagedReceipt(path, contents);
+    else writeAtomic(path, contents, 0o600);
+  });
 }
 function readRecord(path: string): ImageRecord {
   const value = JSON.parse(readFileSync(path, "utf8")) as ImageRecord;
@@ -80,15 +137,15 @@ function readRecord(path: string): ImageRecord {
     typeof value.checkout !== "string" ||
     !isAbsolute(value.checkout) ||
     typeof value.profile !== "string" ||
-    !/^[a-z][a-z0-9_-]*$/.test(value.profile) ||
+    !profileName.test(value.profile) ||
     typeof value.reference !== "string" ||
     !(imageReference(value.reference) || localPreparedReference(value.reference)) ||
     !imageDigest.test(value.image) ||
     !/^[a-f0-9]{64}$/.test(value.inputs) ||
-    !["linux-x64", "linux-arm64"].includes(value.platform) ||
+    !profilePlatforms.includes(value.platform) ||
     (value.verified !== undefined && typeof value.verified !== "string") ||
     (value.assembled !== undefined && typeof value.assembled !== "string") ||
-    (value.verificationHost !== undefined && !["linux-x64", "linux-arm64"].includes(value.verificationHost)) ||
+    (value.verificationHost !== undefined && !profilePlatforms.includes(value.verificationHost)) ||
     (value.verificationMethod !== undefined && !Object.values(ImageExecution).includes(value.verificationMethod)) ||
     (value.verificationHost === undefined) !== (value.verificationMethod === undefined) ||
     (value.verificationMethod !== undefined &&
@@ -97,9 +154,69 @@ function readRecord(path: string): ImageRecord {
     catalogPath(value) !== path
   )
     throw new Error(`${path}: invalid prepared image ownership`);
+  if (value.storePin !== undefined) value.storePin = managedStorePin(value.storePin);
+  if (value.priorStorePins !== undefined) {
+    if (
+      !Array.isArray(value.priorStorePins) ||
+      value.priorStorePins.some(
+        (pin: unknown) =>
+          !isRecord(pin) ||
+          typeof pin.profile !== "string" ||
+          !profileName.test(pin.profile) ||
+          typeof pin.platform !== "string" ||
+          !profilePlatforms.includes(pin.platform) ||
+          typeof pin.image !== "string" ||
+          !imageDigest.test(pin.image) ||
+          typeof pin.inputs !== "string" ||
+          !/^[a-f0-9]{64}$/.test(pin.inputs) ||
+          (pin.verified !== undefined &&
+            (typeof pin.verified !== "string" || !Number.isFinite(Date.parse(pin.verified)))),
+      )
+    )
+      throw new Error(`${path}: invalid prior store pin evidence`);
+    value.priorStorePins = value.priorStorePins.map((pin) => ({ ...pin, storePin: managedStorePin(pin.storePin) }));
+  }
   return value;
 }
-function records(issues: string[], checkout?: string): { path: string; record: ImageRecord }[] {
+
+export function storePinForImage(
+  checkout: string,
+  profile: string,
+  reference: string,
+  image: string,
+  inputs: string,
+): ManagedStorePin | undefined {
+  const path = catalogPath({ checkout, reference });
+  if (!existsSync(path)) return undefined;
+  const record = readRecord(path);
+  if (record.profile === profile && record.image === image && record.inputs === inputs) return record.storePin;
+  return record.priorStorePins
+    ?.slice()
+    .reverse()
+    .find((pin) => pin.profile === profile && pin.image === image && pin.inputs === inputs)?.storePin;
+}
+/** Drop retired roots without discarding the image's verification or newer pin evidence. */
+export function forgetPreparedStorePin(path: string, owner: string, inputs: string, pin: ManagedStorePin): void {
+  withCacheLockSync(path, () => {
+    if (!existsSync(path)) return;
+    const record = readRecord(path);
+    const identity = JSON.stringify(pin);
+    const matches = (entry: Pick<ImageRecord, "profile" | "inputs" | "storePin">) =>
+      managedProfileOwner(record.checkout, entry.profile) === owner &&
+      entry.inputs === inputs &&
+      JSON.stringify(entry.storePin) === identity;
+    const current = matches(record);
+    const previous = record.priorStorePins ?? [];
+    const retained = previous.filter((entry) => !matches(entry));
+    if (!current && retained.length === previous.length) return;
+    if (current) delete record.storePin;
+    if (retained.length) record.priorStorePins = retained;
+    else delete record.priorStorePins;
+    writeAtomic(path, JSON.stringify(record, null, 2) + "\n", 0o600);
+  });
+}
+
+export function preparedImageEvidence(issues: string[], checkout?: string): { path: string; record: ImageRecord }[] {
   const base = join(userDirectory("cache"), "prepared-images");
   const result: { path: string; record: ImageRecord }[] = [];
   const children = (directory: string): string[] => {
@@ -134,7 +251,7 @@ function records(issues: string[], checkout?: string): { path: string; record: I
 export function inspectPreparedImages(checkout?: string, references?: ReadonlySet<string>): LocalImageReport {
   const report: LocalImageReport = { location: "local", entries: [], issues: [] };
   const kept = keptCacheAssets();
-  const owned = records(report.issues, checkout).filter(
+  const owned = preparedImageEvidence(report.issues, checkout).filter(
     ({ record }) => !references || references.has(record.reference),
   );
   if (!owned.length) return report;

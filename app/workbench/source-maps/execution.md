@@ -148,10 +148,12 @@
   shared BuildKit cache.
 - `src/core/artifacts/buildkit.ts`: Own pinned, project-scoped Docker builders, persistent BuildKit state, private
   client configuration, and verified cleanup.
-- `src/core/storage/builder-cache.ts`: Inventories Docker builder stores and revalidates ownership and active use before
-  explicit grouped volume removal.
-- `test/core/storage/builder_store_gc.test.mts`: Retain owned private-store roots and collect unreachable Nix/Guix
-  packages after successful container assembly.
+- `src/core/storage/builder-cache.ts`, `src/core/storage/managed-store-pins.ts`: Inventory shared stores and builder
+  caches, and revalidate ownership, active use, and verification evidence before cleanup.
+- `src/core/storage/managed-preparation.ts`: Records the project and managed store generation before assembly so an
+  interruption can be traced until the image catalog records its pins.
+- `test/core/storage/builder_store_gc.test.mts`: Exercise independent release of staging archives and superseded profile
+  roots, including interrupted cleanup.
 - `src/core/storage/cache-prune-progress.ts`: Reports completed cache deletions and elapsed time, animating terminal
   progress while asynchronous removal retains its ownership locks.
 - `src/core/execution/checks/check-coordination.ts`, `src/core/storage/process-lock.ts`: Serialize gates for one

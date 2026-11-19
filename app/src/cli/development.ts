@@ -56,21 +56,23 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
     .command("locks")
     .description("Inspect preparation locks, ownership, recovery digests, and active work")
     .argument("<profile>")
-    .action((profile: string) => {
-      console.log(JSON.stringify(inspectDevelopmentLocks(root, profile), null, 2));
+    .addOption(new Option("--architecture <architecture>", "Linux target architecture").choices(["x64", "arm64"]))
+    .action((profile: string, options: { architecture?: string }) => {
+      console.log(JSON.stringify(inspectDevelopmentLocks(root, profile, options.architecture), null, 2));
     });
   development
     .command("recover")
     .description("Recover an inspected preparation lock only after its owner and work have stopped")
     .argument("<profile>")
+    .addOption(new Option("--architecture <architecture>", "Linux target architecture").choices(["x64", "arm64"]))
     .addOption(
       new Option("--lock <kind>", "Select the preparation lock")
         .choices(Object.values(DevelopmentLock))
         .default(DevelopmentLock.Profile),
     )
     .requiredOption("--expect <digest>", "Exact lock digest returned by development locks")
-    .action((profile: string, options: { lock: DevelopmentLock; expect: string }) => {
-      recoverDevelopmentLock(root, profile, options.lock, options.expect);
+    .action((profile: string, options: { lock: DevelopmentLock; expect: string; architecture?: string }) => {
+      recoverDevelopmentLock(root, profile, options.lock, options.expect, options.architecture);
       console.log(`Recovered ${options.lock} lock for ${profile}.`);
     });
   for (const operation of ["prepare", "verify", "publish"] as const) {

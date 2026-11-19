@@ -100,6 +100,18 @@ test("global updates retain comments without creating empty option groups", () =
   expect(parse(readFileSync(config, "utf8"))).toEqual({ storage: { external: true } });
 });
 
+test("managed image stores are independently enabled in personal settings", () => {
+  const { config, run, ok } = fixture();
+  expect(ok("config", "get", "preparation.nix_store")).toBe("disabled");
+  expect(ok("config", "get", "preparation.guix_store")).toBe("disabled");
+  ok("config", "set", "--scope", "global", "preparation.nix_store", "managed");
+  ok("config", "set", "--scope", "global", "preparation.guix_store", "system");
+  expect(parse(readFileSync(config, "utf8"))).toEqual({ preparation: { nix_store: "managed", guix_store: "system" } });
+  expect(run("config", "set", "preparation.nix_store", "auto").status).not.toBe(0);
+  expect(run("config", "set", "--scope", "local", "preparation.nix_store", "managed").status).not.toBe(0);
+  expect(ok("complete", "--", "config", "set", "preparation.nix_store", "")).toBe("disabled\nmanaged\nsystem");
+});
+
 test("plain preference round-trips globally and flags and environment override presentation without writing preferences", () => {
   const { config, env, run, ok } = fixture();
   delete env.WORKBENCH_PLAIN;

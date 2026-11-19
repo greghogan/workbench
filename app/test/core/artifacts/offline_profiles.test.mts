@@ -41,6 +41,7 @@ interface OfflineState {
   calls: unknown[][];
   platform: string;
   fail: string;
+  stagedAfterFailure: string | undefined;
   config: Record<string, unknown>;
   onBuild: (() => void) | undefined;
   afterSnapshot: ((destination: string) => void) | undefined;
@@ -59,6 +60,7 @@ const state = vi.hoisted((): OfflineState => ({
   calls: [],
   platform: "amd64",
   fail: "",
+  stagedAfterFailure: undefined,
   config: {},
   onBuild: undefined,
   afterSnapshot: undefined,
@@ -153,7 +155,13 @@ vi.mock("../../../src/core/execution/ci/support/ci-lifecycle.mjs", async (import
       promised(() => {
         state.calls.push([command, ...args]);
         if (command === "assemble-managed") state.recipeEnvironment = options?.env;
-        if (state.fail && args.includes(state.fail)) throw new Error("selected failure");
+        if (state.fail && args.includes(state.fail)) {
+          const staged = args.find((arg) => arg.startsWith("workbench-offline:prepare-"));
+          if (command === "assemble-managed" && staged) state.stagedAfterFailure = staged;
+          throw new Error("selected failure");
+        }
+        if (command === "docker" && args[0] === "image" && args[1] === "ls")
+          return state.stagedAfterFailure && args.includes(`reference=${state.stagedAfterFailure}`) ? state.image : "";
         if (command === "node") return JSON.stringify({ configuration: state.config });
         if (command === "docker" && args[0] === "info")
           return args.includes("{{.Architecture}}") ? (process.arch === "arm64" ? "aarch64" : "x86_64") : state.daemon;
@@ -198,6 +206,7 @@ beforeEach(() => {
   state.calls = [];
   state.platform = process.arch === "arm64" ? "arm64" : "amd64";
   state.fail = "";
+  state.stagedAfterFailure = undefined;
   state.image = `sha256:${"a".repeat(64)}`;
   state.policy = "fixture-policy";
   state.daemon = "";
@@ -747,6 +756,10 @@ linuxTest("retrieved image identity failures stop preparation without a fallback
 linuxTest(
   "project preparation recipes replace the bootstrap build and receive literal image and distribution arguments",
   async () => {
+    const userConfig = join(root, "fixture-user-config");
+    mkdirSync(userConfig);
+    writeFileSync(join(userConfig, "config.toml"), '[preparation]\nguix_store = "managed"\n');
+    vi.stubEnv("WORKBENCH_CONFIG_HOME", userConfig);
     profile.builder = "guix";
     profile.offline.prepare = ["assemble-managed", "{workbench}/recipe.mjs", "{image}"];
     const config = configFromData(
@@ -770,10 +783,10 @@ linuxTest(
   },
 );
 
-linuxTest("a failed managed recipe preserves the previous accepted receipt and never verifies its image", async () => {
+linuxTest("a failed managed recipe removes its staged image and preserves the accepted receipt", async () => {
   await prepareOfflineProfile(root, "offline", { build: true });
   const previous = readFileSync(offlineReceiptPath(root, "offline"), "utf8");
-  profile.offline.prepare = ["assemble-managed", "fail-assembly"];
+  profile.offline.prepare = ["assemble-managed", "fail-assembly", "{image}"];
   const config = configFromData(parse(readFileSync(join(root, "workbench/config.toml"), "utf8")), undefined, "fixture");
   required(config.development, "Expected fixture value: config.development").profiles = [profile];
   writeFileSync(join(root, "workbench/config.toml"), stringify(config));
@@ -782,6 +795,13 @@ linuxTest("a failed managed recipe preserves the previous accepted receipt and n
   await expect(prepareOfflineProfile(root, "offline", { build: true })).rejects.toThrow(/selected failure/);
   expect(readFileSync(offlineReceiptPath(root, "offline"), "utf8")).toBe(previous);
   expect(state.calls.some((call) => call[0] === "docker" && call[1] === "create")).toBe(false);
+  const recipe = required(
+    state.calls.find((call) => call[0] === "assemble-managed"),
+    "Expected managed preparation",
+  );
+  expect(
+    state.calls.filter(([command, object, action]) => command === "docker" && object === "image" && action === "rm"),
+  ).toEqual([["docker", "image", "rm", recipe[2]]]);
 });
 
 linuxTest("profile image inspection checks the exact configured registry identity without preparation", async () => {

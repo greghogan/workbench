@@ -59,6 +59,9 @@ jobs:
           BUILDER: ${{ matrix.builder }}
         run: |
           node bin/workbench.mjs tools install --devcontainer
+          case "$BUILDER" in
+            nix|guix) node bin/workbench.mjs config set --scope global "preparation.${BUILDER}_store" managed ;;
+          esac
           node bin/workbench.mjs development prepare "${BUILDER}" --assemble-only
           reference=$(node bin/workbench.mjs development images "${BUILDER}" --json | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s)[0].reference))')
           image=$(docker image inspect --format '{{.Id}}' "$reference")

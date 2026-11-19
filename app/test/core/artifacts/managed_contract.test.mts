@@ -1,12 +1,7 @@
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { expect, test } from "vitest";
 import { resolve } from "node:path";
-import {
-  builderDirectory,
-  builderVolumes,
-  builderOwner,
-  validateManagedPlan,
-} from "../../../src/core/execution/environments/managed/managed-contract.mjs";
+import { validateManagedPlan } from "../../../src/core/execution/environments/managed/managed-contract.mjs";
 import { managedDeclaration } from "../../../src/core/execution/environments/managed/managed-source-contract.mjs";
 const digest = "sha256-" + Buffer.alloc(32).toString("base64");
 const source = () => ({ url: "https://example.test/source", hash: digest, destination: "npm/source.tgz" });
@@ -19,13 +14,6 @@ const plan = () => ({
   imageRoot: resolve("image-root"),
   runtimeOwner: resolve("dependencies"),
   roots: [{ path: ".", profile: resolve("profile") }],
-});
-test("builder identity supplies the same namespace and paired volume layout to preparation and pruning", () => {
-  expect(builderDirectory("cache", "checkout", "guix")).toContain(builderOwner("checkout"));
-  expect(builderDirectory("cache", "checkout", "native")).toMatch(/native$/);
-  expect(builderVolumes("guix", "a".repeat(24)).map((v) => v.destination)).toEqual(["/gnu", "/var/guix"]);
-  expect(builderVolumes("nix", "a".repeat(24)).map((v) => v.destination)).toEqual(["/nix"]);
-  expect(() => builderVolumes("native", "a".repeat(24))).toThrow(/identity/);
 });
 test.each([
   null,

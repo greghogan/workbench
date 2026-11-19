@@ -6,11 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test as baseTest, vi } from "vitest";
 import { withProjectBuilder, inspectBuildkitCache, buildProjectImage } from "../../../src/core/artifacts/buildkit.ts";
-import {
-  inspectBuilderCache,
-  pruneBuilderCache,
-  recordBuilderVolumes,
-} from "../../../src/core/storage/builder-cache.ts";
+import { inspectBuilderCache, pruneBuilderCache } from "../../../src/core/storage/builder-cache.ts";
 import { keepCacheAsset } from "../../../src/core/projects/project-registry.ts";
 
 const test = baseTest.skipIf(process.platform === "win32");
@@ -152,20 +148,24 @@ function fixture() {
   return root;
 }
 
-test("one Docker measurement reports both BuildKit and package-manager stores", async () => {
+test("builder inventory measures BuildKit separately from shared stores without Docker volume registrations", async () => {
   const root = fixture();
   await withProjectBuilder(root, () => Promise.resolve());
-  const cache = "a".repeat(24);
-  state.volumes.push({ Name: `workbench-nix-${cache}-store`, CreatedAt: "created-volume", Labels: {} });
-  await recordBuilderVolumes(root, "nix", cache);
+  const cache = join(root, "cache", "managed-stores", "nix", "a".repeat(24), "store");
+  mkdirSync(cache, { recursive: true });
+  writeFileSync(join(cache, "profile"), Buffer.alloc(8192));
+  state.volumes.push({ Name: "unrelated", CreatedAt: "created-volume", Labels: {} });
 
   const scansBeforeInspection = state.usageScans;
-  const report = await inspectBuilderCache(root);
+  const report = await inspectBuilderCache();
   expect(report.issues).toEqual([]);
   expect(report.entries.map(({ builder, bytes }) => [builder, bytes])).toEqual([
     ["buildkit", 1_500_000_000],
-    ["nix", 1_500_000_000],
+    ["nix", 8192],
   ]);
+  const shared = required(report.entries[1], "Shared store");
+  await expect(pruneBuilderCache({ ...report, entries: [shared] })).rejects.toThrow(/not removable/);
+  expect(state.volumes).toHaveLength(2);
   expect(state.usageScans - scansBeforeInspection).toBe(1);
 });
 

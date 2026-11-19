@@ -33,7 +33,7 @@
 - `scripts/check-workflows.mts`: Validates workflow files and project runner configuration without requiring Git metadata.
 - `scripts/managed-process.mts`: Own preparation child lifetimes, bounded capture, cancellation, safe shutdown despite uncertain ownership, release only after confirmed drainage, and command discovery.
 - `scripts/managed-files.mts`: Validate source declarations and atomically replace generated metadata after acquisition and generation finish.
-- `scripts/verify-managed-preparation.mts`: Explicitly verifies two tiny host-managed profiles in a real offline Docker image and releases its temporary profile roots and image tags.
+- `scripts/verify-managed-preparation.mts`: Rehearses offline Nix and Guix images with host pins or a disposable managed store, including remount and pruning.
 - `scripts/prepare-guix-profiles.mts`: Realizes independent Guix channel groups, retains per-root profiles and matching runtimes, and passes only realized store paths to image assembly.
 - `scripts/pnpm-metadata.mts`: Retains locked package policy metadata through a disposable importer and the verified package manager.
 - `browser.nix`, `browser.scm`: Package the pinned browser test engine with managed Linux runtime closures and verify its native platform coverage and pairing with the locked Playwright driver.

@@ -96,7 +96,7 @@ const commands: Record<string, Admission> = {
 
   logs: { explicitRoot: true },
 
-  "managed-builder-record": { internal: true, policy: true },
+  "managed-builder-store": { internal: true, policy: true },
 
   "managed-exec": { internal: true, policy: true },
 

@@ -2,14 +2,37 @@ import { RegistryProvider } from "../../../src/core/artifacts/registry-managemen
 import { completedProcess } from "../../fixtures/process.mjs";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
-import { autoPrunePreparedImages, retainedBuilderInputs } from "../../../src/core/artifacts/image-retention.ts";
-import { imageProfileLock, imageProfileReceipt } from "../../../src/core/artifacts/image-contract.ts";
+import { autoPrunePreparedImages } from "../../../src/core/artifacts/image-retention.ts";
+import { imageProfileLock, imageProfileReceipt, preparedImageTag } from "../../../src/core/artifacts/image-contract.ts";
+import {
+  forgetPreparedStorePin,
+  preparedImageEvidence,
+  storePinForImage,
+} from "../../../src/core/artifacts/local-images.ts";
+import { offlineInputs, offlineProfile } from "../../../src/core/artifacts/offline-profiles.ts";
+import { setUserOption } from "../../../src/core/configuration/user-config.ts";
+import {
+  managedProfileOwner,
+  partialManagedStorePin,
+  type ManagedStorePin,
+} from "../../../src/core/execution/environments/managed/managed-contract.mjs";
+import { inspectManagedStorePins } from "../../../src/core/storage/managed-store-pins.ts";
+import { pruneBuilderCache } from "../../../src/core/storage/builder-cache.ts";
+import { recordManagedPreparation } from "../../../src/core/storage/managed-preparation.ts";
 import { keepCacheAsset } from "../../../src/core/projects/project-registry.ts";
-import { recordBuilderVolumes, inspectBuilderCache } from "../../../src/core/storage/builder-cache.ts";
 import {
   recordPreparedImage,
   inspectPreparedImages,
@@ -26,7 +49,6 @@ const state = vi.hoisted(() => ({
   versions: [] as { id: number; name: string; created_at: string; metadata: { container: { tags: string[] } } }[],
   fail: "",
   removed: [] as (string | undefined)[],
-  volumes: new Map<string, { Name: string; CreatedAt: string }>(),
 }));
 vi.mock("../../../src/core/toolchains/acquisition/network-command.mts", async (original) => ({
   ...(await original<typeof import("../../../src/core/toolchains/acquisition/network-command.mts")>()),
@@ -73,16 +95,7 @@ vi.mock("node:child_process", async (original) => ({
       return completedProcess({ status: 1, stderr: "permission denied (HTTP 403)" });
     if (command === "docker") {
       if (args[0] === "info") output = "fixture-engine";
-      else if (args[0] === "volume") {
-        if (args[1] === "ls") output = [...state.volumes.keys()].join("\n");
-        else if (args[1] === "inspect") output = args.slice(2).map((name) => state.volumes.get(name));
-        else if (args[1] === "rm") {
-          for (const name of args.slice(2)) {
-            state.removed.push(name);
-            state.volumes.delete(name);
-          }
-        } else throw new Error(`Unexpected volume operation: ${args.join(" ")}`);
-      } else if (args[0] === "manifest") {
+      else if (args[0] === "manifest") {
         if (state.manifest) return completedProcess({ status: 1, stderr: state.manifest });
         output = { schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json" };
       } else if (args[1] === "ls") output = [...state.images.keys()].join("\n");
@@ -133,7 +146,6 @@ function fixture() {
   state.manifest = "";
   state.fail = "";
   state.removed = [];
-  state.volumes.clear();
   const inputs = "a".repeat(64),
     image = `sha256:${"b".repeat(64)}`;
   const tag = `linux-x64-${inputs}`,
@@ -174,6 +186,152 @@ test("verified image history provides local ownership, sizes, and survives expli
   expect(readFileSync(required(entry, "Expected fixture value: entry").catalog)).toEqual(catalog);
 });
 
+test.skipIf(process.platform !== "linux")(
+  "an interrupted preparation protects its roots until the matching store generation is catalogued",
+  async () => {
+    const { root, image, inputs, reference } = fixture();
+    vi.stubEnv("WORKBENCH_CONFIG_HOME", join(root, "user-config"));
+    setUserOption("preparation.guix_store", "managed");
+    writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="fixture"\npath="."\n');
+    const key = "b".repeat(24);
+    const owner = managedProfileOwner(root, "guix");
+    const generation = join(
+      root,
+      "cache",
+      "managed-stores",
+      "guix",
+      key,
+      "state",
+      "gcroots",
+      "workbench",
+      owner,
+      inputs,
+    );
+    const stage = join(dirname(generation), partialManagedStorePin(inputs));
+    mkdirSync(stage, { recursive: true });
+    recordManagedPreparation({ checkout: root, profile: "guix", architecture: "x64", inputs, builder: "guix", key });
+    let report = await inspectManagedStorePins(root);
+    expect(report.issues).toEqual([]);
+    expect(report.entries).toHaveLength(1);
+    expect(report.entries[0]).toMatchObject({ status: "preparation pending", checkout: root });
+    expect(report.entries[0]?.blockedBy).toContain("prepare guix --build");
+    renameSync(stage, generation);
+    const pin: ManagedStorePin = {
+      builder: "guix",
+      key,
+      roots: [`/gnu/store/${"a".repeat(32)}-profile`],
+      archive: `/gnu/store/${"b".repeat(32)}-image`,
+    };
+    recordPreparedImage(root, "guix", reference, {
+      image,
+      inputs,
+      platform: "linux-x64",
+      assembled: "2026-10-20T00:00:00Z",
+      storePin: pin,
+    });
+    report = await inspectManagedStorePins(root);
+    expect(report.issues).toEqual([]);
+    expect(report.entries).toHaveLength(1);
+    expect(report.entries[0]?.status).not.toBe("preparation pending");
+    expect(report.entries[0]?.blockedBy).toBe("image verification is pending");
+  },
+);
+
+test.skipIf(process.platform !== "linux")(
+  "a same-tag store replacement releases old roots only after exact profile verification",
+  async () => {
+    const { root, receipt } = fixture();
+    vi.stubEnv("WORKBENCH_CONFIG_HOME", join(root, "user-config"));
+    vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
+    setUserOption("preparation.guix_store", "managed");
+    writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="probe"\npath="."\n');
+    const config = join(root, ".devcontainer/guix/devcontainer.json");
+    mkdirSync(dirname(config), { recursive: true });
+    writeFileSync(config, "{}");
+    writeFileSync(join(root, "manifest.scm"), "fixture");
+    const inputs = offlineInputs(root, offlineProfile(root, "guix"), "x64");
+    const reference = `ghcr.io/owner/project/development-guix:${preparedImageTag("x64", inputs)}`;
+    const makePin = (digit: string): ManagedStorePin => {
+      const pin: ManagedStorePin = {
+        builder: "guix",
+        key: digit.repeat(24),
+        roots: [`/gnu/store/${digit.repeat(32)}-profile`],
+        archive: `/gnu/store/${digit.repeat(32)}-image.tar`,
+      };
+      const store = join(root, "cache/managed-stores/guix", pin.key);
+      const generation = join(store, "state/gcroots/workbench", managedProfileOwner(root, "guix"), inputs);
+      mkdirSync(generation, { recursive: true });
+      writeFileSync(join(store, ".workbench-maintenance-image"), receipt.image + "\n");
+      symlinkSync(pin.archive, join(generation, "archive"), "file");
+      const [target] = pin.roots;
+      if (!target) throw new Error("Fixture profile has no root");
+      mkdirSync(join(store, "store", target.slice("/gnu/".length)), { recursive: true });
+      symlinkSync(target, join(generation, "0"), "dir");
+      return pin;
+    };
+    const previous = { ...receipt, inputs, storePin: makePin("a") };
+    const accepted = imageProfileReceipt(root, "guix", "x64");
+    mkdirSync(dirname(accepted), { recursive: true });
+    writeFileSync(accepted, JSON.stringify({ ...previous, version: 1, profile: "guix" }));
+    recordPreparedImage(root, "guix", reference, previous);
+    const replacement = { ...previous, storePin: makePin("b"), verified: "2026-10-22T00:00:00Z" };
+    const { verified, ...staged } = replacement;
+    state.images.set(reference, { Id: replacement.image, Size: 21, Config: { Labels: {} } });
+    recordPreparedImage(root, "guix", reference, { ...staged, assembled: verified });
+    expect(storePinForImage(root, "guix", reference, receipt.image, inputs)).toEqual(replacement.storePin);
+    expect(
+      preparedImageEvidence([], root).find(({ record }) => record.reference === reference)?.record.priorStorePins,
+    ).toMatchObject([{ profile: "guix", inputs, storePin: previous.storePin, verified: previous.verified }]);
+    const before = await inspectManagedStorePins(root);
+    expect(before.issues).toEqual([]);
+    expect(before.entries.map(({ cleanup, blockedBy }) => [cleanup?.pin.key, cleanup?.release, blockedBy])).toEqual([
+      [previous.storePin.key, "archive", undefined],
+      [replacement.storePin.key, "archive", "image verification is pending"],
+    ]);
+
+    recordPreparedImage(root, "guix", reference, replacement);
+    writeFileSync(accepted, JSON.stringify({ ...replacement, version: 1, profile: "guix" }));
+    const after = await inspectManagedStorePins(root);
+    expect(after.issues).toEqual([]);
+    expect(after.entries.map(({ cleanup, blockedBy }) => [cleanup?.pin.key, cleanup?.release, blockedBy])).toEqual([
+      [previous.storePin.key, "generation", undefined],
+      [replacement.storePin.key, "archive", undefined],
+    ]);
+    const retirement = required(after.entries[0], "Superseded managed profile");
+    await expect(
+      pruneBuilderCache(
+        { entries: [retirement], issues: [] },
+        {
+          begin: () => undefined,
+          start: () => {
+            setUserOption("preparation.guix_store", "disabled");
+          },
+          complete: () => undefined,
+        },
+      ),
+    ).rejects.toThrow("preparation store is disabled");
+    expect(existsSync(required(retirement.cleanup, "Managed retirement").journal)).toBe(false);
+    setUserOption("preparation.guix_store", "managed");
+    expect((await inspectManagedStorePins(root)).entries[0]?.cleanup?.release).toBe("generation");
+    rmSync(join(root, "cache/managed-stores/guix", replacement.storePin.key, "store"), { recursive: true });
+    const missing = await inspectManagedStorePins(root);
+    expect(missing.entries.find(({ cleanup }) => cleanup?.pin.key === previous.storePin.key)?.cleanup?.release).toBe(
+      "archive",
+    );
+    const catalog = () =>
+      required(
+        preparedImageEvidence([], root).find(({ record }) => record.reference === reference),
+        "Prepared image",
+      );
+    forgetPreparedStorePin(catalog().path, managedProfileOwner(root, "unrelated"), inputs, previous.storePin);
+    expect(catalog().record.priorStorePins).toHaveLength(1);
+    forgetPreparedStorePin(catalog().path, managedProfileOwner(root, "guix"), inputs, previous.storePin);
+    expect(catalog().record.priorStorePins).toBeUndefined();
+    expect(catalog().record.verified).toBe(replacement.verified);
+    expect(storePinForImage(root, "guix", reference, replacement.image, inputs)).toEqual(replacement.storePin);
+  },
+);
+
 test("automatic image maintenance retires superseded local images after activation and respects explicit keeps", async () => {
   const { root, reference, receipt } = fixture();
   vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
@@ -199,10 +357,9 @@ test("automatic image maintenance retires superseded local images after activati
   expect(state.images.has(replacement)).toBe(true);
 });
 
-test("both platform receipts retain their images and builder inputs under separate operation locks", async () => {
+test("both platform receipts retain their images under separate operation locks", async () => {
   const { root } = fixture();
   const replacements: string[] = [];
-  const retained: string[] = [];
   for (const [architecture, digit] of [
     ["x64", "c"],
     ["arm64", "d"],
@@ -217,14 +374,12 @@ test("both platform receipts retain their images and builder inputs under separa
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify({ version: 1, profile: "guix", ...receipt }));
     replacements.push(reference);
-    retained.push(inputs);
   }
   const report = inspectPreparedImages(root);
   expect(new Set(report.entries.map((entry) => entry.lock))).toEqual(
     new Set([imageProfileLock(root, "guix", "x64"), imageProfileLock(root, "guix", "arm64")]),
   );
   expect(new Set(report.entries.map((entry) => entry.receipt)).size).toBe(2);
-  expect(retainedBuilderInputs(root, ["guix"])?.sort()).toEqual(retained.sort());
   await autoPrunePreparedImages(root);
   expect(replacements.every((reference) => state.images.has(reference))).toBe(true);
   expect(
@@ -232,65 +387,6 @@ test("both platform receipts retain their images and builder inputs under separa
       .entries.map((entry) => entry.reference)
       .sort(),
   ).toEqual(replacements.sort());
-});
-
-test("accepted image cache requirements retire obsolete builder volumes while preserving current and explicitly kept generations", async () => {
-  const { root, reference, receipt } = fixture();
-  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
-  const oldKey = "a".repeat(24),
-    currentKey = "b".repeat(24);
-  for (const key of [oldKey, currentKey]) {
-    for (const role of ["store", "state"]) {
-      const Name = `workbench-guix-${key}-${role}`;
-      state.volumes.set(Name, { Name, CreatedAt: "2026-10-20T00:00:00Z" });
-    }
-    vi.stubEnv("WORKBENCH_IMAGE_INPUTS", key === currentKey ? receipt.inputs : "c".repeat(64));
-    await recordBuilderVolumes(root, "guix", key);
-  }
-  const definitions = () => new Map([["guix", receipt.inputs]]);
-  const path = imageProfileReceipt(root, "guix", receipt.platform.slice("linux-".length));
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify({ version: 1, profile: "guix", ...receipt }));
-  await autoPrunePreparedImages(root, definitions);
-  expect(state.removed).toEqual([]);
-  writeFileSync(
-    path,
-    JSON.stringify({ version: 1, profile: "guix", ...receipt, builderCaches: [`guix-${currentKey}`] }),
-  );
-  await autoPrunePreparedImages(root, () => new Map([["guix", "d".repeat(64)]]));
-  expect(state.removed).toEqual([]);
-  await autoPrunePreparedImages(
-    root,
-    () =>
-      new Map([
-        ["guix", receipt.inputs],
-        ["nix", "d".repeat(64)],
-      ]),
-  );
-  expect(state.removed).toEqual([]);
-  const old = required(
-    (await inspectBuilderCache(root, undefined, false)).entries.find((entry) => entry.key === `guix-${oldKey}`),
-    "old builder",
-  );
-  keepCacheAsset(required(old.receipt, "builder receipt"), true);
-  await autoPrunePreparedImages(root, definitions);
-  expect(state.removed).toEqual([]);
-  keepCacheAsset(required(old.receipt, "builder receipt"), false);
-  const candidate = reference.replace(":linux-x64-", ":linux-arm64-");
-  state.images.set(candidate, required(state.images.get(reference), "Candidate image"));
-  recordPreparedImage(root, "guix", candidate, {
-    image: receipt.image,
-    inputs: receipt.inputs,
-    platform: "linux-arm64",
-    assembled: receipt.verified,
-  });
-  await autoPrunePreparedImages(root, definitions);
-  expect(state.removed).toEqual([]);
-  state.images.delete(candidate);
-  await autoPrunePreparedImages(root, definitions);
-  expect(state.removed.sort()).toEqual([`workbench-guix-${oldKey}-state`, `workbench-guix-${oldKey}-store`]);
-  expect(state.volumes.size).toBe(2);
-  expect(state.images.has(reference)).toBe(true);
 });
 
 test("local pruning never claims unrecorded images or another checkout's verified image", () => {

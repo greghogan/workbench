@@ -1,12 +1,15 @@
-import { required, isStringArray } from "../app/src/core/runtime/values.mjs";
+import { required, isStringArray, record, records } from "../app/src/core/runtime/values.mjs";
 import { guixImageDefinition } from "./pack-guix-image.mjs";
 import { withManagedProcesses } from "./managed-process.mjs";
 import { importManagedImage } from "./managed-image-import.mjs";
 import {
-  builderVolumes,
-  builderCacheKey,
+  PreparationStore,
+  builderOwner,
   guixChannelFile,
+  managedStorePin,
+  type ManagedStorePin,
 } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,6 +23,10 @@ const root = process.cwd();
 const inputs = process.env.WORKBENCH_IMAGE_INPUTS;
 if (!/^[a-f0-9]{64}$/.test(inputs ?? ""))
   throw new Error("Use workbench development prepare to select the image inputs");
+const store = process.env.WORKBENCH_PREPARATION_STORE;
+if (store !== PreparationStore.System && store !== PreparationStore.Managed)
+  throw new Error("Use workbench development prepare to select the preparation store");
+if (builder === "nix" && store === PreparationStore.System) process.env.NIX_REMOTE = "daemon";
 const distribution = resolve(import.meta.dirname, "..");
 const architecture = process.env.WORKBENCH_IMAGE_ARCHITECTURE ?? process.arch;
 if (!["x64", "arm64"].includes(architecture)) throw new Error("Unsupported managed image architecture");
@@ -47,11 +54,14 @@ await withManagedProcesses(async (scope) => {
   });
   const bootstrap = `workbench-builder:${randomUUID()}`;
   const container = `workbench-builder-${randomUUID()}`;
+  const result = process.env.WORKBENCH_PREPARATION_RESULT;
+  let pin: ManagedStorePin | undefined;
   writeFileSync(join(temporary, "roots.json"), JSON.stringify(roots));
   mkdirSync(join(temporary, "profiles"));
-  const installed = await scope.run(builder, ["--version"], { capture: true, missing: true });
-  if (installed !== undefined) {
-    console.log(`Preparing ${builder} image using the host store`);
+  if (store === PreparationStore.System) {
+    console.log(
+      `Preparing ${builder} image using the host store at ${builder === "nix" ? "/nix/store" : "/gnu/store"}`,
+    );
     await run(
       [
         join(distribution, "bin/workbench.mjs"),
@@ -66,7 +76,8 @@ await withManagedProcesses(async (scope) => {
       process.execPath,
     );
   } else {
-    console.log(`Preparing ${builder} image using a Docker builder (${builder} is not installed)`);
+    const channels =
+      builder === "guix" ? guixChannelFile(root, join(root, required(roots[0], "Missing managed root"))) : undefined;
     scope.defer(async () => {
       if (await run(["image", "ls", "--quiet", "--filter", `reference=${bootstrap}`], true, true))
         await run(["image", "rm", bootstrap], false, true);
@@ -84,37 +95,29 @@ await withManagedProcesses(async (scope) => {
       join(root, ".devcontainer", builder, "Dockerfile"),
       "--tag",
       bootstrap,
-      ...(builder === "guix"
-        ? [
-            "--build-arg",
-            `WORKBENCH_GUIX_CHANNELS=${relative(root, guixChannelFile(root, join(root, required(roots[0], "Missing managed root")))).replaceAll("\\", "/")}`,
-          ]
-        : []),
+      ...(channels ? ["--build-arg", `WORKBENCH_GUIX_CHANNELS=${relative(root, channels).replaceAll("\\", "/")}`] : []),
       root,
     ]);
     const identity = await run(["image", "inspect", "--format", "{{.Id}}", bootstrap], true);
-    const cache = builderCacheKey(process.env.WORKBENCH_PREPARATION_OWNER ?? root, builder, architecture, identity);
-    const volumes = builderVolumes(builder, cache);
-    for (const volume of volumes) await run(["volume", "create", volume.name]);
-    const maintenance: unknown = JSON.parse(
-      await run(
-        [join(distribution, "bin/workbench.mjs"), "managed-builder-record", builder, cache],
-        true,
-        false,
-        process.execPath,
+    const managed = record(
+      JSON.parse(
+        await run(
+          [join(distribution, "bin/workbench.mjs"), "managed-builder-store", builder, identity],
+          true,
+          false,
+          process.execPath,
+        ),
       ),
+      "Invalid managed builder store",
     );
-    if (
-      !maintenance ||
-      typeof maintenance !== "object" ||
-      !("collect" in maintenance) ||
-      typeof maintenance.collect !== "boolean"
-    )
-      throw new Error("Invalid private builder maintenance selection");
-    const mounts = volumes.flatMap(({ name, destination }) => [
-      "--mount",
-      `type=volume,src=${name},dst=${destination}`,
-    ]);
+    const { key, directory } = managed;
+    if (typeof key !== "string" || typeof directory !== "string") throw new Error("Invalid managed builder identity");
+    console.log(`Preparing ${builder} image using the managed Docker store at ${directory}`);
+    const volumes = records(managed.volumes, "Invalid managed builder volumes");
+    const mounts = volumes.flatMap(({ name, destination }) => {
+      if (typeof name !== "string" || typeof destination !== "string") throw new Error("Invalid managed builder mount");
+      return ["--mount", `type=volume,src=${name},dst=${destination}`];
+    });
     scope.defer(async () => {
       if (await run(["container", "ls", "--all", "--quiet", "--filter", `name=^/${container}$`], true, true))
         await run(["rm", container], false, true);
@@ -153,12 +156,9 @@ await withManagedProcesses(async (scope) => {
       "--env",
       `WORKBENCH_IMAGE_ARCHITECTURE=${architecture}`,
       "--env",
-      `WORKBENCH_PRIVATE_BUILDER=${cache}`,
+      `WORKBENCH_PRIVATE_BUILDER=${key}`,
       "--env",
-      `WORKBENCH_BUILDER_GC=${String(maintenance.collect)}`,
-      ...(process.env.WORKBENCH_BUILDER_RETAIN_INPUTS === undefined
-        ? []
-        : ["--env", `WORKBENCH_BUILDER_RETAIN_INPUTS=${process.env.WORKBENCH_BUILDER_RETAIN_INPUTS}`]),
+      `WORKBENCH_PREPARATION_OWNER=${process.env.WORKBENCH_PREPARATION_OWNER ?? builderOwner(root)}`,
       "--workdir",
       "/preparation",
       "--entrypoint",
@@ -174,6 +174,10 @@ await withManagedProcesses(async (scope) => {
     const archive = readFileSync(join(temporary, "image-path"), "utf8").trim();
     if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
       throw new Error("Builder returned an invalid image store path");
+    if (result) {
+      pin = managedStorePin(JSON.parse(readFileSync(join(temporary, "store-pin.json"), "utf8")));
+      if (pin.builder !== builder || pin.key !== key) throw new Error("Builder reported a different store pin");
+    }
     await importManagedImage(scope, archive, image, container);
   }
   if (builder === "guix") {
@@ -191,4 +195,5 @@ await withManagedProcesses(async (scope) => {
       process.execPath,
     );
   }
+  if (result && pin) writeAtomic(result, JSON.stringify(pin) + "\n", 0o600);
 });

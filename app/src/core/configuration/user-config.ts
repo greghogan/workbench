@@ -6,6 +6,7 @@ import { readToml, readText } from "../runtime/files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { userDirectory } from "../storage/storage.js";
 import { validateCollectionDirectories } from "../collections/collection-schema.js";
+import { PreparationStore } from "../execution/environments/managed/managed-contract.mjs";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 
 export const userOptions = {
@@ -13,6 +14,16 @@ export const userOptions = {
     type: "integer",
     local: false,
     description: "Keep project monitoring after its last browser connection closes (default: 1800)",
+  },
+  "preparation.nix_store": {
+    type: "preparation-store",
+    local: false,
+    description: "Store for local Nix image preparation: disabled, system, or managed (default: disabled)",
+  },
+  "preparation.guix_store": {
+    type: "preparation-store",
+    local: false,
+    description: "Store for local Guix image preparation: disabled, system, or managed (default: disabled)",
   },
   "cache.auto_prune": {
     type: "boolean",
@@ -181,15 +192,7 @@ export function validateUserOption(key: string, value: unknown): asserts key is 
       throw new Error(`${key} requires a positive integer`);
     return;
   }
-  if (
-    (key.startsWith("logs.") && userOptions[key as UserOption].type === "integer") ||
-    key === "cache.max_generations" ||
-    key === "cache.max_age_days" ||
-    key === "cache.max_image_generations" ||
-    key === "cache.buildkit_max_bytes" ||
-    key === "cache.rust_max_bytes" ||
-    key === "cache.rust_max_age_days"
-  ) {
+  if (userOptions[key as UserOption].type === "integer") {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
       throw new Error(`${key} requires a nonnegative integer`);
     return;
@@ -202,6 +205,11 @@ export function validateUserOption(key: string, value: unknown): asserts key is 
   }
   if (key === "logs.compression") {
     if (!hasEnumValue(LogCompressionPreference, value)) throw new Error(`${key} requires auto, zstd, gzip, or none`);
+    return;
+  }
+  if (userOptions[key as UserOption].type === "preparation-store") {
+    if (!hasEnumValue(PreparationStore, value))
+      throw new Error(`${key} requires ${Object.values(PreparationStore).join(", ")}`);
     return;
   }
   if (key === "skills.enabled") {
@@ -244,6 +252,8 @@ export function readUserConfig(): Values {
 export function userConfigValues(preferences = readUserConfig()): Record<UserOption, UserValue | undefined> {
   return {
     "server.project_idle_seconds": 1800,
+    "preparation.nix_store": PreparationStore.Disabled,
+    "preparation.guix_store": PreparationStore.Disabled,
     "cache.auto_prune": true,
     "cache.max_generations": 2,
     "cache.max_image_generations": 1,

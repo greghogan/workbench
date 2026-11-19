@@ -131,7 +131,6 @@ export const bootstrapSources: ReadonlySet<string> = new Set([
   "app/src/core/configuration/runtime-parsers.mts",
   "scripts/split-prepared-inputs.mts",
   "app/src/core/runtime/values.mts",
-  "scripts/verify-managed-preparation.mts",
   "scripts/verify-managed.mts",
   "app/src/core/runtime/windows-arguments.mts",
   "app/src/core/runtime/windows-utf8-console.mts",
@@ -200,11 +199,13 @@ export const maintainerSources: ReadonlySet<string> = new Set([
 
     "test-coverage",
     "test-failures",
+    "verify-managed-preparation",
   ].map((name) => `scripts/${name}.mts`),
 ]);
 const bundledSources = new Set<string>([
   "scripts/check-web-browser.mts",
   "scripts/evaluate-skills.mts",
+  "scripts/verify-managed-preparation.mts",
   // Sent as a standalone program into managed shells; no checkout-relative imports may remain.
   "scripts/cache-ownership.mts",
   "scripts/check-security-results.mts",

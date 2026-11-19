@@ -132,7 +132,6 @@ __pycache__/
 !/app/src/core/configuration/runtime-parsers.mjs
 !/scripts/split-prepared-inputs.mjs
 !/app/src/core/runtime/values.mjs
-!/scripts/verify-managed-preparation.mjs
 !/scripts/verify-managed.mjs
 !/app/src/core/runtime/windows-arguments.mjs
 !/app/src/core/runtime/windows-utf8-console.mjs

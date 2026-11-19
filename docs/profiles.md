@@ -255,24 +255,42 @@ workbench shell --path examples/languages/go -- go test ./...
 
 Preparation reuses a matching local image or tries the configured registry before building the configured recipe.
 Registry retrieval failures are reported before a local build; required base images and dependencies must still be
-available. `development prepare PROFILE --build` skips image reuse. Successful local verification can be reused when its
-immutable image, complete frozen source and Workbench distribution, verification command, Docker host, and effective
-execution environment match. `development prepare PROFILE --fresh` forces verification; CI, explicit verification, and
-publication retries can reuse matching evidence no older than 30 minutes. Missing or uncertain evidence also runs fresh.
-Verification mounts a separate source snapshot into the immutable image with `--network=none`. Verification has no host
-dependency-cache mounts or installed project outputs; it compiles and tests current source. Native installation uses
-Workbench's verified installer. Nix and Guix assemble images directly from their declared development closures,
-including locked check dependencies. Nix submits subproject environments to one builder graph. Guix groups them by
-effective channel declaration and evaluates each group with its matching Guix, then assembles the realized profiles
-without re-evaluating manifests. Both retain separate profiles for each root; Guix also retains each group's runtime.
-Image preparation does not run project builds or language package managers. Native images retain verified tools and
-dependency downloads. Advisory checks requiring live services remain online operations; an offline build does not claim
-fresh vulnerability information.
+available. `development prepare PROFILE --build` skips image reuse. To build a Nix or Guix image locally, select that
+manager's store in personal configuration. For example, use `workbench config set preparation.guix_store system` for the
+host daemon or `workbench config set preparation.nix_store managed` for Docker. Each defaults to `disabled`. Pulling or
+verifying a prepared image requires no store selection.
+
+Managed stores live under `managed-stores/nix` or `managed-stores/guix` in the Workbench cache. Projects can reuse
+packages when they use the same Docker engine, bootstrap closures, and store trust configuration. Native and emulated
+builds share that store while retaining their own profile roots. Ordinary Docker volume cleanup removes the mounts and
+the next preparation recreates them from the retained cache directories.
+
+The Builders section of `workbench cache` shows shared store sizes, eligible profile roots, and pending work. If
+assembly stops after creating managed store roots, cache inventory keeps those roots protected and shows the command to
+retry the preparation. A successful retry with the same inputs reuses their store and records the roots with the image.
+`workbench cache prune --checkout builders` previews cleanup or prompts for confirmation in a terminal. Cleanup releases
+verified staging archives and superseded profiles, then lets the store's package manager reclaim unreachable packages.
+Other projects' pins and explicitly retained profiles remain live. Workbench releases its own system-store profiles
+through dependency pruning. The system administrator controls garbage collection for those stores.
+
+Successful local verification can be reused when its immutable image, complete frozen source and Workbench distribution,
+verification command, Docker host, and effective execution environment match. `development prepare PROFILE --fresh`
+forces verification; CI, explicit verification, and publication retries can reuse matching evidence no older than 30
+minutes. Missing or uncertain evidence also runs fresh. Verification mounts a separate source snapshot into the
+immutable image with `--network=none`. Verification has no host dependency-cache mounts or installed project outputs; it
+compiles and tests current source. Native installation uses Workbench's verified installer. Nix and Guix assemble images
+directly from their declared development closures, including locked check dependencies. Nix submits subproject
+environments to one builder graph. Guix groups them by effective channel declaration and evaluates each group with its
+matching Guix, then assembles the realized profiles without re-evaluating manifests. Both retain separate profiles for
+each root; Guix also retains each group's runtime. Image preparation does not run project builds or language package
+managers. Native images retain verified tools and dependency downloads. Advisory checks requiring live services remain
+online operations; an offline build does not claim fresh vulnerability information.
 
 Waiters observe busy preparation locks without mutating their metadata. Inspect profile, managed-builder, and BuildKit
 ownership with `workbench development locks PROFILE`. To recover a demonstrably abandoned lock, select its returned
 digest with `workbench development recover PROFILE --lock profile --expect DIGEST` (or `--lock builder` /
-`--lock buildkit`). Recovery rechecks the exact owner, local child-process scope, and container activity. Active owners,
+`--lock buildkit`). Use `--lock store` for a managed store lock. Use the same `--architecture` on both commands for an
+emulated build. Recovery rechecks the exact owner, local child-process scope, and container activity. Active owners,
 foreign hosts, incomplete launch evidence, and uncertain engine state are preserved. An activity scope left by an
 interrupted preparation also remains uncertain: dead direct children alone cannot prove that detached descendants have
 finished. Recovery requires a normally released activity scope. Drain and stop Workbench containers and builders before
@@ -314,35 +332,29 @@ the previous receipt.
 
 An optional `prepare` command array builds the image instead of the Dev Container Dockerfile. It runs from a project
 snapshot on the host; `{image}` names the local output image and `{workbench}` identifies its pinned distribution. The
-reference managed recipes use the installed Nix or Guix and its host store when available, including for emulated
-targets, then assemble the final image with Nix dockerTools or Guix pack. Host preparation registers the per-root
-development profiles against garbage collection. Each target architecture has separate profile identities; Guix also
-retains the native pinned channel manager and target runtime. Missing managers use native bootstrap containers with
-persistent, builder-specific Docker store volumes. Foreign package builders execute through the enabled binfmt handler.
-Durable private-store roots are registered even when automatic pruning is disabled. Those volumes retain successful
-package work after a later failure and appear in Workbench cache reporting and explicit pruning. A failed installed
-manager is an error, not a fallback. The Linux assembly helper requires Docker, Bash, and tar on the host. Import
-streams directly to Docker; Nix and Guix use uncompressed local import archives to avoid repeated compression. Docker
-handles registry layer compression when publishing. Both image layouts expose the platform loader through `/lib` and
-`/lib64` for prebuilt development tools. Prepared Guix commands also expose the selected profile's library directories;
-mutable caches remain outside the immutable store.
+reference recipes use the selected preparation backend, then assemble the final image with Nix dockerTools or Guix pack.
+Each target architecture has separate profile identities. Guix also retains the native pinned channel manager and target
+runtime. Docker-backed preparation runs the manager in a native bootstrap container. Foreign package builders execute
+through the enabled binfmt handler. Profiles stay rooted even when automatic pruning is disabled. The Linux assembly
+helper requires Docker, Bash, and tar on the host. Import streams directly to Docker; Nix and Guix use uncompressed
+local import archives to avoid repeated compression. Docker handles registry layer compression when publishing. Both
+image layouts expose the platform loader through `/lib` and `/lib64` for prebuilt development tools. Prepared Guix
+commands also expose the selected profile's library directories; mutable caches remain outside the immutable store.
 
-`workbench cache --checkout builders` reports fallback Docker stores; `cache prune --checkout builders` selects paired
-store/state volumes together. Attached containers and active preparation protect them. Volumes without a matching
-Workbench ownership receipt are reported but retained; a subsequent preparation registers reused volumes. Pruning
-builder stores leaves prepared images intact. Host profiles are part of the owning project's dependency cache and are
-released with `cache prune --dependencies`. Host shared-store GC remains the host administrator’s policy; Workbench
-retires only its owned roots. Guix check replacements keep the previous environment rooted until the replacement
-succeeds and its stable root is registered. An interrupted publication retains a registered pending root until retry or
-explicit dependency pruning. Nix profile generations likewise remain protected with their owning dependency cache.
+Guix host checks keep the previous environment rooted until the replacement succeeds and its stable root is registered.
+An interrupted publication retains a pending root until retry or explicit dependency pruning.
 
-To rehearse managed image assembly with two tiny profiles, run `node scripts/verify-managed-preparation.mjs guix` or
-`node scripts/verify-managed-preparation.mjs nix` from a prepared Workbench checkout. This explicit integration check
-requires the selected manager installed on Linux and Docker. It uses temporary project caches, executes both profiles
-with networking disabled, and removes its profile roots and newly imported image tags. Store outputs remain eligible for
-the manager's ordinary garbage collection. Add `--subproject-pin` to the Guix rehearsal to exercise a separate
-subproject declaration at the existing pinned revision. Routine tests exercise the script entry points with isolated
-tool fixtures.
+From a prepared Workbench checkout, run `pnpm run tooling:maintainers`, then
+`node scripts/verify-managed-preparation.mjs guix` or `node scripts/verify-managed-preparation.mjs nix` to rehearse
+managed image assembly with two tiny profiles. This explicit integration check requires the selected manager installed
+on Linux and Docker. It uses temporary project caches, executes both profiles with networking disabled, and removes its
+profile roots and newly imported image tags. Store outputs remain eligible for the manager's ordinary garbage
+collection. Add `--subproject-pin` to the Guix rehearsal to exercise a separate subproject declaration at the existing
+pinned revision. Routine tests exercise the script entry points with isolated tool fixtures.
+
+Pass `--store managed` with either manager to qualify its Docker-backed store. The script prepares two independent
+projects in a disposable Workbench cache, checks pin reuse through Docker volume recreation, and prunes an obsolete
+profile. Successful qualification removes the disposable store and image tags.
 
 Metadata refresh collects and verifies all requested sources before replacing project files. Generated declarations and
 recipes likewise finish generation first; each file replacement is atomic.
@@ -387,12 +399,11 @@ Review the emulator dependency before an administrator installs it; Workbench do
 the kernel and interpreter requirements. Emulation shares the host kernel and can be substantially slower for
 source-heavy builds.
 
-Docker selects the target platform; managed foreign builds use a target-architecture container with its own Nix/Guix
-daemon and store. Architecture-specific builder identities keep those stores separate. Before verification, Workbench
-checks both image metadata and the running container's architecture. Receipts identify the verification host, target,
-and native or binfmt method. Each architecture has its own receipt, while a shared profile lock coordinates both
-variants. Emulated offline verification is sufficient for explicit development-image publication; it does not establish
-native platform support. Complete the native CI matrix before publishing a Workbench release.
+Docker selects the target platform for native images. Nix and Guix run their managers on the host architecture and
+realize the requested target in the configured store. Before verification, Workbench checks both the image metadata and
+the running container's architecture. Each target has its own receipt identifying the verification host, target, and
+native or binfmt method. Emulated offline verification is sufficient for explicit development-image publication;
+complete the native CI matrix to verify platform support for a Workbench release.
 
 `--assemble-only` stops before verification and cannot activate or publish an unverified image. An assembled image can
 be transferred with Docker save/load, then independently accepted with

@@ -305,7 +305,7 @@ interface DockerVolumeUsage {
   Links: string | number;
 }
 
-export async function readDockerVolumeUsage(signal?: AbortSignal): Promise<DockerVolumeUsage[]> {
+async function readDockerVolumeUsage(signal?: AbortSignal): Promise<DockerVolumeUsage[]> {
   return JSON.parse(
     await dockerQuery(["system", "df", "-v", "--format", "{{json .Volumes}}"], signal),
   ) as DockerVolumeUsage[];
@@ -314,7 +314,7 @@ export async function readDockerVolumeUsage(signal?: AbortSignal): Promise<Docke
 export async function inspectBuildkitCache(
   checkout?: string,
   signal?: AbortSignal,
-  readUsage: false | (() => Promise<DockerVolumeUsage[]>) = () => readDockerVolumeUsage(signal),
+  measure = true,
 ): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
   const query = (args: string[]) => dockerQuery(args, signal);
@@ -338,9 +338,9 @@ export async function inspectBuildkitCache(
       if (!blockedBy && !actual.volume && !actual.container) continue;
       if (!blockedBy && existsSync(`${lockPath(value)}.lock`))
         blockedBy = "active or recovery-required preparation lock";
-      if (readUsage) usage ??= await readUsage();
+      if (measure) usage ??= await readDockerVolumeUsage(signal);
       const measured = usage?.find((item) => item.Name === volumeName(value));
-      if (readUsage && !measured) throw new Error(`Docker volume usage is unavailable: ${volumeName(value)}`);
+      if (measure && !measured) throw new Error(`Docker volume usage is unavailable: ${volumeName(value)}`);
       report.entries.push({
         key: value.name,
         builder: "buildkit",

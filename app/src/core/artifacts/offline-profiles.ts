@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, sta
 import { release, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, relative } from "node:path";
 import { policyCompatibility } from "../collections/policy-compatibility.js";
-import { UserFacingError } from "../diagnostics/diagnostic-errors.mjs";
+import { settleCleanup, UserFacingError } from "../diagnostics/diagnostic-errors.mjs";
 import {
   diagnostic,
   DiagnosticOperation,
@@ -19,8 +19,12 @@ import { CILifecycle, executeCI, withCIProcessOwner } from "../execution/ci/supp
 import { builderExecutionResources, executionEnvironment } from "../execution/environments/execution-resources.js";
 import {
   builderDirectory,
-  builderOwner,
+  managedProfileOwner,
   guixChannelFile,
+  managedStoreDirectory,
+  managedStorePin,
+  type ManagedStorePin,
+  PreparationStore,
 } from "../execution/environments/managed/managed-contract.mjs";
 import { readConfig, readLanguageRoots } from "../projects/project-configuration.js";
 import { distributionRoot } from "../projects/project-context.js";
@@ -30,14 +34,15 @@ import { readText } from "../runtime/files.js";
 import { required } from "../runtime/invariants.js";
 import { processCancellation } from "../runtime/owned-child.mjs";
 import { ownedPath } from "../runtime/paths.js";
-import { currentBuilderCacheKeys } from "../storage/builder-cache.js";
+import { storePinForImage } from "./local-images.js";
 import { withCacheActivity, withCacheLock } from "../storage/cache-lock.js";
+import { completeManagedPreparation } from "../storage/managed-preparation.js";
 import { acquireProcessLock, type ProcessLock } from "../storage/process-lock.js";
 import { userDirectory } from "../storage/storage.js";
 import { acquireRegistryImage } from "../toolchains/acquisition/image-acquisition.mts";
 import { dependencyInputHash } from "../toolchains/dependency-identity.mjs";
 import { nativeEnvironment } from "../toolchains/native/native-tools.js";
-import { withProjectBuilder } from "./buildkit.js";
+import { currentBuildkitCacheKeys, withProjectBuilder } from "./buildkit.js";
 import { imageReference } from "./container-references.js";
 import { containerStartup, validateContainerOwnership } from "./container-startup.js";
 import { containerCLI } from "./container-tools.js";
@@ -54,7 +59,8 @@ import {
 } from "./image-contract.js";
 import { profileRequiresBinfmt } from "./image-emulation.js";
 import { finalizeImage } from "./image-finalization.js";
-import { autoPrunePreparedImages, retainedBuilderInputs } from "./image-retention.js";
+import { autoPrunePreparedImages } from "./image-retention.js";
+import { selectPreparationStore } from "./preparation-store.js";
 import {
   frozenDistributionTree,
   sameVerification,
@@ -96,6 +102,7 @@ interface Receipt {
   published?: string;
   verification?: VerificationProof;
   builderCaches?: string[] | undefined;
+  storePin?: ManagedStorePin;
 }
 
 export function withOfflineProfileLock<T>(
@@ -130,9 +137,9 @@ export function withOfflineProfileLock<T>(
   );
 }
 
-function workingBuilderCaches(root: string, builder: string, inputs: string): string[] | undefined {
+function workingBuilderCaches(root: string): string[] | undefined {
   try {
-    return currentBuilderCacheKeys(root, builder, inputs);
+    return currentBuildkitCacheKeys(root);
   } catch (error) {
     try {
       diagnostic(
@@ -613,13 +620,20 @@ async function imageVerification(
 export async function prepareOfflineProfile(
   root: string,
   name: string,
-  options: { build?: boolean; pullOnly?: boolean; fresh?: boolean; architecture?: string; assembleOnly?: boolean } = {},
+  options: {
+    build?: boolean;
+    pullOnly?: boolean;
+    fresh?: boolean;
+    architecture?: string;
+    assembleOnly?: boolean;
+  } = {},
 ): Promise<void> {
   if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch))
     throw new Error("Offline preparation requires a Linux x64 or ARM64 host; use WSL 2 on Windows");
   const architecture = options.architecture ?? process.arch;
   if (!["x64", "arm64"].includes(architecture)) throw new Error("Image architecture must be x64 or arm64");
   const profile = offlineProfile(root, name);
+  const build = options.build === true;
   const emulated = architecture !== process.arch;
   if (emulated && profileRequiresBinfmt(architecture))
     throw new Error(
@@ -632,7 +646,7 @@ export async function prepareOfflineProfile(
   const pullOnly =
     options.pullOnly === true ||
     (hosted && !emulated && !options.assembleOnly && ["nix", "guix"].includes(profile.builder));
-  if (pullOnly && options.build) throw new Error("Registry-only preparation cannot build locally");
+  if (pullOnly && build) throw new Error("Registry-only preparation cannot build locally");
   if (pullOnly && !profile.offline.registry)
     throw new Error(`Registry-only preparation requires offline.registry for '${name}'`);
   const path = offlineReceiptPath(root, name, architecture);
@@ -648,7 +662,9 @@ export async function prepareOfflineProfile(
     const temporary = mkdtempSync(join(tmpdir(), "workbench-offline-"));
     const lifecycle = new CILifecycle();
     const tag = `workbench-offline:prepare-${randomUUID()}`;
-    let built = false;
+    let staging: "absent" | "building" | "built" = "absent";
+    let failure: unknown;
+    let storePin: ManagedStorePin | undefined;
     try {
       const source = join(temporary, "source");
       await snapshotCIProject(root, source, lifecycle);
@@ -661,13 +677,13 @@ export async function prepareOfflineProfile(
       const reference = imageReferenceForInputs(root, profile, inputs, architecture);
       let acquired = false;
       try {
-        if (options.build || pullOnly) throw new Error("No such image: explicit acquisition requested");
+        if (build || pullOnly) throw new Error("No such image: explicit acquisition requested");
         await executeCI("docker", ["image", "inspect", reference], { capture: true });
         acquired = true;
       } catch (error) {
         if (!(error instanceof Error) || !error.message.includes("No such image")) throw error;
       }
-      if (!acquired && !options.build && profile.offline.registry) {
+      if (!acquired && !build && profile.offline.registry) {
         try {
           await acquireRegistryImage(reference, { platform, profile: name });
           acquired = true;
@@ -693,42 +709,53 @@ export async function prepareOfflineProfile(
           throw new Error("Prepared image input label does not match this configuration");
       } else if (config.image) await acquireRegistryImage(config.image, { platform, quiet: false });
       else if (profile.offline.prepare) {
+        const store = await selectPreparationStore(profile.builder, root);
         const snapshotDistribution = materializeDistribution(root, source, "");
         const [command, ...args] = profile.offline.prepare.map((part) =>
           part.replaceAll("{image}", tag).replaceAll("{workbench}", snapshotDistribution),
         );
         if (!command) throw new Error("Image preparation requires a command");
         const allocation = builderExecutionResources(root);
-        await withCacheLock(builderDirectory(userDirectory("cache"), root, profile.builder), () =>
+        const preparationResult = join(temporary, "store-pin.json");
+        const cache = userDirectory("cache");
+        const lock =
+          store === PreparationStore.Managed
+            ? managedStoreDirectory(cache, profile.builder)
+            : builderDirectory(cache, root, profile.builder);
+        if (store === PreparationStore.Managed) ownedPath(cache, `managed-stores/${profile.builder}`);
+        staging = "building";
+        await withCacheLock(lock, () =>
           executeCI(command, args, {
             cwd: source,
             env: {
               ...env,
               WORKBENCH_PROJECT_ROOT: source,
               WORKBENCH_DISTRIBUTION_ROOT: snapshotDistribution,
-              WORKBENCH_PREPARATION_OWNER: builderOwner(root),
+              WORKBENCH_PREPARATION_OWNER: managedProfileOwner(root, name),
+              WORKBENCH_PREPARATION_PROFILE: store === PreparationStore.Managed ? name : undefined,
+              WORKBENCH_PREPARATION_STORE: store,
+              WORKBENCH_PREPARATION_RESULT: store === PreparationStore.Managed ? preparationResult : undefined,
               WORKBENCH_CONTAINER_CHECKOUT: root,
               WORKBENCH_LOCAL_CONFIG_ROOT: root,
               WORKBENCH_EPHEMERAL_CHECKOUT: "1",
               WORKBENCH_IMAGE_INPUTS: inputs,
               WORKBENCH_IMAGE_ARCHITECTURE: architecture,
-              WORKBENCH_BUILDER_RETAIN_INPUTS: (() => {
-                const retained = retainedBuilderInputs(
-                  root,
-                  (readConfig(root).development?.profiles ?? [])
-                    .filter((entry) => entry.offline && entry.builder === profile.builder)
-                    .map((entry) => entry.name),
-                );
-                return retained === undefined ? undefined : JSON.stringify(retained);
-              })(),
               WORKBENCH_MANAGED_CORES: String(allocation.cores),
               WORKBENCH_MANAGED_JOBS: String(allocation.maxJobs),
               WORKBENCH_IMAGE_ROOTS: profile.offline.paths ? JSON.stringify(profile.offline.paths) : undefined,
             },
           }),
         );
-        built = true;
+        staging = "built";
+        if (existsSync(preparationResult)) {
+          storePin = managedStorePin(
+            JSON.parse(readBoundedFile(preparationResult, 64 * 1024, "managed store preparation").toString("utf8")),
+          );
+          if (profile.builder !== storePin.builder)
+            throw new Error("Image preparation reported a different store manager");
+        }
       } else {
+        staging = "building";
         await withProjectBuilder(root, (client) =>
           containerStartup(
             "node",
@@ -749,7 +776,7 @@ export async function prepareOfflineProfile(
             { ...env, ...client.env },
           ),
         );
-        built = true;
+        staging = "built";
       }
       if (!acquired) {
         const sourceURL = preparedImageSource(root);
@@ -766,12 +793,23 @@ export async function prepareOfflineProfile(
         await executeCI("docker", ["image", "inspect", "--format", "{{.Id}}", reference], { capture: true })
       ).trim();
       if (!imageId.test(image)) throw new Error("Build did not produce an immutable image ID");
+      storePin ??= storePinForImage(root, name, reference, image, inputs);
       recordPreparedImage(root, name, reference, {
         image,
         inputs,
         platform: `linux-${architecture}`,
         assembled: new Date().toISOString(),
+        ...(storePin ? { storePin } : {}),
       });
+      if (storePin)
+        completeManagedPreparation({
+          checkout: root,
+          profile: name,
+          architecture,
+          inputs,
+          builder: storePin.builder,
+          key: storePin.key,
+        });
       if (options.assembleOnly) {
         console.log(
           `Assembled ${name} for linux-${architecture}: ${image}. Offline verification is required before publication.`,
@@ -811,10 +849,8 @@ export async function prepareOfflineProfile(
         platform: `linux-${architecture}`,
         verified: reuse && previous ? previous.verified : new Date().toISOString(),
         ...executionEvidence(architecture),
-        builderCaches:
-          reuse && previous?.builderCaches
-            ? previous.builderCaches
-            : workingBuilderCaches(root, profile.builder, inputs),
+        ...(storePin ? { storePin } : {}),
+        builderCaches: reuse && previous?.builderCaches ? previous.builderCaches : workingBuilderCaches(root),
         ...(verification ? { verification } : {}),
         ...(previous?.image === image &&
         typeof previous.published === "string" &&
@@ -828,13 +864,33 @@ export async function prepareOfflineProfile(
       console.log(
         `Prepared ${name}: ${image}; ${reuse ? "matching offline verification reused" : "fresh offline build passed"}.`,
       );
+    } catch (error) {
+      failure = error;
+      throw error;
     } finally {
-      lifecycle.close();
-      try {
-        if (built) await executeCI("docker", ["image", "rm", tag]);
-      } finally {
-        rmSync(temporary, { recursive: true, force: true });
-      }
+      await settleCleanup(
+        [
+          async () => {
+            if (
+              staging === "built" ||
+              (staging === "building" &&
+                (
+                  await executeCI("docker", ["image", "ls", "--quiet", "--filter", `reference=${tag}`], {
+                    capture: true,
+                  })
+                ).trim())
+            )
+              await executeCI("docker", ["image", "rm", tag]);
+          },
+          () => {
+            rmSync(temporary, { recursive: true, force: true });
+          },
+          () => {
+            lifecycle.close();
+          },
+        ],
+        failure,
+      );
     }
   });
   await maintainPreparedImages(root);
@@ -910,17 +966,19 @@ async function verifyAcceptedProfile(
     if ((!image || retry) && preparedOfflineProfile(root, profile, architecture).image !== receipt.image)
       throw new Error("Accepted image changed during verification");
     const verification = await imageVerification(root, profile, config, receipt.image, source, trees, architecture);
+    const reference = offlineImageReference(root, name, architecture);
+    const pin = storePinForImage(root, name, reference, receipt.image, receipt.inputs);
     const updated: Receipt = {
       ...receipt,
       verified: new Date().toISOString(),
       ...executionEvidence(architecture),
-      builderCaches: receipt.builderCaches ?? workingBuilderCaches(root, profile.builder, receipt.inputs),
+      builderCaches: receipt.builderCaches ?? workingBuilderCaches(root),
+      ...(pin ? { storePin: pin } : {}),
       ...(verification ? { verification } : {}),
     };
     if (!verification) delete updated.verification;
-    if (image && !retry)
-      await executeCI("docker", ["tag", receipt.image, offlineImageReference(root, name, architecture)]);
-    recordPreparedImage(root, name, offlineImageReference(root, name, architecture), updated);
+    if (image && !retry) await executeCI("docker", ["tag", receipt.image, reference]);
+    recordPreparedImage(root, name, reference, updated);
     writeAtomic(offlineReceiptPath(root, name, architecture), JSON.stringify(updated, null, 2) + "\n");
     return updated;
   } finally {
