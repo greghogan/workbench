@@ -8,7 +8,14 @@ import { captureOwnedChild, processCancellation } from "../runtime/owned-child.m
 import { createOwnedScratch } from "../runtime/owned-scratch.mjs";
 import { ownedPath } from "../runtime/paths.js";
 import { withCacheLock } from "../storage/cache-lock.js";
-import { archiveInstallationEnvironment, readDistributionSource } from "./distribution-identity.js";
+import {
+  archiveInstallationEnvironment,
+  launchdNativeHelper,
+  launchdServiceEnvironment,
+  launchdSharedPort,
+  launchdSystemDirectory,
+  readDistributionSource,
+} from "./distribution-identity.js";
 import { readExecutableIdentity } from "./executable-identity.js";
 import { stageReleaseArchive } from "./release-archive.js";
 import { sameToolPin, type ToolPin } from "../toolchains/tool-pin.js";
@@ -19,6 +26,7 @@ import {
   maximumTransitionBytes,
   finishReleaseTransition,
   parseReleaseSelection,
+  permitLaunchDaemonStart,
   publishReleaseState,
   readReleaseTransition,
   recordReleaseTransition,
@@ -33,6 +41,7 @@ const selectionFile = "active.json";
 const installedReleaseFile = "release.json";
 const launcherName = process.platform === "win32" ? "workbench.cjs" : "workbench";
 const launcherHeader = "#!/usr/bin/env node\n// Workbench archive launcher.\n";
+const launchdStartupMarker = "// Workbench launchd startup protocol 1.\n";
 const shimHeader = "@rem Workbench archive launcher\r\n";
 
 function activeRelease(installation: string): { selection: ReleaseSelection; bytes: Buffer } | undefined {
@@ -70,6 +79,14 @@ export function installedServiceLauncher(distribution: string): string {
   return launcherPath(installation);
 }
 
+export function assertInstalledLaunchdLauncher(launcher: string): void {
+  const contents = readBoundedFile(launcher, 16 * 1024, "installed Workbench launcher").toString();
+  if (!contents.startsWith(launcherHeader + launchdStartupMarker))
+    throw new Error(
+      "Repair the installed Workbench launcher from the active verified archive before registering its LaunchDaemon",
+    );
+}
+
 /** Close admission to a new manual listener while the installed release is changing. */
 export function checkInstalledServiceStart(distribution: string, managed: boolean): void {
   const installation = process.env[archiveInstallationEnvironment];
@@ -80,16 +97,18 @@ export function checkInstalledServiceStart(distribution: string, managed: boolea
 }
 
 function launcherText(): string {
-  return `${launcherHeader}async function launch() {
+  return `${launcherHeader}${launchdStartupMarker}async function launch() {
   const {lstatSync, readFileSync, realpathSync} = await import("node:fs");
   const {dirname, join} = await import("node:path");
   const {pathToFileURL} = await import("node:url");
   const installation = join(dirname(realpathSync(process.argv[1])), ${JSON.stringify(storageName)});
   const [command, ...args] = process.argv.slice(2);
   const recover = command === "update" && args.includes("--recover");
+  const launchd = process.platform === "darwin" && process.env[${JSON.stringify(launchdServiceEnvironment)}] === "1";
   const managed = command === "serve" && args.includes("--service") && (
-    process.platform === "linux" && process.env.WORKBENCH_SYSTEMD_SERVICE === "1" && !!process.env.NOTIFY_SOCKET
+    (process.platform === "linux" && process.env.WORKBENCH_SYSTEMD_SERVICE === "1" && !!process.env.NOTIFY_SOCKET) || launchd
   );
+  const launchDaemon = managed && launchd && process.geteuid() === 0 && process.env.WORKBENCH_SYSTEM_SERVICE === "1";
   const privileged = process.geteuid?.() === 0 && (recover || process.env.WORKBENCH_SYSTEM_SERVICE === "1");
   const trusted = (path) => {
     if (!privileged) return;
@@ -104,22 +123,37 @@ function launcherText(): string {
   const selection = join(installation, ${JSON.stringify(selectionFile)});
   trusted(selection);
   const receipt = join(installation, ${JSON.stringify(releaseTransitionFile)});
-  const pending = lstatSync(receipt, {throwIfNoEntry: false});
-  if (pending && !recover && !managed) {
+  const pending = () => lstatSync(receipt, {throwIfNoEntry: false});
+  if (pending() && !recover && !managed) {
     console.error("workbench: A Workbench update is pending. If the update stopped, run 'workbench update --recover'.");
     process.exitCode = 1;
     return;
   }
-  let contents = readFileSync(selection, "utf8");
-  if (pending && recover) {
-    trusted(receipt);
-    if (!pending.isFile() || pending.size > ${String(maximumTransitionBytes)}) {
+  const readReceipt = () => {
+    const info = pending();
+    if (!info) return undefined;
+    if (!info.isFile() || info.size > ${String(maximumTransitionBytes)}) {
       throw new Error("Invalid Workbench release update receipt");
     }
-    const journal = JSON.parse(readFileSync(receipt, "utf8"));
+    let journal;
+    try {
+      trusted(receipt);
+      journal = JSON.parse(readFileSync(receipt, "utf8"));
+    } catch (error) {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    }
     if (journal.version !== 1 || typeof journal.before !== "string") throw new Error("Invalid release update receipt");
-    contents = journal.before;
+    return journal;
+  };
+  if (launchDaemon) {
+    for (;;) {
+      const journal = readReceipt();
+      if (journal?.service?.manager !== "launchd" || journal.service.scope !== "system" || journal.launchdMayStart === true) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
+  const contents = (recover ? readReceipt()?.before : undefined) ?? readFileSync(selection, "utf8");
   const active = JSON.parse(contents);
   if (active.version !== 1 || typeof active.sha256 !== "string" || !/${archiveDigest.source}/.test(active.sha256)) {
     throw new Error("Invalid active Workbench release");
@@ -130,6 +164,17 @@ function launcherText(): string {
   trusted(entry);
   trusted(join(release, "bundle", "launcher.cjs"));
   trusted(join(release, "bundle", "main.cjs"));
+  if (launchDaemon) {
+    const port = process.env[${JSON.stringify(launchdSharedPort)}];
+    if (!port || !/^[1-9][0-9]{0,4}$/.test(port) || Number(port) > 65535 || typeof process.execve !== "function") {
+      throw new Error("Invalid Workbench LaunchDaemon startup context");
+    }
+    const helper = join(release, ${JSON.stringify(launchdNativeHelper)});
+    trusted(helper);
+    trusted(process.execPath);
+    process.execve(helper, [helper, process.execPath, entry, port, ${JSON.stringify(launchdSystemDirectory + "/control.sock")}], process.env);
+    throw new Error("The Workbench LaunchDaemon could not activate its protected endpoints");
+  }
   process.argv[1] = entry;
   await import(pathToFileURL(entry).href);
 }
@@ -267,6 +312,7 @@ export interface ReleaseActivation {
   previous: string;
   replacement: string;
   begin: (service: ReleaseServiceRegistration) => void;
+  permitLaunchDaemonStart: (allowed: boolean) => void;
   select: () => void;
   restore: () => void;
   finishRestoration: () => void;
@@ -394,6 +440,9 @@ export async function updateArchiveRelease(
         recordReleaseTransition(receipt, before, after, service);
         state.recorded = state.managed = true;
       },
+      permitLaunchDaemonStart: (allowed: boolean) => {
+        permitLaunchDaemonStart(receipt, allowed);
+      },
       select() {
         if (!state.recorded) {
           recordReleaseTransition(receipt, before, after);
@@ -447,6 +496,7 @@ export async function recoverArchiveRelease(
     restore: () => void,
     service: ReleaseServiceRegistration | undefined,
     previous: string,
+    permitStart: (allowed: boolean) => void,
   ) => void | Promise<void>,
 ): Promise<ToolPin> {
   const installation = archiveInstallation();
@@ -471,6 +521,9 @@ export async function recoverArchiveRelease(
       },
       pending.service,
       installedDirectory(installation, previousDigest),
+      (allowed: boolean) => {
+        permitLaunchDaemonStart(receipt, allowed);
+      },
     );
     if (readBoundedFile(path, 4096, "active Workbench release").toString() !== pending.before)
       throw new Error("The previous Workbench release was not restored");

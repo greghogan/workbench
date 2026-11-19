@@ -65,6 +65,10 @@ export function listenLocal(server: Server, host: string, port: number): Promise
   return listen(server, (ready) => server.listen(port, host, ready));
 }
 
+export function listenInherited(server: NetServer, fd: number): Promise<void> {
+  return listen(server, (ready) => server.listen({ fd }, ready));
+}
+
 export function listenUnix(server: NetServer, path: string): Promise<void> {
   return listen(server, (ready) => server.listen(path, ready));
 }

@@ -16,7 +16,7 @@ export interface ReleaseSelection {
 }
 
 export interface ReleaseServiceRegistration {
-  manager: "systemd";
+  manager: "systemd" | "launchd";
   scope: "user" | "system";
   path: string;
   digest: string;
@@ -27,6 +27,7 @@ interface ReleaseTransition {
   before: string;
   after: string;
   service?: ReleaseServiceRegistration;
+  launchdMayStart?: true;
 }
 
 export function validArchiveDigest(value: unknown): value is string {
@@ -54,6 +55,10 @@ export function readReleaseTransition(path: string): ReleaseTransition | undefin
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
+  return parseTransition(bytes);
+}
+
+function parseTransition(bytes: Buffer): ReleaseTransition {
   const value: unknown = JSON.parse(bytes.toString());
   if (!isRecord(value) || value.version !== 1 || typeof value.before !== "string" || typeof value.after !== "string")
     throw new Error("Invalid Workbench release update receipt");
@@ -65,7 +70,7 @@ export function readReleaseTransition(path: string): ReleaseTransition | undefin
     const entry = value.service;
     if (
       !isRecord(entry) ||
-      entry.manager !== "systemd" ||
+      (entry.manager !== "systemd" && entry.manager !== "launchd") ||
       (entry.scope !== "user" && entry.scope !== "system") ||
       typeof entry.path !== "string" ||
       !isAbsolute(entry.path) ||
@@ -74,7 +79,18 @@ export function readReleaseTransition(path: string): ReleaseTransition | undefin
       throw new Error("Invalid Workbench service update receipt");
     service = { manager: entry.manager, scope: entry.scope, path: entry.path, digest: entry.digest };
   }
-  return { version: 1, before: value.before, after: value.after, ...(service ? { service } : {}) };
+  if (
+    value.launchdMayStart !== undefined &&
+    (value.launchdMayStart !== true || service?.manager !== "launchd" || service.scope !== "system")
+  )
+    throw new Error("Invalid Workbench LaunchDaemon update receipt");
+  return {
+    version: 1,
+    before: value.before,
+    after: value.after,
+    ...(service ? { service } : {}),
+    ...(value.launchdMayStart === true ? { launchdMayStart: true } : {}),
+  };
 }
 
 function syncParent(path: string): void {
@@ -119,6 +135,21 @@ export function recordReleaseTransition(
 export function finishReleaseTransition(path: string): void {
   unlinkSync(path);
   syncParent(path);
+}
+
+/** Keep launchd's sockets registered while an update stops and replaces its process. */
+export function permitLaunchDaemonStart(path: string, allowed: boolean): void {
+  const existing = readBoundedFile(path, maximumTransitionBytes, "Workbench release update receipt");
+  const { launchdMayStart, ...transition } = parseTransition(existing);
+  if (transition.service?.manager !== "launchd" || transition.service.scope !== "system")
+    throw new Error("The update receipt does not select a Workbench LaunchDaemon");
+  if (Boolean(launchdMayStart) === allowed) return;
+  publishReleaseState(
+    path,
+    JSON.stringify({ ...transition, ...(allowed ? { launchdMayStart: true } : {}) }) + "\n",
+    existing,
+    0o600,
+  );
 }
 
 /** Resume only a lock whose writer is known to have exited. */

@@ -1,9 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, readFileSync, rmdirSync, unlinkSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { createConnection, createServer, type Socket } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { userConfigValues } from "../../core/configuration/user-config.js";
+import { launchdSocketsActivated, launchdSystemDirectory } from "../../core/distribution/distribution-identity.js";
 import { executableIdentity } from "../../core/distribution/executable-identity.js";
 import {
   diagnostic,
@@ -15,7 +17,7 @@ import {
 import { readBoundedFile } from "../../core/runtime/file-reads.js";
 import { writeAtomic } from "../../core/runtime/file-publication.mjs";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
-import { isRecord } from "../../core/runtime/values.mjs";
+import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
 import {
   CacheLockState,
   inspectCacheMetadataLock,
@@ -25,19 +27,33 @@ import {
 import { demonstrationBase } from "../projects/project-mounts.js";
 import { isBrowserUsername, localBrowserUsername, systemSignOutPath } from "./browser-auth.js";
 import { WebError } from "./errors.js";
-import { closeLocalServer, createLocalServer, listenLocal, listenUnix, localEndpoint } from "./http-listener.js";
+import {
+  closeLocalServer,
+  createLocalServer,
+  listenInherited,
+  listenLocal,
+  listenUnix,
+  localEndpoint,
+} from "./http-listener.js";
 import { requestOrigin, secureResponse, send } from "./http.js";
 import { WebMetrics } from "./observability.js";
 import { activePrivateListenerProcesses } from "./system-ownership.js";
 import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
 import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
-import { AccountWorkers, linuxAccount, type LinuxAccount } from "./system-workers.js";
+import { AccountWorkers, serviceAccount, type ServiceAccount } from "./system-workers.js";
 
-const passwordPattern = /^[A-Za-z0-9_-]{43}$/;
+const browserCredentialBytes = 32;
+const browserCredentialPattern = /^[A-Za-z0-9_-]{43}$/;
 const digestPattern = /^[0-9a-f]{64}$/;
 const maximumControlBytes = 1024;
 const maximumAccountSessions = 32;
 const maximumSessions = 2048;
+const serviceReadinessQuery = "release-ready";
+
+function browserCredentialDigest(credential: string): string {
+  // The stored lookup key is for a generated 256-bit browser credential.
+  return createHash("sha256").update(credential).digest("hex");
+}
 
 export function serviceRelease(distribution: string): string {
   const { repository, revision, directory } = executableIdentity(distribution);
@@ -47,7 +63,9 @@ export function serviceRelease(distribution: string): string {
 }
 
 function runtimePath(): string {
-  return process.env.WORKBENCH_SYSTEM_RUNTIME_DIRECTORY ?? "/run/workbench";
+  return process.platform === "darwin"
+    ? launchdSystemDirectory
+    : (process.env.WORKBENCH_SYSTEM_RUNTIME_DIRECTORY ?? "/run/workbench");
 }
 
 function protectedPath(path: string): void {
@@ -63,7 +81,7 @@ function controlPaths(runtime: string) {
 }
 
 export function systemServicePending(): boolean {
-  if (process.platform !== "linux") return false;
+  if (process.platform !== "linux" && process.platform !== "darwin") return false;
   const runtime = runtimePath();
   const lease = lstatSync(join(runtime, "system.lock"), { throwIfNoEntry: false });
   if (!lease) return false;
@@ -72,7 +90,7 @@ export function systemServicePending(): boolean {
 }
 
 function privateProof(root: string, proof: string): number | undefined {
-  if (!passwordPattern.test(proof)) return undefined;
+  if (!browserCredentialPattern.test(proof)) return undefined;
   const path = join(root, proof);
   const entry = lstatSync(path, { throwIfNoEntry: false });
   if (!entry?.isDirectory() || entry.uid === 0 || (entry.mode & 0o777) !== 0o700) return undefined;
@@ -95,10 +113,11 @@ class BrowserSessions {
   private stored = new Map<string, Session>();
 
   constructor(
-    readonly path: string,
+    readonly path: string | undefined,
     readonly origin: string,
     readonly lifetime: number,
   ) {
+    if (path === undefined) return;
     const existing = lstatSync(path, { throwIfNoEntry: false });
     if (!existing) return;
     if (!existing.isFile() || existing.uid !== 0 || existing.mode & 0o077)
@@ -129,6 +148,7 @@ class BrowserSessions {
   }
 
   private save(sessions = this.stored): void {
+    if (this.path === undefined) return;
     writeAtomic(
       this.path,
       JSON.stringify({ version: 1, origin: this.origin, sessions: Object.fromEntries(sessions) }),
@@ -136,10 +156,10 @@ class BrowserSessions {
     );
   }
 
-  issue(account: LinuxAccount): string {
-    const password = randomBytes(32).toString("base64url");
-    const digest = createHash("sha256").update(password).digest("hex");
+  issue(account: ServiceAccount): string {
     if (!isBrowserUsername(account.name)) throw new Error("The OS account name cannot be used for browser sign-in");
+    const credential = randomBytes(browserCredentialBytes).toString("base64url");
+    const digest = browserCredentialDigest(credential);
     const now = Date.now();
     const next = new Map([...this.stored].filter(([, item]) => item.expires > now));
     const personal = [...next].filter(([, item]) => item.uid === account.uid);
@@ -154,7 +174,7 @@ class BrowserSessions {
     });
     this.save(next);
     this.stored = next;
-    return password;
+    return credential;
   }
 
   find(authorization: string | undefined): { digest: string; session: Session } | undefined {
@@ -165,9 +185,9 @@ class BrowserSessions {
     const separator = decoded.indexOf(":");
     if (separator < 1) return undefined;
     const user = decoded.slice(0, separator),
-      password = decoded.slice(separator + 1);
-    if (!passwordPattern.test(password)) return undefined;
-    const digest = createHash("sha256").update(password).digest("hex");
+      credential = decoded.slice(separator + 1);
+    if (!browserCredentialPattern.test(credential)) return undefined;
+    const digest = browserCredentialDigest(credential);
     const session = this.stored.get(digest);
     return session?.user === user && session.expires > Date.now() ? { digest, session } : undefined;
   }
@@ -201,20 +221,27 @@ function boundedControl(socket: Socket, complete: (payload: string) => void): vo
 }
 
 export async function startSystemService(distribution: string, options: { host?: "127.0.0.1" | "::1"; port?: number }) {
-  if (process.platform !== "linux" || process.getuid?.() !== 0 || process.geteuid?.() !== 0)
-    throw new Error("System Workbench service startup requires a qualified Linux administrator installation");
+  const launchd = process.platform === "darwin";
+  if ((!launchd && process.platform !== "linux") || process.getuid?.() !== 0 || process.geteuid?.() !== 0)
+    throw new Error("System Workbench service startup requires a qualified administrator installation");
   const preferences = userConfigValues();
   const { host, port } = localEndpoint({ ...options, port: options.port ?? Number(preferences["daemon.system_port"]) });
-  const firstUnprivileged = Number(readFileSync("/proc/sys/net/ipv4/ip_unprivileged_port_start", "utf8").trim());
-  if (!Number.isSafeInteger(firstUnprivileged) || port === 0 || port >= firstUnprivileged)
-    throw new Error("Choose a fixed Workbench system port that ordinary accounts cannot bind on this host");
+  if (launchd) {
+    if (process.env[launchdSocketsActivated] !== "1" || !port || host !== "127.0.0.1")
+      throw new Error("Start the installed Workbench LaunchDaemon to acquire its protected endpoints");
+    Reflect.deleteProperty(process.env, launchdSocketsActivated);
+  } else {
+    const firstUnprivileged = Number(readFileSync("/proc/sys/net/ipv4/ip_unprivileged_port_start", "utf8").trim());
+    if (!Number.isSafeInteger(firstUnprivileged) || port === 0 || port >= firstUnprivileged)
+      throw new Error("Choose a fixed Workbench system port that ordinary accounts cannot bind on this host");
+  }
   protectedPath(distribution);
   protectedPath(join(distribution, "bundle/main.cjs"));
   protectedPath(process.execPath);
   const runtime = runtimePath();
   const state = process.env.WORKBENCH_SYSTEM_STATE_DIRECTORY ?? "/var/lib/workbench";
   protectedPath(runtime);
-  protectedPath(state);
+  if (!launchd) protectedPath(state);
   const { control, requests } = controlPaths(runtime);
   const origin = new URL(`http://${host === "::1" ? "[::1]" : host}:${String(port)}`).origin;
   const release = serviceRelease(distribution);
@@ -226,18 +253,22 @@ export async function startSystemService(distribution: string, options: { host?:
     await withCacheLocksSync(
       [lease],
       async () => {
-        const stale = lstatSync(control, { throwIfNoEntry: false });
-        if (stale) {
-          if (!stale.isSocket() || stale.uid !== 0) throw new Error("The system control path is already occupied");
-          unlinkSync(control);
+        const endpoint = lstatSync(control, { throwIfNoEntry: false });
+        if (endpoint && (!endpoint.isSocket() || endpoint.uid !== 0))
+          throw new Error("The system control path is already occupied");
+        if (launchd) {
+          if (!endpoint || (endpoint.mode & 0o777) !== 0o666)
+            throw new Error("Launchd did not publish the administrator-owned Workbench control socket");
+        } else {
+          if (endpoint) unlinkSync(control);
+          mkdirSync(requests, { recursive: true, mode: 0o700 });
         }
-        mkdirSync(requests, { recursive: true, mode: 0o700 });
         const inbox = lstatSync(requests);
-        if (!inbox.isDirectory() || inbox.uid !== 0)
+        if (!inbox.isDirectory() || inbox.uid !== 0 || (launchd && (inbox.mode & 0o7777) !== 0o1733))
           throw new Error("The system sign-in directory is not administrator-owned");
-        chmodSync(requests, 0o1733);
+        if (!launchd) chmodSync(requests, 0o1733);
         const sessions = new BrowserSessions(
-          join(state, "browser-sessions.json"),
+          launchd ? undefined : join(state, "browser-sessions.json"),
           origin,
           Number(preferences["daemon.session_seconds"]) * 1000,
         );
@@ -246,7 +277,7 @@ export async function startSystemService(distribution: string, options: { host?:
           join(runtime, "workers-" + randomBytes(5).toString("hex")),
           Number(preferences["daemon.worker_idle_seconds"]) * 1000,
         );
-        const browser = createLocalServer(async (request, response) => {
+        const handleBrowser = async (request: IncomingMessage, response: ServerResponse) => {
           secureResponse(response);
           try {
             if (requestOrigin(request) !== origin)
@@ -279,17 +310,31 @@ export async function startSystemService(distribution: string, options: { host?:
                 error instanceof WebError ? error.message : "Workbench system request failed",
               );
           }
-        }, new WebMetrics());
+        };
+        const browser = createLocalServer(handleBrowser, new WebMetrics());
+        const additionalBrowser = launchd ? createLocalServer(handleBrowser, new WebMetrics()) : undefined;
+        let listening = false;
+        const controlClients = new Set<Socket>();
         const signIn = createServer({ allowHalfOpen: true }, (socket) => {
+          controlClients.add(socket);
+          socket.once("close", () => controlClients.delete(socket));
           boundedControl(socket, (payload) => {
             try {
+              if (launchd && payload === serviceReadinessQuery + "\n" + release) {
+                socket.end(JSON.stringify({ ready: listening, pid: process.pid }));
+                return;
+              }
+              if (launchd && !listening) {
+                socket.end(JSON.stringify({ waiting: true }));
+                return;
+              }
               const [claim, client] = payload.split("\n");
               if (!claim || release !== client) {
                 socket.end(JSON.stringify({ error: "A different Workbench release owns the system service" }));
                 return;
               }
               const uid = privateProof(requests, claim);
-              const account = uid === undefined ? undefined : linuxAccount(uid);
+              const account = uid === undefined ? undefined : serviceAccount(uid);
               if (!account) {
                 socket.end(JSON.stringify({ error: "Workbench could not verify the account requesting sign-in" }));
                 return;
@@ -304,7 +349,8 @@ export async function startSystemService(distribution: string, options: { host?:
         signIn.maxConnections = 16;
         try {
           const signal = cancellation.signal;
-          checkInstalledServiceStart(distribution, systemdServiceProcess());
+          checkInstalledServiceStart(distribution, launchd || systemdServiceProcess());
+          if (launchd) await listenInherited(signIn, 5);
           if (activePrivateListenerProcesses().length) {
             diagnostic(
               LogLevel.Info,
@@ -317,10 +363,16 @@ export async function startSystemService(distribution: string, options: { host?:
             while (activePrivateListenerProcesses().length) await delay(200, undefined, { signal });
           }
           signal.throwIfAborted();
-          await listenLocal(browser, host, port);
-          await listenUnix(signIn, control);
-          chmodSync(control, 0o666);
-          notifySystemdServiceReady();
+          if (additionalBrowser) {
+            await listenInherited(browser, 3);
+            await listenInherited(additionalBrowser, 4);
+          } else {
+            await listenLocal(browser, host, port);
+            await listenUnix(signIn, control);
+            chmodSync(control, 0o666);
+            notifySystemdServiceReady();
+          }
+          listening = true;
           console.log(`Workbench web UI: ${origin}`);
           if (!cancellation.signal.aborted)
             await new Promise<void>((resolve, reject) => {
@@ -332,12 +384,16 @@ export async function startSystemService(distribution: string, options: { host?:
                 { once: true },
               );
               browser.once("error", reject);
+              additionalBrowser?.once("error", reject);
               signIn.once("error", reject);
             });
         } finally {
+          listening = false;
+          diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopping);
           await settleCleanup([
-            () =>
-              new Promise<void>((resolve, reject) => {
+            async () => {
+              for (const socket of controlClients) socket.destroy();
+              await new Promise<void>((resolve, reject) => {
                 if (!signIn.listening) {
                   resolve();
                   return;
@@ -346,10 +402,21 @@ export async function startSystemService(distribution: string, options: { host?:
                   if (error) reject(error);
                   else resolve();
                 });
-              }),
-            () => workers.close(),
+              });
+              diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, {
+                component: "control listener",
+              });
+            },
+            async () => {
+              await workers.close();
+              diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, {
+                component: "account workers",
+              });
+            },
             () => closeLocalServer(browser),
+            () => (additionalBrowser ? closeLocalServer(additionalBrowser) : undefined),
             () => {
+              if (launchd) return;
               try {
                 rmdirSync(requests);
               } catch (error) {
@@ -357,6 +424,7 @@ export async function startSystemService(distribution: string, options: { host?:
               }
             },
           ]);
+          diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped);
         }
       },
       { mutable: false },
@@ -368,8 +436,41 @@ export async function startSystemService(distribution: string, options: { host?:
   }
 }
 
+export async function launchDaemonReady(distribution: string, pid: number, signal: AbortSignal): Promise<boolean> {
+  const runtime = runtimePath();
+  protectedPath(runtime);
+  const { control } = controlPaths(runtime);
+  const endpoint = lstatSync(control, { throwIfNoEntry: false });
+  if (!endpoint) return false;
+  if (!endpoint.isSocket() || endpoint.uid !== 0)
+    throw new Error("The Workbench LaunchDaemon control socket ownership changed during the update");
+  const query = serviceReadinessQuery + "\n" + serviceRelease(distribution);
+  return new Promise<boolean>((resolve, reject) => {
+    const socket = createConnection({ path: control, signal: AbortSignal.any([signal, AbortSignal.timeout(1000)]) });
+    socket.once("error", () => {
+      if (signal.aborted) reject(errorFrom(signal.reason));
+      else resolve(false);
+    });
+    socket.once("connect", () => {
+      socket.end(query);
+    });
+    boundedControl(socket, (reply) => {
+      try {
+        const value: unknown = JSON.parse(reply);
+        resolve(isRecord(value) && value.ready === true && value.pid === pid);
+      } catch {
+        resolve(false);
+      }
+    });
+    socket.once("close", () => {
+      if (signal.aborted) reject(errorFrom(signal.reason));
+      else resolve(false);
+    });
+  });
+}
+
 export async function discoverSystemService(distribution: string, demo: boolean, signal: AbortSignal) {
-  if (process.platform !== "linux" || process.getuid?.() === 0) return undefined;
+  if ((process.platform !== "linux" && process.platform !== "darwin") || process.getuid?.() === 0) return undefined;
   const runtime = runtimePath();
   const { control, requests } = controlPaths(runtime);
   const endpoint = lstatSync(control, { throwIfNoEntry: false });
@@ -418,6 +519,7 @@ export async function discoverSystemService(distribution: string, demo: boolean,
         reject(new Error("Workbench system sign-in connection closed"));
       });
     });
+    if (process.platform === "darwin" && isRecord(payload) && payload.waiting === true) return undefined;
     if (isRecord(payload) && typeof payload.error === "string") throw new Error(payload.error);
     if (
       !isRecord(payload) ||
@@ -426,7 +528,7 @@ export async function discoverSystemService(distribution: string, demo: boolean,
       new URL(payload.origin).origin !== payload.origin ||
       payload.username !== localBrowserUsername() ||
       typeof payload.password !== "string" ||
-      !passwordPattern.test(payload.password) ||
+      !browserCredentialPattern.test(payload.password) ||
       typeof payload.pid !== "number" ||
       !Number.isSafeInteger(payload.pid) ||
       payload.pid <= 0
@@ -439,6 +541,11 @@ export async function discoverSystemService(distribution: string, demo: boolean,
       logs: undefined,
       shared: true,
     };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (process.platform === "darwin" && (code === "ENOENT" || code === "ECONNREFUSED") && !systemServicePending())
+      return undefined;
+    throw error;
   } finally {
     retireProof();
   }

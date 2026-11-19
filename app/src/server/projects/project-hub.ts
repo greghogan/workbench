@@ -667,25 +667,41 @@ export async function startProjectHub(
       clearInterval(heartbeat);
       unsubscribe();
       inventories.close();
-      await settleCleanup([
-        () => {
-          tasks.cancelPending();
-        },
-        () => reviews.close(),
-        () => directory.close(),
-        () => views.close(),
-        () => demo?.close(),
-        () => {
-          for (const response of clients) response.end();
-          clients.clear();
-        },
-        () => lifecycle.drain(),
-        () => tasks.close(),
-        () => closeLocalServer(server),
-        () => {
-          generation.close();
-        },
-      ]);
+      const phases = [
+        [
+          "cache admission",
+          () => {
+            tasks.cancelPending();
+          },
+        ],
+        ["review summaries", () => reviews.close()],
+        ["project directory", () => directory.close()],
+        ["project views", () => views.close()],
+        ["demonstration", () => demo?.close()],
+        [
+          "event streams",
+          () => {
+            for (const response of clients) response.end();
+            clients.clear();
+          },
+        ],
+        ["admitted requests", () => lifecycle.drain()],
+        ["cache workers", () => tasks.close()],
+        ["browser transport", () => closeLocalServer(server)],
+        [
+          "worker generation",
+          () => {
+            generation.close();
+          },
+        ],
+      ] as const;
+      await settleCleanup(
+        phases.map(([component, close]) => async () => {
+          await close();
+          if (options.worker)
+            diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, { component });
+        }),
+      );
     })();
     return closed;
   };

@@ -160,7 +160,7 @@ shipped-browser workflows exercise the assembled interface separately from domai
 - `src/server/http/private-service.ts`, `test/server/http/private_service.test.mts`: Coordinate private listener
   ownership, CLI discovery, background startup, and recovery from an abandoned service.
 - `src/server/http/system-service.ts`, `src/server/http/system-workers.ts`, `src/server/http/system-ownership.ts`: Admit
-  Linux system sign-in, coordinate handoff, and forward authorized requests to isolated account workers.
+  shared Unix service sign-in, coordinate handoff, and forward authorized requests to isolated account workers.
 - `src/server/views/experiment-pages.tsx`: Presents experiment execution, candidate verdicts, and completed evidence for
   human review.
 - `test/server/projects/demo_service.test.mts`, `test/server/demo/demonstration_resume.test.mts`,

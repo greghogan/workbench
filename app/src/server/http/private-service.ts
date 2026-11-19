@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { settleCleanup } from "../../core/diagnostics/diagnostic-errors.mjs";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../../core/diagnostics/diagnostics.mjs";
 import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
+import { launchdServiceProcess } from "../../core/distribution/distribution-identity.js";
 import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
@@ -85,7 +86,7 @@ function windowsPrivateLease(): string {
 /** A manual server must stop before the application can switch its installed release. */
 export function assertReleaseServicesIdle(exceptPid?: number, managedState?: string): void {
   const active =
-    process.platform === "linux"
+    process.platform === "linux" || (process.platform === "darwin" && process.geteuid?.() === 0)
       ? activePrivateListenerProcesses(process.geteuid?.() === 0 ? undefined : process.geteuid?.()).some(
           (pid) => pid !== exceptPid,
         )
@@ -277,7 +278,10 @@ async function serveOwned(
   let yielded = false;
   try {
     abandon = markPrivateListener(paths.directory);
-    checkInstalledServiceStart(distribution, options.mode === "service" && systemdServiceProcess());
+    checkInstalledServiceStart(
+      distribution,
+      options.mode === "service" && (systemdServiceProcess() || launchdServiceProcess()),
+    );
     yielded = systemServicePending();
     if (!yielded) {
       hub = await startProjectHub(distribution, options);
@@ -358,14 +362,14 @@ export async function runPrivateService(distribution: string, options: Options, 
     const paths = servicePaths(),
       release = serviceRelease(distribution);
     while (!signal.aborted) {
-      if (options.mode !== "service") {
+      const lock = inspectCacheMetadataLock(paths.lease);
+      if (options.mode !== "service" && lock.state !== CacheLockState.Active) {
         const shared = await discoverSystemService(distribution, options.demo ?? false, signal);
         if (shared) {
           present(shared, false);
           return;
         }
       }
-      const lock = inspectCacheMetadataLock(paths.lease);
       if (lock.state === CacheLockState.Unlocked) {
         if (systemServicePending()) {
           if (!announcedWait) {

@@ -3,6 +3,18 @@ import { readBoundedFile } from "../runtime/file-reads.js";
 
 export const distributionSourceFile = "workbench-source.json";
 export const archiveInstallationEnvironment = "WORKBENCH_ARCHIVE_INSTALLATION";
+export const launchdServiceEnvironment = "WORKBENCH_LAUNCHD_SERVICE";
+export const launchdSharedPort = "WORKBENCH_LAUNCHD_SYSTEM_PORT";
+export const launchdSocketsActivated = "WORKBENCH_LAUNCHD_SOCKET_ACTIVATED";
+export { launchdNativeHelper, launchdSystemDirectory } from "./launchd-paths.mts";
+
+export function launchdServiceProcess(): boolean {
+  const uid = process.geteuid?.();
+  return (
+    process.platform === "darwin" && uid !== undefined && uid > 0 && process.env[launchdServiceEnvironment] === "1"
+  );
+}
+
 export interface DistributionSource {
   repository: string;
   revision: string;

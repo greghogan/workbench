@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { lstatSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { readBoundedFile } from "../../core/runtime/file-reads.js";
@@ -21,11 +22,30 @@ function linuxProcessIdentity(pid: number): { uid: number; start: string } | und
   }
 }
 
+function listenerIdentity(pid: number): { uid: number; start: string } | undefined {
+  if (process.platform === "linux") return linuxProcessIdentity(pid);
+  if (process.platform !== "darwin") return undefined;
+  try {
+    const line = execFileSync("/bin/ps", ["-p", String(pid), "-o", "uid=", "-o", "lstart="], {
+      encoding: "utf8",
+      maxBuffer: 256,
+      timeout: 5000,
+      env: { PATH: "/usr/bin:/bin", LC_ALL: "C" },
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const [, uid, start] = /^(\d+)\s+([^\r\n]+)$/.exec(line) ?? [];
+    if (uid && start) return { uid: Number(uid), start };
+  } catch {
+    // A stopped process cannot retain the listener lease.
+  }
+  return undefined;
+}
+
 /** An account publishes its identity before attempting browser bind and keeps it until transport shutdown. */
 export function markPrivateListener(directory: string): (() => void) | undefined {
-  if (process.platform !== "linux") return undefined;
-  const identity = linuxProcessIdentity(process.pid);
-  if (!identity) throw new Error("Could not establish the Linux private Workbench listener identity");
+  if (process.platform !== "linux" && process.platform !== "darwin") return undefined;
+  const identity = listenerIdentity(process.pid);
+  if (!identity) throw new Error("Could not establish the private Workbench listener identity");
   const marker = join(directory, ownerFile);
   writeAtomic(marker, JSON.stringify({ pid: process.pid, start: identity.start }), 0o600);
   return () => {
@@ -54,7 +74,7 @@ export function activePrivateListenerProcesses(uid?: number): number[] {
         typeof owner.start !== "string"
       )
         continue;
-      const active = linuxProcessIdentity(owner.pid);
+      const active = listenerIdentity(owner.pid);
       if (active?.uid === file.uid && active.start === owner.start) processes.push(owner.pid);
     } catch {
       // A private owner may leave at any point. No unverified marker establishes activity.

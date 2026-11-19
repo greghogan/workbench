@@ -132,9 +132,11 @@ workbench update --archive ./workbench.tar.gz --sha256 SHA256
 workbench update --rollback
 ```
 
-For a shared installation, use its installed launcher with administrator access. An active systemd service drains its work and restarts using the selected version. Workbench waits for the replacement to listen
-and restores the previous version if startup fails. Stop any manual server before updating. The installed launcher
-stays in the same location and project collections update separately.
+For a shared installation, use its installed launcher with administrator access. An active systemd or launchd service
+drains its work and restarts using the selected version. Workbench waits for the replacement to listen
+and restores the previous version if startup fails. A shared LaunchDaemon keeps its socket registration loaded during
+the switch. Stop manual servers before updating. The installed launcher stays in the same location and project
+collections update separately.
 
 If the update process stopped during the switch, run `workbench update --recover` using the same installed command
 and account. The launcher uses the previous verified release for recovery. Workbench restores that selection and
@@ -266,6 +268,30 @@ uses two accounts to verify isolation. Run it on a disposable Linux runner with 
 
     bash scripts/check-linux-service.sh user /path/to/workbench-artifacts
     bash scripts/check-linux-service.sh system /path/to/workbench-artifacts
+
+## Register the macOS user service
+
+From a graphical login session, use the installed, verified command to register a LaunchAgent for your account.
+
+    workbench install --service user
+    launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/org.workbench.app.plist"
+
+The LaunchAgent runs at graphical login. Run `workbench serve` to obtain the active listener's URL and sign-in. Each
+restart invalidates the previous password. Inspect its status with `launchctl print "gui/$(id -u)/org.workbench.app"`.
+Remove the registration with `workbench uninstall --service user`. Removal drains the listener and preserves application
+files and user data.
+
+To register a shared LaunchDaemon, use the archive-managed system installation with an administrator-owned Node.js
+runtime. Select the installed Xcode or Command Line Tools with `xcode-select` so account workers can run Git without an
+interactive setup prompt. The release archive includes the macOS launcher.
+
+    sudo /usr/local/bin/workbench install --service system
+    sudo launchctl bootstrap system /Library/LaunchDaemons/org.workbench.app.plist
+
+Launchd owns the fixed loopback port while the registration is loaded. Choose it with `--port PORT` during registration.
+Run `workbench serve` from each account for its URL, username, and password. The daemon's next process requires a new
+sign-in. Use `sudo launchctl print system/org.workbench.app` to inspect the registration. Use
+`sudo /usr/local/bin/workbench uninstall --service system` to remove it and preserve the installation and account data.
 
 ## Select a project revision
 

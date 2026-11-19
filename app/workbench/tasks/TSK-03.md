@@ -114,7 +114,7 @@ Uninstall removes registration without removing user data.
 - [x] Protect private browser access with native sign-in.
 - [x] Coordinate shared and private startup, and route authenticated requests to isolated workers.
 - [x] Install and manage Linux services with systemd and verify native lifecycle and identity boundaries.
-- [ ] Install and manage macOS services with launchd and verify native lifecycle and identity boundaries.
+- [x] Install and manage macOS services with launchd and verify native lifecycle and identity boundaries.
 - [ ] Install and manage Windows services with SCM and verify native lifecycle and identity boundaries.
 - [ ] Verify coherent updates, rollback, repair, and removal across installed releases.
 
@@ -123,13 +123,13 @@ Uninstall removes registration without removing user data.
 ### Private browser sign-in
 
 The private listener challenges requests for project pages, events, and actions. It accepts a generated credential only
-for the server process that issued it. Sign-in uses the OS username. The demonstration uses separate credentials for the
-connection between the hub and its child. The hub fixes the child's network address at startup, keeping request paths
-from redirecting requests or exposing that credential. Chromium exercised sign-in, form submission, and reload with
-JavaScript disabled. The browser checks scope credentials to the service origin. Cache verification uses Chromium's
-stored sign-in after the initial challenge, keeping its cache enabled. Retained service and fixture diagnostics redact
-the generated password. An SSH tunnel to a different local port preserved the private listener's sign-in challenge and
-authorized access.
+for the server process that issued it. The sign-in username comes from the OS account. The demonstration uses a separate
+credential for the connection between the hub and its child. The hub fixes the child's network address at startup,
+keeping request paths from redirecting requests or exposing that credential. Chromium exercised sign-in, form
+submission, and reload with JavaScript disabled. The browser checks scope credentials to the service origin. Cache
+verification uses Chromium's stored sign-in after the initial challenge, keeping its cache enabled. Retained service and
+fixture diagnostics redact the generated password. An SSH tunnel to a different local port preserved the private
+listener's sign-in challenge and authorized access.
 
 ### Private listener discovery
 
@@ -146,9 +146,9 @@ port. A waiting supervisor can stop without affecting the existing listener.
 
 The system service binds a port protected by the host and waits for private listeners before accepting browser traffic.
 Local sign-in verifies the requesting account through its ownership of a one-use filesystem entry. The supervisor keeps
-browser credential digests in protected state and forwards authenticated requests over Unix sockets to workers running
-as their respective accounts. Browser sign-in uses the OS account. Idle workers can be recreated without renewing
-browser sign-in.
+browser credential digests and account names in protected state. It matches both at sign-in and forwards requests over
+Unix sockets to workers running as their respective accounts. Idle workers can be recreated without renewing browser
+sign-in.
 
 An isolated Linux environment exercised both directions of private and shared startup, cancellation while waiting,
 separate project visibility for two OS accounts, and sign-in across service restart. Signing out revoked only the
@@ -180,6 +180,24 @@ still access it after its idle worker stopped. An open event stream kept its wor
 account signed in. Starting a worker required the saved sign-in to match the current OS account. Changing its home
 directory while idle caused the original sign-in to be refused.
 
+### macOS endpoint qualification
+
+A [hosted macOS probe](https://github.com/greghogan/workbench/actions/runs/44634804787/job/135950452890) launched two
+workers under their intended OS accounts. Each could read its own test data and was denied access to the other's data.
+Ordinary processes were denied an explicit loopback bind but could listen on the low port through a wildcard bind while
+the shared listener was stopped. A wildcard listener covers loopback. Under the original persistent sign-in design, a
+browser refreshing the same URL during an update could resend a password that would still work after Workbench
+restarted. The browser also needs a protected origin when it follows a saved link during a restart.
+
+A [socket activation probe](https://github.com/greghogan/workbench/actions/runs/44644643298/job/135984003909) verified
+that `launchd` reserved both loopback addresses with its registration loaded and no service process running. Neither
+ordinary account could claim the port. After the first process stopped, both addresses reached a new process on the same
+port. The probe verified removal of the registration after deliberate unload.
+
+The macOS user installer registers a LaunchAgent in the account's graphical session. Hosted candidate preparation
+includes a qualification script for installation, browser sign-in, credential invalidation after restart, and
+preservation of edited registrations.
+
 ### Installed release selection
 
 Archive installation verifies the checksum and starts the candidate CLI before recording it as active. The CLI and
@@ -192,6 +210,14 @@ launcher switches releases. The new service reports readiness after its browser 
 startup fails, Workbench restores the previous selection and starts that release. An active manual listener defers the
 switch. Native user and system units exercised an update, a failed replacement startup, an explicit rollback, and
 manual-listener deferral.
+
+The macOS LaunchAgent uses the same durable release switch. The update verifies the replacement listener through its
+account-owned control socket and the PID reported by launchd. The CI qualification script exercises updates, failed
+replacement startup, interrupted handoff recovery, and rollback in the graphical session.
+
+Shared macOS updates keep launchd's sockets registered while the old process drains and the replacement starts. The
+release receipt coordinates the switch, and the daemon confirms its release and PID through the protected local control
+socket. The native candidate fixture checks that the same endpoint remains registered through update and rollback.
 
 Before stopping a managed service, Workbench saves its selected and replacement releases and the registered unit. The
 stable launcher can run recovery from the previous verified release while the replacement is unconfirmed. Native user

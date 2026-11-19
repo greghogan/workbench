@@ -24,6 +24,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { prepareWorkbenchPackage } from "../../../src/core/artifacts/package.ts";
 import {
   archiveInstallationEnvironment,
+  launchdNativeHelper,
   readDistributionSource,
 } from "../../../src/core/distribution/distribution-identity.ts";
 import {
@@ -106,6 +107,23 @@ async function unpack(path: PathOrFileDescriptor) {
   await pipeline(Readable.from(gunzipSync(readFileSync(path))), extract);
   return entries;
 }
+
+test("the portable archive retains the verified macOS helper as executable alongside portable bundles", async () => {
+  const { root } = fixture();
+  const source = commit(root);
+  const helper = Buffer.from("native helper fixture");
+  const script = Buffer.from("portable bundle fixture");
+  const built = await prepareWorkbenchPackage(root, {
+    generated: [
+      { path: launchdNativeHelper, contents: helper, executable: true },
+      { path: "bundle/launcher.cjs", contents: script },
+    ],
+  });
+  const files = await unpack(built.archive);
+  expect(built.source?.revision).toBe(source);
+  expect(files.get(`workbench/${launchdNativeHelper}`)).toMatchObject({ header: { mode: 0o755 }, bytes: helper });
+  expect(files.get("workbench/bundle/launcher.cjs")).toMatchObject({ header: { mode: 0o644 }, bytes: script });
+});
 
 test("archive installation switches only verified releases and restores the launcher selection when activation fails", async () => {
   const { base, root } = fixture();

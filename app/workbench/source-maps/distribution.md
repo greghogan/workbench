@@ -16,6 +16,8 @@
 - `src/cli/installation.ts`: Installs and updates owned command launchers and manages installed service registrations.
 - `src/core/distribution/systemd-service.ts`: Manages owned systemd units, including service readiness and release
   activation.
+- `src/core/distribution/launchd-service.ts`, `src/core/distribution/launchd-paths.mts`: Register the macOS user agent
+  and shared daemon, preserve launchd socket ownership during process restarts, and drain owned jobs on removal.
 - `src/core/distribution/runtime-distribution.ts`: Materializes an external executable into disposable CI checkouts.
 - `src/core/distribution/distribution-manifest.ts`: Verifies artifact inventories and resolves recorded input hashes.
 - `src/core/distribution/release-archive.ts`: Verifies release checksums and unpacks a private copy for qualification
@@ -44,9 +46,9 @@
 - `src/core/artifacts`: Builds and verifies development images and release packages, including input and publication
   identities.
 
-- `src/core/verification`: Runs installed-product rehearsals against disposable projects and distributions.
 - `src/core/artifacts/preparation-store.ts`, `src/core/storage/managed-builder-store.ts`: Select preparation backends,
   verify Docker's access to local cache directories, and attach shared stores.
 
+- `src/core/verification`: Runs installed-product rehearsals against disposable projects and distributions.
 
 - `resources/verification`: Provides the human-written charter used by disposable verification projects.

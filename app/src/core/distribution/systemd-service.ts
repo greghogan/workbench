@@ -259,6 +259,7 @@ export function recoverSystemdRelease(
     restore();
     return;
   }
+  if (service.manager !== "systemd") throw new Error("Recover the release with the original native service manager");
   const { scope, path, digest } = service;
   serviceOwner(scope);
   if (path !== servicePath(scope))

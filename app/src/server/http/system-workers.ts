@@ -1,11 +1,22 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, chownSync, lstatSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from "node:fs";
+import {
+  accessSync,
+  chmodSync,
+  chownSync,
+  constants,
+  lstatSync,
+  mkdirSync,
+  renameSync,
+  rmdirSync,
+  unlinkSync,
+} from "node:fs";
 import { request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { isAbsolute, join } from "node:path";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom } from "../../core/runtime/values.mjs";
 import { settleCleanup } from "../../core/diagnostics/diagnostic-errors.mjs";
+import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../../core/diagnostics/diagnostics.mjs";
 import { startProjectHub } from "../projects/project-hub.js";
 import { WebError } from "./errors.js";
 
@@ -22,20 +33,20 @@ const immediateConnectionHeaders = new Set([
   "upgrade",
 ]);
 
-export interface LinuxAccount {
+export interface ServiceAccount {
   uid: number;
   gid: number;
   name: string;
   home: string;
 }
 
-type AccountIdentity = Pick<LinuxAccount, "uid" | "name" | "home">;
+type AccountIdentity = Pick<ServiceAccount, "uid" | "name" | "home">;
 
-function sameAccount(account: LinuxAccount, identity: AccountIdentity): boolean {
+function sameAccount(account: ServiceAccount, identity: AccountIdentity): boolean {
   return account.uid === identity.uid && account.name === identity.name && account.home === identity.home;
 }
 
-export function linuxAccount(uid: number): LinuxAccount | undefined {
+function linuxAccount(uid: number): ServiceAccount | undefined {
   if (!Number.isSafeInteger(uid) || uid <= 0) return undefined;
   let record: string;
   try {
@@ -62,6 +73,44 @@ export function linuxAccount(uid: number): LinuxAccount | undefined {
   )
     return undefined;
   return { uid, gid: Number(group), name, home };
+}
+
+export function serviceAccount(uid: number): ServiceAccount | undefined {
+  if (process.platform !== "darwin") return linuxAccount(uid);
+  if (!Number.isSafeInteger(uid) || uid <= 0) return undefined;
+  try {
+    const answer = execFileSync("/usr/bin/dscacheutil", ["-q", "user", "-a", "uid", String(uid)], {
+      encoding: "utf8",
+      maxBuffer: 8192,
+      timeout: 5000,
+      env: { PATH: "/usr/bin:/bin", LC_ALL: "C" },
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const fields = new Map<string, string>();
+    for (const match of answer.matchAll(/^(name|uid|gid|dir): (.+)$/gm)) {
+      const [, name, value] = match;
+      if (name === undefined || value === undefined || fields.has(name)) return undefined;
+      fields.set(name, value);
+    }
+    const name = fields.get("name"),
+      group = fields.get("gid"),
+      home = fields.get("dir");
+    if (
+      fields.get("uid") !== String(uid) ||
+      !name ||
+      /[:\p{Cc}]/u.test(name) ||
+      !group ||
+      !/^\d+$/.test(group) ||
+      !Number.isSafeInteger(Number(group)) ||
+      !home ||
+      /\p{Cc}/u.test(home) ||
+      !isAbsolute(home)
+    )
+      return undefined;
+    return { uid, gid: Number(group), name, home };
+  } catch {
+    return undefined;
+  }
 }
 
 /** The worker starts after OS privilege reduction and only accepts the supervisor's Unix transport. */
@@ -102,7 +151,13 @@ export async function serveAccountWorker(distribution: string, socket: string): 
         });
       });
     } finally {
+      diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopping, {
+        component: "account worker",
+      });
       await hub.close();
+      diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, {
+        component: "account worker",
+      });
     }
   } finally {
     process.off("disconnect", stop);
@@ -145,7 +200,40 @@ function forward(socket: string, token: string, request: IncomingMessage, respon
   });
 }
 
-async function openWorker(distribution: string, directory: string, account: LinuxAccount, signal: AbortSignal) {
+function accountWorkerPath(): string {
+  const system = "/usr/local/bin:/usr/bin:/bin";
+  if (process.platform !== "darwin") return system;
+  try {
+    // The system Git shim may invoke Xcode's interactive setup for an account without a graphical session.
+    const developer = execFileSync("/usr/bin/xcode-select", ["--print-path"], {
+      encoding: "utf8",
+      env: { PATH: system },
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 8192,
+      timeout: 5000,
+      killSignal: "SIGKILL",
+    }).trimEnd();
+    if (!isAbsolute(developer) || /[:\0\r\n]/.test(developer)) throw new Error("Invalid developer tools path");
+    const tools = join(developer, "usr/bin");
+    accessSync(join(tools, "git"), constants.X_OK);
+    return `${tools}:${system}`;
+  } catch (error) {
+    throw new Error(
+      "Select an installed Xcode or Command Line Tools directory before starting the Workbench system service.",
+      {
+        cause: error,
+      },
+    );
+  }
+}
+
+async function openWorker(
+  distribution: string,
+  directory: string,
+  account: ServiceAccount,
+  path: string,
+  signal: AbortSignal,
+) {
   const nonce = randomBytes(12).toString("hex");
   const staging = join(directory, nonce);
   const source = join(staging, "hub.sock");
@@ -163,7 +251,7 @@ async function openWorker(distribution: string, directory: string, account: Linu
       HOME: account.home,
       USER: account.name,
       LOGNAME: account.name,
-      PATH: "/usr/local/bin:/usr/bin:/bin",
+      PATH: path,
       WORKBENCH_DISTRIBUTION_ROOT: distribution,
       [workerToken]: token,
     },
@@ -171,7 +259,8 @@ async function openWorker(distribution: string, directory: string, account: Linu
     signal,
   });
   const exited = new Promise<void>((resolve, reject) => {
-    child.once("close", () => {
+    // A successful spawn proves termination at exit, independently of the IPC channel closing.
+    child.once(child.pid === undefined ? "close" : "exit", () => {
       try {
         if (lstatSync(destination, { throwIfNoEntry: false })) unlinkSync(destination);
         const socket = lstatSync(source, { throwIfNoEntry: false });
@@ -185,6 +274,7 @@ async function openWorker(distribution: string, directory: string, account: Linu
   });
   void exited.catch(() => undefined);
   const close = async () => {
+    if (child.connected) child.disconnect();
     if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
     await exited;
   };
@@ -216,7 +306,7 @@ async function openWorker(distribution: string, directory: string, account: Linu
 
 interface WorkerUse {
   worker: ReturnType<typeof openWorker>;
-  account: LinuxAccount;
+  account: ServiceAccount;
   cancellation: AbortController;
   requests: number;
   idle?: ReturnType<typeof setTimeout>;
@@ -233,6 +323,7 @@ function removeEmptyDirectory(path: string): void {
 
 export class AccountWorkers {
   private readonly workers = new Map<number, WorkerUse>();
+  private readonly workerPath = accountWorkerPath();
   private closed = false;
 
   constructor(
@@ -254,7 +345,7 @@ export class AccountWorkers {
     }
     if (!use || !sameAccount(use.account, identity)) {
       // Revalidate persistent browser sign-ins before starting a worker with OS authority.
-      const account = linuxAccount(identity.uid);
+      const account = serviceAccount(identity.uid);
       if (!account || !sameAccount(account, identity))
         throw new WebError(403, "The Workbench sign-in account is unavailable");
       if (use) {
@@ -264,7 +355,7 @@ export class AccountWorkers {
         return this.request(identity, request, response);
       }
       const cancellation = new AbortController();
-      const worker = openWorker(this.distribution, this.directory, account, cancellation.signal);
+      const worker = openWorker(this.distribution, this.directory, account, this.workerPath, cancellation.signal);
       const started: WorkerUse = { worker, account, cancellation, requests: 0 };
       this.workers.set(account.uid, started);
       const retire = () => {

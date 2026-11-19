@@ -7,6 +7,8 @@
 - `scripts/bundle-options.mts`: Select compilation targets and deferred runtime entry points.
 - `scripts/bundle-licenses.mts`, `scripts/bundle-license-overrides.json`, `scripts/licenses`: Retain bundled dependency
   license evidence.
+- `scripts/launchd-helper.mts`, `scripts/service-native/workbench-launchd.c`: Build and verify the native macOS service
+  launcher carried in the portable release.
 - `scripts/package-workbench.mts`, `scripts/package-output.mts`: Prepare an executable package without project policy or
   development dependencies.
 - `scripts/check-release.mts`: Verifies the checksummed release tarball outside the checkout.

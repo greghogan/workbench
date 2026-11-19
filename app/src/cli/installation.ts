@@ -11,6 +11,13 @@ import {
   updateArchiveRelease,
 } from "../core/distribution/installed-release.js";
 import {
+  activateLaunchdRelease,
+  installLaunchAgent,
+  installLaunchDaemon,
+  recoverLaunchdRelease,
+  removeLaunchdService,
+} from "../core/distribution/launchd-service.js";
+import {
   activateSystemdRelease,
   installSystemdService,
   recoverSystemdRelease,
@@ -130,7 +137,12 @@ export function registerInstallationCommands(program: Command, root: string): vo
       }) => {
         if (options.service) {
           const distribution = distributionRoot(root);
-          const result = installSystemdService(distribution, options.service, options.port);
+          const result =
+            process.platform === "darwin"
+              ? options.service === "system"
+                ? installLaunchDaemon(distribution, options.port)
+                : installLaunchAgent(distribution, options.port)
+              : installSystemdService(distribution, options.service, options.port);
           console.log("Registered " + result.path);
           console.log("Start it with " + result.command);
           return;
@@ -173,10 +185,26 @@ export function registerInstallationCommands(program: Command, root: string): vo
         }
         if (revision || (!options.rollback && !options.recover && (!options.archive || !options.sha256)))
           throw new Error("Supply --archive and --sha256, or use --rollback or --recover");
-        const { assertReleaseServicesIdle } = await import("../server/runtime.js");
+        const { assertReleaseServicesIdle, launchDaemonReady, privateServiceReady } =
+          await import("../server/runtime.js");
+        const launchdReady =
+          process.geteuid?.() === 0
+            ? (distribution: string, pid: number, _state: string, signal: AbortSignal) =>
+                launchDaemonReady(distribution, pid, signal)
+            : privateServiceReady;
         if (options.recover) {
-          const restored = await recoverArchiveRelease((launcher, restore, service) => {
-            recoverSystemdRelease(launcher, restore, service, assertReleaseServicesIdle);
+          const restored = await recoverArchiveRelease(async (launcher, restore, service, previous, permitStart) => {
+            if (process.platform === "darwin")
+              await recoverLaunchdRelease(
+                launcher,
+                restore,
+                service,
+                previous,
+                permitStart,
+                assertReleaseServicesIdle,
+                launchdReady,
+              );
+            else recoverSystemdRelease(launcher, restore, service, assertReleaseServicesIdle);
           });
           console.log(`Active Workbench release ${toolSpecification(restored)}.`);
           return;
@@ -185,8 +213,10 @@ export function registerInstallationCommands(program: Command, root: string): vo
           ? "rollback"
           : { source: resolve(options.archive ?? ""), sha256: options.sha256 ?? "" };
         const distribution = distributionRoot(root);
-        const selected = await updateArchiveRelease(distribution, release, (transition) => {
-          activateSystemdRelease(transition, assertReleaseServicesIdle);
+        const selected = await updateArchiveRelease(distribution, release, async (transition) => {
+          if (process.platform === "darwin")
+            await activateLaunchdRelease(transition, assertReleaseServicesIdle, launchdReady);
+          else activateSystemdRelease(transition, assertReleaseServicesIdle);
         });
         console.log(`Active Workbench release ${toolSpecification(selected)}.`);
       },
@@ -198,8 +228,8 @@ export function registerInstallationCommands(program: Command, root: string): vo
         .choices(serviceScopes)
         .makeOptionMandatory(),
     )
-    .action(({ service }: { service: ServiceScope }) => {
-      const path = removeSystemdService(service);
+    .action(async ({ service }: { service: ServiceScope }) => {
+      const path = process.platform === "darwin" ? await removeLaunchdService(service) : removeSystemdService(service);
       console.log(path ? "Removed " + path : `Workbench ${service} service is already unregistered.`);
     });
 }

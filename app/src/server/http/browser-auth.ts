@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { userInfo } from "node:os";
 
 export const systemSignOutPath = "/sign-out";
@@ -14,9 +14,12 @@ export function localBrowserUsername(): string {
 }
 
 export function authorizationCheck(expected: string): (actual: string | undefined) => boolean {
-  const digest = (header: string) => createHash("sha256").update(header).digest();
-  const accepted = digest(expected);
-  return (actual) => actual !== undefined && timingSafeEqual(digest(actual), accepted);
+  const accepted = Buffer.from(expected);
+  return (actual) => {
+    if (actual?.length !== expected.length) return false;
+    const supplied = Buffer.from(actual);
+    return supplied.length === accepted.length && timingSafeEqual(supplied, accepted);
+  };
 }
 
 /** A private server's credential is valid only for that process's browser listener. */
