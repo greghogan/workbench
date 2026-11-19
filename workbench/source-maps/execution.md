@@ -21,6 +21,8 @@
 - `scripts/ci-native-prerequisites.mts`: prepares hosted SDK dependencies for native Ruby and PHP runtimes.
 - `scripts/ci-cache-metrics.mts`: records cache footprint and elapsed verification-window evidence.
 - `.github/workflows/publication.yml`: separately prepares, natively verifies, and publishes development images with package write authority.
+- `.github/workflows/service-qualification.yml`, `scripts/native-service-probes`: Exercise port ownership and account
+  isolation on disposable macOS and Windows hosts.
 - `scripts/ci-hosted.mts`: Runs the exact configured targets on a hosted native platform or in its prepared environment.
 - `scripts/prepare-development.mts`: Prepares toolchains, dependency archives and pnpm policy metadata, and verifies fresh offline builds.
 - `scripts/managed-input-recipes.mts`, `scripts/refresh-managed-inputs.mts`: Derive standalone Nix/Guix source packages and refresh pinned proof metadata.

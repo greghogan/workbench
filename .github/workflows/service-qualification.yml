@@ -1,0 +1,47 @@
+name: Native service feasibility
+on:
+  push:
+    branches: ["ci/service-native-probes-20261119"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    name: launchd and loopback port protection
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Verify two ordinary accounts under launchd
+        shell: bash
+        run: bash scripts/native-service-probes/test-launchd.sh "$(command -v node)" 861
+
+  windows:
+    name: SCM, protected port, and account workers
+    runs-on: windows-2025
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+      - name: Verify the service and account-worker probes
+        shell: powershell
+        run: |
+          $probes = (Resolve-Path 'scripts/native-service-probes').Path
+          $portSource = Join-Path $probes 'port-probe.c'
+          $identitySource = Join-Path $probes 'identity-probe.c'
+          $test = Join-Path $probes 'Test-ReservedPort.ps1'
+          Set-Location $env:RUNNER_TEMP
+          & cl.exe /nologo /std:c17 /W4 /WX /O2 $portSource ws2_32.lib iphlpapi.lib advapi32.lib /Fe:port-probe.exe
+          if ($LASTEXITCODE -ne 0) { throw 'The native port probe did not compile.' }
+          & cl.exe /nologo /std:c17 /W4 /WX /O2 $identitySource advapi32.lib userenv.lib /Fe:identity-probe.exe
+          if ($LASTEXITCODE -ne 0) { throw 'The native worker probe did not compile.' }
+          & $test -Probe (Join-Path $env:RUNNER_TEMP 'port-probe.exe') -IdentityProbe (Join-Path $env:RUNNER_TEMP 'identity-probe.exe')
