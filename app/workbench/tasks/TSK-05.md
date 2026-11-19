@@ -57,8 +57,8 @@ parent. Human acknowledgments use that same ordered tree context and survive com
 
 Finalization selects reviewed ancestry while keeping task deliveries together. It recreates affected descendants with
 the same source trees and keeps their pending markers. Removing a provisional marker preserves the rest of the commit
-message. One Git transaction updates affected local branches and tags, with their original and replacement objects
-retained for recovery.
+message. Finalization submits affected local branches and tags in one Git ref transaction. Recovery refs retain the old
+tips and prepared replacements until explicitly removed.
 
 CLI and browser decisions schedule finalization for the owning branch. The request survives server and CLI exits. An
 active Git operation or an accepted outcome that still needs to enter Git history leaves the request pending for the
@@ -66,8 +66,9 @@ next handoff. The browser service observes Git operation markers and retries whe
 aborted merge that leaves the source tree untouched. Approval can return while finalization runs. A graceful server
 shutdown drains the processes it started. Pre-push checks the exact outgoing object IDs selected by Git.
 
-Finalization that would change an existing signature waits for the developer's terminal. The manual command verifies
-that replacement commits and tags use the same signing keys before updating the refs.
+Background finalization writes unsigned replacements and retains signed originals for recovery. Manual finalization can
+sign replacements through Git and uses the original key when renewing a signature. It can finish unsigned when signing
+is unavailable. Pre-push still enforces the configured commit signature policy.
 
 ## Implementing-agent detail
 

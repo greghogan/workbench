@@ -35,6 +35,7 @@ data = "delete"
 changes = true
 tasks = true
 task_approvals = true
+signed_commits = true
 
 [commit]
 style = "conventional"

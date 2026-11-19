@@ -59,7 +59,7 @@ export type Config = Record<string, unknown> & {
   tool?: { repository: string; revision: string };
   bundle?: { compression?: "brotli" | "zlib" | "zstd" };
   markdown?: { wrap_width?: number };
-  review?: { changes?: boolean; tasks?: boolean; task_approvals?: boolean };
+  review?: { changes?: boolean; tasks?: boolean; task_approvals?: boolean; signed_commits?: boolean };
   checks?: {
     environment?: string;
     nix_docker_image?: string;

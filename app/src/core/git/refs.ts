@@ -44,7 +44,11 @@ export function gitAncestor(root: string, ancestor: string, descendant: string):
   return result.status === 0;
 }
 
-/** Include absent loose refs and their ancestors so creation, replacement, and packing invalidate readers. */
+export function gitRefFormat(root: string): "files" | "reftable" {
+  return gitBytes(root, ["rev-parse", "--show-ref-format"]).toString().trim() === "reftable" ? "reftable" : "files";
+}
+
+/** Watch the published ref inputs for the active backend, including the linked checkout's own stack. */
 export function gitReferenceInputs(root: string, prefixes: readonly string[]): string[] {
   if (
     prefixes.some(
@@ -55,8 +59,30 @@ export function gitReferenceInputs(root: string, prefixes: readonly string[]): s
     )
   )
     throw new InvalidInput("Invalid observed Git reference");
-  const common = resolve(gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).toString().trim()),
-    refs = gitBytes(root, ["for-each-ref", "--format=%(refname)", ...prefixes])
+  const locations = gitBytes(root, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--show-ref-format",
+    "--git-common-dir",
+    "--git-dir",
+  ])
+    .toString()
+    .replace(/\r?\n$/, "")
+    .split(/\r?\n/);
+  // Query individually when a Git directory name contains a newline.
+  const directory = (index: number, option: string) => {
+    const path = locations.length === 3 ? locations[index] : undefined;
+    return resolve(
+      path ??
+        gitBytes(root, ["rev-parse", "--path-format=absolute", option])
+          .toString()
+          .replace(/\r?\n$/, ""),
+    );
+  };
+  const common = directory(1, "--git-common-dir");
+  if (locations[0] === "reftable")
+    return [...new Set([common, directory(2, "--git-dir")])].map((path) => join(path, "reftable", "tables.list"));
+  const refs = gitBytes(root, ["for-each-ref", "--format=%(refname)", ...prefixes])
       .toString()
       .trim()
       .split("\n")

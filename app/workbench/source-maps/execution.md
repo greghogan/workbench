@@ -180,7 +180,8 @@
 - `src/core/storage/logs/diagnostic-log.ts`, `src/core/storage/logs/log-reader.ts`,
   `test/core/storage/logs/diagnostic_log.test.mts`: Rotate server events and terminal output, read retained segments in
   order, and protect active sessions and interrupted evidence.
-- `src/core/diagnostics/terminal-transcript.ts`: Retain redacted service stdout and stderr while preserving console output.
+- `src/core/diagnostics/terminal-transcript.ts`: Retain redacted service stdout and stderr while preserving console
+  output.
 - `src/core/storage/logs/log-run.ts`, `src/core/storage/logs/log-codec.ts`, `src/core/storage/logs/log-retention.ts`:
   Define typed ownership receipts, single-pipeline codec lifetimes, complete asynchronous inventories, pure retention
   selection, and locked removal.

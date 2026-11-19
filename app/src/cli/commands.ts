@@ -167,6 +167,8 @@ const commands: Record<string, Admission> = {
 
   "shell-session": { internal: true, policy: true },
 
+  sign: { project: true, registration: true, policy: true },
+
   skills: {},
 
   subproject: { project: true, registration: true },

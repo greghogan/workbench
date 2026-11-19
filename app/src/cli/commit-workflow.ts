@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { settleCleanup } from "../core/diagnostics/diagnostic-errors.mjs";
 import { launchProcess } from "../core/distribution/launcher-runtime.js";
 import {
+  pendingMergeParents,
   provisionalCommitRequested,
   provisionalEnvironment,
   provisionalMessage,
@@ -13,6 +14,11 @@ import { checkCommit, commitMessageLimit, readCommitMessage } from "../core/git/
 import { stagedReviewTree } from "../core/git/git-snapshot.js";
 import { checkAgentCommit } from "../core/review/agent-review.js";
 import { checkReview } from "../core/review/review-check.js";
+import { commitVersion } from "../core/review/review-units.js";
+import { commitSigningEnabled } from "../core/git/commit-writing.js";
+import { finalizationBranch } from "../core/git/finalization-refs.js";
+import { gitRevision } from "../core/git/refs.js";
+import { signCreatedCommit } from "../core/git/sign-history.js";
 import { readBoundedFile } from "../core/runtime/file-reads.js";
 import { InvalidInput } from "../core/runtime/input-errors.js";
 
@@ -46,21 +52,45 @@ export async function createCommit(
       `Workbench manages the reserved ${provisionalTrailer} trailer; omit it from the supplied text`,
     );
   const tree = stagedReviewTree(root);
+  const attemptSigning = commitSigningEnabled(root);
+  const branch = attemptSigning && process.stdin.isTTY && process.stderr.isTTY ? finalizationBranch(root) : undefined;
+  const head = branch || options.amend ? gitRevision(root, "HEAD^{commit}") : undefined;
+  const amended = options.amend && head ? commitVersion(root, head) : undefined;
+  const parents = branch ? (amended?.parents ?? [...(head ? [head] : []), ...pendingMergeParents(root)]) : [];
   const environment = { ...process.env };
+  if (amended) environment.GIT_COMMITTER_DATE ??= amended.committerDate;
   Reflect.deleteProperty(environment, provisionalEnvironment);
   if (options.provisional) environment[provisionalEnvironment] = tree;
   const directory = mkdtempSync(join(tmpdir(), "workbench-commit-"));
   let failure: unknown;
   try {
     const path = join(directory, "message");
-    writeFileSync(path, message.trimEnd() + (options.provisional ? `\n\n${provisionalTrailer}: true\n` : "\n"), {
+    const contents = message.trimEnd() + (options.provisional ? `\n\n${provisionalTrailer}: true\n` : "\n");
+    writeFileSync(path, contents, {
       mode: 0o600,
     });
     checkCommit(root, path);
-    await launchProcess("git", ["-C", root, "commit", ...(options.amend ? ["--amend"] : []), "--file", path], {
-      env: environment,
-      cwd: root,
-    });
+    await launchProcess(
+      "git",
+      ["-C", root, "commit", "--no-gpg-sign", ...(options.amend ? ["--amend"] : []), "--file", path],
+      {
+        env: environment,
+        cwd: root,
+      },
+    );
+    if (attemptSigning && process.exitCode === 0) {
+      let signed: string | undefined;
+      try {
+        if (branch) signed = signCreatedCommit(root, branch, tree, parents, contents);
+      } catch {
+        // Git has already published the local commit and run its hooks successfully.
+      }
+      console.log(
+        signed
+          ? `Signed commit ${signed.slice(0, 12)}.`
+          : "Commit saved unsigned. Run 'workbench sign' when your signer is ready.",
+      );
+    }
   } catch (error) {
     failure = error;
   }

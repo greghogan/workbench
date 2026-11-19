@@ -25,9 +25,11 @@ export interface CommitVersion {
   tree: string;
   parents: string[];
   author: string;
+  committerDate: string;
   message: string;
   provisional: boolean;
   signed: boolean;
+  embeddedMergeTag: boolean;
 }
 export function commitVersion(root: string, revision: string): CommitVersion {
   const selected = gitRevision(root, `${revision}^{commit}`);
@@ -40,11 +42,14 @@ export function commitVersion(root: string, revision: string): CommitVersion {
     headers = contents.slice(0, boundary).split("\n"),
     tree = headers.find((line) => line.startsWith("tree "))?.slice(5),
     author = headers.find((line) => line.startsWith("author "))?.slice(7),
+    committer = headers.find((line) => line.startsWith("committer ")),
+    committerDate = / (\d+ [+-]\d{4})$/.exec(committer ?? "")?.[1],
     parents = headers.filter((line) => line.startsWith("parent ")).map((line) => line.slice(7));
   if (
     boundary < 0 ||
     !tree ||
     !author ||
+    !committerDate ||
     ![tree, ...parents].every((oid) => /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(oid))
   )
     throw new InvalidInput("Invalid retained commit metadata");
@@ -54,9 +59,11 @@ export function commitVersion(root: string, revision: string): CommitVersion {
     tree,
     parents,
     author,
+    committerDate,
     message,
     provisional: provisionalMessage(root, message),
     signed: headers.some((line) => /^(?:gpgsig|gpgsig-sha256) /.test(line)),
+    embeddedMergeTag: headers.some((line) => line.startsWith("mergetag ")),
   };
 }
 const comparisons = new WeightedCache<ReturnType<typeof inspectReviewCommit>["comparison"]>(32 * 1024 * 1024);

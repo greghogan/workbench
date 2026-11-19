@@ -27,7 +27,19 @@ import {
   recordAgentReview,
   reviewIdentity,
 } from "../../../src/core/review/agent-review.ts";
-import { finalizationPlan, finalizeHistory } from "../../../src/core/git/finalization.ts";
+import { finalizationPlan, finalizeHistory, resumePreparedFinalization } from "../../../src/core/git/finalization.ts";
+import { subscribeDiagnostics } from "../../../src/core/diagnostics/diagnostics.mjs";
+import {
+  applyInterruptedMoves,
+  initRefFormat,
+  linkedCheckout,
+  preparedMoves,
+  recoveryCases,
+  refActivationInterrupted,
+  stopBeforeRefActivation,
+  type RefFormat,
+} from "../../fixtures/ref-recovery.mts";
+import type { TestContext } from "vitest";
 import {
   pendingFinalizationStatus,
   queueFinalization,
@@ -49,12 +61,13 @@ const temporary: string[] = [];
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
 });
-function fixture() {
+function fixture(storage?: { format: RefFormat; context: TestContext }) {
   const root = mkdtempSync(join(tmpdir(), "workbench-units-"));
   temporary.push(root);
-  git(root, "init", "-qb", "main");
-  git(root, "config", "user.name", "Reviewer fixture");
-  git(root, "config", "user.email", "review@example.invalid");
+  if (storage) initRefFormat(root, storage.format, storage.context);
+  else git(root, "init", "-qb", "main");
+  git(root, "config", "user.name", "Fixture");
+  git(root, "config", "user.email", "fixture@example.invalid");
   mkdirSync(join(root, "workbench/decisions"), { recursive: true });
   writeFileSync(
     join(root, "workbench/config.toml"),
@@ -265,7 +278,7 @@ test("a retained review schedules the branch containing it and waits for a named
   expect(pendingFinalizationStatus(f.root)).toBeUndefined();
 });
 
-test("unattended finalization keeps exact review when commit signing needs the developer's terminal", () => {
+test("unattended finalization retains an unsigned result when the repository signer needs a terminal", () => {
   const f = fixture(),
     prior = f.commit("Reviewed policy");
   f.agent(prior);
@@ -274,11 +287,11 @@ test("unattended finalization keeps exact review when commit signing needs the d
   git(f.root, "config", "gpg.program", join(f.root, "interactive-signing-only"));
   queueFinalization(f.root, { revision: prior });
   resumeFinalization(f.root);
-  expect(pendingFinalizationStatus(f.root)).toMatch(/signing needs an interactive finalization/);
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(prior);
-  expect(committedReview(f.root, prior).pending).toBe(0);
-  git(f.root, "config", "commit.gpgSign", "false");
-  resumeFinalization(f.root);
+  expect(commitVersion(f.root, "HEAD")).toMatchObject({
+    tree: commitVersion(f.root, prior).tree,
+    signed: false,
+    provisional: false,
+  });
   expect(pendingCommitReviews(f.root)).toEqual([]);
   expect(pendingFinalizationStatus(f.root)).toBeUndefined();
 });
@@ -308,64 +321,79 @@ test("a working record's finalization request survives an unrelated commit", () 
   expect(pendingFinalizationStatus(f.root)).toBeUndefined();
 });
 
-test("manual finalization re-signs the exact annotated tag and refuses a different key before moving refs", ({
-  skip,
-}) => {
-  const f = fixture();
-  const key = (name: string) => {
-    const file = join(f.root, ".git", name),
-      generated = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", file], { encoding: "utf8" });
-    if (generated.error && (generated.error as NodeJS.ErrnoException).code === "ENOENT")
-      skip("OpenSSH signing is unavailable on this host");
-    expect(generated.status, generated.stderr).toBe(0);
-    return file;
-  };
-  const original = key("original-key"),
-    other = key("other-key"),
-    signers = join(f.root, ".git/signers");
-  writeFileSync(
-    signers,
-    [original, other].map((file) => `review@example.invalid ${readFileSync(file + ".pub", "utf8")}`).join(""),
-  );
-  git(f.root, "config", "gpg.format", "ssh");
-  git(f.root, "config", "gpg.ssh.program", "ssh-keygen");
-  git(f.root, "config", "gpg.ssh.allowedSignersFile", signers);
-  git(f.root, "config", "user.signingkey", original);
-  git(f.root, "config", "commit.gpgSign", "false");
-  const tagged = f.commit("Reviewed starting point");
-  f.agent(tagged);
-  approveCapturedReviews(f.root, captureCommittedReview(f.root, tagged).captured, false);
-  git(f.root, "tag", "--sign", "--message", "Original annotation\n\nKeep this paragraph.", "reviewed", tagged);
-  const tag = git(f.root, "rev-parse", "refs/tags/reviewed"),
-    originalPayload = unsignedTagPayload(gitBytes(f.root, ["cat-file", "tag", tag])),
-    signer = verifiedSignatureKey(f.root, "tag", tag);
-  git(f.root, "config", "user.signingkey", other);
-  const attempted = finalizationPlan(f.root);
-  expect(() => finalizeHistory(f.root, attempted.digest, false, true)).toThrow(
-    /needs signing from the developer's terminal/,
-  );
-  expect(() => finalizeHistory(f.root, attempted.digest)).toThrow(/signed by a different key/);
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(tagged);
-  expect(git(f.root, "rev-parse", "refs/tags/reviewed")).toBe(tag);
-
-  git(f.root, "config", "user.signingkey", original);
-  git(f.root, "config", "commit.gpgSign", "true");
-  const signedCommit = f.commit("Reviewed signed successor", true);
-  f.agent(signedCommit);
-  approveCapturedReviews(f.root, captureCommittedReview(f.root, signedCommit).captured, false);
-  const final = finalizeHistory(f.root, finalizationPlan(f.root).digest),
-    replaced = git(f.root, "rev-parse", "refs/tags/reviewed^{commit}"),
-    newTag = git(f.root, "rev-parse", "refs/tags/reviewed");
-  expect(replaced).not.toBe(tagged);
-  expect(commitVersion(f.root, final.after)).toMatchObject({ signed: true, provisional: false, parents: [replaced] });
-  expect(verifiedSignatureKey(f.root, "commit", final.after)).toBe(
-    verifiedSignatureKey(f.root, "commit", signedCommit),
-  );
-  expect(verifiedSignatureKey(f.root, "tag", newTag)).toBe(signer);
-  expect(unsignedTagPayload(gitBytes(f.root, ["cat-file", "tag", newTag]))).toEqual(
-    Buffer.concat([Buffer.from(`object ${replaced}`), originalPayload.subarray(originalPayload.indexOf(10))]),
-  );
-});
+test.for(["terminal", "background", "unavailable key", "different key", "foreign author"] as const)(
+  "finalization preserves reviewed content and signed recovery history with %s",
+  (mode, { skip }) => {
+    const f = fixture();
+    const key = (name: string) => {
+      const file = join(f.root, ".git", name),
+        generated = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", file], { encoding: "utf8" });
+      if (generated.error && (generated.error as NodeJS.ErrnoException).code === "ENOENT")
+        skip("OpenSSH signing is unavailable on this host");
+      expect(generated.status, generated.stderr).toBe(0);
+      return file;
+    };
+    const original = key("original-key"),
+      other = key("other-key"),
+      signers = join(f.root, ".git/signers");
+    writeFileSync(
+      signers,
+      [original, other].map((file) => `review@example.invalid ${readFileSync(file + ".pub", "utf8")}`).join(""),
+    );
+    git(f.root, "config", "gpg.format", "ssh");
+    git(f.root, "config", "gpg.ssh.program", "ssh-keygen");
+    git(f.root, "config", "gpg.ssh.allowedSignersFile", signers);
+    git(f.root, "config", "user.signingkey", original);
+    git(f.root, "config", "commit.gpgSign", "false");
+    const tagged = f.commit("Reviewed starting point");
+    f.agent(tagged);
+    approveCapturedReviews(f.root, captureCommittedReview(f.root, tagged).captured, false);
+    git(f.root, "tag", "--sign", "--message", "Original annotation\n\nKeep this paragraph.", "reviewed", tagged);
+    const tag = git(f.root, "rev-parse", "refs/tags/reviewed"),
+      originalPayload = unsignedTagPayload(gitBytes(f.root, ["cat-file", "tag", tag])),
+      signer = verifiedSignatureKey(f.root, "tag", tag);
+    git(f.root, "config", "commit.gpgSign", "true");
+    const signedCommit = f.commit("Reviewed signed successor", true);
+    f.agent(signedCommit);
+    approveCapturedReviews(f.root, captureCommittedReview(f.root, signedCommit).captured, false);
+    if (mode === "unavailable key") git(f.root, "config", "user.signingkey", join(f.root, "missing-key"));
+    if (mode === "different key") git(f.root, "config", "user.signingkey", other);
+    if (mode === "foreign author") {
+      git(f.root, "config", "user.name", "Other Author");
+      expect(() => finalizeHistory(f.root, finalizationPlan(f.root).digest, false, true)).toThrow(/tagger.*differs/);
+      expect(git(f.root, "rev-parse", "refs/tags/reviewed")).toBe(tag);
+      git(f.root, "tag", "-d", "reviewed");
+      expect(() => finalizeHistory(f.root, finalizationPlan(f.root).digest, false, true)).toThrow(/author.*differs/);
+      expect(git(f.root, "rev-parse", "HEAD")).toBe(signedCommit);
+      expect(git(f.root, "for-each-ref", "--format=%(refname)", "refs/workbench/recovery")).toBe("");
+      return;
+    }
+    const final = finalizeHistory(f.root, finalizationPlan(f.root).digest, false, mode === "background"),
+      replaced = git(f.root, "rev-parse", "refs/tags/reviewed^{commit}"),
+      newTag = git(f.root, "rev-parse", "refs/tags/reviewed");
+    expect(replaced).not.toBe(tagged);
+    expect(commitVersion(f.root, final.after)).toMatchObject({
+      signed: mode === "terminal",
+      provisional: false,
+      parents: [replaced],
+      tree: commitVersion(f.root, signedCommit).tree,
+    });
+    const replacementTag = gitBytes(f.root, ["cat-file", "tag", newTag]);
+    if (mode === "terminal") {
+      expect(verifiedSignatureKey(f.root, "commit", final.after)).toBe(
+        verifiedSignatureKey(f.root, "commit", signedCommit),
+      );
+      expect(verifiedSignatureKey(f.root, "tag", newTag)).toBe(signer);
+    } else expect(unsignedTagPayload(replacementTag)).toEqual(replacementTag);
+    expect(unsignedTagPayload(replacementTag)).toEqual(
+      Buffer.concat([Buffer.from(`object ${replaced}`), originalPayload.subarray(originalPayload.indexOf(10))]),
+    );
+    expect(git(f.root, "rev-parse", final.recovery)).toBe(signedCommit);
+    expect(git(f.root, "rev-parse", `${final.recovery.replace(/\/before$/, "")}/before-refs/refs/tags/reviewed`)).toBe(
+      tag,
+    );
+  },
+);
 
 test("a ready merge side moves its linked branch and both tag forms together", () => {
   const f = fixture(),
@@ -745,32 +773,70 @@ test("rebasing accepted history without private receipts preserves unchanged doc
   expect(git(clone, "for-each-ref", "--format=%(refname)", "refs/workbench/review-authority")).toBe("");
 });
 
-test("interrupted finalization retains its prepared history through Git collection and resumes activation", () => {
+test.for(recoveryCases)(
+  "finalization resumes from the linked checkout with %s refs interrupted %s",
+  ([format, stage], context) => {
+    const f = fixture({ format, context }),
+      first = f.commit("Recoverable policy.");
+    f.agent(first);
+    approveCapturedReviews(f.root, captureCommittedReview(f.root, first).captured, false);
+    const linked = linkedCheckout(f.root, "shared");
+    git(f.root, "tag", "-am", "Original annotation", "recovery-test");
+    const stop = stopBeforeRefActivation(f.root),
+      plan = finalizationPlan(f.root);
+    const dirty = join(linked, f.path);
+    writeFileSync(dirty, readFileSync(dirty, "utf8") + "\nPrivate edit.\n");
+    const staged = git(linked, "write-tree"),
+      status = git(linked, "status", "--porcelain");
+
+    expect(() => finalizeHistory(f.root, plan.digest)).toThrow(refActivationInterrupted);
+    const moves = preparedMoves(f.root, "finalization");
+    expect(moves.map(({ name }) => name)).toEqual(["refs/heads/main", "refs/heads/shared", "refs/tags/recovery-test"]);
+    for (const { name, before } of moves) expect(git(f.root, "rev-parse", name)).toBe(before);
+    stop();
+    applyInterruptedMoves(f.root, moves, stage);
+    git(f.root, "reflog", "expire", "--expire=now", "--all");
+    git(f.root, "gc", "--prune=now");
+
+    const messages: string[] = [],
+      unsubscribe = subscribeDiagnostics(({ message }) => {
+        if (message) messages.push(message);
+      });
+    try {
+      expect(resumePreparedFinalization(linked)?.completed).toBe(true);
+      expect(resumePreparedFinalization(linked)).toBeUndefined();
+    } finally {
+      unsubscribe();
+    }
+    expect(messages.filter((message) => message.includes("reftable"))).toHaveLength(stage === "partial" ? 1 : 0);
+    for (const { name, after } of moves) expect(git(f.root, "rev-parse", name)).toBe(after);
+    expect(git(f.root, "for-each-ref", "--format=%(contents:subject)", "refs/tags/recovery-test")).toBe(
+      "Original annotation",
+    );
+    expect(git(linked, "status", "--porcelain")).toBe(status);
+    expect(git(linked, "write-tree")).toBe(staged);
+    expect(pendingCommitReviews(f.root)).toEqual([]);
+  },
+);
+
+test("automatic finalization leaves prepared refs untouched when review or publication authority changed", () => {
   const f = fixture(),
-    first = f.commit("Recoverable policy.");
+    first = f.commit("Reviewed but unpublished policy.");
   f.agent(first);
   approveCapturedReviews(f.root, captureCommittedReview(f.root, first).captured, false);
-  git(f.root, "branch", "shared", first);
-  const hooks = join(f.root, ".git/finalization-hooks"),
-    marker = join(f.root, ".git/workbench/fail-finalization");
-  mkdirSync(hooks);
-  writeFileSync(
-    join(hooks, "reference-transaction"),
-    '#!/bin/sh\nif [ "$1" = prepared ]; then\n while read -r old new ref; do\n  if [ "$ref" = refs/heads/shared ] && [ -f "$(git rev-parse --git-path workbench/fail-finalization)" ]; then exit 1; fi\n done\nfi\n',
-    { mode: 0o755 },
-  );
-  git(f.root, "config", "core.hooksPath", hooks);
-  writeFileSync(marker, "stop\n");
+  git(f.root, "tag", "recovery-test");
   const plan = finalizationPlan(f.root);
-  expect(() => finalizeHistory(f.root, plan.digest)).toThrow();
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(first);
-  expect(git(f.root, "rev-parse", "refs/heads/shared")).toBe(first);
-  rmSync(marker);
-  git(f.root, "reflog", "expire", "--expire=now", "--all");
-  git(f.root, "gc", "--prune=now");
-  const recovered = finalizeHistory(f.root, "", true);
-  expect(recovered.completed).toBe(true);
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(recovered.after);
-  expect(git(f.root, "rev-parse", "refs/heads/shared")).toBe(recovered.after);
-  expect(pendingCommitReviews(f.root)).toEqual([]);
+  const stop = stopBeforeRefActivation(f.root);
+  expect(() => finalizeHistory(f.root, plan.digest)).toThrow(refActivationInterrupted);
+  stop();
+  const moves = preparedMoves(f.root, "finalization");
+  git(f.root, "update-ref", "refs/remotes/origin/archive", first);
+
+  expect(() => resumePreparedFinalization(f.root)).toThrow(/Review set changed/);
+  for (const { name, before, after } of moves) {
+    expect(git(f.root, "rev-parse", name)).toBe(before);
+    expect(git(f.root, "cat-file", "-t", after)).toBe("commit");
+  }
+  git(f.root, "update-ref", "-d", "refs/remotes/origin/archive");
+  expect(resumePreparedFinalization(f.root)?.completed).toBe(true);
 });

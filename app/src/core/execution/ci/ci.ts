@@ -16,6 +16,7 @@ import { selectedCompiler } from "../../toolchains/compilers.js";
 import { rubyMinimum, phpMinimum } from "../../configuration/script-language-config.js";
 import { exactJavaVersion, javaSupport } from "../../toolchains/java-config.js";
 import { ciPlatforms, githubRunner } from "./ci-hosting.js";
+import { projectOptionDefaults } from "../../configuration/config-schema.js";
 const environments = ["guix", "nix", "nix-docker", "devcontainer"];
 import { compilerCompatibilityRoles, type CompatibilityRuntime } from "./support/ci-contract.mjs";
 export { compilerCompatibilityRoles };
@@ -25,7 +26,7 @@ function ciArchitectures(config: Pick<Config, "ci">, os: "linux" | "macos" | "wi
     .filter((platform) => platform.os === os)
     .map((platform) => platform.architecture);
   const selected = selection(
-    config.ci?.architectures?.[os] ?? [os === "macos" ? "arm64" : "x64"],
+    config.ci?.architectures?.[os] ?? projectOptionDefaults["ci.architectures"].value[os],
     supported,
     `ci.architectures.${os}`,
   );

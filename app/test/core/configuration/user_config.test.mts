@@ -176,6 +176,27 @@ test("configuration overview reports one effective value and its overriding scop
   unset("execution.cpus_per_job", "local");
   expect(get()).toMatch(/execution\.cpus_per_job\s*\|\s*8\s*\|\s*global/);
 });
+
+test("configuration reports built-in defaults and describes omitted contextual options", () => {
+  const { env, ok, get, set, unset } = fixture();
+  ok("setup-project", env.WORKBENCH_PROJECT_ROOT);
+  expect(ok("config", "get", "review.signed_commits")).toBe("false");
+  expect(get("checks.allow_empty")).toBe("false");
+  expect(get("checks.inputs")).toBe("[]");
+  expect(get("records.archive_group_size")).toBe("1296");
+  expect(get("commit.body_width")).toBe("72");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*false\s*\|\s*default/);
+  expect(get()).toContain("Archival disabled");
+  expect(get()).not.toContain("<unset>");
+
+  set("diagnostics.level", "warn");
+  expect(get("diagnostics.server_level")).toBe("warn");
+  set("review.signed_commits", "true");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*true\s*\|\s*project/);
+  unset("review.signed_commits");
+  expect(get("review.signed_commits")).toBe("false");
+});
+
 test("configuration shows complete nested values and uses the terminal width before wrapping", () => {
   const { env, ok, set, get } = fixture();
   ok("setup-project", env.WORKBENCH_PROJECT_ROOT);

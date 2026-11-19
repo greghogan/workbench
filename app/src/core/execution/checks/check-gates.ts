@@ -13,6 +13,7 @@ import { releaseAfterFailure } from "../../storage/cache-lock.js";
 import { safeOutput } from "../../diagnostics/terminal-output.js";
 import { CheckNetwork } from "./check-network.mjs";
 import { provisionalCommitRequested } from "../../git/commit-history.js";
+import { checkPushSignatures } from "../../git/push-signatures.js";
 
 export interface GateOptions extends CheckInspectionOptions {
   list?: boolean;
@@ -84,19 +85,22 @@ async function executeGate(
   }
   if (!options.list && mode === "pre-push" && process.env.WORKBENCH_PUSH_TIP) {
     if (!process.env.WORKBENCH_PUSH_REMOTE) throw new Error("Push review requires the remote revision");
+    const repository = process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? root;
     const archiveUpdates = process.env.WORKBENCH_PUSH_UPDATES;
     checkArchivePublication(
-      process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? root,
+      repository,
       archiveUpdates
         ? readFileSync(archiveUpdates, "utf8")
         : `${process.env.WORKBENCH_PUSH_LOCAL_REF ?? "HEAD"} ${process.env.WORKBENCH_PUSH_TIP} ${process.env.WORKBENCH_PUSH_REMOTE_REF ?? "HEAD"} ${process.env.WORKBENCH_PUSH_REMOTE}\n`,
       process.env.WORKBENCH_PUSH_REMOTE_NAME ?? options.remote ?? "",
     );
-    checkAgentPush(
-      process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? root,
+    checkPushSignatures(
+      repository,
       process.env.WORKBENCH_PUSH_TIP,
       process.env.WORKBENCH_PUSH_REMOTE,
+      process.env.WORKBENCH_PUSH_REMOTE_URL,
     );
+    checkAgentPush(repository, process.env.WORKBENCH_PUSH_TIP, process.env.WORKBENCH_PUSH_REMOTE);
   }
   const selected = mode === "pre-push" ? online : options;
   if (options.list) {

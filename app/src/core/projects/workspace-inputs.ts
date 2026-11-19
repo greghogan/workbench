@@ -12,7 +12,6 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
   let indexPath = "";
   const names = [
     "HEAD",
-    "packed-refs",
     "shallow",
     "index",
     "config",
@@ -77,6 +76,6 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
       : join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "git/ignore"),
   );
   observe(reviewAuthorityPath(root));
-  for (const path of gitReferenceInputs(root, ["refs/heads/"])) observe(path);
+  for (const path of gitReferenceInputs(root, ["refs/heads/", "refs/remotes/"])) observe(path);
   return indexPath;
 }

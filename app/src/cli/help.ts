@@ -22,6 +22,7 @@ const layouts: Readonly<Record<string, Groups>> = {
         "validate",
         "review",
         "commit",
+        "sign",
         "docs",
         "secrets",
         "advisories",

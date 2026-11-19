@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { gitBytes } from "./git-snapshot.js";
 import { gitAncestor, gitRevision } from "./refs.js";
 import { checkFinalizationCheckouts, finalizationBranch, finalizationCheckouts } from "./finalization-refs.js";
-import { finalizationPlan, finalizeHistory, preparedFinalization } from "./finalization.js";
+import { finalizationPlan, finalizeHistory, resumePreparedFinalization } from "./finalization.js";
+import { resumePreparedSigning } from "./sign-history.js";
 import { repositoryStatePath } from "./repository-state.js";
 import { distributionRoot } from "../projects/project-context.js";
 import { gitEnvironment } from "../distribution/update-git.js";
@@ -187,7 +188,8 @@ export function resumeFinalization(root: string): void {
           try {
             checkFinalizationCheckouts(root, new Set([branch]));
             checkPolicyCompatibility(root);
-            if (preparedFinalization(root)) finalizeHistory(root, "", true, true);
+            resumePreparedSigning(root);
+            resumePreparedFinalization(root);
             const plan = finalizationPlan(root);
             if (plan.branch !== branch) return;
             const after = plan.eligible.length ? finalizeHistory(root, plan.digest, false, true).after : plan.before;

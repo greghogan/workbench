@@ -5,8 +5,8 @@ const formatValue = (value: unknown): string =>
   value === undefined ? "<unset>" : typeof value === "string" ? value : JSON.stringify(value);
 
 /** Wrap complete values only to fit the remaining table column. */
-function overviewValue(value: unknown, width: number): string[] {
-  const text = formatValue(value).replace(/\p{Cc}/gu, " ");
+function overviewValue(value: unknown, width: number, behavior?: string): string[] {
+  const text = (behavior ?? formatValue(value)).replace(/\p{Cc}/gu, " ");
   if (plainOutput()) return [text];
   const characters = Array.from(text);
   const lines: string[] = [];
@@ -29,7 +29,11 @@ export function showConfiguration(root: string, scope?: ConfigScope, key?: strin
   const rows = [...values]
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([name, entry]) =>
-      overviewValue(entry.value, valueWidth).map((line, index) => [index ? "" : name, line, index ? "" : entry.scope]),
+      overviewValue(entry.value, valueWidth, entry.behavior).map((line, index) => [
+        index ? "" : name,
+        line,
+        index ? "" : entry.scope,
+      ]),
     );
   console.log(terminalTable(["OPTION", "VALUE", "SCOPE"], rows));
   console.log("\n" + sources.join("\n"));

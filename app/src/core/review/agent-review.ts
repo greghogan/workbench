@@ -1,6 +1,7 @@
 import { gitAncestor } from "../git/refs.js";
 import { acceptedAgentContext } from "./review-authority.js";
 import { projectPaths } from "../projects/project-paths.js";
+import { defaultReviewPolicy } from "../configuration/config-schema.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
@@ -330,16 +331,16 @@ export function reviewPolicy(root: string, tree: string): ReviewPolicy {
   );
 }
 function decodeReviewPolicy(contents: Buffer | undefined): ReviewPolicy {
-  if (!contents) return { changes: false, tasks: false, task_approvals: false };
-  const config = parseToml(contents.toString());
+  const config = contents ? parseToml(contents.toString()) : {};
   const value = record(config.review ?? {}, "Invalid review policy");
   for (const key of ["changes", "tasks", "task_approvals"])
     if (value[key] !== undefined && typeof value[key] !== "boolean")
       throw new InvalidInput(`Invalid review policy: ${key} must be a boolean`);
   return {
-    changes: value.changes === true,
-    tasks: value.tasks === true,
-    task_approvals: value.task_approvals === true,
+    changes: typeof value.changes === "boolean" ? value.changes : defaultReviewPolicy.changes,
+    tasks: typeof value.tasks === "boolean" ? value.tasks : defaultReviewPolicy.tasks,
+    task_approvals:
+      typeof value.task_approvals === "boolean" ? value.task_approvals : defaultReviewPolicy.task_approvals,
   };
 }
 function requiredPolicy(

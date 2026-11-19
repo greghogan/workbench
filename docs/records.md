@@ -719,17 +719,38 @@ trees require renewed agent review and verification.
 `workbench commit finalize --apply --expected DIGEST` to finalize the ready history. Only complete accepted task
 deliveries qualify. An independent reviewed side of a merge can qualify while another side waits. Finalization keeps
 waiting commits provisional, preserves source trees, authorship, and checkout files, and updates affected local branches
-and tags together. Original and prepared histories remain available through the reported recovery references.
-`workbench commit finalize --recover` resumes an interrupted activation. Published checkpoints and active Git operations
-block finalization. When a tag would move, Workbench checks the configured remotes for that tag before applying.
+and tags together. Original and prepared histories remain available through local recovery references. Published
+checkpoints and active Git operations block finalization. When a tag would move, Workbench checks the configured remotes
+for that tag before applying.
 
 Task acceptance and document review schedule finalization in the background. When an outcome is accepted in the working
-files, finalization waits for that version to enter Git history. An active Git operation, active task, or signing that
-needs the terminal can also delay the rewrite. The server retries after observing the Git operation end. Workbench also
-checks after a commit or another handoff on the branch. `workbench commit finalize` reports any remaining wait.
+files, finalization waits for that version to enter Git history. An active Git operation, active task, or signed work
+attributed to another author can also delay the rewrite. The server retries after observing the Git operation end.
+Workbench also checks after a commit or another handoff on the branch. `workbench commit finalize` reports any
+remaining wait.
 
-When a signed commit or tag would change, run finalization from your terminal with the original signing key. Workbench
-verifies the replacement signatures before updating references.
+Background finalization creates unsigned replacements for locally authored history. Manual finalization can retain
+signatures when the original keys are available. Signed originals remain in recovery references. Run `workbench sign`
+before publishing if the project requires signed commits.
+
+### Commit signing
+
+`workbench commit` uses Git's configured signer when running in a terminal with `commit.gpgSign` enabled. If signing is
+unavailable, the reviewed local commit remains unsigned. Background finalization can finish unsigned work without
+opening a signing prompt.
+
+Run `workbench sign` to sign your unsigned unpublished commits reachable from the current branch, including merge
+parents. The recorded author name and email must match your Git configuration. Supply a local branch or tag to sign
+another history. Git opens any signing prompt in the terminal. Workbench checks locally known publication history and
+explains how to fetch when it cannot establish that an affected tag is unpublished. It verifies the replacements before
+moving affected local branches and tags together. Signing and finalization retain both Git dates. By default,
+`workbench commit --amend` also retains them. Git's configured signer sets any separate signature creation time.
+Use `workbench commit recovery` to inspect retained originals.
+
+To require trusted signatures on outgoing commits, set `signed_commits = true` under `[review]` in `workbench/config.toml`
+and use the Workbench pre-push hook. The policy defaults to `false`. The hook uses the destination and ref update supplied
+by `git push` and reports missing signatures separately from invalid or untrusted ones. Sign the unsigned history or
+resolve Git's trust settings, then retry `git push`.
 
 Fold accepted task-state changes into their owning delivery before finalizing, rather than adding approval-only commits.
 For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that
@@ -738,7 +759,22 @@ the versions on both sides of the comparison still match. The original local rec
 
 ### Git recovery references
 
-`workbench commit recovery` lists retained backups from integration, finalization, and deletion. Inspect a reference
-with Git before releasing it. `workbench commit recovery --delete REFERENCE --expected OBJECT --yes` removes that exact
-reference without changing project branches. Cleanup refuses unfinished repository operations and changed references.
-Removing the last reference can make its contents eligible for Git garbage collection; cleanup is explicit.
+The next `workbench sign`, `workbench commit`, or `workbench commit finalize` resumes interrupted signing or
+finalization. A scheduled finalization can also resume the rewrite. Workbench uses the original checkout and keeps
+prepared signatures. If a branch or tag now points somewhere unexpected or was deleted, Workbench names it and preserves
+the retained histories. `git push` checks its original outgoing revisions.
+
+`workbench commit recovery` lists retained backups from integration, signing, finalization, and deletion. Inspect a
+reference with Git before releasing it. `workbench commit recovery --delete REFERENCE --expected OBJECT --yes` removes
+that exact reference without changing project branches. Cleanup refuses unfinished repository operations and changed
+references. Recovery references have no expiry. After removal, Git can collect objects once its ordinary retention rules
+allow it.
+
+### Git reference storage
+
+Both Git ref formats support linked worktrees. Reftable updates shared branch and tag refs atomically and can prevent
+the kind of partial update Workbench reports for the files format. To migrate, check `git rev-parse --show-ref-format`
+and confirm that Git and any other tools using the repository support reftable. Back up the repository, stop Workbench
+and other Git writers, and remove linked worktrees after preserving their work. Use
+`git refs migrate --ref-format=reftable --dry-run` to inspect the conversion, then run it without `--dry-run` and check
+`git refs verify` before recreating the worktrees. See the [Git refs manual](https://git-scm.com/docs/git-refs).
