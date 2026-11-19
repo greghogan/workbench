@@ -9,6 +9,23 @@ static wchar_t *service_name, *directory, *first_sid, *second_sid;
 static SERVICE_STATUS_HANDLE status_handle;
 static HANDLE stop_event, service_thread;
 
+enum failure_stage {
+    SCM_CONNECTION = 1, SCM_SERVICE, SCM_STATUS, PIPE_OPEN, PIPE_PEER, PIPE_IO,
+    PIPE_IMPERSONATION, CLIENT_TOKEN, PRIMARY_TOKEN, WORKER_ENVIRONMENT, WORKER_PROCESS,
+    WORKER_PROFILE, WORKER_PROJECT, WORKER_ISOLATION
+};
+static const char *const stages[] = {
+    "argument or service", "connect to SCM", "open SCM service", "query SCM service",
+    "open control pipe", "verify SCM peer", "exchange pipe request", "impersonate pipe client",
+    "read client token", "duplicate primary token", "load worker environment", "start worker",
+    "verify worker identity or profile", "read worker project", "verify worker isolation"
+};
+
+/* An exit code carries the failing step alongside a Win32 status through the worker and pipe. */
+static DWORD at_stage(enum failure_stage stage, DWORD result) {
+    return result ? ((DWORD)stage << 24) | (result & 0xffffffUL) : NO_ERROR;
+}
+
 static DWORD process_sid(HANDLE token, wchar_t **sid) {
     union { TOKEN_USER header; BYTE bytes[512]; } info;
     DWORD length = 0;
@@ -28,7 +45,7 @@ static DWORD check_worker(const wchar_t *root, const wchar_t *own, const wchar_t
     HANDLE token;
     wchar_t *actual = NULL;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
-        return GetLastError();
+        return at_stage(WORKER_PROFILE, GetLastError());
     DWORD result = process_sid(token, &actual);
     wchar_t profile[32768], environment_profile[32768];
     DWORD capacity = 32768;
@@ -40,31 +57,31 @@ static DWORD check_worker(const wchar_t *root, const wchar_t *own, const wchar_t
     if (actual)
         LocalFree(actual);
     if (result)
-        return result;
+        return at_stage(WORKER_PROFILE, result);
     capacity = GetEnvironmentVariableW(L"USERPROFILE", environment_profile, 32768);
     if (!capacity || capacity >= 32768 || _wcsicmp(profile, environment_profile))
-        return ERROR_INVALID_DATA;
+        return at_stage(WORKER_PROFILE, ERROR_INVALID_DATA);
     wchar_t path[32768];
     if ((result = path_for(path, root, own)) != NO_ERROR)
-        return result;
+        return at_stage(WORKER_PROJECT, result);
     HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (file == INVALID_HANDLE_VALUE)
-        return GetLastError();
+        return at_stage(WORKER_PROJECT, GetLastError());
     char marker;
     DWORD read = 0;
     BOOL opened = ReadFile(file, &marker, 1, &read, NULL);
     CloseHandle(file);
     if (!opened || read != 1 || marker != 'W')
-        return ERROR_INVALID_DATA;
+        return at_stage(WORKER_PROJECT, ERROR_INVALID_DATA);
 
     if ((result = path_for(path, root, other)) != NO_ERROR)
-        return result;
+        return at_stage(WORKER_ISOLATION, result);
     file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (file != INVALID_HANDLE_VALUE) {
         CloseHandle(file);
-        return ERROR_INVALID_ACCESS;
+        return at_stage(WORKER_ISOLATION, ERROR_INVALID_ACCESS);
     }
-    return GetLastError() == ERROR_ACCESS_DENIED ? NO_ERROR : ERROR_INVALID_DATA;
+    return GetLastError() == ERROR_ACCESS_DENIED ? NO_ERROR : at_stage(WORKER_ISOLATION, ERROR_INVALID_DATA);
 }
 
 static DWORD launch_worker(HANDLE token, const wchar_t *sid) {
@@ -74,7 +91,7 @@ static DWORD launch_worker(HANDLE token, const wchar_t *sid) {
     else if (!wcscmp(sid, second_sid))
         other = first_sid;
     else
-        return ERROR_ACCESS_DENIED;
+        return at_stage(CLIENT_TOKEN, ERROR_ACCESS_DENIED);
     wchar_t executable[32768], command[32768];
     DWORD length = GetModuleFileNameW(NULL, executable, 32768);
     if (!length || length == 32768 || swprintf(command, 32768, L"\"%ls\" worker \"%ls\" %ls %ls",
@@ -85,14 +102,14 @@ static DWORD launch_worker(HANDLE token, const wchar_t *sid) {
     PROCESS_INFORMATION child = {0};
     LPVOID environment = NULL;
     if (!CreateEnvironmentBlock(&environment, token, FALSE))
-        return GetLastError();
+        return at_stage(WORKER_ENVIRONMENT, GetLastError());
     BOOL started = CreateProcessAsUserW(token, executable, command, NULL, NULL, FALSE,
                                        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, environment,
                                        directory, &startup, &child);
     DWORD start_error = started ? NO_ERROR : GetLastError();
     DestroyEnvironmentBlock(environment);
     if (!started)
-        return start_error;
+        return at_stage(WORKER_PROCESS, start_error);
     CloseHandle(child.hThread);
     DWORD result = ERROR_PROCESS_ABORTED;
     if (WaitForSingleObject(child.hProcess, 10000) == WAIT_OBJECT_0) {
@@ -117,14 +134,14 @@ static DWORD answer(HANDLE pipe) {
     if (length != 1 || operation != 1)
         return ERROR_INVALID_DATA;
     if (!ImpersonateNamedPipeClient(pipe))
-        return GetLastError();
+        return at_stage(PIPE_IMPERSONATION, GetLastError());
 
     DWORD result = NO_ERROR;
     if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_DUPLICATE, TRUE, &caller))
-        result = GetLastError();
-    else if ((result = process_sid(caller, &sid)) == NO_ERROR &&
+        result = at_stage(CLIENT_TOKEN, GetLastError());
+    else if ((result = at_stage(CLIENT_TOKEN, process_sid(caller, &sid))) == NO_ERROR &&
              !DuplicateTokenEx(caller, MAXIMUM_ALLOWED, NULL, SecurityImpersonation, TokenPrimary, &worker))
-        result = GetLastError();
+        result = at_stage(PRIMARY_TOKEN, GetLastError());
     if (!RevertToSelf())
         ExitProcess(GetLastError());
     if (!result)
@@ -225,29 +242,30 @@ static DWORD request(const wchar_t *service) {
         return ERROR_INVALID_NAME;
     SC_HANDLE manager = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
     if (!manager)
-        return GetLastError();
+        return at_stage(SCM_CONNECTION, GetLastError());
     SC_HANDLE registration = OpenServiceW(manager, service, SERVICE_QUERY_STATUS);
     SERVICE_STATUS_PROCESS status;
     DWORD length = 0, result = NO_ERROR;
-    if (!registration || !QueryServiceStatusEx(registration, SC_STATUS_PROCESS_INFO, (BYTE *)&status,
-                                                  sizeof(status), &length))
-        result = GetLastError();
+    if (!registration)
+        result = at_stage(SCM_SERVICE, GetLastError());
+    else if (!QueryServiceStatusEx(registration, SC_STATUS_PROCESS_INFO, (BYTE *)&status, sizeof(status), &length))
+        result = at_stage(SCM_STATUS, GetLastError());
     else if (status.dwCurrentState != SERVICE_RUNNING)
         result = ERROR_SERVICE_NOT_ACTIVE;
     else {
         HANDLE pipe = CreateFileW(name, FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE, 0, NULL, OPEN_EXISTING,
                                   SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION, NULL);
         if (pipe == INVALID_HANDLE_VALUE)
-            result = GetLastError();
+            result = at_stage(PIPE_OPEN, GetLastError());
         else {
             ULONG peer = 0;
             BYTE operation = 1;
             DWORD response = ERROR_INVALID_DATA;
             if (!GetNamedPipeServerProcessId(pipe, &peer) || peer != status.dwProcessId)
-                result = ERROR_INVALID_OWNER;
+                result = at_stage(PIPE_PEER, ERROR_INVALID_OWNER);
             else if (!WriteFile(pipe, &operation, 1, &length, NULL) || length != 1 ||
                      !ReadFile(pipe, &response, sizeof(response), &length, NULL) || length != sizeof(response))
-                result = ERROR_INVALID_DATA;
+                result = at_stage(PIPE_IO, ERROR_INVALID_DATA);
             else
                 result = response;
             CloseHandle(pipe);
@@ -273,7 +291,11 @@ int wmain(int argc, wchar_t **argv) {
     } else if (argc == 5 && !wcscmp(argv[1], L"worker")) {
         result = check_worker(argv[2], argv[3], argv[4]);
     }
-    if (result)
-        fprintf(stderr, "Windows account-worker probe failed (%lu)\n", (unsigned long)result);
+    if (result) {
+        const DWORD stage = result >> 24;
+        const char *name = stage < sizeof(stages) / sizeof(stages[0]) ? stages[stage] : "worker exit";
+        fprintf(stderr, "Windows account-worker probe could not %s (%lu)\n", name,
+                (unsigned long)(stage < sizeof(stages) / sizeof(stages[0]) ? result & 0xffffffUL : result));
+    }
     return (int)result;
 }

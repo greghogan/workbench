@@ -38,21 +38,33 @@ function Assert-UserProbe(
     [string] $ServiceArgument = "$Port"
 ) {
     foreach ($credential in $credentials) {
-        $options = @{
-            Credential = $credential
-            FilePath = $Binary
-            ArgumentList = @($Mode, $ServiceArgument)
-            LoadUserProfile = $true
-            WorkingDirectory = $directory
-            PassThru = $true
-        }
-        $process = Start-Process @options
-        if (-not $process.WaitForExit(15000)) {
-            $process.Kill()
-            throw "User probe $Mode timed out."
-        }
-        if ($Expected -notcontains $process.ExitCode) {
-            throw "User probe $Mode returned $($process.ExitCode); expected $($Expected -join ' or ')."
+        $start = [Diagnostics.ProcessStartInfo]::new($Binary, "$Mode $ServiceArgument")
+        $start.Domain = $env:COMPUTERNAME
+        $start.UserName = $credential.UserName
+        $start.Password = $credential.Password
+        $start.LoadUserProfile = $true
+        $start.WorkingDirectory = $directory
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $start.RedirectStandardError = $true
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $start
+        try {
+            if (-not $process.Start()) { throw "Could not start user probe $Mode." }
+            $standardError = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit(15000)) {
+                $process.Kill()
+                $process.WaitForExit()
+                throw "User probe $Mode timed out."
+            }
+            $details = $standardError.GetAwaiter().GetResult().Trim()
+            $result = $process.ExitCode
+            if ($Expected -notcontains $result) {
+                throw "User probe $Mode returned $result; expected $($Expected -join ' or '). $details"
+            }
+            Write-Output "Ordinary account probe $Mode returned $result."
+        } finally {
+            $process.Dispose()
         }
     }
 }
@@ -80,7 +92,7 @@ try {
         if (-not (Get-LocalGroupMember -Group $group | Where-Object { $_.SID -eq $user.SID })) {
             Add-LocalGroupMember -Group $group -Member $user
         }
-        $credentials += [PSCredential]::new("$env:COMPUTERNAME\$name", $password)
+        $credentials += [PSCredential]::new($name, $password)
         $sid = $user.SID.Value
         $userSids += $sid
         $private = Join-Path $directory $sid
