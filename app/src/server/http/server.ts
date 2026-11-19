@@ -84,6 +84,7 @@ interface WebOptions {
   port?: number;
   pollInterval?: number;
   collectionRunner?: typeof runCollectionWorker;
+  authorizeListener?: (authorization: string | undefined) => boolean;
 }
 export async function startWebServer(root: string, options: WebOptions = {}) {
   const { host, port } = localEndpoint(options);
@@ -837,7 +838,21 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       send(response, status, "text/html; charset=utf-8", requestUnavailablePage(publicMessage, recovery));
     }
   };
-  const server = createLocalServer(handle, metrics);
+  const authorizeListener = options.authorizeListener;
+  const server = createLocalServer(
+    authorizeListener
+      ? (request, response) => {
+          if (!authorizeListener(request.headers.authorization)) {
+            secureResponse(response);
+            send(response, 403, "text/plain", "This listener is private to the Workbench service.\n");
+            return;
+          }
+          Reflect.deleteProperty(request.headers, "authorization");
+          return handle(request, response);
+        }
+      : handle,
+    metrics,
+  );
   const slowClient = (response: ServerResponse): boolean => {
     if (response.writableLength <= 64 * 1024) return false;
     metrics.count("slowClientDisconnects");

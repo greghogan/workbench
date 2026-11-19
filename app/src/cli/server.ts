@@ -22,6 +22,9 @@ export function registerServerCommands(program: Command, root: string): void {
         if (!(name in hubEnvironment)) Reflect.deleteProperty(process.env, name);
       const web = await startProjectHub(distributionRoot(root), options);
       console.log(`Workbench web UI: ${web.url}`);
+      console.log(`Sign-in username: ${web.signIn.username}`);
+      // Use the shared terminal transcript's credential redaction label.
+      console.log(`Sign-in password: ${web.signIn.password}`);
       console.log("Press Ctrl-C to stop.");
       let stop: () => void = () => undefined;
       try {

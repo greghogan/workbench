@@ -10,10 +10,12 @@ workbench serve --port 8081
 workbench serve --demo
 ```
 
-Open the printed URL in your browser. The listener defaults to `127.0.0.1:8080`; `--host ::1` selects IPv6 loopback, and
-`--port 0` selects an available port. Workbench does not launch a browser or configure SSH. Use your own browser and
-forwarding arrangement when working on a remote host. Stop the service with Ctrl-C. Shutdown stops accepting work and
-waits for admitted collection changes and cache deletions to finish. Read-only cache scans are cancelled on shutdown.
+Open the printed URL and enter the username and generated password in the browser's sign-in prompt. The credential
+expires when the server stops. Links and forms continue to work with JavaScript disabled.
+
+The listener defaults to `127.0.0.1:8080`. Use `--host ::1` for IPv6 loopback or `--port 0` to select an available port.
+If you are working on a remote host, configure forwarding and open the forwarded URL in your browser. Ctrl-C stops
+admission, cancels read-only cache scans, and waits for admitted collection changes and cache deletions to finish.
 
 The dashboard lists registered consuming projects, including Workbench itself when registered. Open a project to browse
 its records; **Projects** returns to the dashboard. Project records and adopted collections remain separate sources

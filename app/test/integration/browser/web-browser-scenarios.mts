@@ -19,7 +19,7 @@ export const BrowserScenario = {
 } as const;
 import { accessibilityEvidence } from "./web-accessibility.mjs";
 import axe from "axe-core";
-import type { Browser, Locator, Page } from "playwright-core";
+import type { BrowserContext, BrowserContextOptions, Locator, Page } from "playwright-core";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { brotliCompressSync } from "node:zlib";
@@ -30,7 +30,8 @@ import assert from "node:assert/strict";
 interface BrowserScenarioContext {
   distribution: string;
   page: Page;
-  browser: Browser;
+  browserVersion: string;
+  newContext: (options?: BrowserContextOptions) => Promise<BrowserContext>;
   root: string;
   provider: string;
   commit: string;
@@ -42,7 +43,21 @@ interface BrowserScenarioContext {
   workbench: (...args: string[]) => string;
 }
 export function webBrowserScenarios(context: BrowserScenarioContext): { name: string; run: () => Promise<void> }[] {
-  const { page, browser, root, provider, commit, adr, staged, directory, base, git, workbench, distribution } = context;
+  const {
+    page,
+    browserVersion,
+    newContext,
+    root,
+    provider,
+    commit,
+    adr,
+    staged,
+    directory,
+    base,
+    git,
+    workbench,
+    distribution,
+  } = context;
   const documentNavigation = async () => {
     const content = await page.locator(".record-pane-content > .panel").first().boundingBox();
     assert(content, "The document pane is visible");
@@ -140,7 +155,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
             "Wide diagrams scroll within the document",
           );
-          const plain = await browser.newContext({ javaScriptEnabled: false });
+          const plain = await newContext({ javaScriptEnabled: false });
           try {
             const fallback = await plain.newPage();
             await fallback.goto(base + "/records/demo:ADR-Z");
@@ -194,6 +209,9 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
     {
       name: BrowserScenario.Performance,
       run: async () => {
+        // Playwright disables Chromium's cache while intercepting authentication challenges.
+        // The browser has signed in and can now use its native credentials and cache.
+        await page.context().setHTTPCredentials(null);
         const samples: { name: string; durationMs: number; ttfbMs: number; timing: string | undefined }[] = [];
         const navigate = async (name: string, path: string) => {
           const response = await page.goto(base + path, { waitUntil: "load" });
@@ -269,7 +287,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
                 platform: process.platform,
                 arch: process.arch,
                 node: process.version,
-                browser: browser.version(),
+                browser: browserVersion,
                 userAgent: await page.evaluate(() => navigator.userAgent),
               },
               workload: {
@@ -667,7 +685,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         const receiptPath = join(root, ".git/workbench/review.json");
         const receiptBefore = existsSync(receiptPath) ? readFileSync(receiptPath, "utf8") : null;
         writeFileSync(adr, unformatted);
-        const coldContext = await browser.newContext({ javaScriptEnabled: false });
+        const coldContext = await newContext({ javaScriptEnabled: false });
         try {
           const cold = await coldContext.newPage();
           const response = await cold.goto(base + "/records/demo:ADR-0/review?layout=unified");
@@ -1227,7 +1245,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             .trim() +
           "\n\n## Details\n\n- [x] Check the browser workflow.\n";
         writeFileSync(path, taskSource);
-        const plain = await browser.newContext({ javaScriptEnabled: false });
+        const plain = await newContext({ javaScriptEnabled: false });
         try {
           const review = await plain.newPage();
           await review.goto(base + "/records/demo:TSK-ZZ");
@@ -1473,7 +1491,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           () =>
             (document.querySelector('[data-commit-file="task-delivery.ts"] .file-diff-scroll')?.scrollLeft ?? 0) > 0,
         );
-        const plainContext = await browser.newContext({ javaScriptEnabled: false }),
+        const plainContext = await newContext({ javaScriptEnabled: false }),
           plainPage = await plainContext.newPage();
         try {
           const url = new URL(inlineURL);
@@ -1684,7 +1702,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         });
         await page.getByRole("heading", { name: "TSK-0: Inspect the interface", exact: true }).waitFor();
         assert.equal(await page.locator('[data-task-window="roots"] [data-record-id]').count(), 120);
-        const manual = await browser.newPage();
+        const manualContext = await newContext();
+        const manual = await manualContext.newPage();
         await manual.addInitScript(() => {
           Object.defineProperty(globalThis, "IntersectionObserver", { value: undefined, configurable: true });
         });
@@ -1698,7 +1717,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         );
         await manual.getByRole("heading", { name: "TSK-0: Refreshed expanded result", exact: true }).waitFor();
         assert.equal(await manual.locator('[data-task-window="roots"] [data-record-id]').count(), 120);
-        await manual.close();
+        await manualContext.close();
         await page.goto(base + "/records?type=TSK");
         assert.equal(await page.locator("[data-task-node]").count(), 100);
         await page.evaluate(() => {
@@ -2160,17 +2179,14 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.screenshot({ path: join(directory, "demonstration-review-groups.png"), fullPage: true });
         await outcome.getByRole("link", { name: "ADR-1: Offline search and previews", exact: true }).click();
         await page.getByRole("button", { name: "Confirm changes", exact: true }).click();
-        await page.waitForURL((url) => url.pathname === "/demonstration/reviews");
-        await outcome.locator('[data-record-id="demo:TSK-7"] a[data-card-link]').click();
-        await Promise.all([
+        await page.waitForURL((url) => url.origin === origin && url.pathname === "/demonstration/records/demo:TSK-7");
+        const [acceptance] = await Promise.all([
           page.waitForResponse(
-            (response) =>
-              response.request().method() === "POST" &&
-              response.url().endsWith("/actions/task-state") &&
-              response.status() === 200,
+            (response) => response.request().method() === "POST" && response.url().endsWith("/actions/task-state"),
           ),
           page.getByRole("button", { name: "Accept outcome", exact: true }).click(),
         ]);
+        assert.equal(acceptance.status(), 200, "Task outcome acceptance succeeds");
         await page.waitForURL(
           (url) =>
             url.origin === origin &&

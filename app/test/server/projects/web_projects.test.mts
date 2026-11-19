@@ -66,30 +66,70 @@ async function project() {
   await registerConsumingProject(root);
   return root;
 }
-function post(url: string, values: Record<string, string>) {
-  return fetch(url, { method: "POST", body: new URLSearchParams(values), redirect: "manual" });
+function signInHeader(server: (typeof servers)[number]): string {
+  return `Basic ${Buffer.from(`${server.signIn.username}:${server.signIn.password}`).toString("base64")}`;
 }
+function browse(url: string | URL, options: RequestInit = {}) {
+  const origin = new URL(url).origin;
+  const server = servers.findLast((candidate) => new URL(candidate.url).origin === origin);
+  if (!server) throw new Error("Missing registered fixture listener for browser navigation");
+  const headers = new Headers(options.headers);
+  headers.set("authorization", signInHeader(server));
+  return fetch(url, { ...options, headers });
+}
+function post(url: string, values: Record<string, string>) {
+  return browse(url, { method: "POST", body: new URLSearchParams(values), redirect: "manual" });
+}
+test("private sign-in protects reads, events, and actions and expires on restart", async () => {
+  const root = await project(),
+    id = projectIdentity(root),
+    web = await start();
+  for (const route of ["/", "/events", "/metrics", `/projects/${id}/`, "/demonstration/"]) {
+    const challenge = await fetch(web.url + route);
+    expect(challenge.status).toBe(401);
+    expect(challenge.headers.get("www-authenticate")).toBe('Basic realm="Workbench", charset="UTF-8"');
+    expect(challenge.headers.get("cache-control")).toBe("no-store");
+  }
+  const dashboard = await (await browse(web.url)).text();
+  const csrf = hiddenValue(dashboard, "csrf");
+  const unauthorizedAction = await fetch(web.url + "/projects/remove", {
+    method: "POST",
+    body: new URLSearchParams({ csrf, project: id }),
+    headers: { authorization: "Basic wrong-credential" },
+  });
+  expect(unauthorizedAction.status).toBe(401);
+  expect(registeredProjects().some((entry) => entry.id === id)).toBe(true);
+  expect((await post(web.url + "/projects/remove", { csrf: "wrong", project: id })).status).toBe(403);
+  expect((await browse(web.url + "/metrics")).status).toBe(200);
+
+  const expired = signInHeader(web);
+  await web.close();
+  const restarted = await start();
+  expect((await fetch(restarted.url, { headers: { authorization: expired } })).status).toBe(401);
+  expect((await browse(restarted.url)).status).toBe(200);
+});
+
 test("record bookmarks cold-load across service restarts and checkout relocation without old route aliases", async () => {
   const root = await project(),
     id = projectIdentity(root),
     web = await start();
   const bookmark = `/projects/${id}/records/demo:ADR-0`;
-  const view = await fetch(web.url + bookmark);
+  const view = await browse(web.url + bookmark);
   expect(view.status).toBe(200);
   expect(await view.text()).toContain("Keep files authoritative");
-  expect((await fetch(web.url + `/p/${id}/record?id=demo:ADR-0`)).status).toBe(404);
-  expect((await fetch(web.url + `/projects/${id}/record?id=demo:ADR-0`)).status).toBe(404);
-  expect((await fetch(web.url + bookmark + "?id=demo:ADR-0")).status).toBe(400);
+  expect((await browse(web.url + `/p/${id}/record?id=demo:ADR-0`)).status).toBe(404);
+  expect((await browse(web.url + `/projects/${id}/record?id=demo:ADR-0`)).status).toBe(404);
+  expect((await browse(web.url + bookmark + "?id=demo:ADR-0")).status).toBe(400);
   const decision = join(root, "workbench/decisions/ADR-00.md");
   writeFileSync(decision, readFileSync(decision, "utf8") + "\nReview the relocated decision.\n");
   const moved = root + "-moved";
   renameSync(root, moved);
   roots.push(moved);
   await relocateConsumingProject(root, moved);
-  expect((await fetch(web.url + bookmark)).status).toBe(200);
+  expect((await browse(web.url + bookmark)).status).toBe(200);
   await web.close();
   const restarted = await start();
-  const cold = await fetch(restarted.url + bookmark + "/review?layout=unified");
+  const cold = await browse(restarted.url + bookmark + "/review?layout=unified");
   expect(cold.status).toBe(200);
   const document = parseDOM(await cold.text()).window.document;
   expect(document.querySelector('nav[aria-label="Difference layout"] [aria-current="page"]')?.textContent).toBe(
@@ -187,7 +227,9 @@ test("canceling a cold project navigation records cancellation without a spuriou
     ready.mockRestore();
     await this.ready();
   });
-  const request = get(web.url + `/projects/${projectIdentity(root)}/`);
+  const request = get(web.url + `/projects/${projectIdentity(root)}/`, {
+    headers: { authorization: signInHeader(web) },
+  });
   const disconnected = new Promise<void>((resolve) => {
     request.once("error", () => {
       resolve();
@@ -204,7 +246,7 @@ test("canceling a cold project navigation records cancellation without a spuriou
   } finally {
     release();
   }
-  expect((await fetch(web.url + `/projects/${projectIdentity(root)}/`)).status).toBe(200);
+  expect((await browse(web.url + `/projects/${projectIdentity(root)}/`)).status).toBe(200);
 });
 test("project browsing does not inherit another checkout's configuration, build destinations, or approval context", () => {
   const user = {
@@ -233,12 +275,12 @@ test("cache generation keeps protect owned products until explicitly released", 
   prepareBuild(paths);
   writeFileSync(join(paths.directory, "output"), "regenerable product");
   const web = await start();
-  const page = await (await fetch(web.url + "/caches?refresh=1")).text();
+  const page = await (await browse(web.url + "/caches?refresh=1")).text();
   const csrf = hiddenValue(page, "csrf");
   expect(page).toContain("Keep generation");
   expect((await post(web.url + "/caches/keep", { csrf, identity: paths.directory, keep: "yes" })).status).toBe(303);
   const preview = await post(web.url + "/projects/remove", { csrf, project: projectIdentity(root) });
-  const contents = await (await fetch(new URL(preview.headers.get("location") ?? "", web.url))).text();
+  const contents = await (await browse(new URL(preview.headers.get("location") ?? "", web.url))).text();
   const token = hiddenValue(contents, "token");
   expect((await post(web.url + "/cleanup/apply", { csrf, token, reviewed: "yes" })).status).toBe(409);
   expect(projectRegistration(root)).toBe(Registration.Registered);
@@ -299,7 +341,7 @@ test("uncertain cache cleanup previews the exact selection and rejects stale con
   let page = "";
   await vi.waitFor(
     async () => {
-      page = await (await fetch(web.url + "/caches")).text();
+      page = await (await browse(web.url + "/caches")).text();
       expect(page).toContain("unowned build directory");
     },
     { timeout: 30000 },
@@ -308,7 +350,7 @@ test("uncertain cache cleanup previews the exact selection and rejects stale con
   const preview = async () => {
     const response = await post(web.url + "/caches/recover", { csrf, directory: paths.directory });
     expect(response.status).toBe(303);
-    const content = await (await fetch(new URL(response.headers.get("location") ?? "", web.url))).text();
+    const content = await (await browse(new URL(response.headers.get("location") ?? "", web.url))).text();
     expect(content).toContain("Delete uncertain cache files");
     expect(content).toContain(paths.directory);
     return hiddenValue(content, "token");
@@ -328,12 +370,12 @@ test("the dashboard isolates same-namespace projects, routes forms, and verifies
   const first = await project(),
     second = await project(),
     web = await start();
-  const dashboard = await (await fetch(web.url)).text();
+  const dashboard = await (await browse(web.url)).text();
   const a = `/projects/${projectIdentity(first)}`,
     b = `/projects/${projectIdentity(second)}`;
   expect(dashboard).toContain(a);
   expect(dashboard).toContain(b);
-  const page = await (await fetch(web.url + a + "/records/demo:ADR-0?view=edit")).text();
+  const page = await (await browse(web.url + a + "/records/demo:ADR-0?view=edit")).text();
   expect(page).toContain(`action="${a}/actions/save"`);
   const document = parseDOM(page, { url: web.url }).window.document;
   expect(document.querySelector(".topbar .project-switch")?.getAttribute("href")).toBe("/projects");
@@ -346,7 +388,7 @@ test("the dashboard isolates same-namespace projects, routes forms, and verifies
   );
   const prepared = await post(web.url + "/projects/remove", { csrf, project: projectIdentity(first) });
   expect(prepared.status).toBe(303);
-  const preview = await (await fetch(new URL(prepared.headers.get("location") ?? "", web.url))).text();
+  const preview = await (await browse(new URL(prepared.headers.get("location") ?? "", web.url))).text();
   expect(preview).toContain("Project files are preserved");
   expect(projectRegistration(first)).toBe(Registration.Registered);
   const token = hiddenValue(preview, "token");
@@ -355,9 +397,9 @@ test("the dashboard isolates same-namespace projects, routes forms, and verifies
   expect(projectRegistration(first)).toBe(Registration.Declined);
   expect(existsSync(join(first, "workbench/CHARTER.md"))).toBe(true);
   expect(projectRegistration(second)).toBe(Registration.Registered);
-  expect((await fetch(web.url + a + "/")).status).toBe(404);
-  expect((await fetch(web.url + b + "/")).status).toBe(200);
-  expect((await fetch(web.url + "/missing")).status).toBe(404);
+  expect((await browse(web.url + a + "/")).status).toBe(404);
+  expect((await browse(web.url + b + "/")).status).toBe(200);
+  expect((await browse(web.url + "/missing")).status).toBe(404);
 });
 test("the demonstration is offline, editable, reset by restart, and isolated from the personal registry", async ({
   signal,
@@ -365,11 +407,13 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
   const real = await project(),
     before = registeredProjects(),
     web = await start(true);
-  const html = await (await fetch(web.url)).text();
+  const html = await (await browse(web.url)).text();
   expect(html).toContain("Demonstration");
   expect(html).not.toContain(real);
   expect(parseDOM(html).window.document.querySelector(".project-switch")?.getAttribute("href")).toBe("/projects");
-  const records = await (await fetch(web.url + "/records")).text();
+  const hubAuthority = new URL(web.url).host;
+  expect((await browse(`${web.url}//${hubAuthority}/projects`)).status).toBe(400);
+  const records = await (await browse(web.url + "/records")).text();
   for (const type of ["ADR", "TSK", "EXP", "ENV", "CIT", "REL"]) expect(records).toContain(`demo:${type}-0`);
   const listed = parseDOM(records).window.document;
   for (const type of ["ADR", "TSK", "EXP", "ENV", "CIT", "REL"])
@@ -377,7 +421,7 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
   const declaredName = readProjects(join(distribution, "demo"))[0]?.name;
   if (!declaredName) throw new Error("Missing demonstration display name");
   expect(parseDOM(html).window.document.querySelector(".project-switch-name")?.textContent).toBe(declaredName);
-  const queue = parseDOM(await (await fetch(web.url + "/reviews")).text(), { url: web.url }).window.document;
+  const queue = parseDOM(await (await browse(web.url + "/reviews")).text(), { url: web.url }).window.document;
   const reviewLinks = [
     ...queue.querySelectorAll('.review-group:not([data-task-group^="task:"]) article.record-row a[data-card-link]'),
   ];
@@ -388,18 +432,18 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
       node.getAttribute("data-record-id"),
     ),
   ).toEqual(["demo:ADR-1", "demo:TSK-7"]);
-  const pdfPage = await (await fetch(web.url + "/records/demo:CIT-0")).text();
+  const pdfPage = await (await browse(web.url + "/records/demo:CIT-0")).text();
   expect(pdfPage).toContain("File present locally");
   const href = [...parseDOM(pdfPage).window.document.querySelectorAll(".citation-source .actions a")]
     .find((link) => link.textContent === "Read")
     ?.getAttribute("href");
   expect(href).toBeTruthy();
-  const pdf = await fetch(new URL(href ?? "", web.url));
+  const pdf = await browse(new URL(href ?? "", web.url));
   expect(pdf.headers.get("content-type")).toBe("application/pdf");
   expect((await pdf.text()).startsWith("%PDF-")).toBe(true);
   for (const id of ["demo:CIT-1", "demo:CIT-2"])
-    expect(await (await fetch(web.url + "/records/" + id)).text()).toContain("File missing locally");
-  const collection = await (await fetch(web.url + "/collections")).text();
+    expect(await (await browse(web.url + "/records/" + id)).text()).toContain("File missing locally");
+  const collection = await (await browse(web.url + "/collections")).text();
   expect(collection).toContain(web.demonstration()?.source);
   expect(process.env.WORKBENCH_DEMONSTRATION_ROOT).toBeUndefined();
   const rejected = await post(web.url + "/actions/collection-preview", {
@@ -433,7 +477,7 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
   );
   expect(validated.status, validated.stdout + validated.stderr).toBe(0);
   const original = readFileSync(join(real, "workbench/decisions/ADR-00.md"), "utf8");
-  const editor = await (await fetch(web.url + "/records/demo:ADR-0?view=edit")).text();
+  const editor = await (await browse(web.url + "/records/demo:ADR-0?view=edit")).text();
   const saved = await post(web.url + "/actions/save", {
     csrf: hiddenValue(editor, "csrf"),
     expected: hiddenValue(editor, "expected"),
@@ -446,14 +490,14 @@ test("the demonstration is offline, editable, reset by restart, and isolated fro
   expect(registeredProjects()).toEqual(before);
   expect(readFileSync(join(real, "workbench/decisions/ADR-00.md"), "utf8")).toBe(original);
   const restarted = await start(true);
-  expect(await (await fetch(restarted.url + "/records/demo:ADR-0")).text()).not.toContain("Disposable human edit");
+  expect(await (await browse(restarted.url + "/records/demo:ADR-0")).text()).not.toContain("Disposable human edit");
 });
 
 test("the demo header returns to Projects and reopening preserves its isolated session", async () => {
   const real = await project(),
     web = await start(true);
   const demoRoot = web.demonstration()?.root;
-  const editor = await (await fetch(web.url + "/records/demo:ADR-0?view=edit")).text();
+  const editor = await (await browse(web.url + "/records/demo:ADR-0?view=edit")).text();
   const saved = await post(web.url + "/actions/save", {
     csrf: hiddenValue(editor, "csrf"),
     expected: hiddenValue(editor, "expected"),
@@ -461,9 +505,9 @@ test("the demo header returns to Projects and reopening preserves its isolated s
     contents: "# ADR-0: Retained demo edit\n\nKeep this session when switching projects.\n",
   });
   expect(saved.status).toBe(303);
-  const current = await (await fetch(web.url)).text();
+  const current = await (await browse(web.url)).text();
   expect(parseDOM(current).window.document.querySelector(".project-switch")?.getAttribute("href")).toBe("/projects");
-  const dashboard = await (await fetch(new URL("/projects", web.url))).text();
+  const dashboard = await (await browse(new URL("/projects", web.url))).text();
   expect(web.demonstration()?.root).toBe(demoRoot);
   expect(dashboard).toContain(real);
   expect(dashboard).not.toContain("Retained demo edit");
@@ -471,7 +515,7 @@ test("the demo header returns to Projects and reopening preserves its isolated s
   const entered = await post(new URL("/demonstration", web.url).href, { csrf: hiddenValue(dashboard, "csrf") });
   expect(entered.status).toBe(303);
   expect(web.demonstration()?.root).toBe(demoRoot);
-  expect(await (await fetch(web.url + "/records/demo:ADR-0")).text()).toContain("Retained demo edit");
+  expect(await (await browse(web.url + "/records/demo:ADR-0")).text()).toContain("Retained demo edit");
 });
 
 test("scoped link helpers include PDF routes and tabs without leaking URL context between requests", async () => {
@@ -514,9 +558,9 @@ test("inventory updates preserve current project navigation while cache discover
     });
   });
   const web = await start();
-  const page = await (await fetch(new URL("/projects", web.url))).text();
+  const page = await (await browse(new URL("/projects", web.url))).text();
   for (const root of [first, second]) expect(page).toContain(`/projects/${projectIdentity(root)}/`);
-  const response = await fetch(web.url + "/inventory?view=projects");
+  const response = await browse(web.url + "/inventory?view=projects");
   expect(response.status).toBe(200);
   const update = (await response.json()) as { sections: { projects: string }; refreshing: boolean };
   expect(update.refreshing).toBe(true);
@@ -550,7 +594,7 @@ test("project review counts load independently of cache sizes, group supporting 
     });
   });
   const web = await start();
-  const initial = parseDOM(await (await fetch(web.url + "/projects")).text()).window.document;
+  const initial = parseDOM(await (await browse(web.url + "/projects")).text()).window.document;
   expect([...initial.querySelectorAll("table th")].map((heading) => heading.textContent)).toEqual([
     "Project",
     "Reviews",
@@ -558,7 +602,7 @@ test("project review counts load independently of cache sizes, group supporting 
     "Actions",
   ]);
   const counts = async () => {
-    const response = await fetch(web.url + "/inventory?view=projects");
+    const response = await browse(web.url + "/inventory?view=projects");
     expect(response.status).toBe(200);
     const update = (await response.json()) as { sections: { projects: string } };
     return parseDOM(`<table><tbody>${update.sections.projects}</tbody></table>`).window.document;
@@ -602,12 +646,12 @@ test("current registration and display names govern navigation while an older ca
     });
   });
   const web = await start();
-  await fetch(new URL("/projects", web.url));
+  await browse(new URL("/projects", web.url));
   const second = await project();
   writeFileSync(join(second, "workbench/projects.toml"), '[[project]]\nid="demo"\nname="New Display Name"\npath="."\n');
   declineProject(first, "Removed fixture");
   for (const view of ["projects", "caches"]) {
-    const response = await fetch(web.url + `/inventory?view=${view}`);
+    const response = await browse(web.url + `/inventory?view=${view}`);
     const update = (await response.json()) as { sections: { projects: string } };
     expect(update.sections.projects).not.toContain(`/projects/${projectIdentity(first)}/`);
     const document = parseDOM(`<table><tbody>${update.sections.projects}</tbody></table>`).window.document;
@@ -618,7 +662,7 @@ test("current registration and display names govern navigation while an older ca
       link?.closest("tr")?.querySelector('[data-cache-cell$="-owned"]')?.getAttribute("data-cache-uncertain"),
     ).toBe("true");
   }
-  const page = await (await fetch(new URL("/projects", web.url))).text();
+  const page = await (await browse(new URL("/projects", web.url))).text();
   expect(page).toContain("New Display Name");
   expect(page).toContain("Project directory on the server");
 });

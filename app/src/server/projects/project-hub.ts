@@ -37,6 +37,7 @@ import {
 } from "../views/hub-pages.js";
 import { InventoryService, type InventoryView } from "../cache/inventory-service.js";
 import { WebMetrics } from "../http/observability.js";
+import { createPrivateBrowserAuthentication } from "../http/browser-auth.js";
 
 interface Pending {
   expires: number;
@@ -77,6 +78,7 @@ export async function startProjectHub(
   options: { host?: "127.0.0.1" | "::1"; port?: number; demo?: boolean } = {},
 ) {
   const { host, port } = localEndpoint(options);
+  const authentication = createPrivateBrowserAuthentication();
   const csrf = randomBytes(32).toString("hex");
   const metrics = new WebMetrics();
   const generation = new WorkerGeneration(distribution);
@@ -234,6 +236,12 @@ export async function startProjectHub(
       const origin = requestOrigin(request);
       const url = new URL(request.url ?? "/", origin);
       if (url.origin !== origin) throw new WebError(400, "Request URL is outside this service");
+      if (!authentication.accepts(request.headers.authorization)) {
+        response.setHeader("www-authenticate", 'Basic realm="Workbench", charset="UTF-8"');
+        send(response, 401, "text/plain", "Enter the sign-in credential printed by workbench serve.\n");
+        return;
+      }
+      Reflect.deleteProperty(request.headers, "authorization");
       if (url.pathname === demonstrationBase && request.method === "GET") {
         redirect(response, demonstrationBase + "/");
         return;
@@ -666,7 +674,11 @@ export async function startProjectHub(
   return {
     server,
     close,
+    signIn: { username: authentication.username, password: authentication.password },
     demonstration: () => (demo ? { root: demo.root, source: demo.source } : undefined),
-    url: `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}${options.demo ? demonstrationBase : ""}`,
+    url: new URL(
+      options.demo ? demonstrationBase : "/",
+      `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}`,
+    ).href.replace(/\/$/, ""),
   };
 }
