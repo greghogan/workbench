@@ -16,7 +16,7 @@ export interface ReleaseSelection {
 }
 
 export interface ReleaseServiceRegistration {
-  manager: "systemd" | "launchd";
+  manager: "systemd" | "launchd" | "scm" | "task-scheduler";
   scope: "user" | "system";
   path: string;
   digest: string;
@@ -28,6 +28,7 @@ interface ReleaseTransition {
   after: string;
   service?: ReleaseServiceRegistration;
   launchdMayStart?: true;
+  windowsTaskMayStart?: true;
 }
 
 export function validArchiveDigest(value: unknown): value is string {
@@ -70,8 +71,13 @@ function parseTransition(bytes: Buffer): ReleaseTransition {
     const entry = value.service;
     if (
       !isRecord(entry) ||
-      (entry.manager !== "systemd" && entry.manager !== "launchd") ||
+      (entry.manager !== "systemd" &&
+        entry.manager !== "launchd" &&
+        entry.manager !== "scm" &&
+        entry.manager !== "task-scheduler") ||
       (entry.scope !== "user" && entry.scope !== "system") ||
+      (entry.manager === "scm" && entry.scope !== "system") ||
+      (entry.manager === "task-scheduler" && entry.scope !== "user") ||
       typeof entry.path !== "string" ||
       !isAbsolute(entry.path) ||
       !validArchiveDigest(entry.digest)
@@ -84,12 +90,18 @@ function parseTransition(bytes: Buffer): ReleaseTransition {
     (value.launchdMayStart !== true || service?.manager !== "launchd" || service.scope !== "system")
   )
     throw new Error("Invalid Workbench LaunchDaemon update receipt");
+  if (
+    value.windowsTaskMayStart !== undefined &&
+    (value.windowsTaskMayStart !== true || service?.manager !== "task-scheduler")
+  )
+    throw new Error("Invalid Workbench Windows task update receipt");
   return {
     version: 1,
     before: value.before,
     after: value.after,
     ...(service ? { service } : {}),
     ...(value.launchdMayStart === true ? { launchdMayStart: true } : {}),
+    ...(value.windowsTaskMayStart === true ? { windowsTaskMayStart: true } : {}),
   };
 }
 
@@ -137,19 +149,22 @@ export function finishReleaseTransition(path: string): void {
   syncParent(path);
 }
 
-/** Keep launchd's sockets registered while an update stops and replaces its process. */
-export function permitLaunchDaemonStart(path: string, allowed: boolean): void {
+/** Allow the registered supervisor to start the selected release during the update. */
+export function permitManagedServiceStart(path: string, allowed: boolean): void {
   const existing = readBoundedFile(path, maximumTransitionBytes, "Workbench release update receipt");
-  const { launchdMayStart, ...transition } = parseTransition(existing);
-  if (transition.service?.manager !== "launchd" || transition.service.scope !== "system")
-    throw new Error("The update receipt does not select a Workbench LaunchDaemon");
-  if (Boolean(launchdMayStart) === allowed) return;
-  publishReleaseState(
-    path,
-    JSON.stringify({ ...transition, ...(allowed ? { launchdMayStart: true } : {}) }) + "\n",
-    existing,
-    0o600,
-  );
+  const transition = parseTransition(existing);
+  const key =
+    transition.service?.manager === "task-scheduler"
+      ? "windowsTaskMayStart"
+      : transition.service?.manager === "launchd" && transition.service.scope === "system"
+        ? "launchdMayStart"
+        : undefined;
+  if (!key)
+    throw new Error("The update receipt does not select a managed Workbench service that needs startup permission");
+  if (Boolean(transition[key]) === allowed) return;
+  const { version, before, after, service } = transition;
+  const selected = { version, before, after, service, ...(allowed ? { [key]: true } : {}) };
+  publishReleaseState(path, JSON.stringify(selected) + "\n", existing, 0o600);
 }
 
 /** Resume only a lock whose writer is known to have exited. */

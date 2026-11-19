@@ -3,6 +3,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, writeFileSyn
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { syncLocalContextIndex } from "../core/collections/local-context.js";
+import { userConfigValues } from "../core/configuration/user-config.js";
 import { executingToolPin, readToolPin } from "../core/distribution/launcher-identity.js";
 import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
 import {
@@ -26,6 +27,18 @@ import {
   type ServiceScope,
 } from "../core/distribution/systemd-service.js";
 import { updateWorkbench } from "../core/distribution/update.js";
+import {
+  activateWindowsRelease,
+  installWindowsService,
+  recoverWindowsRelease,
+  removeWindowsService,
+} from "../core/distribution/windows-service.js";
+import {
+  activateWindowsUserRelease,
+  installWindowsUserService,
+  recoverWindowsUserRelease,
+  removeWindowsUserService,
+} from "../core/distribution/windows-user-service.js";
 import { distributionRoot } from "../core/projects/project-context.js";
 import { ownedPath } from "../core/runtime/paths.js";
 import { toolSpecification, type ToolPin } from "../core/toolchains/tool-pin.js";
@@ -137,6 +150,25 @@ export function registerInstallationCommands(program: Command, root: string): vo
       }) => {
         if (options.service) {
           const distribution = distributionRoot(root);
+          if (process.platform === "win32") {
+            if (options.service === "user") {
+              const task = await installWindowsUserService(
+                distribution,
+                options.port ?? Number(userConfigValues()["daemon.private_port"]),
+              );
+              console.log(`Registered ${task}. It starts when you sign in.`);
+              console.log(`Start it now with schtasks /Run /TN ${task}.`);
+              return;
+            }
+            const service = await installWindowsService(
+              distribution,
+              options.port ?? Number(userConfigValues()["daemon.system_port"]),
+            );
+            console.log(
+              `Registered ${service}. Start it with Start-Service ${service} from an administrator terminal.`,
+            );
+            return;
+          }
           const result =
             process.platform === "darwin"
               ? options.service === "system"
@@ -185,8 +217,13 @@ export function registerInstallationCommands(program: Command, root: string): vo
         }
         if (revision || (!options.rollback && !options.recover && (!options.archive || !options.sha256)))
           throw new Error("Supply --archive and --sha256, or use --rollback or --recover");
-        const { assertReleaseServicesIdle, launchDaemonReady, privateServiceReady } =
+        const { assertReleaseServicesIdle, drainWindowsPrivateService, launchDaemonReady, privateServiceReady } =
           await import("../server/runtime.js");
+        const windowsUser = {
+          assertIdle: assertReleaseServicesIdle,
+          drain: drainWindowsPrivateService,
+          ready: privateServiceReady,
+        };
         const launchdReady =
           process.geteuid?.() === 0
             ? (distribution: string, pid: number, _state: string, signal: AbortSignal) =>
@@ -194,6 +231,12 @@ export function registerInstallationCommands(program: Command, root: string): vo
             : privateServiceReady;
         if (options.recover) {
           const restored = await recoverArchiveRelease(async (launcher, restore, service, previous, permitStart) => {
+            if (process.platform === "win32") {
+              if (service?.manager === "task-scheduler")
+                await recoverWindowsUserRelease(launcher, restore, service, previous, permitStart, windowsUser);
+              else await recoverWindowsRelease(launcher, restore, service, assertReleaseServicesIdle);
+              return;
+            }
             if (process.platform === "darwin")
               await recoverLaunchdRelease(
                 launcher,
@@ -214,6 +257,11 @@ export function registerInstallationCommands(program: Command, root: string): vo
           : { source: resolve(options.archive ?? ""), sha256: options.sha256 ?? "" };
         const distribution = distributionRoot(root);
         const selected = await updateArchiveRelease(distribution, release, async (transition) => {
+          if (process.platform === "win32") {
+            if (!(await activateWindowsUserRelease(transition, windowsUser)))
+              await activateWindowsRelease(transition, assertReleaseServicesIdle);
+            return;
+          }
           if (process.platform === "darwin")
             await activateLaunchdRelease(transition, assertReleaseServicesIdle, launchdReady);
           else activateSystemdRelease(transition, assertReleaseServicesIdle);
@@ -229,7 +277,14 @@ export function registerInstallationCommands(program: Command, root: string): vo
         .makeOptionMandatory(),
     )
     .action(async ({ service }: { service: ServiceScope }) => {
-      const path = process.platform === "darwin" ? await removeLaunchdService(service) : removeSystemdService(service);
+      const path =
+        process.platform === "win32"
+          ? service === "system"
+            ? await removeWindowsService(distributionRoot(root))
+            : await removeWindowsUserService(distributionRoot(root))
+          : process.platform === "darwin"
+            ? await removeLaunchdService(service)
+            : removeSystemdService(service);
       console.log(path ? "Removed " + path : `Workbench ${service} service is already unregistered.`);
     });
 }

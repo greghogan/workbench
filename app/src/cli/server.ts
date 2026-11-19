@@ -68,6 +68,14 @@ export function registerServerCommands(program: Command, root: string, logDirect
       const { serveAccountWorker } = await import("../server/runtime.js");
       await serveAccountWorker(distributionRoot(root), socket);
     });
+  registerCommand(program, "web-windows-system", { hidden: true }).action(async () => {
+    const { serveWindowsSystem } = await import("../server/runtime.js");
+    await serveWindowsSystem(distributionRoot(root), process.stdin, process.stdout);
+  });
+  registerCommand(program, "web-windows-account", { hidden: true }).action(async () => {
+    const { serveWindowsAccount } = await import("../server/runtime.js");
+    await serveWindowsAccount(distributionRoot(root));
+  });
   registerCommand(program, "web-collection", { hidden: true })
     .argument("<operation>")
     .action(async (operation: string) => {

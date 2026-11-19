@@ -2,10 +2,20 @@ import { afterEach, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { Writable } from "node:stream";
 import { startDiagnosticSession } from "../../../src/core/diagnostics/diagnostic-session.ts";
+import { readLog } from "../../../src/core/storage/logs/log-reader.ts";
 import { maintainLogRuns } from "../../../src/core/storage/logs/log-retention.ts";
 import { setUserOption } from "../../../src/core/configuration/user-config.ts";
-import { configureDiagnostics, LogLevel, LogScope } from "../../../src/core/diagnostics/diagnostics.mjs";
+import {
+  configureDiagnostics,
+  diagnostic,
+  DiagnosticOperation,
+  DiagnosticOutcome,
+  LogFormat,
+  LogLevel,
+  LogScope,
+} from "../../../src/core/diagnostics/diagnostics.mjs";
 vi.mock("../../../src/core/storage/logs/log-retention.ts", async (original) => {
   const actual = await original<typeof import("../../../src/core/storage/logs/log-retention.ts")>();
   return {
@@ -74,8 +84,6 @@ test("periodic diagnostic retention never overlaps and shutdown drains its sweep
 
 test("persistent writer errors are reported before shutdown and do not recursively emit warnings", async () => {
   const { DiagnosticLog } = await import("../../../src/core/storage/logs/diagnostic-log.ts");
-  const { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogFormat } =
-    await import("../../../src/core/diagnostics/diagnostics.mjs");
   const root = mkdtempSync(join(tmpdir(), "workbench-session-failure-"));
   roots.push(root);
   vi.stubEnv("WORKBENCH_CONFIG_HOME", join(root, "config"));
@@ -103,4 +111,39 @@ test("persistent writer errors are reported before shutdown and do not recursive
   } finally {
     await session.close();
   }
+});
+
+test("an SCM control stream stays private while stderr and structured events are retained", async () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-session-control-"));
+  roots.push(root);
+  vi.stubEnv("WORKBENCH_CONFIG_HOME", join(root, "config"));
+  vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "state"));
+  setUserOption("logs.compression", "none");
+  const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  const session = await startDiagnosticSession(LogLevel.Info, LogScope.Server, undefined, { transcript: ["stderr"] });
+  try {
+    process.stdout.write('{"password":"control-frame-secret"}\n');
+    process.stderr.write("SCM worker started\n");
+  } finally {
+    await session.close();
+  }
+  expect(stdout).toHaveBeenCalledWith('{"password":"control-frame-secret"}\n');
+  function capture() {
+    const chunks: string[] = [];
+    const output = new Writable({
+      write(chunk: Buffer, _encoding, complete) {
+        chunks.push(chunk.toString());
+        complete();
+      },
+    });
+    return { output, text: () => chunks.join("") };
+  }
+  const events = capture();
+  await readLog(session.directory, events.output);
+  expect(events.text()).toContain(DiagnosticOperation.PersistentDiagnostics);
+  const stderr = capture();
+  await readLog(session.directory, stderr.output, "stderr");
+  expect(stderr.text()).toBe("SCM worker started\n");
+  await expect(readLog(session.directory, capture().output, "stdout")).rejects.toThrow(/No retained stdout/);
 });

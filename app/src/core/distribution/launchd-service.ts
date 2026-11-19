@@ -426,15 +426,15 @@ export async function activateLaunchdRelease(
         await agent.drain(cancellation.signal, system);
         assertIdle(undefined, agent.stateHome);
         transition.select();
-        if (system) transition.permitLaunchDaemonStart(true);
+        if (system) transition.permitManagedServiceStart(true);
         await agent.restart(transition.replacement, ready, cancellation.signal);
       } catch (failure) {
         if (cancellation.signal.aborted) throw failure;
         try {
-          if (system) transition.permitLaunchDaemonStart(false);
+          if (system) transition.permitManagedServiceStart(false);
           await agent.drain(cancellation.signal, system);
           transition.restore();
-          if (system) transition.permitLaunchDaemonStart(true);
+          if (system) transition.permitManagedServiceStart(true);
           await agent.restart(transition.previous, ready, cancellation.signal);
           transition.finishRestoration();
         } catch (restore) {

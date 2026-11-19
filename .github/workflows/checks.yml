@@ -209,9 +209,35 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  windows-service-helper:
+    name: Build native Windows service launcher
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          architecture: x64
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+      - shell: pwsh
+        run: node scripts/windows-service-helper.mts (Join-Path $env:RUNNER_TEMP windows-service-helper)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-service-helper-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/windows-service-helper/workbench-scm.exe
+            ${{ runner.temp }}/windows-service-helper/windows-service-helper.json
+          if-no-files-found: error
+          retention-days: 30
+
   candidate:
     name: Build portable Workbench candidate
-    needs: launchd-helper
+    needs: [launchd-helper, windows-service-helper]
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     outputs:
@@ -233,9 +259,14 @@ jobs:
         with:
           name: launchd-helper-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/launchd-helper/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-service-helper-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-service-helper/
       - name: Build the configured root release once
         env:
           WORKBENCH_LAUNCHD_HELPER_INPUT: ${{ runner.temp }}/launchd-helper
+          WORKBENCH_WINDOWS_SERVICE_HELPER_INPUT: ${{ runner.temp }}/windows-service-helper
         run: |
           node bin/workbench.mjs check --role release --path . --environment native --no-cache
           node --input-type=module <<'JS'

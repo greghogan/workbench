@@ -18,6 +18,8 @@
   activation.
 - `src/core/distribution/launchd-service.ts`, `src/core/distribution/launchd-paths.mts`: Register the macOS user agent
   and shared daemon, preserve launchd socket ownership during process restarts, and drain owned jobs on removal.
+- `src/core/distribution/windows-service.ts`, `src/core/distribution/windows-user-service.ts`: Manage owned Windows
+  SCM services and per-account logon tasks for installed releases.
 - `src/core/distribution/runtime-distribution.ts`: Materializes an external executable into disposable CI checkouts.
 - `src/core/distribution/distribution-manifest.ts`: Verifies artifact inventories and resolves recorded input hashes.
 - `src/core/distribution/release-archive.ts`: Verifies release checksums and unpacks a private copy for qualification

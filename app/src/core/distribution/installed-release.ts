@@ -26,7 +26,7 @@ import {
   maximumTransitionBytes,
   finishReleaseTransition,
   parseReleaseSelection,
-  permitLaunchDaemonStart,
+  permitManagedServiceStart,
   publishReleaseState,
   readReleaseTransition,
   recordReleaseTransition,
@@ -42,7 +42,9 @@ const installedReleaseFile = "release.json";
 const launcherName = process.platform === "win32" ? "workbench.cjs" : "workbench";
 const launcherHeader = "#!/usr/bin/env node\n// Workbench archive launcher.\n";
 const launchdStartupMarker = "// Workbench launchd startup protocol 1.\n";
+const windowsTaskStartupMarker = "// Workbench Windows task startup protocol 1.\n";
 const shimHeader = "@rem Workbench archive launcher\r\n";
+export const windowsStableHelper = "workbench-scm.exe";
 
 function activeRelease(installation: string): { selection: ReleaseSelection; bytes: Buffer } | undefined {
   try {
@@ -96,21 +98,46 @@ export function checkInstalledServiceStart(distribution: string, managed: boolea
     throw new Error("A Workbench release change is in progress. Wait for it to finish before starting the server.");
 }
 
+export function assertInstalledWindowsTaskLauncher(launcher: string): void {
+  const contents = readBoundedFile(launcher, 16 * 1024, "installed Workbench launcher").toString();
+  if (!contents.startsWith(launcherHeader + launchdStartupMarker + windowsTaskStartupMarker))
+    throw new Error(
+      "Repair the installed Workbench launcher from the active verified archive before updating the logon task",
+    );
+}
+
+export function windowsTaskStartupReceipt(): ReleaseServiceRegistration | undefined {
+  const installation = archiveInstallation();
+  if (!installation) return undefined;
+  const transition = readReleaseTransition(ownedPath(installation, releaseTransitionFile));
+  return transition?.windowsTaskMayStart ? transition.service : undefined;
+}
+
 function launcherText(): string {
-  return `${launcherHeader}${launchdStartupMarker}async function launch() {
+  return `${launcherHeader}${launchdStartupMarker}${windowsTaskStartupMarker}async function launch() {
   const {lstatSync, readFileSync, realpathSync} = await import("node:fs");
   const {dirname, join} = await import("node:path");
   const {pathToFileURL} = await import("node:url");
   const installation = join(dirname(realpathSync(process.argv[1])), ${JSON.stringify(storageName)});
   const [command, ...args] = process.argv.slice(2);
   const recover = command === "update" && args.includes("--recover");
+  const windows = process.platform === "win32" && (
+    command === "web-windows-system" && process.env.WORKBENCH_WINDOWS_SCM === "1" ||
+    command === "web-windows-account" && !!process.env.WORKBENCH_WINDOWS_ACCOUNT_PIPE
+  );
   const launchd = process.platform === "darwin" && process.env[${JSON.stringify(launchdServiceEnvironment)}] === "1";
-  const managed = command === "serve" && args.includes("--service") && (
+  const managed = windows || command === "serve" && args.includes("--service") && (
     (process.platform === "linux" && process.env.WORKBENCH_SYSTEMD_SERVICE === "1" && !!process.env.NOTIFY_SOCKET) || launchd
   );
   const launchDaemon = managed && launchd && process.geteuid() === 0 && process.env.WORKBENCH_SYSTEM_SERVICE === "1";
   const privileged = process.geteuid?.() === 0 && (recover || process.env.WORKBENCH_SYSTEM_SERVICE === "1");
+  const native = windows ? join(installation, ${JSON.stringify(windowsStableHelper)}) : undefined;
+  const windowsCheck = windows ? (await import("node:child_process")).execFileSync : undefined;
   const trusted = (path) => {
+    if (windowsCheck && native) {
+      windowsCheck(native, ["verify-path", path], {stdio: "ignore", windowsHide: true});
+      return;
+    }
     if (!privileged) return;
     for (let current = path; ; current = dirname(current)) {
       const entry = lstatSync(current);
@@ -124,11 +151,6 @@ function launcherText(): string {
   trusted(selection);
   const receipt = join(installation, ${JSON.stringify(releaseTransitionFile)});
   const pending = () => lstatSync(receipt, {throwIfNoEntry: false});
-  if (pending() && !recover && !managed) {
-    console.error("workbench: A Workbench update is pending. If the update stopped, run 'workbench update --recover'.");
-    process.exitCode = 1;
-    return;
-  }
   const readReceipt = () => {
     const info = pending();
     if (!info) return undefined;
@@ -146,6 +168,14 @@ function launcherText(): string {
     if (journal.version !== 1 || typeof journal.before !== "string") throw new Error("Invalid release update receipt");
     return journal;
   };
+  if (pending() && !recover && !managed) {
+    const journal = process.platform === "win32" && command === "serve" && args.includes("--service") && readReceipt();
+    if (!journal || journal.service?.manager !== "task-scheduler" || journal.windowsTaskMayStart !== true) {
+      console.error("workbench: A Workbench update is pending. If the update stopped, run 'workbench update --recover'.");
+      process.exitCode = 1;
+      return;
+    }
+  }
   if (launchDaemon) {
     for (;;) {
       const journal = readReceipt();
@@ -164,6 +194,10 @@ function launcherText(): string {
   trusted(entry);
   trusted(join(release, "bundle", "launcher.cjs"));
   trusted(join(release, "bundle", "main.cjs"));
+  for (const asset of ["bootstrap.cjs.br", "launcher.cjs.br", "main.cjs.br", "server.cjs.br"]) {
+    const source = join(release, "bundle", asset);
+    if (windows && lstatSync(source, {throwIfNoEntry: false})) trusted(source);
+  }
   if (launchDaemon) {
     const port = process.env[${JSON.stringify(launchdSharedPort)}];
     if (!port || !/^[1-9][0-9]{0,4}$/.test(port) || Number(port) > 65535 || typeof process.execve !== "function") {
@@ -312,7 +346,7 @@ export interface ReleaseActivation {
   previous: string;
   replacement: string;
   begin: (service: ReleaseServiceRegistration) => void;
-  permitLaunchDaemonStart: (allowed: boolean) => void;
+  permitManagedServiceStart: (allowed: boolean) => void;
   select: () => void;
   restore: () => void;
   finishRestoration: () => void;
@@ -440,8 +474,8 @@ export async function updateArchiveRelease(
         recordReleaseTransition(receipt, before, after, service);
         state.recorded = state.managed = true;
       },
-      permitLaunchDaemonStart: (allowed: boolean) => {
-        permitLaunchDaemonStart(receipt, allowed);
+      permitManagedServiceStart: (allowed: boolean) => {
+        permitManagedServiceStart(receipt, allowed);
       },
       select() {
         if (!state.recorded) {
@@ -522,7 +556,7 @@ export async function recoverArchiveRelease(
       pending.service,
       installedDirectory(installation, previousDigest),
       (allowed: boolean) => {
-        permitLaunchDaemonStart(receipt, allowed);
+        permitManagedServiceStart(receipt, allowed);
       },
     );
     if (readBoundedFile(path, 4096, "active Workbench release").toString() !== pending.before)

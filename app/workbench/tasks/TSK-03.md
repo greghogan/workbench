@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: Accepted
 added_at: 2026-11-12T12:39:15.000Z
 ---
 
@@ -115,8 +115,8 @@ Uninstall removes registration without removing user data.
 - [x] Coordinate shared and private startup, and route authenticated requests to isolated workers.
 - [x] Install and manage Linux services with systemd and verify native lifecycle and identity boundaries.
 - [x] Install and manage macOS services with launchd and verify native lifecycle and identity boundaries.
-- [ ] Install and manage Windows services with SCM and verify native lifecycle and identity boundaries.
-- [ ] Verify coherent updates, rollback, repair, and removal across installed releases.
+- [x] Install and manage Windows services with SCM and verify native lifecycle and identity boundaries.
+- [x] Verify coherent updates, rollback, repair, and removal across installed releases.
 
 ## Implementation account
 
@@ -198,6 +198,33 @@ The macOS user installer registers a LaunchAgent in the account's graphical sess
 includes a qualification script for installation, browser sign-in, credential invalidation after restart, and
 preservation of edited registrations.
 
+### Windows endpoint qualification
+
+A [hosted Windows probe](https://github.com/greghogan/workbench/actions/runs/44644643298/job/135984004271) verified that
+the TCP reservation blocked both ordinary accounts from binding the shared port during two SCM starts and while the
+service was stopped. The port became available after removing the reservation. The local control pipe granted clients
+individual data and attribute access. Each account then started a worker under its own OS identity and profile, and each
+worker was denied access to the other's project data.
+
+The installed Windows service registered for automatic system startup, retained diagnostic events without sign-in
+credentials, and served separate projects to two ordinary accounts. One account signed out without affecting the other.
+Workers returned after an idle stop, and an open event stream kept its worker active. Browser credentials held by the
+previous SCM process were refused after restart, and both accounts could obtain fresh sign-in through the installed CLI.
+
+Each ordinary account also registered and removed its own interactive logon task. Private background servers returned
+sign-in through a named pipe restricted to the owning Windows account. Repeated discovery reused the same process.
+Restarting the private listener required a new password. The hosted fixture inspected both task definitions under
+secondary logon.
+
+The Windows service supervisor waits for active private listeners before opening the shared browser port. The native
+fixture kept a private listener active under each of two ordinary accounts, canceled a waiting supervisor, and obtained
+shared access after both listeners stopped. Shared-first CLI starts used the existing account workers.
+
+Windows can change the token for a persistent port reservation after reboot. Workbench records the reserved port in the
+service registration and validates the token within each boot. The optional startup check on Windows Server 2025
+verified that SCM starts the shared listener before sign-in and Task Scheduler starts the private listener in a fresh
+ordinary user's desktop session.
+
 ### Installed release selection
 
 Archive installation verifies the checksum and starts the candidate CLI before recording it as active. The CLI and
@@ -218,6 +245,17 @@ replacement startup, interrupted handoff recovery, and rollback in the graphical
 Shared macOS updates keep launchd's sockets registered while the old process drains and the replacement starts. The
 release receipt coordinates the switch, and the daemon confirms its release and PID through the protected local control
 socket. The native candidate fixture checks that the same endpoint remains registered through update and rollback.
+
+The installed Windows SCM fixture switched between verified archives, checked the replacement under an ordinary browser
+account, and rolled back through the same stable launcher and port reservation. It also recovered after rejecting a
+failed activation and after interrupting an update with the replacement process already started. Repeating recovery kept
+the restored process running. Repair from the verified archive restored a damaged launcher and preserved both the old
+launcher bytes and the running service.
+
+An active Windows logon task drains before switching releases. Workbench uses the task's process identity and its
+account-owned control channel, then confirms readiness from the selected release. The hosted desktop fixture exercised
+update and rollback with an authenticated listener, restored the previous release after rejecting a listening
+replacement or interrupting its updater, and preserved a separate manually started listener.
 
 Before stopping a managed service, Workbench saves its selected and replacement releases and the registered unit. The
 stable launcher can run recovery from the previous verified release while the replacement is unconfirmed. Native user

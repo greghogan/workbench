@@ -10,6 +10,8 @@ import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "..
 import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
 import { launchdServiceProcess } from "../../core/distribution/distribution-identity.js";
 import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
+import { windowsServiceHelper } from "../../core/distribution/windows-service.js";
+import { verifyWindowsTaskStartup } from "../../core/distribution/windows-user-service.js";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
 import {
@@ -25,6 +27,17 @@ import { demonstrationBase } from "../projects/project-mounts.js";
 import { localBrowserUsername } from "./browser-auth.js";
 import { discoverSystemService, serviceRelease, systemServicePending } from "./system-service.js";
 import { activePrivateListenerProcesses, markPrivateListener } from "./system-ownership.js";
+import {
+  drainWindowsPrivateControl,
+  launchWindowsPrivateDaemon,
+  maximumWindowsPrivateReply,
+  openWindowsPrivateAdmission,
+  openWindowsPrivateControl,
+  readWindowsPrivateControl,
+  windowsPrivateInstance,
+  windowsSystemInUse,
+} from "./windows-private-control.js";
+import { discoverWindowsSystem } from "./windows-system-service.js";
 
 type Hub = Awaited<ReturnType<typeof startProjectHub>>;
 type Options = NonNullable<Parameters<typeof startProjectHub>[1]> & {
@@ -79,26 +92,26 @@ function servicePaths(stateHome = userDirectory("state")) {
   return { uid, directory, lease: join(state, `private-${identity}`), socket: join(directory, "serve.sock") };
 }
 
-function windowsPrivateLease(): string {
-  return join(userDirectory("state"), "daemon", "windows-private");
+function windowsPrivateLease(stateHome = userDirectory("state")): string {
+  return join(stateHome, "daemon", "windows-private");
 }
 
 /** A manual server must stop before the application can switch its installed release. */
 export function assertReleaseServicesIdle(exceptPid?: number, managedState?: string): void {
+  const busy = (lease: string) => {
+    const lock = inspectCacheMetadataLock(lease);
+    return (
+      lock.state === CacheLockState.Uncertain || (lock.state === CacheLockState.Active && lock.owner.pid !== exceptPid)
+    );
+  };
   const active =
     process.platform === "linux" || (process.platform === "darwin" && process.geteuid?.() === 0)
       ? activePrivateListenerProcesses(process.geteuid?.() === 0 ? undefined : process.geteuid?.()).some(
           (pid) => pid !== exceptPid,
         )
       : process.platform === "win32"
-        ? inspectCacheMetadataLock(windowsPrivateLease()).state !== CacheLockState.Unlocked
-        : [...new Set([userDirectory("state"), managedState])].some((directory) => {
-            const lock = inspectCacheMetadataLock(servicePaths(directory).lease);
-            return (
-              lock.state === CacheLockState.Uncertain ||
-              (lock.state === CacheLockState.Active && lock.owner.pid !== exceptPid)
-            );
-          });
+        ? [...new Set([userDirectory("state"), managedState])].some((directory) => busy(windowsPrivateLease(directory)))
+        : [...new Set([userDirectory("state"), managedState])].some((directory) => busy(servicePaths(directory).lease));
   if (active) throw new Error("Stop the manual Workbench server before switching installed releases.");
   if (process.geteuid?.() === 0 && exceptPid === undefined && systemServicePending())
     throw new Error("Stop the unmanaged shared Workbench server before switching installed releases.");
@@ -196,6 +209,19 @@ export async function privateServiceReady(
   stateHome: string,
   signal: AbortSignal,
 ): Promise<boolean> {
+  if (process.platform === "win32") {
+    const helper = windowsServiceHelper(distribution);
+    if (!helper) return false;
+    const lease = windowsPrivateLease(stateHome);
+    const lock = inspectCacheMetadataLock(lease);
+    if (lock.state !== CacheLockState.Active || lock.owner.pid !== pid) return false;
+    const reply = await readWindowsPrivateControl(helper, windowsPrivateInstance(lease), signal);
+    return (
+      reply !== undefined &&
+      decodeAccess(reply, serviceRelease(distribution), false).pid === pid &&
+      inspectCacheMetadataLock(lease).digest === lock.digest
+    );
+  }
   const paths = servicePaths(stateHome);
   const lock = inspectCacheMetadataLock(paths.lease);
   if (lock.state !== CacheLockState.Active || lock.owner.pid !== pid) return false;
@@ -203,10 +229,9 @@ export async function privateServiceReady(
   return access?.pid === pid && inspectCacheMetadataLock(paths.lease).digest === lock.digest;
 }
 
-async function openControl(paths: ReturnType<typeof servicePaths>, access: Access, release: string) {
-  const clients = new Set<Socket>();
+function encodeAccess(access: Access, release: string): string {
   const address = new URL(access.url);
-  const reply = JSON.stringify({
+  return JSON.stringify({
     protocol,
     release,
     host: address.hostname,
@@ -215,6 +240,25 @@ async function openControl(paths: ReturnType<typeof servicePaths>, access: Acces
     ...(access.logs ? { logs: access.logs } : {}),
     ...access.signIn,
   });
+}
+
+export async function drainWindowsPrivateService(
+  distribution: string,
+  pid: number,
+  stateHome: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const helper = windowsServiceHelper(distribution);
+  const lease = windowsPrivateLease(stateHome);
+  const lock = inspectCacheMetadataLock(lease);
+  if (!helper || lock.state !== CacheLockState.Active || lock.owner.pid !== pid)
+    throw new Error("The registered Windows Workbench listener has not confirmed ownership");
+  await drainWindowsPrivateControl(helper, windowsPrivateInstance(lease), pid, signal);
+}
+
+async function openControl(paths: ReturnType<typeof servicePaths>, access: Access, release: string) {
+  const clients = new Set<Socket>();
+  const reply = encodeAccess(access, release);
   const server = createServer((client) => {
     clients.add(client);
     client.once("close", () => clients.delete(client));
@@ -242,6 +286,56 @@ async function openControl(paths: ReturnType<typeof servicePaths>, access: Acces
       });
     },
   };
+}
+
+async function serveOwnedWindows(
+  helper: string | undefined,
+  instance: string | undefined,
+  distribution: string,
+  options: Options,
+  release: string,
+  signal: AbortSignal,
+  present: Present,
+): Promise<boolean> {
+  const registered = options.mode === "service" && (await verifyWindowsTaskStartup(distribution, signal));
+  checkInstalledServiceStart(distribution, registered);
+  const unmark = await openWindowsPrivateAdmission();
+  const closing = new AbortController();
+  let hub: Hub | undefined;
+  let native: Awaited<ReturnType<typeof openWindowsPrivateControl>> | undefined;
+  let failure: unknown;
+  let yielded = false;
+  try {
+    // Starting SCM processes either see this marker or become visible before this recheck.
+    yielded = await windowsSystemInUse(helper, signal);
+    if (!yielded) {
+      hub = await startProjectHub(distribution, options);
+      const access = { url: hub.url, signIn: hub.signIn, pid: process.pid, logs: options.logs };
+      if (helper && instance) {
+        const reply = encodeAccess(access, release);
+        native = await openWindowsPrivateControl(
+          helper,
+          instance,
+          Buffer.byteLength(reply) <= maximumWindowsPrivateReply
+            ? reply
+            : encodeAccess({ ...access, logs: undefined }, release),
+          signal,
+          () => {
+            closing.abort();
+          },
+        );
+      }
+      signal.throwIfAborted();
+      present(access, true);
+      const stopped = untilStopped([hub.server], AbortSignal.any([signal, closing.signal]));
+      await (native ? Promise.race([stopped, native.exited]) : stopped);
+    }
+  } catch (error) {
+    failure = error;
+  }
+  closing.abort();
+  await settleCleanup([() => native?.close(), () => hub?.close(), unmark], failure);
+  return yielded;
 }
 
 async function untilStopped(servers: Server[], signal: AbortSignal): Promise<void> {
@@ -310,19 +404,15 @@ async function serveOwned(
   return yielded;
 }
 
-function launchPrivateService(distribution: string, directory: string, options: Options): ChildProcess {
+function privateLaunch(distribution: string, directory: string, options: Options) {
   const args = [join(distribution, "bundle/main.cjs"), "serve", "--service"];
   if (options.host) args.push("--host", options.host);
   if (options.port !== undefined) args.push("--port", String(options.port));
   if (options.demo) args.push("--demo");
-  const child = spawn(process.execPath, args, {
-    cwd: directory,
+  return {
+    args,
     env: { ...process.env, WORKBENCH_PROJECT_ROOT: directory, WORKBENCH_DISTRIBUTION_ROOT: distribution },
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
-  return child;
+  };
 }
 
 /** The control socket and its credentials remain private to the account, independent of the browser listener. */
@@ -330,48 +420,48 @@ export async function runPrivateService(distribution: string, options: Options, 
   const cancellation = processCancellation();
   const { signal } = cancellation;
   let child: ChildProcess | undefined;
+  let windowsLaunch: Awaited<ReturnType<typeof launchWindowsPrivateDaemon>> | undefined;
   let launchFailure: Error | undefined;
   let discoveredPid: number | undefined;
   let announcedWait = false;
   try {
-    if (process.platform === "win32") {
-      // Keep direct foreground service until the Windows control channel passes native qualification.
+    const windows = process.platform === "win32";
+    const helper = windows ? windowsServiceHelper(distribution) : undefined;
+    const release = serviceRelease(distribution);
+    if (windows && !helper) {
       if (options.mode !== "foreground")
-        throw new Error("Managed private startup requires an authorized local control channel. Run 'workbench serve'.");
+        throw new Error("Install a Windows Workbench release with the private service helper for managed startup.");
       const lease = windowsPrivateLease();
       mkdirSync(dirname(lease), { recursive: true });
       const owner = inspectCacheMetadataLock(lease);
       if (owner.state === CacheLockState.Abandoned) recoverCacheMetadataLock(lease, { expected: owner.digest });
-      await withCacheLocksSync(
+      const yielded = await withCacheLocksSync(
         [lease],
-        async () => {
-          checkInstalledServiceStart(distribution, false);
-          const hub = await startProjectHub(distribution, options);
-          try {
-            if (!signal.aborted)
-              present({ url: hub.url, signIn: hub.signIn, pid: process.pid, logs: options.logs }, true);
-            await untilStopped([hub.server], signal);
-          } finally {
-            await hub.close();
-          }
-        },
+        () => serveOwnedWindows(undefined, undefined, distribution, options, release, signal, present),
         { mutable: false },
       );
+      if (yielded)
+        throw new Error("The shared Windows service owns browser access. Run the installed Workbench command.");
       return;
     }
-    const paths = servicePaths(),
-      release = serviceRelease(distribution);
+    const paths = windows ? undefined : servicePaths();
+    const lease = paths?.lease ?? windowsPrivateLease();
+    if (windows) mkdirSync(dirname(lease), { recursive: true });
+    const instance = windows ? windowsPrivateInstance(lease) : undefined;
     while (!signal.aborted) {
-      const lock = inspectCacheMetadataLock(paths.lease);
+      const lock = inspectCacheMetadataLock(lease);
       if (options.mode !== "service" && lock.state !== CacheLockState.Active) {
-        const shared = await discoverSystemService(distribution, options.demo ?? false, signal);
+        const shared = windows
+          ? await discoverWindowsSystem(distribution, options.demo ?? false, signal)
+          : await discoverSystemService(distribution, options.demo ?? false, signal);
         if (shared) {
           present(shared, false);
           return;
         }
       }
       if (lock.state === CacheLockState.Unlocked) {
-        if (systemServicePending()) {
+        const pending = helper ? await windowsSystemInUse(helper, signal) : systemServicePending();
+        if (pending) {
           if (!announcedWait) {
             diagnostic(
               LogLevel.Info,
@@ -384,23 +474,36 @@ export async function runPrivateService(distribution: string, options: Options, 
             announcedWait = true;
           }
         } else if (options.mode === "daemon") {
-          if (!child) {
-            child = launchPrivateService(distribution, dirname(paths.lease), options);
-            child.once("error", (error) => {
-              launchFailure = new Error("Could not launch the private Workbench service", { cause: error });
-            });
-            child.once("exit", (code, reason) => {
-              launchFailure = new Error(
-                `Private Workbench service exited before discovery (${String(reason ?? code)}). Inspect 'workbench logs' or run 'workbench serve' in the foreground.`,
-              );
-            });
+          if (!child && !windowsLaunch) {
+            const directory = dirname(lease);
+            const { args, env } = privateLaunch(distribution, directory, options);
+            if (helper) {
+              windowsLaunch = await launchWindowsPrivateDaemon(helper, directory, args, env, signal);
+              void windowsLaunch.exited.catch((error: unknown) => {
+                launchFailure = errorFrom(error);
+              });
+            } else {
+              child = spawn(process.execPath, args, { cwd: directory, env, detached: true, stdio: "ignore" });
+              child.unref();
+              child.once("error", (error) => {
+                launchFailure = new Error("Could not launch the private Workbench service", { cause: error });
+              });
+              child.once("exit", (code, reason) => {
+                launchFailure = new Error(
+                  `Private Workbench service exited before discovery (${String(reason ?? code)}). Inspect 'workbench logs' or run 'workbench serve' in the foreground.`,
+                );
+              });
+            }
           }
         } else {
           let owned: Promise<boolean> | undefined;
           try {
             owned = withCacheLocksSync(
-              [paths.lease],
-              () => serveOwned(paths, distribution, options, release, signal, present),
+              [lease],
+              async () => {
+                if (paths) return serveOwned(paths, distribution, options, release, signal, present);
+                return serveOwnedWindows(helper, instance, distribution, options, release, signal, present);
+              },
               { mutable: false },
             );
           } catch (error) {
@@ -410,11 +513,11 @@ export async function runPrivateService(distribution: string, options: Options, 
         }
       } else if (lock.state === CacheLockState.Abandoned) {
         try {
-          recoverCacheMetadataLock(paths.lease, { expected: lock.digest });
+          recoverCacheMetadataLock(lease, { expected: lock.digest });
         } catch (error) {
           if (
-            inspectCacheMetadataLock(paths.lease).digest === lock.digest &&
-            inspectCacheMetadataLock(`${paths.lease}.recovery`).state !== CacheLockState.Active
+            inspectCacheMetadataLock(lease).digest === lock.digest &&
+            inspectCacheMetadataLock(`${lease}.recovery`).state !== CacheLockState.Active
           )
             throw error;
         }
@@ -431,8 +534,16 @@ export async function runPrivateService(distribution: string, options: Options, 
           announcedWait = true;
         }
       } else if (lock.state === CacheLockState.Active) {
-        const found = await readAccess(paths, release, options.demo ?? false, signal);
+        const bytes = helper && instance ? await readWindowsPrivateControl(helper, instance, signal) : undefined;
+        const found = paths
+          ? await readAccess(paths, release, options.demo ?? false, signal)
+          : bytes && decodeAccess(bytes, release, options.demo ?? false);
         if (found?.pid === lock.owner.pid) {
+          if (windowsLaunch?.pid === found.pid) {
+            const launch = windowsLaunch;
+            windowsLaunch = undefined;
+            await launch.finish(true);
+          }
           discoveredPid = found.pid;
           present(found, false);
           return;
@@ -444,8 +555,17 @@ export async function runPrivateService(distribution: string, options: Options, 
   } catch (error) {
     if (!signal.aborted || !(error instanceof Error) || error.name !== "AbortError") throw error;
   } finally {
-    if (child?.pid !== undefined && child.pid !== discoveredPid && child.exitCode === null && child.signalCode === null)
-      child.kill("SIGTERM");
-    cancellation.close();
+    try {
+      await windowsLaunch?.finish(false);
+      if (
+        child?.pid !== undefined &&
+        child.pid !== discoveredPid &&
+        child.exitCode === null &&
+        child.signalCode === null
+      )
+        child.kill("SIGTERM");
+    } finally {
+      cancellation.close();
+    }
   }
 }

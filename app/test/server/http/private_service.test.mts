@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { redact } from "../../../src/core/diagnostics/diagnostic-text.mjs";
 import { privateServiceReady } from "../../../src/server/http/private-service.ts";
+import { processInstance } from "../../fixtures/check-coordination.mjs";
 import { expect, test } from "vitest";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
@@ -45,6 +46,17 @@ test.skipIf(process.platform === "win32")(
     };
     const children: Invocation[] = [];
     let backgroundPid: number | undefined;
+    async function stopBackground() {
+      const pid = backgroundPid;
+      if (pid === undefined) return;
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+      await expect.poll(() => processInstance(pid), { timeout: 5000 }).toBeUndefined();
+      backgroundPid = undefined;
+    }
     function start(...options: string[]): Invocation {
       const child = spawn(
         process.execPath,
@@ -189,12 +201,9 @@ test.skipIf(process.platform === "win32")(
       });
       expect(authenticated.status).toBe(200);
       await authenticated.arrayBuffer();
-      if (backgroundPid === undefined) throw new Error("Background service did not report its process");
-      process.kill(backgroundPid, "SIGTERM");
-      await expect.poll(() => readdirSync(join(state, "daemon"))).toEqual([]);
-      backgroundPid = undefined;
+      await stopBackground();
+      expect(readdirSync(join(state, "daemon"))).toEqual([]);
     } finally {
-      if (backgroundPid !== undefined) process.kill(backgroundPid, "SIGTERM");
       for (const { child, closed } of children) {
         if (child.exitCode === null && child.signalCode === null) {
           child.kill("SIGTERM");
@@ -202,6 +211,7 @@ test.skipIf(process.platform === "win32")(
         }
         await closed;
       }
+      await stopBackground();
       const identity = createHash("sha256")
         .update(JSON.stringify([hostname(), join(state, "daemon")]))
         .digest("hex")

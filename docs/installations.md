@@ -132,8 +132,8 @@ workbench update --archive ./workbench.tar.gz --sha256 SHA256
 workbench update --rollback
 ```
 
-For a shared installation, use its installed launcher with administrator access. An active systemd or launchd service
-drains its work and restarts using the selected version. Workbench waits for the replacement to listen
+For a shared installation, use its installed launcher with administrator access. An active systemd, launchd, or
+Windows service drains its work and restarts using the selected version. Workbench waits for the replacement to listen
 and restores the previous version if startup fails. A shared LaunchDaemon keeps its socket registration loaded during
 the switch. Stop manual servers before updating. The installed launcher stays in the same location and project
 collections update separately.
@@ -292,6 +292,54 @@ Launchd owns the fixed loopback port while the registration is loaded. Choose it
 Run `workbench serve` from each account for its URL, username, and password. The daemon's next process requires a new
 sign-in. Use `sudo launchctl print system/org.workbench.app` to inspect the registration. Use
 `sudo /usr/local/bin/workbench uninstall --service system` to remove it and preserve the installation and account data.
+
+## Register the Windows service
+
+Install a verified archive containing the native Windows service helper. A user registration uses Windows Task
+Scheduler and starts under your account when you sign in. Use the installed command from that account.
+
+```powershell
+workbench install --service user
+```
+
+Run the start command printed by Workbench to start the registered task during the current Windows session. Run
+`workbench serve` to get the listener URL and sign-in credentials. Use the same command with `--daemon` to start a
+private background server without registering a logon task. A private server requires fresh browser sign-in after a
+restart. An update of an active logon task drains the registered server and starts the selected release in the signed-in
+Windows session.
+
+For a shared installation, run registration and startup from an administrator PowerShell using the installed release
+in a protected directory and a port Windows permits Workbench to reserve.
+
+```powershell
+workbench install --service system
+Start-Service WorkbenchApplication
+```
+
+The shared service starts with Windows. An ordinary account runs `workbench serve` to sign in and open its own projects.
+After a service restart, run it again for a fresh password.
+View registered user task status in Task Scheduler and shared service status with `Get-Service WorkbenchApplication`.
+When private listeners are active, the shared service waits before opening its browser port. Stop the private listeners
+to finish startup. `Stop-Service WorkbenchApplication` cancels the wait and leaves the private listeners running.
+
+Stop the user task in Task Scheduler before removing it with `workbench uninstall --service user`. Use an administrator
+PowerShell to remove the shared service with `workbench uninstall --service system`. The installed release and its
+data remain available.
+
+### Qualify automatic Windows startup
+
+Run this optional check in a clean, disposable Windows guest with Desktop Experience. Use an elevated 64-bit Windows
+PowerShell, a verified candidate archive and its SHA-256, and the pinned Windows Node.js runtime.
+
+```powershell
+.\scripts\check-windows-startup.ps1 -Node C:\test\node.exe -Archive C:\test\workbench.tar.gz -Digest SHA256 -RebootDisposableGuest
+```
+
+The check creates a temporary OS account and reboots the guest twice. Its observer checks SCM startup before desktop
+sign-in, then checks Task Scheduler startup in the new ordinary account's desktop. Read the result from
+`$env:ProgramFiles\WorkbenchBootFixture\qualification.log`. Use `-SerialLog` to also send the result to a VM console
+connected to COM1. Discard the guest after collecting the result. The regular Windows CI job exercises installation,
+restart, update, rollback, and removal on its hosted runner.
 
 ## Select a project revision
 

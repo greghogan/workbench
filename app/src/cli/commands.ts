@@ -196,6 +196,10 @@ const commands: Record<string, Admission> = {
   "web-collection": { internal: true },
 
   "web-demo": { internal: true },
+
+  "web-windows-account": { internal: true, explicitRoot: true },
+
+  "web-windows-system": { internal: true, explicitRoot: true },
 };
 export function commandAdmission(path: string) {
   const [top = "", ...rest] = path.split(" ");
