@@ -9,7 +9,8 @@ param(
     [switch] $IdleWorkers,
     [switch] $PrivateService,
     [switch] $Handoff,
-    [switch] $Recovery
+    [switch] $Recovery,
+    [switch] $DesktopTask
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +49,8 @@ $previousLogs = @(Get-ChildItem -LiteralPath $serviceLogs -Directory -ErrorActio
     Select-Object -ExpandProperty FullName)
 $created = $false
 $registered = $false
+$desktopAccount = $null
+$desktopSession = 0
 $client = [Net.Http.HttpClient]::new()
 $client.Timeout = [TimeSpan]::FromSeconds(20)
 
@@ -64,12 +67,12 @@ function Workbench([string[]] $Arguments) {
 function Start-FixtureNode([string[]] $Arguments, $Account) {
     $start = [Diagnostics.ProcessStartInfo]::new($nodeExe)
     foreach ($part in $Arguments) { $start.ArgumentList.Add($part) }
-    if ($Account) {
+    if ($Account) { $start.WorkingDirectory = $Account.project }
+    if ($Account.password) {
         $start.Domain = $env:COMPUTERNAME
         $start.UserName = $Account.name
         $start.Password = $Account.password
         $start.LoadUserProfile = $true
-        $start.WorkingDirectory = $Account.project
     }
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
@@ -557,6 +560,107 @@ connection.once('error', (error) => {
     Write-Output 'Interactive desktop logon is outside this secondary-logon fixture.'
 }
 
+
+function Start-DesktopTask($Account) {
+    Start-ScheduledTask -TaskPath '\' -TaskName $Account.task
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $listeners = @(Get-CimInstance Win32_Process -Filter "Name = 'node.exe' AND SessionId = $desktopSession" |
+            Where-Object {
+                $_.ExecutablePath -eq $nodeExe -and $_.CommandLine -and
+                $_.CommandLine -match '(?:^|\s)"?serve"?\s+"?--service"?(?:\s|$)' -and
+                $_.CommandLine.IndexOf($launcher, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid).Sid -eq $Account.sid
+            })
+        if ($listeners.Count -eq 1 -and
+            (Get-ScheduledTask -TaskPath '\' -TaskName $Account.task).State -eq 'Running') { break }
+        if ($timer.Elapsed.TotalSeconds -ge 45) {
+            $result = (Get-ScheduledTaskInfo -TaskPath '\' -TaskName $Account.task).LastTaskResult
+            throw "The installed interactive task did not launch one account-owned listener (result $result)."
+        }
+        Start-Sleep -Milliseconds 250
+    } while ($true)
+    $Account.access = Start-PrivateService $Account
+    if ($Account.access.process -ne $listeners[0].ProcessId -or
+        (Browse $Account.access.authorization '/projects' 'GET' $Account.access.url).status -ne 200) {
+        throw 'The installed CLI did not discover the Task Scheduler listener in the signed-in desktop session.'
+    }
+}
+
+function Stop-DesktopTask($Account) {
+    $registration = Get-ScheduledTask -TaskPath '\' -TaskName $Account.task -ErrorAction SilentlyContinue
+    if ($registration -and $registration.State -in 'Queued', 'Running') {
+        Stop-ScheduledTask -TaskPath '\' -TaskName $Account.task
+    }
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($Account.access -and (Get-Process -Id $Account.access.process -ErrorAction SilentlyContinue)) -or
+        ($registration -and (Get-ScheduledTask -TaskPath '\' -TaskName $Account.task).State -in 'Queued', 'Running')) {
+        if ($timer.Elapsed.TotalSeconds -ge 20) { throw 'Task Scheduler did not stop the owned fixture task.' }
+        Start-Sleep -Milliseconds 250
+    }
+    $Account.access = $null
+}
+
+function Assert-DesktopTaskReleaseLifecycle {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $sid = $identity.User.Value
+    $sessions = @(Get-CimInstance Win32_Process -Filter "Name = 'explorer.exe' AND SessionId > 0" |
+        Where-Object { (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid).Sid -eq $sid } |
+        Select-Object -ExpandProperty SessionId -Unique)
+    if ($sessions.Count -ne 1) { throw 'The Windows user-service qualification needs one signed-in desktop session.' }
+    $script:desktopSession = $sessions[0]
+    $replacement = if ($Replacement) { @{ path = $Replacement; digest = $ReplacementDigest } }
+        else { New-ServiceTestArchive 'private-replacement' 'void 0;' }
+    $project = (New-Item -ItemType Directory -Path (Join-Path $root desktop-fixture)).FullName
+    $account = @{name = $identity.Name.Split('\')[-1]; sid = $identity.User.Value; launcher = $launcher; project = $project}
+    if (Get-ScheduledTask -TaskPath '\' -TaskName "Workbench.Private.$($account.sid)" -ErrorAction SilentlyContinue) {
+        throw 'Use an interactive disposable account without a pre-existing Workbench task.'
+    }
+    Workbench @('install', '--service', 'user', '--port', '0') | Out-Null
+    $account.task = "Workbench.Private.$($account.sid)"
+    $script:desktopAccount = $account
+    $scheduled = Get-ScheduledTask -TaskPath '\' -TaskName $account.task
+    if ($scheduled.Principal.LogonType -ne 'Interactive' -or $scheduled.Principal.RunLevel -ne 'Limited') {
+        throw 'The installed logon task did not retain the expected logon and privilege settings.'
+    }
+    Start-DesktopTask $account
+    $previous = $account.access
+    Write-Output 'The native Task Scheduler started the installed private server in the signed-in desktop session.'
+
+    $update = Start-ReleaseUpdate $replacement
+    try {
+        if (-not $update.process.WaitForExit(60000) -or -not $update.errors.Wait(10000)) {
+            throw 'The active-task update did not settle.'
+        }
+        $failure = ($update.errors.GetAwaiter().GetResult() -replace '\s+', ' ')
+        if ($update.process.ExitCode -ne 1 -or $failure -notmatch 'before switching installed releases') {
+            throw 'The installed updater did not report the expected active listener guard.'
+        }
+    } finally { Close-FixtureNode $update }
+    Assert-ActiveRelease $Digest
+    $live = Start-PrivateService $account
+    if ($live.process -ne $previous.process -or
+        (Browse $previous.authorization '/projects' 'GET' $previous.url).status -ne 200 -or
+        (Test-Path -LiteralPath (Join-Path $root installed/.workbench-installation/update.json))) {
+        throw 'The rejected active-task update disrupted the installed listener or left a partial release transition.'
+    }
+    Write-Output 'The installer preserved the live scheduled task and verified release when an update was requested.'
+
+    Stop-DesktopTask $account
+    Workbench @('update', '--archive', $replacement.path, '--sha256', $replacement.digest) | Out-Null
+    Assert-ActiveRelease $replacement.digest
+    Start-DesktopTask $account
+    if ($account.access.process -eq $previous.process -or
+        (Browse $previous.authorization '/projects' 'GET' $account.access.url).status -ne 401) {
+        throw 'The restarted scheduled task did not require fresh browser sign-in.'
+    }
+    Stop-DesktopTask $account
+    Workbench @('update', '--rollback') | Out-Null
+    Assert-ActiveRelease $Digest
+    Start-DesktopTask $account
+    Write-Output 'Windows verified stopped-task update and rollback with actual Task Scheduler launches and fresh authentication.'
+}
+
 try {
     New-Item -ItemType Directory -Path $root | Out-Null
     $created = $true
@@ -566,6 +670,10 @@ try {
         & $nodeExe $external install --archive $Archive --sha256 $Digest --directory (Split-Path -Parent $launcher)
     } | Out-Null
     Assert-ActiveRelease $Digest
+    if ($DesktopTask) {
+        Assert-DesktopTaskReleaseLifecycle
+        return
+    }
     Invoke-Checked 'Protect fixture ownership' { icacls.exe $root /setowner '*S-1-5-32-544' /T /Q } | Out-Null
     Invoke-Checked 'Protect fixture permissions' {
         icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /Q
@@ -685,6 +793,15 @@ try {
 } finally {
     $client.Dispose()
     $cleanup = @()
+    if ($desktopAccount) {
+        try {
+            Stop-DesktopTask $desktopAccount
+            Workbench @('uninstall', '--service', 'user') | Out-Null
+            if (Get-ScheduledTask -TaskPath '\' -TaskName $desktopAccount.task -ErrorAction SilentlyContinue) {
+                throw 'The interactive Workbench fixture registration survived owned removal.'
+            }
+        } catch { $cleanup += $_ }
+    }
     if ($registered) {
         try {
             if ((Get-Service -Name $service).Status -ne 'Stopped') { Stop-Service -Name $service }
