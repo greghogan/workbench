@@ -5,3 +5,4 @@ export { decodeCollectionWorkerRequest } from "./projects/protocol.js";
 export { assertReleaseServicesIdle, privateServiceReady, runPrivateService } from "./http/private-service.js";
 export { launchDaemonReady, startSystemService } from "./http/system-service.js";
 export { serveAccountWorker } from "./http/system-workers.js";
+export { serveWindowsAccount, serveWindowsSystem } from "./http/windows-system-service.js";

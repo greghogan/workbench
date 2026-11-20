@@ -16,7 +16,7 @@ export interface ReleaseSelection {
 }
 
 export interface ReleaseServiceRegistration {
-  manager: "systemd" | "launchd";
+  manager: "systemd" | "launchd" | "scm";
   scope: "user" | "system";
   path: string;
   digest: string;
@@ -70,8 +70,9 @@ function parseTransition(bytes: Buffer): ReleaseTransition {
     const entry = value.service;
     if (
       !isRecord(entry) ||
-      (entry.manager !== "systemd" && entry.manager !== "launchd") ||
+      (entry.manager !== "systemd" && entry.manager !== "launchd" && entry.manager !== "scm") ||
       (entry.scope !== "user" && entry.scope !== "system") ||
+      (entry.manager === "scm" && entry.scope !== "system") ||
       typeof entry.path !== "string" ||
       !isAbsolute(entry.path) ||
       !validArchiveDigest(entry.digest)

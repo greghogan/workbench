@@ -11,7 +11,8 @@ import { WorkerGeneration } from "../workspace/worker-generation.js";
 import { knownRoute, routeContracts, decodeRoute, routeOperation, Route } from "../routes/routes.js";
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { type ServerResponse } from "node:http";
+import type { Server as HttpServer, ServerResponse } from "node:http";
+import type { Server as NetServer } from "node:net";
 import {
   diagnostic,
   DiagnosticOperation,
@@ -85,7 +86,7 @@ export async function startProjectHub(
     host?: "127.0.0.1" | "::1";
     port?: number;
     demo?: boolean;
-    worker?: { socket: string; token: string };
+    worker?: { socket: string; token: string; transport?: (server: HttpServer) => NetServer };
   } = {},
 ) {
   const preferences = userConfigValues();
@@ -624,8 +625,9 @@ export async function startProjectHub(
     throw error;
   }
   const server = createLocalServer(handler, metrics);
+  const transport = options.worker?.transport?.(server) ?? server;
   try {
-    if (options.worker) await listenUnix(server, options.worker.socket);
+    if (options.worker) await listenUnix(transport, options.worker.socket);
     else await listenPrivate(server, host, port);
   } catch (error) {
     lifecycle.stop();
@@ -647,7 +649,7 @@ export async function startProjectHub(
     );
     throw error;
   }
-  const address = server.address();
+  const address = transport.address();
   if (!address) throw new Error("Listener did not publish its address");
   let closed: Promise<void> | undefined;
   const close = () => {
@@ -677,7 +679,21 @@ export async function startProjectHub(
         ],
         ["admitted requests", () => lifecycle.drain()],
         ["cache workers", () => tasks.close()],
-        ["browser transport", () => closeLocalServer(server)],
+        [
+          "browser transport",
+          async () => {
+            if (transport === server) await closeLocalServer(server);
+            else {
+              server.closeAllConnections();
+              await new Promise<void>((resolve, reject) => {
+                transport.close((error) => {
+                  if (error) reject(error);
+                  else resolve();
+                });
+              });
+            }
+          },
+        ],
         [
           "worker generation",
           () => {
@@ -696,7 +712,7 @@ export async function startProjectHub(
     return closed;
   };
   return {
-    server,
+    server: transport,
     close,
     signIn: { username: authentication.username, password: authentication.password },
     demonstration: () => (demo ? { root: demo.root, source: demo.source } : undefined),

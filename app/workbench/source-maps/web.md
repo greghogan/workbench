@@ -158,6 +158,8 @@ shipped-browser workflows exercise the assembled interface separately from domai
   startup/closure consistently to project and hub services.
 - `src/server/http/private-service.ts`, `test/server/http/private_service.test.mts`: Coordinate private listener
   ownership, CLI discovery, background startup, and recovery from an abandoned service.
+- `src/server/http/windows-private-control.ts`: Shares private sign-in with the verified Windows account over a local
+  named pipe tied to the listener process.
 - `src/server/http/system-service.ts`, `src/server/http/system-workers.ts`, `src/server/http/system-ownership.ts`: Admit
   shared Unix service sign-in, coordinate handoff, and forward authorized requests to isolated account workers.
 - `src/server/views/experiment-pages.tsx`: Presents experiment execution, candidate verdicts, and completed evidence for

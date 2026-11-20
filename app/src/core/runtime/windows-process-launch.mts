@@ -204,8 +204,15 @@ public static class WorkbenchProcessJob {
 }
 '@
 $result = [WorkbenchProcessJob]::Run($request.executable, $request.commandLine, $request.cwd, [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($request.environment)), $request.pipe, $request.token, $request.stopOnExit, $request.hide)
-$result | Add-Member -NotePropertyName token -NotePropertyValue $request.token
-[System.IO.File]::WriteAllText($request.result, (ConvertTo-Json -InputObject $result -Compress))
+$proof = @{
+  version = [int]$result.version
+  token = [string]$request.token
+  pid = [uint32]$result.pid
+  status = if ($null -eq $result.status) { $null } else { [int64]$result.status }
+  jobEmpty = [bool]$result.jobEmpty
+  error = if ($null -eq $result.error) { $null } else { [string]$result.error }
+}
+[System.IO.File]::WriteAllText($request.result, (ConvertTo-Json -InputObject $proof -Compress))
 if ($null -ne $result.error) { exit 1 }
 exit 0
 `;

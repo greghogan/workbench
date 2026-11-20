@@ -48,6 +48,8 @@
   candidate on disposable Linux runners.
 - `scripts/check-macos-system-service.sh`: Qualifies installed launchd activation, per-account browser isolation,
   fresh sign-in after restart, and owned removal on a disposable macOS runner.
+- `scripts/check-windows-service.ps1`, `scripts/windows-service-helper.mts`, `scripts/service-native`: Build the
+  Windows service adapter and qualify a verified release's system and private service operations on a disposable host.
 - `scripts/ci-platform.mts`: Groups configured target phases by operation and profile, rejecting missing or duplicated work.
 - `scripts/ci-candidate.mts`, `scripts/ci-release-ready.mts`: Binds the shared portable candidate to successful complete CI and immutable source identity.
 - `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.

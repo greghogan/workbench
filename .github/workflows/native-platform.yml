@@ -69,6 +69,20 @@ jobs:
         env:
           GH_TOKEN: ""
         run: bash scripts/check-macos-system-service.sh "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+      - name: Qualify the installed Windows services
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted' && fromJSON(inputs.platform).architecture == 'x64'
+        timeout-minutes: 12
+        shell: pwsh
+        env:
+          GH_TOKEN: ""
+        run: |
+          $artifacts = Join-Path $env:RUNNER_TEMP runtime-candidate/workbench-artifacts
+          $archive = Join-Path $artifacts workbench.tar.gz
+          $checksum = (Get-Content -LiteralPath (Join-Path $artifacts SHA256SUMS) -Raw).Split(' ')[0]
+          $node = (Get-Command node.exe).Source
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -ResumeWorker -IdleWorkers -Handoff
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -PrivateService
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -Recovery
       - id: plan
         env:
           CI_MATRIX: ${{ inputs.platform }}

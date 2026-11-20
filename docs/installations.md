@@ -132,11 +132,11 @@ workbench update --archive ./workbench.tar.gz --sha256 SHA256
 workbench update --rollback
 ```
 
-For a shared installation, use its installed launcher with administrator access. An active systemd or launchd service
-drains its work and restarts using the selected version. Workbench waits for the replacement to listen and restores the
-previous version if startup fails. A shared LaunchDaemon keeps its socket registration loaded during the switch.
-Stop any manual server before updating. The installed launcher stays in the same location and project collections
-update separately.
+For a shared installation, use its installed launcher with administrator access. An active systemd service, launchd
+service, or shared Windows service drains its work and restarts using the selected version. Workbench waits for the
+replacement to listen and restores the previous version if startup fails. A shared LaunchDaemon keeps its socket
+registration loaded during the switch. Stop manual servers and active Windows user logon tasks before updating. The
+installed launcher stays in the same location and project collections update separately.
 
 If the update process stopped during the switch, run `workbench update --recover` using the same installed command
 and account. The launcher uses the previous verified release for recovery. Workbench restores that selection and
@@ -277,6 +277,37 @@ Launchd owns the fixed loopback port while the registration is loaded. Choose it
 Run `workbench serve` from each account for its URL, username, and password. The daemon's next process requires a new
 sign-in. Use `sudo launchctl print system/org.workbench.app` to inspect the registration. Use
 `sudo /usr/local/bin/workbench uninstall --service system` to remove it and preserve the installation and account data.
+
+## Register the Windows service
+
+Install a verified archive containing the native Windows service helper. A user registration uses Windows Task
+Scheduler and starts under your account when you sign in. Use the installed command from that account.
+
+```powershell
+workbench install --service user
+```
+
+Run the start command printed by Workbench to start the registered task during the current Windows session. Run
+`workbench serve` to get the listener URL and sign-in credentials. Use the same command with `--daemon` to start a
+private background server without registering a logon task. A private server requires fresh browser sign-in after a
+restart.
+
+For a shared installation, run registration and startup from an administrator PowerShell using the installed release
+in a protected directory and a port Windows permits Workbench to reserve.
+
+```powershell
+workbench install --service system
+Start-Service WorkbenchApplication
+```
+
+The shared service starts with Windows. An ordinary account runs `workbench serve` to sign in and open its own projects.
+View registered user task status in Task Scheduler and shared service status with `Get-Service WorkbenchApplication`.
+When private listeners are active, the shared service waits before opening its browser port. Stop the private listeners
+to finish startup. `Stop-Service WorkbenchApplication` cancels the wait and leaves the private listeners running.
+
+Stop the user task in Task Scheduler before removing it with `workbench uninstall --service user`. Use an administrator
+PowerShell to remove the shared service with `workbench uninstall --service system`. The installed release and its
+data remain available.
 
 ## Select a project revision
 

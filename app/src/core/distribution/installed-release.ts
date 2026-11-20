@@ -43,6 +43,7 @@ const launcherName = process.platform === "win32" ? "workbench.cjs" : "workbench
 const launcherHeader = "#!/usr/bin/env node\n// Workbench archive launcher.\n";
 const launchdStartupMarker = "// Workbench launchd startup protocol 1.\n";
 const shimHeader = "@rem Workbench archive launcher\r\n";
+export const windowsStableHelper = "workbench-scm.exe";
 
 function activeRelease(installation: string): { selection: ReleaseSelection; bytes: Buffer } | undefined {
   try {
@@ -104,13 +105,23 @@ function launcherText(): string {
   const installation = join(dirname(realpathSync(process.argv[1])), ${JSON.stringify(storageName)});
   const [command, ...args] = process.argv.slice(2);
   const recover = command === "update" && args.includes("--recover");
+  const windows = process.platform === "win32" && (
+    command === "web-windows-system" && process.env.WORKBENCH_WINDOWS_SCM === "1" ||
+    command === "web-windows-account" && !!process.env.WORKBENCH_WINDOWS_ACCOUNT_PIPE
+  );
   const launchd = process.platform === "darwin" && process.env[${JSON.stringify(launchdServiceEnvironment)}] === "1";
-  const managed = command === "serve" && args.includes("--service") && (
+  const managed = windows || command === "serve" && args.includes("--service") && (
     (process.platform === "linux" && process.env.WORKBENCH_SYSTEMD_SERVICE === "1" && !!process.env.NOTIFY_SOCKET) || launchd
   );
   const launchDaemon = managed && launchd && process.geteuid() === 0 && process.env.WORKBENCH_SYSTEM_SERVICE === "1";
   const privileged = process.geteuid?.() === 0 && (recover || process.env.WORKBENCH_SYSTEM_SERVICE === "1");
+  const native = windows ? join(installation, ${JSON.stringify(windowsStableHelper)}) : undefined;
+  const windowsCheck = windows ? (await import("node:child_process")).execFileSync : undefined;
   const trusted = (path) => {
+    if (windowsCheck && native) {
+      windowsCheck(native, ["verify-path", path], {stdio: "ignore", windowsHide: true});
+      return;
+    }
     if (!privileged) return;
     for (let current = path; ; current = dirname(current)) {
       const entry = lstatSync(current);
@@ -164,6 +175,10 @@ function launcherText(): string {
   trusted(entry);
   trusted(join(release, "bundle", "launcher.cjs"));
   trusted(join(release, "bundle", "main.cjs"));
+  for (const asset of ["bootstrap.cjs.br", "launcher.cjs.br", "main.cjs.br", "server.cjs.br"]) {
+    const source = join(release, "bundle", asset);
+    if (windows && lstatSync(source, {throwIfNoEntry: false})) trusted(source);
+  }
   if (launchDaemon) {
     const port = process.env[${JSON.stringify(launchdSharedPort)}];
     if (!port || !/^[1-9][0-9]{0,4}$/.test(port) || Number(port) > 65535 || typeof process.execve !== "function") {

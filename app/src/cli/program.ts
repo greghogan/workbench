@@ -172,7 +172,7 @@ export function createCLI(root: string = projectRoot()) {
       action.getOptionValue("plain") as boolean | undefined,
       preferences["terminal.plain"] === true,
     );
-    const serverLogs = action.name() === "serve" || action.name() === "web-account";
+    const serverLogs = ["serve", "web-account", "web-windows-account", "web-windows-system"].includes(action.name());
     const { level, fileLevel, format, persist } = resolveDiagnosticOptions(
       cli,
       process.env,
@@ -193,6 +193,8 @@ export function createCLI(root: string = projectRoot()) {
         fileLevel,
         serverLogs ? LogScope.Server : LogScope.Cli,
         userConfigValues(preferences),
+        // The SCM coordinator sends one-use credentials over its private stdout pipe.
+        action.name() === "web-windows-system" ? { transcript: ["stderr"] } : undefined,
       ).catch((error: unknown) => {
         diagnostic(
           LogLevel.Warn,

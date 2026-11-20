@@ -12,6 +12,7 @@ import {
   unlinkSync,
 } from "node:fs";
 import { request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import type { Socket } from "node:net";
 import { isAbsolute, join } from "node:path";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom } from "../../core/runtime/values.mjs";
@@ -173,7 +174,13 @@ function forwardingHeaders(headers: IncomingMessage["headers"]) {
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !remove.has(name)));
 }
 
-function forward(socket: string, token: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
+export function forwardAccountRequest(
+  socket: string,
+  token: string,
+  request: IncomingMessage,
+  response: ServerResponse,
+  verified?: Socket,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const headers = {
       ...forwardingHeaders(request.headers),
@@ -181,7 +188,12 @@ function forward(socket: string, token: string, request: IncomingMessage, respon
       authorization: `Bearer ${token}`,
     };
     const outgoing = httpRequest(
-      { socketPath: socket, path: request.url ?? "/", method: request.method, headers },
+      {
+        ...(verified ? { createConnection: () => verified } : { socketPath: socket }),
+        path: request.url ?? "/",
+        method: request.method,
+        headers,
+      },
       (incoming) => {
         response.writeHead(incoming.statusCode ?? 502, forwardingHeaders(incoming.headers));
         incoming.pipe(response);
@@ -294,7 +306,8 @@ async function openWorker(
     if (!listener.isSocket() || listener.uid !== account.uid)
       throw new Error("The Workbench account worker did not publish an authorized socket");
     return {
-      forward: (request: IncomingMessage, response: ServerResponse) => forward(destination, token, request, response),
+      forward: (request: IncomingMessage, response: ServerResponse) =>
+        forwardAccountRequest(destination, token, request, response),
       close,
       exited,
     };
