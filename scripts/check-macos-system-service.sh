@@ -122,7 +122,7 @@ for index in 0 1; do
     sudo -n install -d -o "$uid" -g staff -m 0700 "$home" "$home/project" "$home/project/workbench"
     printf '[[project]]\nid = "qualification"\nname = "macOS service project %s"\npath = "."\n' "$index" |
         sudo -n -u "$account" tee "$home/project/workbench/projects.toml" >/dev/null
-    printf 'schema_version = 1\n[compatibility]\nrequired = false\n' |
+    printf 'schema_version = 1\n[compatibility]\nrequired = false\n[markdown]\nwrap_width = 100\n' |
         sudo -n -u "$account" tee "$home/project/workbench/config.toml" >/dev/null
     project_git=(sudo -n -u "$account" /usr/bin/env -i "HOME=$home" PATH=/usr/bin:/bin
         "$developer_git" -C "$home/project")
