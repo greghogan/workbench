@@ -4,7 +4,7 @@ name: Checks
 on:
   push:
     # Explicit preparation branches publish the environments that these check jobs require.
-    branches-ignore: ["ci/publication-verification-**", "ci/tsk-3-macos-candidate-20261120"]
+    branches-ignore: ["ci/publication-verification-**", "ci/tsk-3-macos-candidate-20261120", "ci/tsk-3-windows-qualification-20261120"]
     tags-ignore: ["**"]
   pull_request:
 

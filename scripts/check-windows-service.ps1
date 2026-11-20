@@ -666,7 +666,30 @@ function Assert-DesktopTaskReleaseLifecycle {
     Write-Output 'Windows rolled back the active Task Scheduler release and confirmed readiness.'
 
     $latest = $account.access
-    $broken = New-ServiceTestArchive 'private-start-failure' 'process.exit(1);' -PrivateTask
+    Invoke-Checked 'Permit the task to write its qualification markers' {
+        icacls.exe $project /grant:r "*$($account.sid):(OI)(CI)M" /Q
+    } | Out-Null
+    $candidateReady = Join-Path $project 'candidate-private-listening'
+    $candidateStopped = Join-Path $project 'candidate-private-exited'
+    $readyPath = ConvertTo-Json -InputObject $candidateReady -Compress
+    $stoppedPath = ConvertTo-Json -InputObject $candidateStopped -Compress
+    $badReadiness = @"
+const fixtureFs = require('node:fs');
+const fixtureStringify = JSON.stringify;
+JSON.stringify = function(value, ...args) {
+  if (value?.pid === process.pid && value.release && value.host && value.password) {
+    return fixtureStringify({ ...value, release: 'incorrect-runtime-identity' }, ...args);
+  }
+  return fixtureStringify(value, ...args);
+};
+const fixtureWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...args) {
+  if (String(chunk).includes('Workbench web UI:')) fixtureFs.writeFileSync($readyPath, String(process.pid));
+  return fixtureWrite(chunk, ...args);
+};
+process.on('exit', () => fixtureFs.writeFileSync($stoppedPath, String(process.pid)));
+"@
+    $broken = New-ServiceTestArchive 'private-invalid-readiness' $badReadiness -PrivateTask
     $update = Start-ReleaseUpdate $broken
     try {
         if (-not $update.process.WaitForExit(90000) -or -not $update.errors.Wait(10000)) {
@@ -678,14 +701,66 @@ function Assert-DesktopTaskReleaseLifecycle {
         }
     } finally { Close-FixtureNode $update }
     Assert-ActiveRelease $Digest
+    $started = Get-Content -LiteralPath $candidateReady -Raw
+    $stopped = Get-Content -LiteralPath $candidateStopped -Raw
+    if ($started -notmatch '^[1-9][0-9]*$' -or $started -ne $stopped -or $started -eq $latest.process) {
+        throw 'The invalid candidate listener was not observed to start and cooperatively stop before restoration.'
+    }
     $account.access = Start-PrivateService $account
-    if ($account.access.process -eq $latest.process -or
+    if ($account.access.process -in @($latest.process, [int]$started) -or
         (Get-ScheduledTask -TaskPath '\' -TaskName $account.task).State -ne 'Running' -or
         (Browse $account.access.authorization '/projects' 'GET' $account.access.url).status -ne 200 -or
         (Test-Path -LiteralPath (Join-Path $root installed/.workbench-installation/update.json))) {
         throw 'The failed active update did not restore the installed private listener.'
     }
-    Write-Output 'Windows restored the previous Task Scheduler release after verified candidate startup failed.'
+    Write-Output 'Windows drained a listening replacement with invalid readiness and restored the previous Task Scheduler release.'
+
+    $launching = Join-Path $project interrupted-user-launching
+    $listening = Join-Path $project interrupted-user-listening
+    $exited = Join-Path $project interrupted-user-exited
+    $launchingPath = ConvertTo-Json -InputObject $launching -Compress
+    $listeningPath = ConvertTo-Json -InputObject $listening -Compress
+    $exitedPath = ConvertTo-Json -InputObject $exited -Compress
+    $delayedStartup = @"
+const fixtureFs = require('node:fs');
+fixtureFs.writeFileSync($launchingPath, String(process.pid));
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 9000);
+const fixtureWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk, ...args) {
+  if (String(chunk).includes('Workbench web UI:')) fixtureFs.writeFileSync($listeningPath, String(process.pid));
+  return fixtureWrite(chunk, ...args);
+};
+process.on('exit', () => fixtureFs.writeFileSync($exitedPath, String(process.pid)));
+"@
+    $interrupted = New-ServiceTestArchive 'interrupted-user-task' $delayedStartup -PrivateTask
+    $receipt = Join-Path $root installed/.workbench-installation/update.json
+    $update = Start-ReleaseUpdate $interrupted
+    try {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        while (-not (Test-Path -LiteralPath $receipt) -or -not (Test-Path -LiteralPath $launching)) {
+            if ($update.process.HasExited -or $timer.Elapsed.TotalSeconds -ge 45) {
+                throw 'The interruptible replacement never launched as a managed Windows task.'
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        Assert-ActiveRelease $interrupted.digest
+    } finally { Close-FixtureNode $update }
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path -LiteralPath $listening)) {
+        if ($timer.Elapsed.TotalSeconds -ge 20) { throw 'The replacement did not listen while recovery was pending.' }
+        Start-Sleep -Milliseconds 100
+    }
+    Workbench @('update', '--recover') | Out-Null
+    Assert-ActiveRelease $Digest
+    $candidatePid = Get-Content -LiteralPath $listening -Raw
+    if ($candidatePid -ne (Get-Content -LiteralPath $exited -Raw) -or (Test-Path -LiteralPath $receipt)) {
+        throw 'Recovery did not gracefully drain the interrupted replacement and remove its transition receipt.'
+    }
+    $account.access = Start-PrivateService $account
+    if ((Browse $account.access.authorization '/projects' 'GET' $account.access.url).status -ne 200) {
+        throw 'The recovered Windows user task did not serve requests from the restored release.'
+    }
+    Write-Output 'Windows recovered an interrupted user-task upgrade with the replacement already listening.'
 
     Stop-DesktopTask $account
     $account.privateAttempted = $true

@@ -255,27 +255,32 @@ function managedUserTask(
       return lifecycle.ready(distribution, pid, stateHome, signal);
     },
     async drain(distribution: string, signal: AbortSignal) {
-      const observed = await inspect(signal);
-      if (observed.state === "stopped") return;
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
-      let requested: unknown;
-      if (observed.state === "running") {
-        try {
-          await lifecycle.drain(distribution, observed.pid, stateHome, deadline);
-        } catch (failure) {
-          requested = failure;
-        }
-      }
+      let pid: number | undefined;
+      let acknowledged = false;
+      let requestFailure: unknown;
       try {
         for (;;) {
           const status = await inspect(deadline);
           if (status.state === "stopped") return;
-          if (status.state === "running" && status.pid !== observed.pid)
-            throw new Error("The registered Windows Workbench task changed while draining");
+          if (status.state === "running") {
+            if (pid !== undefined && status.pid !== pid)
+              throw new Error("The registered Windows Workbench task changed while draining");
+            pid = status.pid;
+            if (!acknowledged) {
+              try {
+                await lifecycle.drain(distribution, pid, stateHome, deadline);
+                acknowledged = true;
+              } catch (failure) {
+                requestFailure = failure;
+              }
+            }
+          }
           await delay(250, undefined, { signal: deadline });
         }
       } catch (failure) {
-        if (requested) throw combineFailures(requested, failure, "The registered Windows Workbench task did not drain");
+        if (requestFailure)
+          throw combineFailures(requestFailure, failure, "The registered Windows Workbench task did not drain");
         throw failure;
       }
     },
