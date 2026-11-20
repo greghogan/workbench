@@ -145,7 +145,8 @@ const launchctl = (...args) => execFileSync("sudo", ["-n", "/bin/launchctl", ...
 const pid = () => Number(/^\s*pid = (\d+)$/m.exec(launchctl("print", target))?.[1] ?? 0);
 const credentials = (user, password) => "Basic " + Buffer.from(`${user}:${password}`).toString("base64");
 const browse = (authorization) => fetch(origin + "/projects", {
-  headers: authorization ? { authorization } : {}, signal: AbortSignal.timeout(10000),
+  headers: authorization ? { authorization, connection: "close" } : { connection: "close" },
+  signal: AbortSignal.timeout(10000),
 });
 function signIn(index) {
   const user = users[index];
@@ -161,6 +162,7 @@ function signIn(index) {
   assert.ok(password, "The sign-in password was unavailable");
   return { password, authorization: credentials(user, password) };
 }
+console.log("Verify both account workers and the Git-backed review inventory.");
 const firstAccess = users.map((_, index) => signIn(index));
 assert.notEqual(firstAccess[0].password, firstAccess[1].password);
 for (const [index, access] of firstAccess.entries()) {
@@ -179,6 +181,7 @@ for (const [index, access] of firstAccess.entries()) {
   assert.equal(rejected.status, 401);
   await rejected.text();
 }
+console.log("Stop the shared process while launchd retains its endpoint.");
 const first = pid();
 assert.ok(first > 0);
 launchctl("kill", "SIGTERM", target);
@@ -231,16 +234,19 @@ function update(expectedStatus, ...args) {
   assert.deepEqual(endpoint(), originalEndpoint, "The protected launchd socket changed during release transition");
   return result;
 }
+console.log("Switch the running service to the verified replacement.");
 update(0, "--archive", fixture + "/successor.tar.gz", "--sha256", successor);
 assert.equal(active(), successor);
 const updated = pid();
 assert.ok(updated > 0 && updated !== second);
 assert.equal((await browse(replacement.authorization)).status, 401);
 assert.equal((await browse(signIn(0).authorization)).status, 200);
+console.log("Reject the failing replacement and restore the running release.");
 const rejected = update(1, "--archive", fixture + "/failing.tar.gz", "--sha256", failing);
 assert.match(rejected.stderr, /previous service release is running/i);
 assert.equal(active(), successor);
 assert.equal((await browse(signIn(0).authorization)).status, 200);
+console.log("Roll back to the original verified archive.");
 update(0, "--rollback");
 assert.equal(active(), original);
 assert.ok(pid() > 0 && pid() !== updated);
