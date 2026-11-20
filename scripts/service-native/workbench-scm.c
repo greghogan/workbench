@@ -436,7 +436,7 @@ int wmain(int count, wchar_t **arguments) {
             error = ERROR_WRITE_FAULT;
         SecureZeroMemory(output, sizeof(output));
     } else if ((count == 3 && !wcscmp(arguments[1], L"private-read")) ||
-               (count == 4 && !wcscmp(arguments[1], L"private-listen"))) {
+               (count == 4 && (!wcscmp(arguments[1], L"private-listen") || !wcscmp(arguments[1], L"private-drain")))) {
         error = workbench_private_control(arguments[1], arguments[2], count == 4 ? arguments[3] : NULL);
     } else if (count == 5 && !wcscmp(arguments[1], L"private-launch")) {
         error = workbench_private_launch(arguments[2], arguments[3], arguments[4]);

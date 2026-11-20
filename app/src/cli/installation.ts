@@ -33,7 +33,12 @@ import {
   recoverWindowsRelease,
   removeWindowsService,
 } from "../core/distribution/windows-service.js";
-import { installWindowsUserService, removeWindowsUserService } from "../core/distribution/windows-user-service.js";
+import {
+  activateWindowsUserRelease,
+  installWindowsUserService,
+  recoverWindowsUserRelease,
+  removeWindowsUserService,
+} from "../core/distribution/windows-user-service.js";
 import { distributionRoot } from "../core/projects/project-context.js";
 import { ownedPath } from "../core/runtime/paths.js";
 import { toolSpecification, type ToolPin } from "../core/toolchains/tool-pin.js";
@@ -212,8 +217,13 @@ export function registerInstallationCommands(program: Command, root: string): vo
         }
         if (revision || (!options.rollback && !options.recover && (!options.archive || !options.sha256)))
           throw new Error("Supply --archive and --sha256, or use --rollback or --recover");
-        const { assertReleaseServicesIdle, launchDaemonReady, privateServiceReady } =
+        const { assertReleaseServicesIdle, drainWindowsPrivateService, launchDaemonReady, privateServiceReady } =
           await import("../server/runtime.js");
+        const windowsUser = {
+          assertIdle: assertReleaseServicesIdle,
+          drain: drainWindowsPrivateService,
+          ready: privateServiceReady,
+        };
         const launchdReady =
           process.geteuid?.() === 0
             ? (distribution: string, pid: number, _state: string, signal: AbortSignal) =>
@@ -222,7 +232,9 @@ export function registerInstallationCommands(program: Command, root: string): vo
         if (options.recover) {
           const restored = await recoverArchiveRelease(async (launcher, restore, service, previous, permitStart) => {
             if (process.platform === "win32") {
-              await recoverWindowsRelease(launcher, restore, service, assertReleaseServicesIdle);
+              if (service?.manager === "task-scheduler")
+                await recoverWindowsUserRelease(launcher, restore, service, previous, permitStart, windowsUser);
+              else await recoverWindowsRelease(launcher, restore, service, assertReleaseServicesIdle);
               return;
             }
             if (process.platform === "darwin")
@@ -246,7 +258,8 @@ export function registerInstallationCommands(program: Command, root: string): vo
         const distribution = distributionRoot(root);
         const selected = await updateArchiveRelease(distribution, release, async (transition) => {
           if (process.platform === "win32") {
-            await activateWindowsRelease(transition, assertReleaseServicesIdle);
+            if (!(await activateWindowsUserRelease(transition, windowsUser)))
+              await activateWindowsRelease(transition, assertReleaseServicesIdle);
             return;
           }
           if (process.platform === "darwin")

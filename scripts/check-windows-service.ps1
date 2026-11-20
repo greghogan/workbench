@@ -199,12 +199,14 @@ function Assert-ActiveRelease([string] $Expected) {
     if ($selected.sha256 -ne $Expected) { throw 'The installed launcher selected the wrong archive.' }
 }
 
-function New-ServiceTestArchive([string] $Name, [string] $Startup) {
+function New-ServiceTestArchive([string] $Name, [string] $Startup, [switch] $PrivateTask) {
     $entry = Join-Path $root 'workbench/bundle/main.cjs'
     $package = Join-Path $root "$Name.tar.gz"
     $original = [IO.File]::ReadAllBytes($entry)
     try {
-        $guard = [Text.Encoding]::UTF8.GetBytes("if (process.env.WORKBENCH_WINDOWS_SCM === '1') { $Startup }`n")
+        $mode = if ($PrivateTask) { "process.argv.includes('--service')" }
+            else { "process.env.WORKBENCH_WINDOWS_SCM === '1'" }
+        $guard = [Text.Encoding]::UTF8.GetBytes("if ($mode) { $Startup }`n")
         [IO.File]::WriteAllBytes($entry, [byte[]] ($guard + $original))
         Invoke-Checked 'Create owned service activation fixture' { tar.exe -czf $package -C $root workbench } | Out-Null
     } finally {
@@ -627,38 +629,86 @@ function Assert-DesktopTaskReleaseLifecycle {
     $previous = $account.access
     Write-Output 'The native Task Scheduler started the installed private server in the signed-in desktop session.'
 
-    $update = Start-ReleaseUpdate $replacement
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$($previous.url)/events")
+    $request.Headers.Authorization = $previous.authorization
+    $response = $null
     try {
-        if (-not $update.process.WaitForExit(60000) -or -not $update.errors.Wait(10000)) {
-            throw 'The active-task update did not settle.'
+        $response = $client.SendAsync($request, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if ([int]$response.StatusCode -ne 200 -or $response.Content.Headers.ContentType.MediaType -ne 'text/event-stream') {
+            throw 'The installed private listener did not open its authenticated event stream.'
+        }
+        Workbench @('update', '--archive', $replacement.path, '--sha256', $replacement.digest) | Out-Null
+        Assert-ActiveRelease $replacement.digest
+        $closed = $response.Content.ReadAsStringAsync()
+        if (-not $closed.Wait(15000)) { throw 'The previous listener did not close its admitted event stream.' }
+    } finally {
+        if ($response) { $response.Dispose() }
+        $request.Dispose()
+    }
+    $account.access = Start-PrivateService $account
+    if ($account.access.process -eq $previous.process -or
+        (Get-ScheduledTask -TaskPath '\' -TaskName $account.task).State -ne 'Running' -or
+        (Browse $previous.authorization '/projects' 'GET' $account.access.url).status -ne 401 -or
+        (Browse $account.access.authorization '/projects' 'GET' $account.access.url).status -ne 200) {
+        throw 'The installed Workbench task did not become ready under the replacement release.'
+    }
+    Write-Output 'Windows drained an active installed Task Scheduler listener and restarted it with fresh authentication.'
+
+    $latest = $account.access
+    Workbench @('update', '--rollback') | Out-Null
+    Assert-ActiveRelease $Digest
+    $account.access = Start-PrivateService $account
+    if ($account.access.process -eq $latest.process -or
+        (Get-ScheduledTask -TaskPath '\' -TaskName $account.task).State -ne 'Running' -or
+        (Browse $account.access.authorization '/projects' 'GET' $account.access.url).status -ne 200) {
+        throw 'The rollback did not start the previous installed release through the native task.'
+    }
+    Write-Output 'Windows rolled back the active Task Scheduler release and confirmed readiness.'
+
+    $latest = $account.access
+    $broken = New-ServiceTestArchive 'private-start-failure' 'process.exit(1);' -PrivateTask
+    $update = Start-ReleaseUpdate $broken
+    try {
+        if (-not $update.process.WaitForExit(90000) -or -not $update.errors.Wait(10000)) {
+            throw 'The failed active private update did not settle.'
         }
         $failure = ($update.errors.GetAwaiter().GetResult() -replace '\s+', ' ')
-        if ($update.process.ExitCode -ne 1 -or $failure -notmatch 'before switching installed releases') {
-            throw 'The installed updater did not report the expected active listener guard.'
+        if ($update.process.ExitCode -ne 1 -or $failure -notmatch 'previous Windows Workbench task is running') {
+            throw "The failed active private update did not report successful restoration. $failure"
         }
     } finally { Close-FixtureNode $update }
     Assert-ActiveRelease $Digest
-    $live = Start-PrivateService $account
-    if ($live.process -ne $previous.process -or
-        (Browse $previous.authorization '/projects' 'GET' $previous.url).status -ne 200 -or
+    $account.access = Start-PrivateService $account
+    if ($account.access.process -eq $latest.process -or
+        (Get-ScheduledTask -TaskPath '\' -TaskName $account.task).State -ne 'Running' -or
+        (Browse $account.access.authorization '/projects' 'GET' $account.access.url).status -ne 200 -or
         (Test-Path -LiteralPath (Join-Path $root installed/.workbench-installation/update.json))) {
-        throw 'The rejected active-task update disrupted the installed listener or left a partial release transition.'
+        throw 'The failed active update did not restore the installed private listener.'
     }
-    Write-Output 'The installer preserved the live scheduled task and verified release when an update was requested.'
+    Write-Output 'Windows restored the previous Task Scheduler release after verified candidate startup failed.'
 
     Stop-DesktopTask $account
-    Workbench @('update', '--archive', $replacement.path, '--sha256', $replacement.digest) | Out-Null
-    Assert-ActiveRelease $replacement.digest
-    Start-DesktopTask $account
-    if ($account.access.process -eq $previous.process -or
-        (Browse $previous.authorization '/projects' 'GET' $account.access.url).status -ne 401) {
-        throw 'The restarted scheduled task did not require fresh browser sign-in.'
-    }
-    Stop-DesktopTask $account
-    Workbench @('update', '--rollback') | Out-Null
+    $account.privateAttempted = $true
+    $account.access = Start-PrivateService $account
+    $manual = $account.access
+    $update = Start-ReleaseUpdate $replacement
+    try {
+        if (-not $update.process.WaitForExit(60000) -or -not $update.errors.Wait(10000)) {
+            throw 'The update request while a manual private server was active did not settle.'
+        }
+        $failure = ($update.errors.GetAwaiter().GetResult() -replace '\s+', ' ')
+        if ($update.process.ExitCode -ne 1 -or $failure -notmatch 'before switching installed releases') {
+            throw 'The installed updater did not report the expected manual listener guard.'
+        }
+    } finally { Close-FixtureNode $update }
     Assert-ActiveRelease $Digest
-    Start-DesktopTask $account
-    Write-Output 'Windows verified stopped-task update and rollback with actual Task Scheduler launches and fresh authentication.'
+    if ((Start-PrivateService $account).process -ne $manual.process -or
+        (Browse $manual.authorization '/projects' 'GET' $manual.url).status -ne 200) {
+        throw 'The deferred update disrupted the manually started private listener.'
+    }
+    Stop-PrivateService $account
+    Write-Output 'Windows preserved the separate manual listener when the registered task was stopped.'
+
 }
 
 try {
@@ -795,6 +845,7 @@ try {
     $cleanup = @()
     if ($desktopAccount) {
         try {
+            if ($desktopAccount.privateAttempted) { Stop-PrivateService $desktopAccount }
             Stop-DesktopTask $desktopAccount
             Workbench @('uninstall', '--service', 'user') | Out-Null
             if (Get-ScheduledTask -TaskPath '\' -TaskName $desktopAccount.task -ErrorAction SilentlyContinue) {

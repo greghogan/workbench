@@ -5,7 +5,9 @@
 
 enum { workbench_control_capacity = 1024 };
 
-enum workbench_control_operation { workbench_sign_in = 1, workbench_resume_account = 2, workbench_retire_account = 3 };
+enum workbench_control_operation {
+    workbench_sign_in = 1, workbench_resume_account = 2, workbench_retire_account = 3, workbench_private_drain = 4
+};
 
 /* Ordinary sign-in borrows a caller token. LocalSystem can request a previously authorized SID without a token.
    It must finish promptly and may write up to *length bytes, then set *length to the actual size. */
@@ -24,7 +26,8 @@ DWORD workbench_control_serve(HANDLE listener, HANDLE stop_event, workbench_cont
 /* The client permits impersonation only after authenticating the pipe's SCM process. */
 DWORD workbench_control_request(const wchar_t *service, enum workbench_control_operation operation, PSID sid,
                                 BYTE reply[workbench_control_capacity], DWORD *length);
-DWORD workbench_private_request(const wchar_t *name, PSID owner, BYTE reply[workbench_control_capacity], DWORD *length);
+DWORD workbench_private_request(const wchar_t *name, PSID owner, DWORD expected_parent,
+                                BYTE reply[workbench_control_capacity], DWORD *length);
 DWORD workbench_process_sid(HANDLE process, BYTE sid[SECURITY_MAX_SID_SIZE]);
 
 #endif

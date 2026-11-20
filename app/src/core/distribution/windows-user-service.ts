@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import { lstatSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { combineFailures } from "../diagnostics/diagnostic-errors.mjs";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { writeNew } from "../runtime/file-publication.mjs";
 import { captureOwnedChild, processCancellation } from "../runtime/owned-child.mjs";
@@ -7,7 +10,13 @@ import { isRecord } from "../runtime/values.mjs";
 import { windowsExecutableArgument } from "../runtime/windows-arguments.mjs";
 import { withCacheLock } from "../storage/cache-lock.js";
 import { archiveInstallationEnvironment, readDistributionSource } from "./distribution-identity.js";
-import { installedServiceLauncher } from "./installed-release.js";
+import {
+  assertInstalledWindowsTaskLauncher,
+  installedServiceLauncher,
+  windowsTaskStartupReceipt,
+  type ReleaseActivation,
+} from "./installed-release.js";
+import { recoverReleaseLock, type ReleaseServiceRegistration } from "./release-transition.js";
 import { windowsServiceHelper } from "./windows-service.js";
 
 const schedulerScript = String.raw`
@@ -46,7 +55,11 @@ function Check-Owned($Task) {
 }
 
 if ($existing.Count -gt 1) { throw 'Windows returned ambiguous Workbench task registrations.' }
-if ($existing.Count -eq 1) { Check-Owned $existing[0] }
+$registered = if ($existing.Count -eq 1) { $existing[0] }
+if ($registered) { Check-Owned $registered }
+if ($request.operation -in 'inspect', 'start' -and -not $registered) {
+    throw 'The expected Workbench task registration is missing.'
+}
 if ($request.operation -eq 'register' -and $existing.Count -eq 0) {
     $definition = $scheduler.NewTask(0)
     $definition.RegistrationInfo.Description = 'Workbench private browser server'
@@ -68,8 +81,20 @@ if ($request.operation -eq 'register' -and $existing.Count -eq 0) {
 } elseif ($request.operation -eq 'remove' -and $existing.Count -eq 1) {
     if ($existing[0].State -in 2, 4) { throw 'Stop the Workbench task before removing its registration.' }
     $folder.DeleteTask($name, 0)
+    $registered = $null
+} elseif ($request.operation -eq 'start') {
+    $null = $registered.Run($null)
 }
-@{ name = $name } | ConvertTo-Json -Compress
+$state = 'stopped'
+$processId = 0
+if ($registered -and $request.operation -in 'inspect', 'start') {
+    $instances = $registered.GetInstances(0)
+    if ($instances.Count -gt 1) { throw 'Windows returned ambiguous running Workbench tasks.' }
+    if ($instances.Count -eq 1) { $processId = [int]$instances.Item(1).EnginePID }
+    if ($processId -gt 0) { $state = 'running' }
+    elseif ($registered.State -in 2, 4 -or $request.operation -eq 'start') { $state = 'starting' }
+}
+@{ name = $name; state = $state; pid = $processId } | ConvertTo-Json -Compress
 `;
 
 interface Registration {
@@ -82,9 +107,10 @@ function validPort(port: unknown): port is number {
   return typeof port === "number" && Number.isInteger(port) && port >= 0 && port <= 65_535;
 }
 
-function readRegistration(receipt: string): Registration | undefined {
+function readRegistration(receipt: string): { record: Registration; digest: string } | undefined {
   if (!lstatSync(receipt, { throwIfNoEntry: false })) return undefined;
-  const input: unknown = JSON.parse(readBoundedFile(receipt, 4096, "Windows Workbench user task").toString());
+  const bytes = readBoundedFile(receipt, 4096, "Windows Workbench user task");
+  const input: unknown = JSON.parse(bytes.toString());
   if (
     !isRecord(input) ||
     input.version !== 1 ||
@@ -93,20 +119,23 @@ function readRegistration(receipt: string): Registration | undefined {
     !validPort(input.port)
   )
     throw new Error("Invalid Workbench Windows user-service registration");
-  return { version: 1, node: input.node, port: input.port };
+  return {
+    record: { version: 1, node: input.node, port: input.port },
+    digest: createHash("sha256").update(bytes).digest("hex"),
+  };
 }
 
-function installation(distribution: string) {
-  const launcher = installedServiceLauncher(distribution);
+function installation(launcher: string) {
   const directory = dirname(launcher);
   return { launcher, directory, receipt: join(directory, ".workbench-installation/windows-user-service.json") };
 }
 
 async function taskOperation(
-  operation: "register" | "remove",
+  operation: "register" | "remove" | "inspect" | "start",
   { launcher, directory }: ReturnType<typeof installation>,
   { node, port }: Registration,
-): Promise<string> {
+  signal?: AbortSignal,
+) {
   const system = process.env.SystemRoot;
   if (process.platform !== "win32" || !system || !isAbsolute(system))
     throw new Error("Workbench user-service registration requires Windows Task Scheduler");
@@ -128,15 +157,23 @@ async function taskOperation(
         "-EncodedCommand",
         Buffer.from(schedulerScript, "utf16le").toString("base64"),
       ],
-      { cwd: directory, env: process.env, input: request, signal: cancellation.signal },
+      { cwd: directory, env: process.env, input: request, signal: signal ?? cancellation.signal },
       8192,
     );
     if (result.error || result.status !== 0)
       throw new Error("Windows Task Scheduler " + operation + " failed", { cause: result.error ?? result.stderr });
     const reply: unknown = JSON.parse(result.stdout);
-    if (!isRecord(reply) || typeof reply.name !== "string" || !/^Workbench\.Private\.S-1-[\d-]+$/.test(reply.name))
+    if (
+      !isRecord(reply) ||
+      typeof reply.name !== "string" ||
+      !/^Workbench\.Private\.S-1-[\d-]+$/.test(reply.name) ||
+      (reply.state !== "stopped" && reply.state !== "starting" && reply.state !== "running") ||
+      typeof reply.pid !== "number" ||
+      !Number.isSafeInteger(reply.pid) ||
+      (reply.state === "running" ? reply.pid <= 0 : reply.pid !== 0)
+    )
       throw new Error("Invalid Workbench Windows task response");
-    return reply.name;
+    return { name: reply.name, state: reply.state, pid: reply.pid };
   } finally {
     cancellation.close();
   }
@@ -150,24 +187,215 @@ export async function installWindowsUserService(distribution: string, port: numb
     !windowsServiceHelper(distribution)
   )
     throw new Error("Install a verified Workbench archive with the Windows private service helper first");
-  const paths = installation(distribution);
+  const paths = installation(installedServiceLauncher(distribution));
   return withCacheLock(paths.receipt, async () => {
     const existing = readRegistration(paths.receipt);
     const selected: Registration = { version: 1, node: process.execPath, port };
-    if (existing && (existing.node !== selected.node || existing.port !== port))
+    if (existing && (existing.record.node !== selected.node || existing.record.port !== port))
       throw new Error("Preserving the existing Workbench Windows user-service settings");
     if (!existing) writeNew(paths.receipt, JSON.stringify(selected) + "\n", 0o600);
-    return taskOperation("register", paths, selected);
+    return (await taskOperation("register", paths, selected)).name;
   });
 }
 
 export async function removeWindowsUserService(distribution: string): Promise<string | undefined> {
-  const paths = installation(distribution);
+  const paths = installation(installedServiceLauncher(distribution));
   return withCacheLock(paths.receipt, async () => {
     const existing = readRegistration(paths.receipt);
     if (!existing) return undefined;
-    const name = await taskOperation("remove", paths, existing);
+    const { name } = await taskOperation("remove", paths, existing.record);
     unlinkSync(paths.receipt);
     return name;
   });
+}
+
+export async function verifyWindowsTaskStartup(distribution: string, signal: AbortSignal): Promise<boolean> {
+  const expected = windowsTaskStartupReceipt();
+  if (!expected) return false;
+  const paths = installation(installedServiceLauncher(distribution));
+  const observed = readRegistration(paths.receipt);
+  if (expected.path !== paths.receipt || observed?.digest !== expected.digest)
+    throw new Error("The Windows Workbench task registration changed during the installed release switch");
+  const task = await taskOperation("inspect", paths, observed.record, signal);
+  if (task.pid !== process.pid)
+    throw new Error("Only the registered Workbench task can start during its release update");
+  return true;
+}
+
+type ListenerAction = (distribution: string, pid: number, stateHome: string, signal: AbortSignal) => Promise<void>;
+type ListenerReadiness = (
+  distribution: string,
+  pid: number,
+  stateHome: string,
+  signal: AbortSignal,
+) => Promise<boolean>;
+type IdleCheck = (exceptPid?: number, managedState?: string) => void;
+
+interface UserListenerLifecycle {
+  assertIdle: IdleCheck;
+  ready: ListenerReadiness;
+  drain: ListenerAction;
+}
+
+function managedUserTask(
+  paths: ReturnType<typeof installation>,
+  record: Registration,
+  lifecycle: UserListenerLifecycle,
+) {
+  const local = process.env.LOCALAPPDATA;
+  if (!local || !isAbsolute(local)) throw new Error("LOCALAPPDATA must identify the user's local data folder");
+  const stateHome = join(local, "workbench/state");
+  const inspect = (signal: AbortSignal) => taskOperation("inspect", paths, record, signal);
+  return {
+    inspect,
+    assertIdle(exceptPid?: number) {
+      lifecycle.assertIdle(exceptPid, stateHome);
+    },
+    canDrain(distribution: string, pid: number, signal: AbortSignal) {
+      return lifecycle.ready(distribution, pid, stateHome, signal);
+    },
+    async drain(distribution: string, signal: AbortSignal) {
+      const observed = await inspect(signal);
+      if (observed.state === "stopped") return;
+      const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+      let requested: unknown;
+      if (observed.state === "running") {
+        try {
+          await lifecycle.drain(distribution, observed.pid, stateHome, deadline);
+        } catch (failure) {
+          requested = failure;
+        }
+      }
+      try {
+        for (;;) {
+          const status = await inspect(deadline);
+          if (status.state === "stopped") return;
+          if (status.state === "running" && status.pid !== observed.pid)
+            throw new Error("The registered Windows Workbench task changed while draining");
+          await delay(250, undefined, { signal: deadline });
+        }
+      } catch (failure) {
+        if (requested) throw combineFailures(requested, failure, "The registered Windows Workbench task did not drain");
+        throw failure;
+      }
+    },
+    async restart(distribution: string, signal: AbortSignal) {
+      const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+      await taskOperation("start", paths, record, deadline);
+      for (;;) {
+        const ready = await inspect(deadline);
+        if (ready.state === "stopped") throw new Error("The registered Windows Workbench task exited before readiness");
+        if (
+          ready.state === "running" &&
+          (await lifecycle.ready(distribution, ready.pid, stateHome, deadline)) &&
+          (await inspect(deadline)).pid === ready.pid
+        )
+          return;
+        await delay(250, undefined, { signal: deadline });
+      }
+    },
+  };
+}
+
+export async function activateWindowsUserRelease(
+  transition: ReleaseActivation,
+  lifecycle: UserListenerLifecycle,
+): Promise<boolean> {
+  const paths = installation(transition.launcher);
+  if (!lstatSync(paths.receipt, { throwIfNoEntry: false })) return false;
+  const cancellation = processCancellation();
+  try {
+    return await withCacheLock(
+      paths.receipt,
+      async () => {
+        const registration = readRegistration(paths.receipt);
+        if (!registration) return false;
+        const managed = managedUserTask(paths, registration.record, lifecycle);
+        const observed = await managed.inspect(cancellation.signal);
+        if (observed.state === "stopped") return false;
+        if (
+          observed.state !== "running" ||
+          !(await managed.canDrain(transition.previous, observed.pid, cancellation.signal))
+        )
+          throw new Error(
+            "The registered Windows Workbench logon task is still starting. Retry when its listener is ready.",
+          );
+        managed.assertIdle(observed.pid);
+        assertInstalledWindowsTaskLauncher(transition.launcher);
+        transition.begin({
+          manager: "task-scheduler",
+          scope: "user",
+          path: paths.receipt,
+          digest: registration.digest,
+        });
+        try {
+          await managed.drain(transition.previous, cancellation.signal);
+          managed.assertIdle();
+          transition.select();
+          transition.permitManagedServiceStart(true);
+          await managed.restart(transition.replacement, cancellation.signal);
+        } catch (failure) {
+          if (cancellation.signal.aborted) throw failure;
+          try {
+            transition.permitManagedServiceStart(false);
+            await managed.drain(transition.previous, cancellation.signal);
+            transition.restore();
+            transition.permitManagedServiceStart(true);
+            await managed.restart(transition.previous, cancellation.signal);
+            transition.finishRestoration();
+          } catch (restoration) {
+            throw combineFailures(
+              failure,
+              restoration,
+              "Windows task recovery is pending. Run 'workbench update --recover'.",
+            );
+          }
+          throw new Error("The Workbench update failed. The previous Windows Workbench task is running.", {
+            cause: failure,
+          });
+        }
+        return true;
+      },
+      30_000,
+      cancellation.signal,
+    );
+  } finally {
+    cancellation.close();
+  }
+}
+
+export async function recoverWindowsUserRelease(
+  launcher: string,
+  restore: () => void,
+  service: ReleaseServiceRegistration,
+  previous: string,
+  permitStart: (allowed: boolean) => void,
+  lifecycle: UserListenerLifecycle,
+): Promise<void> {
+  const paths = installation(launcher);
+  if (service.manager !== "task-scheduler" || service.scope !== "user" || service.path !== paths.receipt)
+    throw new Error("Recover the release from the original Windows Workbench task installation");
+  recoverReleaseLock(paths.receipt);
+  const cancellation = processCancellation();
+  try {
+    await withCacheLock(
+      paths.receipt,
+      async () => {
+        const registration = readRegistration(paths.receipt);
+        if (registration?.digest !== service.digest)
+          throw new Error("The Windows Workbench task registration changed. Preserve the recovery receipt.");
+        const managed = managedUserTask(paths, registration.record, lifecycle);
+        permitStart(false);
+        await managed.drain(previous, cancellation.signal);
+        managed.assertIdle();
+        restore();
+        permitStart(true);
+        await managed.restart(previous, cancellation.signal);
+      },
+      30_000,
+      cancellation.signal,
+    );
+  } finally {
+    cancellation.close();
+  }
 }

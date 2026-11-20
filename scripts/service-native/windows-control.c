@@ -4,6 +4,7 @@
 #include <sddl.h>
 #include <stddef.h>
 #include <string.h>
+#include <tlhelp32.h>
 #include <wchar.h>
 
 enum { pipe_name_capacity = 128, maximum_wait = 5000, maximum_reply_wait = 60000 };
@@ -147,6 +148,10 @@ static DWORD connect_client(HANDLE pipe, HANDLE stop_event) {
     return error;
 }
 
+static BOOL account_operation(enum workbench_control_operation operation) {
+    return operation == workbench_resume_account || operation == workbench_retire_account;
+}
+
 static DWORD authorize_caller(HANDLE pipe, workbench_control_handler handle,
                               enum workbench_control_operation operation, PSID requested_sid, void *context,
                               struct control_reply *reply, PSID private_owner) {
@@ -180,7 +185,7 @@ static DWORD authorize_caller(HANDLE pipe, workbench_control_handler handle,
         error = ERROR_ACCESS_DENIED;
     } else if (private_owner) {
         error = ERROR_ACCESS_DENIED;
-        if (operation == workbench_sign_in && level >= SecurityIdentification &&
+        if ((operation == workbench_sign_in || operation == workbench_private_drain) && level >= SecurityIdentification &&
             EqualSid(private_owner, identity.user.User.Sid)) {
             reply->length = sizeof(reply->bytes);
             error = handle(operation, NULL, identity.user.User.Sid, context, reply->bytes, &reply->length);
@@ -219,30 +224,35 @@ DWORD workbench_control_serve(HANDLE listener, HANDLE stop_event, workbench_cont
         BYTE request[sizeof(request_prefix) + 1];
         if (!error)
             error = transfer(listener, stop_event, deadline, request, sizeof(request), FALSE);
-        BYTE operation = error ? 0 : request[sizeof(request_prefix)];
+        enum workbench_control_operation operation = error ? 0 : request[sizeof(request_prefix)];
+        BOOL drain = FALSE;
         if (!error && !memcmp(request, request_prefix, sizeof(request_prefix)) &&
-            operation >= workbench_sign_in && operation <= workbench_retire_account &&
+            (operation == workbench_sign_in || (private_owner ? operation == workbench_private_drain
+                                                             : account_operation(operation))) &&
             WaitForSingleObject(stop_event, 0) != WAIT_OBJECT_0) {
             struct control_reply reply = {0};
             BYTE sid[SECURITY_MAX_SID_SIZE] = {0};
-            if (operation != workbench_sign_in)
+            if (account_operation(operation))
                 reply.status = transfer(listener, stop_event, deadline, sid, sizeof(sid), FALSE);
             if (!reply.status)
-                reply.status = authorize_caller(listener, handle, (enum workbench_control_operation)operation, sid,
+                reply.status = authorize_caller(listener, handle, operation, sid,
                                                 context, &reply, private_owner);
             if (reply.status)
                 reply.length = 0;
             deadline = GetTickCount64() + maximum_wait;
             error = transfer(listener, stop_event, deadline, (BYTE *)&reply,
                              (DWORD)offsetof(struct control_reply, bytes) + reply.length, TRUE);
-            SecureZeroMemory(&reply, sizeof(reply));
             /* Disconnect discards unread pipe data. Wait for the client's acknowledgment with the same deadline. */
-            BYTE acknowledgment;
+            BYTE acknowledgment = 0;
             if (!error)
-                transfer(listener, stop_event, deadline, &acknowledgment, sizeof(acknowledgment), FALSE);
+                error = transfer(listener, stop_event, deadline, &acknowledgment, sizeof(acknowledgment), FALSE);
+            drain = !error && !reply.status && acknowledgment == 1 && operation == workbench_private_drain;
+            SecureZeroMemory(&reply, sizeof(reply));
         }
         if (!DisconnectNamedPipe(listener) && GetLastError() != ERROR_PIPE_NOT_CONNECTED)
             return GetLastError();
+        if (drain)
+            return ERROR_CANCELLED;
     }
 }
 
@@ -294,7 +304,7 @@ static DWORD exchange_control(HANDLE pipe, ULONGLONG deadline, enum workbench_co
     memcpy(request, request_prefix, sizeof(request_prefix));
     request[sizeof(request_prefix)] = (BYTE)operation;
     DWORD error = transfer(pipe, NULL, deadline, request, sizeof(request), TRUE);
-    if (!error && operation != workbench_sign_in) {
+    if (!error && account_operation(operation)) {
         BYTE account[SECURITY_MAX_SID_SIZE] = {0};
         if (!sid || !CopySid(sizeof(account), account, sid))
             error = sid ? GetLastError() : ERROR_INVALID_SID;
@@ -361,7 +371,26 @@ DWORD workbench_process_sid(HANDLE process, BYTE sid[SECURITY_MAX_SID_SIZE]) {
     return error;
 }
 
-DWORD workbench_private_request(const wchar_t *name, PSID owner, BYTE reply[workbench_control_capacity], DWORD *length) {
+static DWORD verify_parent(DWORD process, DWORD parent) {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return GetLastError();
+    PROCESSENTRY32W entry = {0};
+    entry.dwSize = sizeof(entry);
+    DWORD result = ERROR_INVALID_OWNER;
+    for (BOOL found = Process32FirstW(snapshot, &entry); found; found = Process32NextW(snapshot, &entry)) {
+        if (entry.th32ProcessID == process) {
+            if (entry.th32ParentProcessID == parent)
+                result = NO_ERROR;
+            break;
+        }
+    }
+    CloseHandle(snapshot);
+    return result;
+}
+
+DWORD workbench_private_request(const wchar_t *name, PSID owner, DWORD expected_parent,
+                                BYTE reply[workbench_control_capacity], DWORD *length) {
     *length = 0;
     ULONGLONG deadline = GetTickCount64() + maximum_wait;
     HANDLE pipe;
@@ -391,8 +420,11 @@ DWORD workbench_private_request(const wchar_t *name, PSID owner, BYTE reply[work
         error = workbench_process_sid(process, observed);
     if (!error && !EqualSid(owner, observed))
         error = ERROR_ACCESS_DENIED;
+    if (!error && expected_parent)
+        error = verify_parent(peer, expected_parent);
     if (!error)
-        error = exchange_control(pipe, deadline, workbench_sign_in, NULL, reply, length);
+        error = exchange_control(pipe, deadline, expected_parent ? workbench_private_drain : workbench_sign_in,
+                                 NULL, reply, length);
     if (process)
         CloseHandle(process);
     CloseHandle(pipe);

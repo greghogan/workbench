@@ -11,6 +11,7 @@ import { checkInstalledServiceStart } from "../../core/distribution/installed-re
 import { launchdServiceProcess } from "../../core/distribution/distribution-identity.js";
 import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
 import { windowsServiceHelper } from "../../core/distribution/windows-service.js";
+import { verifyWindowsTaskStartup } from "../../core/distribution/windows-user-service.js";
 import { processCancellation } from "../../core/runtime/owned-child.mjs";
 import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
 import {
@@ -27,6 +28,7 @@ import { localBrowserUsername } from "./browser-auth.js";
 import { discoverSystemService, serviceRelease, systemServicePending } from "./system-service.js";
 import { activePrivateListenerProcesses, markPrivateListener } from "./system-ownership.js";
 import {
+  drainWindowsPrivateControl,
   launchWindowsPrivateDaemon,
   maximumWindowsPrivateReply,
   openWindowsPrivateAdmission,
@@ -108,7 +110,7 @@ export function assertReleaseServicesIdle(exceptPid?: number, managedState?: str
           (pid) => pid !== exceptPid,
         )
       : process.platform === "win32"
-        ? busy(windowsPrivateLease())
+        ? [...new Set([userDirectory("state"), managedState])].some((directory) => busy(windowsPrivateLease(directory)))
         : [...new Set([userDirectory("state"), managedState])].some((directory) => busy(servicePaths(directory).lease));
   if (active) throw new Error("Stop the manual Workbench server before switching installed releases.");
   if (process.geteuid?.() === 0 && exceptPid === undefined && systemServicePending())
@@ -239,6 +241,20 @@ function encodeAccess(access: Access, release: string): string {
   });
 }
 
+export async function drainWindowsPrivateService(
+  distribution: string,
+  pid: number,
+  stateHome: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const helper = windowsServiceHelper(distribution);
+  const lease = windowsPrivateLease(stateHome);
+  const lock = inspectCacheMetadataLock(lease);
+  if (!helper || lock.state !== CacheLockState.Active || lock.owner.pid !== pid)
+    throw new Error("The registered Windows Workbench listener has not confirmed ownership");
+  await drainWindowsPrivateControl(helper, windowsPrivateInstance(lease), pid, signal);
+}
+
 async function openControl(paths: ReturnType<typeof servicePaths>, access: Access, release: string) {
   const clients = new Set<Socket>();
   const reply = encodeAccess(access, release);
@@ -280,7 +296,8 @@ async function serveOwnedWindows(
   signal: AbortSignal,
   present: Present,
 ): Promise<boolean> {
-  checkInstalledServiceStart(distribution, false);
+  const registered = options.mode === "service" && (await verifyWindowsTaskStartup(distribution, signal));
+  checkInstalledServiceStart(distribution, registered);
   const unmark = await openWindowsPrivateAdmission();
   const closing = new AbortController();
   let hub: Hub | undefined;
@@ -302,6 +319,9 @@ async function serveOwnedWindows(
             ? reply
             : encodeAccess({ ...access, logs: undefined }, release),
           signal,
+          () => {
+            closing.abort();
+          },
         );
       }
       signal.throwIfAborted();

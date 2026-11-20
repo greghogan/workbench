@@ -133,9 +133,13 @@ DWORD workbench_private_launch(const wchar_t *node, const wchar_t *directory, wc
 
 static DWORD private_reply(enum workbench_control_operation operation, HANDLE token, PSID peer, void *context,
                            BYTE *reply, DWORD *length) {
-    (void)operation;
     (void)token;
     (void)peer;
+    if (operation == workbench_private_drain) {
+        reply[0] = '1';
+        *length = 1;
+        return NO_ERROR;
+    }
     struct private_reply *value = context;
     if (*length < value->length)
         return ERROR_INSUFFICIENT_BUFFER;
@@ -178,8 +182,14 @@ static DWORD private_serve(const wchar_t *name, const wchar_t *owner, PSID sid, 
         error = workbench_control_serve(listener, process, private_reply, &value, sid);
     if (listener != INVALID_HANDLE_VALUE)
         CloseHandle(listener);
-    CloseHandle(process);
     SecureZeroMemory(&value, sizeof(value));
+    if (error == ERROR_CANCELLED) {
+        if (fputs("drain\n", stdout) == EOF || fflush(stdout) == EOF)
+            error = ERROR_WRITE_FAULT;
+        else
+            error = WaitForSingleObject(process, INFINITE) == WAIT_OBJECT_0 ? NO_ERROR : GetLastError();
+    }
+    CloseHandle(process);
     return error;
 }
 
@@ -198,13 +208,20 @@ DWORD workbench_private_control(const wchar_t *command, const wchar_t *instance,
         error = ERROR_INVALID_NAME;
     } else if (!wcscmp(command, L"private-listen") && parent) {
         error = private_serve(name, owner, sid, parent);
-    } else if (!wcscmp(command, L"private-read") && !parent) {
-        BYTE reply[workbench_control_capacity];
-        DWORD length = 0;
-        error = workbench_private_request(name, sid, reply, &length);
-        if (!error && (fwrite(reply, 1, length, stdout) != length || fputc('\n', stdout) == EOF))
-            error = ERROR_WRITE_FAULT;
-        SecureZeroMemory(reply, sizeof(reply));
+    } else if ((!wcscmp(command, L"private-read") && !parent) ||
+               (!wcscmp(command, L"private-drain") && parent)) {
+        wchar_t *end = NULL;
+        DWORD expected = parent ? wcstoul(parent, &end, 10) : 0;
+        if (parent && (!expected || *end)) {
+            error = ERROR_INVALID_PARAMETER;
+        } else {
+            BYTE reply[workbench_control_capacity];
+            DWORD length = 0;
+            error = workbench_private_request(name, sid, expected, reply, &length);
+            if (!error && (fwrite(reply, 1, length, stdout) != length || fputc('\n', stdout) == EOF))
+                error = ERROR_WRITE_FAULT;
+            SecureZeroMemory(reply, sizeof(reply));
+        }
     } else {
         error = ERROR_INVALID_PARAMETER;
     }

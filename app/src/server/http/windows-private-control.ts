@@ -77,6 +77,14 @@ export async function readWindowsPrivateControl(helper: string, instance: string
   return Buffer.from(result.stdout, "utf8");
 }
 
+export async function drainWindowsPrivateControl(helper: string, instance: string, pid: number, signal: AbortSignal) {
+  const result = await requestWindowsService(helper, ["private-drain", instance, String(pid)], signal);
+  if (result.error || result.status !== 0 || result.stdout.trim() !== "1")
+    throw new Error("Could not drain the verified Windows Workbench listener", {
+      cause: result.error ?? result.stderr,
+    });
+}
+
 /** Keep the actual process handle through readiness without passing the CLI's handles to the server. */
 export async function launchWindowsPrivateDaemon(
   helper: string,
@@ -129,7 +137,13 @@ export async function launchWindowsPrivateDaemon(
 }
 
 /** The small native listener retains a reply in memory and exits with its owning Node process. */
-export async function openWindowsPrivateControl(helper: string, instance: string, reply: string, signal: AbortSignal) {
+export async function openWindowsPrivateControl(
+  helper: string,
+  instance: string,
+  reply: string,
+  signal: AbortSignal,
+  drain: () => void,
+) {
   if (Buffer.byteLength(reply) > maximumWindowsPrivateReply)
     throw new Error("Windows private Workbench sign-in exceeds the local control limit");
   const child = spawn(helper, ["private-listen", instance, String(process.pid)], {
@@ -153,9 +167,13 @@ export async function openWindowsPrivateControl(helper: string, instance: string
   child.stderr.resume();
   const lines = createInterface({ input: child.stdout });
   const close = async () => {
+    lines.close();
     if (child.exitCode === null && child.signalCode === null) child.kill();
     await closed;
   };
+  lines.on("line", (message) => {
+    if (message === "drain") drain();
+  });
   try {
     const ready: Promise<unknown[]> = once(lines, "line", {
       signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
@@ -167,7 +185,5 @@ export async function openWindowsPrivateControl(helper: string, instance: string
   } catch (error) {
     await close();
     throw error;
-  } finally {
-    lines.close();
   }
 }
