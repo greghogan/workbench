@@ -197,7 +197,8 @@ static void WINAPI serve(DWORD argc, wchar_t **argv) {
         !DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &service_thread,
                          0, FALSE, DUPLICATE_SAME_ACCESS) ||
         !ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x100003;;;AU)", SDDL_REVISION_1, &descriptor, NULL)) {
+            /* Client: synchronize, read attributes, and exchange data. No pipe-instance creation. */
+            L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x100083;;;AU)", SDDL_REVISION_1, &descriptor, NULL)) {
         result = GetLastError();
     } else if (!pipe_path(name, service_name)) {
         result = ERROR_INVALID_NAME;
@@ -253,7 +254,8 @@ static DWORD request(const wchar_t *service) {
     else if (status.dwCurrentState != SERVICE_RUNNING)
         result = ERROR_SERVICE_NOT_ACTIVE;
     else {
-        HANDLE pipe = CreateFileW(name, FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE, 0, NULL, OPEN_EXISTING,
+        const DWORD client_access = FILE_READ_ATTRIBUTES | FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE;
+        HANDLE pipe = CreateFileW(name, client_access, 0, NULL, OPEN_EXISTING,
                                   SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION, NULL);
         if (pipe == INVALID_HANDLE_VALUE)
             result = at_stage(PIPE_OPEN, GetLastError());

@@ -56,6 +56,21 @@ switch (mode) {
     });
     break;
   }
+  case "activation-pid": {
+    const [port, host] = args;
+    const socket = createConnection({ host, port: Number(port) });
+    socket.setTimeout(12000, () => socket.destroy(new Error("launchd activation timed out")));
+    socket.setEncoding("ascii");
+    let response = "";
+    for await (const data of socket) {
+      response += data;
+      assert(response.length < 64);
+    }
+    const match = /^workbench-activation:([1-9][0-9]*)\n$/.exec(response);
+    assert(match, "The listener did not return a probe process identity");
+    console.log(match[1]);
+    break;
+  }
   case "worker": {
     const [home, other, owner, proof] = args;
     assert.equal(process.getuid(), Number(owner));
