@@ -112,6 +112,48 @@ For direct use, extract the archive and run `node workbench/bin/workbench.mjs`. 
 `workbench/bin` directory to `PATH` also exposes the `workbench` command. Keep the extracted distribution together so
 its runtime and reference assets remain available.
 
+To create an archive-managed installation, run the extracted launcher with the archive and its expected checksum.
+
+```sh
+node workbench/bin/workbench.mjs install --archive ./workbench.tar.gz --sha256 SHA256
+```
+
+Use the SHA-256 value from the trusted release manifest. The installer verifies the archive and starts its CLI before
+publishing the launcher. The launcher and a native service registered through it select the same installed release. This
+installation keeps the application release independent of project collection pins. To set up a shared installation, run
+the installer as an administrator and set `--directory` to a protected executable directory accessible to users.
+
+## Update or roll back an archive-managed release
+
+Run the installed command with the new archive and the checksum from its release manifest.
+
+```sh
+workbench update --archive ./workbench.tar.gz --sha256 SHA256
+workbench update --rollback
+```
+
+For a shared installation, use its installed launcher with administrator access. An active systemd or launchd service
+drains its work and restarts using the selected version. Workbench waits for the replacement to listen and restores the
+previous version if startup fails. A shared LaunchDaemon keeps its socket registration loaded during the switch.
+Stop any manual server before updating. The installed launcher stays in the same location and project collections
+update separately.
+
+If the update process stopped during the switch, run `workbench update --recover` using the same installed command
+and account. The launcher uses the previous verified release for recovery. Workbench restores that selection and
+restarts the service if it was running before the update.
+
+Repair a missing or damaged launcher from a separately extracted copy of the verified archive.
+
+```sh
+node workbench/bin/workbench.mjs install --repair --directory /path/to/bin \
+  --archive ./workbench.tar.gz --sha256 SHA256
+```
+
+Use the active archive, or the previous archive during an interrupted update. The installer restores a missing
+launcher or replaces a damaged launcher that still has its Workbench header. It saves a copy of the damaged file in
+the installation's `repair` directory and preserves unrelated executables. Repair keeps the release selection intact.
+After repairing the launcher for an interrupted update, use `workbench update --recover`.
+
 ## Install a user launcher
 
 Acquire the executable from an exact Git commit and install a launcher:
@@ -175,6 +217,66 @@ change `PATH` automatically.
 Use an ordinary account for subsequent project initialization, acquisition, configuration, and checks. Install shell
 completion from that account with `workbench completion install SHELL`. For a single account with a user-managed Node
 installation, the user installation above avoids maintaining a separate administrator environment.
+
+## Register the Linux service
+
+On a systemd host, register the service from the installed release. A user service runs under the account's own systemd
+manager and uses the same private sign-in as a foreground server.
+
+    workbench install --service user
+    systemctl --user enable --now workbench.service
+
+A shared system service uses the system-owned release and a protected loopback port. Run registration and startup with
+administrator privileges.
+
+    sudo /usr/local/bin/workbench install --service system
+    sudo systemctl enable --now workbench.service
+
+The starting ports are 8080 for a user service and 80 for a system service. Use `--port PORT` at registration to choose
+a different port. A system port must be protected against ordinary user binds. Running `workbench serve` from an
+ordinary account prints the active service's URL, your OS username, and the generated password to enter in the browser.
+
+Use `systemctl status workbench.service` and `journalctl -u workbench.service` to inspect the system service. For the
+user service, add `--user` to both commands.
+
+Remove the registration from the manager that owns it.
+
+    workbench uninstall --service user
+    sudo /usr/local/bin/workbench uninstall --service system
+
+Each command drains and removes the selected Workbench-owned service. The other manager's registration, the installed
+release, and its data remain available. Use systemd drop-ins for local overrides. Workbench preserves an edited base
+definition.
+
+Native qualification uses the candidate's `workbench-artifacts` directory and temporary OS accounts. The system check
+uses two accounts to verify isolation. Run it on a disposable Linux runner with systemd and administrative access.
+
+    bash scripts/check-linux-service.sh user /path/to/workbench-artifacts
+    bash scripts/check-linux-service.sh system /path/to/workbench-artifacts
+
+## Register the macOS user service
+
+From a graphical login session, use the installed, verified command to register a LaunchAgent for your account.
+
+    workbench install --service user
+    launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/org.workbench.app.plist"
+
+The LaunchAgent runs at graphical login. Run `workbench serve` to obtain the active listener's URL and sign-in. Each
+restart invalidates the previous password. Inspect its status with `launchctl print "gui/$(id -u)/org.workbench.app"`.
+Remove the registration with `workbench uninstall --service user`. Removal drains the listener and preserves application
+files and user data.
+
+To register a shared LaunchDaemon, use the archive-managed system installation with an administrator-owned Node.js
+runtime. Select the installed Xcode or Command Line Tools with `xcode-select` so account workers can run Git without an
+interactive setup prompt. The release archive includes the macOS launcher.
+
+    sudo /usr/local/bin/workbench install --service system
+    sudo launchctl bootstrap system /Library/LaunchDaemons/org.workbench.app.plist
+
+Launchd owns the fixed loopback port while the registration is loaded. Choose it with `--port PORT` during registration.
+Run `workbench serve` from each account for its URL, username, and password. The daemon's next process requires a new
+sign-in. Use `sudo launchctl print system/org.workbench.app` to inspect the registration. Use
+`sudo /usr/local/bin/workbench uninstall --service system` to remove it and preserve the installation and account data.
 
 ## Select a project revision
 

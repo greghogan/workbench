@@ -10,6 +10,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -21,7 +22,17 @@ import { gunzipSync } from "node:zlib";
 import tar from "tar-stream";
 import { afterEach, expect, test, vi } from "vitest";
 import { prepareWorkbenchPackage } from "../../../src/core/artifacts/package.ts";
-import { readDistributionSource } from "../../../src/core/distribution/distribution-identity.ts";
+import {
+  archiveInstallationEnvironment,
+  launchdNativeHelper,
+  readDistributionSource,
+} from "../../../src/core/distribution/distribution-identity.ts";
+import {
+  installArchiveRelease,
+  recoverArchiveRelease,
+  updateArchiveRelease,
+  type ReleaseActivation,
+} from "../../../src/core/distribution/installed-release.ts";
 import type { PathOrFileDescriptor } from "fs";
 import { publicationTemporaryGlob, stageFile } from "../../../src/core/runtime/file-publication.mjs";
 
@@ -96,6 +107,146 @@ async function unpack(path: PathOrFileDescriptor) {
   await pipeline(Readable.from(gunzipSync(readFileSync(path))), extract);
   return entries;
 }
+
+test("the portable archive retains the verified macOS helper as executable alongside portable bundles", async () => {
+  const { root } = fixture();
+  const source = commit(root);
+  const helper = Buffer.from("native helper fixture");
+  const script = Buffer.from("portable bundle fixture");
+  const built = await prepareWorkbenchPackage(root, {
+    generated: [
+      { path: launchdNativeHelper, contents: helper, executable: true },
+      { path: "bundle/launcher.cjs", contents: script },
+    ],
+  });
+  const files = await unpack(built.archive);
+  expect(built.source?.revision).toBe(source);
+  expect(files.get(`workbench/${launchdNativeHelper}`)).toMatchObject({ header: { mode: 0o755 }, bytes: helper });
+  expect(files.get("workbench/bundle/launcher.cjs")).toMatchObject({ header: { mode: 0o644 }, bytes: script });
+});
+
+test("archive installation switches only verified releases and restores the launcher selection when activation fails", async () => {
+  const { base, root } = fixture();
+  const bin = join(base, "bin");
+  writeFileSync(
+    join(root, "bin/workbench.mjs"),
+    `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+const source = JSON.parse(readFileSync(new URL("../workbench-source.json", import.meta.url)));
+console.log(JSON.stringify({
+  version: 1, repository: source.repository, revision: source.revision,
+  directory: fileURLToPath(new URL("..", import.meta.url)),
+  node: { executable: process.execPath, version: process.versions.node }
+}));
+`,
+  );
+  const firstRevision = commit(root);
+  const first = await prepareWorkbenchPackage(root);
+  const firstDigest = createHash("sha256").update(readFileSync(first.archive)).digest("hex");
+  writeFileSync(join(root, "docs/readme.md"), "Updated release documentation\n");
+  const secondRevision = commit(root);
+  vi.stubEnv("WORKBENCH_RELEASE_OUTPUT", join(base, "second-output"));
+  const second = await prepareWorkbenchPackage(root);
+  const secondDigest = createHash("sha256").update(readFileSync(second.archive)).digest("hex");
+  await installArchiveRelease(bin, first.archive, firstDigest);
+  const installation = join(bin, ".workbench-installation");
+  vi.stubEnv(archiveInstallationEnvironment, installation);
+  const entry = join(bin, process.platform === "win32" ? "workbench.cjs" : "workbench");
+  const healthyLauncher = readFileSync(entry);
+  const selected = () =>
+    JSON.parse(
+      execFileSync(process.execPath, [entry, "executable", "--json"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    ) as {
+      revision: string;
+      directory: string;
+    };
+  const initial = selected();
+  expect(initial.revision).toBe(firstRevision);
+  const activate = ({ select }: ReleaseActivation) => {
+    select();
+  };
+  await expect(
+    updateArchiveRelease(initial.directory, { source: second.archive, sha256: firstDigest }, activate),
+  ).rejects.toThrow("checksum mismatch");
+  await expect(
+    updateArchiveRelease(initial.directory, { source: second.archive, sha256: secondDigest }, ({ select }) => {
+      select();
+      throw new Error("Replacement service did not become ready");
+    }),
+  ).rejects.toThrow("did not become ready");
+  expect(selected().revision).toBe(firstRevision);
+  await updateArchiveRelease(initial.directory, { source: second.archive, sha256: secondDigest }, activate);
+  const updated = selected();
+  expect(updated.revision).toBe(secondRevision);
+  const original = join(installation, "releases", firstDigest, "docs/readme.md");
+  const clean = readFileSync(original);
+  writeFileSync(original, "Changed after installation\n");
+  await expect(updateArchiveRelease(updated.directory, "rollback", activate)).rejects.toThrow(
+    "differ from their verified receipt",
+  );
+  expect(selected().revision).toBe(secondRevision);
+  writeFileSync(original, clean);
+  await updateArchiveRelease(updated.directory, "rollback", activate);
+  expect(selected().revision).toBe(firstRevision);
+
+  const service = {
+    manager: "systemd" as const,
+    scope: "user" as const,
+    path: join(base, "workbench.service"),
+    digest: "d".repeat(64),
+  };
+  await expect(
+    updateArchiveRelease(initial.directory, { source: second.archive, sha256: secondDigest }, (transition) => {
+      transition.begin(service);
+      transition.select();
+      throw new Error("Interrupted service handoff");
+    }),
+  ).rejects.toThrow("Interrupted service handoff");
+  expect(() => selected()).toThrow("A Workbench update is pending");
+
+  const originalHeader = healthyLauncher.toString().split("\n", 2).join("\n");
+  const damaged = Buffer.from(originalHeader + "\nprocess.exit(77);\n");
+  writeFileSync(entry, damaged);
+  await expect(installArchiveRelease(bin, second.archive, secondDigest, true)).rejects.toThrow(
+    "previous verified archive",
+  );
+  expect(readFileSync(entry)).toEqual(damaged);
+  await installArchiveRelease(bin, first.archive, firstDigest, true);
+  expect(readFileSync(entry)).toEqual(healthyLauncher);
+  const backup = join(
+    installation,
+    "repair",
+    `${basename(entry)}-${createHash("sha256").update(damaged).digest("hex")}`,
+  );
+  expect(readFileSync(backup)).toEqual(damaged);
+  expect(() => selected()).toThrow("A Workbench update is pending");
+
+  const recoveryEntry: unknown = JSON.parse(
+    execFileSync(process.execPath, [entry, "update", "--recover"], { encoding: "utf8" }),
+  );
+  expect(recoveryEntry).toMatchObject({ revision: firstRevision });
+  const recovered = await recoverArchiveRelease(async (launcher, restore, registration, previous) => {
+    expect(launcher).toBe(entry);
+    expect(registration).toEqual(service);
+    expect(realpathSync(previous)).toBe(realpathSync(initial.directory));
+    await Promise.resolve();
+    restore();
+  });
+  expect(recovered.revision).toBe(firstRevision);
+  expect(selected().revision).toBe(firstRevision);
+  writeFileSync(entry, "another executable in this directory\n");
+  await expect(installArchiveRelease(bin, first.archive, firstDigest, true)).rejects.toThrow(
+    "preserving the existing installation entry",
+  );
+  expect(readFileSync(entry, "utf8")).toBe("another executable in this directory\n");
+  unlinkSync(entry);
+  await installArchiveRelease(bin, first.archive, firstDigest, true);
+  expect(selected().revision).toBe(firstRevision);
+});
 
 test("a clean source package excludes ignored development JavaScript and retains runnable consumer helpers", async () => {
   const { root } = fixture();

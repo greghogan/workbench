@@ -13,6 +13,7 @@ import { settleCleanup } from "../app/src/core/diagnostics/diagnostics.mts";
 import { required } from "../app/src/core/runtime/values.mjs";
 import { standaloneTools } from "../app/src/core/toolchains/toolchains.ts";
 import { isolateFixtureGit } from "../app/test/fixtures/git-environment.mjs";
+import { captureBrowserService } from "../app/test/integration/browser/service-output.mts";
 
 async function main() {
   const { values } = parseArgs({
@@ -38,6 +39,7 @@ async function main() {
   const cancellation = processCancellation(),
     service = new AbortController();
   const env = { ...process.env };
+  env.WORKBENCH_SYSTEM_RUNTIME_DIRECTORY = join(temporary, "system-runtime");
   isolateFixtureGit(env);
   for (const name of ["TMP", "TEMP", "TMPDIR"]) env[name] = temporary;
   for (const key of [
@@ -50,12 +52,7 @@ async function main() {
     Reflect.deleteProperty(env, key);
   for (const kind of ["CONFIG", "DATA", "CACHE", "STATE"])
     env[`WORKBENCH_${kind}_HOME`] = join(temporary, kind.toLowerCase());
-  const log: string[] = [];
-  let logBytes = 0;
-  let ready: (url: string) => void = () => undefined;
-  const startup = new Promise<string>((resolve) => {
-    ready = resolve;
-  });
+  const captured = captureBrowserService(service);
   const closed = runOwnedChild(
     process.execPath,
     [join(distribution, "bin/workbench.mjs"), "serve", "--demo", "--port", "0"],
@@ -65,30 +62,17 @@ async function main() {
       stopDescendantsOnExit: true,
       env,
       signal: AbortSignal.any([cancellation.signal, service.signal, AbortSignal.timeout(6 * 60 * 1000)]),
-      output: (stdout, stderr) => {
-        for (const stream of [stdout, stderr])
-          stream.on("data", (chunk: Buffer) => {
-            const text = chunk.toString();
-            logBytes += chunk.length;
-            if (logBytes > 1024 * 1024) {
-              service.abort();
-              return;
-            }
-            log.push(text);
-            const match = /Workbench web UI: (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)(?=\r?\n)/.exec(log.join(""));
-            if (match?.[1]) ready(match[1].replace(/\/$/, ""));
-          });
-      },
+      output: captured.capture,
     },
   );
   let browser: Browser | undefined, page: Page | undefined, reader: IScreenReader | undefined, failure: unknown;
   const evidence: { state: string; phrases: string[] }[] = [];
   let passed = false;
   try {
-    const url = await Promise.race([
-      startup,
+    const { url, httpCredentials } = await Promise.race([
+      captured.startup,
       closed.then((outcome) => {
-        throw new Error(`Demonstration service exited: ${JSON.stringify(outcome)}\n${log.join("")}`);
+        throw new Error(`Demonstration service exited: ${JSON.stringify(outcome)}\n${captured.diagnostics()}`);
       }),
     ]);
     browser = await chromium.launch({ executablePath: resolve(values.browser), headless: !!values["browser-only"] });
@@ -97,7 +81,7 @@ async function main() {
       standaloneTools(distribution).get("chromium-headless-shell"),
       "Browser version must match the declared pin",
     );
-    page = await browser.newPage();
+    page = await browser.newPage({ httpCredentials });
     page.setDefaultTimeout(30000);
     let reportFocus: unknown;
     let voiceOverFocusCommand: unknown;
@@ -253,7 +237,7 @@ async function main() {
       ],
       failure,
       (errors) => {
-        writeFileSync(join(output, "service.log"), log.join(""));
+        writeFileSync(join(output, "service.log"), captured.diagnostics());
         writeFileSync(
           join(output, "result.json"),
           JSON.stringify(

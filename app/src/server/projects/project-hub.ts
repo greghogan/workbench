@@ -1,6 +1,12 @@
 import { routeURL } from "../routes/locations.js";
 import { projectMount, demonstrationBase } from "./project-mounts.js";
-import { localEndpoint, createLocalServer, listenLocal, closeLocalServer } from "../http/http-listener.js";
+import {
+  localEndpoint,
+  createLocalServer,
+  listenPrivate,
+  listenUnix,
+  closeLocalServer,
+} from "../http/http-listener.js";
 import { WorkerGeneration } from "../workspace/worker-generation.js";
 import { knownRoute, routeContracts, decodeRoute, routeOperation, Route } from "../routes/routes.js";
 import { randomBytes } from "node:crypto";
@@ -37,6 +43,7 @@ import {
 } from "../views/hub-pages.js";
 import { InventoryService, type InventoryView } from "../cache/inventory-service.js";
 import { WebMetrics } from "../http/observability.js";
+import { authorizationCheck, createPrivateBrowserAuthentication } from "../http/browser-auth.js";
 
 interface Pending {
   expires: number;
@@ -74,9 +81,20 @@ export function projectHubEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Pr
 }
 export async function startProjectHub(
   distribution: string,
-  options: { host?: "127.0.0.1" | "::1"; port?: number; demo?: boolean } = {},
+  options: {
+    host?: "127.0.0.1" | "::1";
+    port?: number;
+    demo?: boolean;
+    worker?: { socket: string; token: string };
+  } = {},
 ) {
-  const { host, port } = localEndpoint(options);
+  const preferences = userConfigValues();
+  const { host, port } = localEndpoint({
+    ...options,
+    port: options.port ?? Number(preferences["daemon.private_port"]),
+  });
+  const authentication = createPrivateBrowserAuthentication();
+  const authorized = options.worker ? authorizationCheck(`Bearer ${options.worker.token}`) : authentication.accepts;
   const csrf = randomBytes(32).toString("hex");
   const metrics = new WebMetrics();
   const generation = new WorkerGeneration(distribution);
@@ -87,7 +105,7 @@ export async function startProjectHub(
       (project, index) => {
         reviews.observe(project, index);
       },
-      Number(userConfigValues()["server.project_idle_seconds"]) * 1000,
+      Number(preferences["server.project_idle_seconds"]) * 1000,
     ),
     lifecycle = new HubLifecycle();
   const demoCancellation = new AbortController();
@@ -228,6 +246,13 @@ export async function startProjectHub(
       const origin = requestOrigin(request);
       const url = new URL(request.url ?? "/", origin);
       if (url.origin !== origin) throw new WebError(400, "Request URL is outside this service");
+      if (!authorized(request.headers.authorization)) {
+        if (options.worker) throw new WebError(403, "Worker connection is unauthorized");
+        response.setHeader("www-authenticate", 'Basic realm="Workbench", charset="UTF-8"');
+        send(response, 401, "text/plain", "Enter the sign-in credential printed by workbench serve.\n");
+        return;
+      }
+      Reflect.deleteProperty(request.headers, "authorization");
       if (url.pathname === demonstrationBase && request.method === "GET") {
         redirect(response, demonstrationBase + "/");
         return;
@@ -499,7 +524,7 @@ export async function startProjectHub(
           response,
           200,
           "text/html",
-          projectDashboard(data, projects, csrf, reviews.read(availableProjects(metadata)), metadata),
+          projectDashboard(data, projects, csrf, reviews.read(availableProjects(metadata)), metadata, !!options.worker),
         );
         return;
       }
@@ -600,7 +625,8 @@ export async function startProjectHub(
   }
   const server = createLocalServer(handler, metrics);
   try {
-    await listenLocal(server, host, port);
+    if (options.worker) await listenUnix(server, options.worker.socket);
+    else await listenPrivate(server, host, port);
   } catch (error) {
     lifecycle.stop();
     clearInterval(heartbeat);
@@ -622,7 +648,7 @@ export async function startProjectHub(
     throw error;
   }
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Listener did not publish its address");
+  if (!address) throw new Error("Listener did not publish its address");
   let closed: Promise<void> | undefined;
   const close = () => {
     closed ??= (async () => {
@@ -631,32 +657,55 @@ export async function startProjectHub(
       clearInterval(heartbeat);
       unsubscribe();
       inventories.close();
-      await settleCleanup([
-        () => {
-          tasks.cancelPending();
-        },
-        () => reviews.close(),
-        () => directory.close(),
-        () => views.close(),
-        () => demo?.close(),
-        () => {
-          for (const response of clients) response.end();
-          clients.clear();
-        },
-        () => lifecycle.drain(),
-        () => tasks.close(),
-        () => closeLocalServer(server),
-        () => {
-          generation.close();
-        },
-      ]);
+      const phases = [
+        [
+          "cache admission",
+          () => {
+            tasks.cancelPending();
+          },
+        ],
+        ["review summaries", () => reviews.close()],
+        ["project directory", () => directory.close()],
+        ["project views", () => views.close()],
+        ["demonstration", () => demo?.close()],
+        [
+          "event streams",
+          () => {
+            for (const response of clients) response.end();
+            clients.clear();
+          },
+        ],
+        ["admitted requests", () => lifecycle.drain()],
+        ["cache workers", () => tasks.close()],
+        ["browser transport", () => closeLocalServer(server)],
+        [
+          "worker generation",
+          () => {
+            generation.close();
+          },
+        ],
+      ] as const;
+      await settleCleanup(
+        phases.map(([component, close]) => async () => {
+          await close();
+          if (options.worker)
+            diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, { component });
+        }),
+      );
     })();
     return closed;
   };
   return {
     server,
     close,
+    signIn: { username: authentication.username, password: authentication.password },
     demonstration: () => (demo ? { root: demo.root, source: demo.source } : undefined),
-    url: `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}${options.demo ? demonstrationBase : ""}`,
+    url:
+      typeof address === "string"
+        ? address
+        : new URL(
+            options.demo ? demonstrationBase : "/",
+            `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}`,
+          ).href.replace(/\/$/, ""),
   };
 }

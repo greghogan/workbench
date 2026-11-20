@@ -1,0 +1,43 @@
+name: macOS service qualification
+
+on:
+  push:
+    branches: ["ci/tsk-3-macos-candidate-20261120"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workbench-macos-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-service:
+    name: Installed macOS user and shared services
+    runs-on: macos-26
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Prepare source dependencies and bundles
+        run: node scripts/setup-development.mjs --build-only
+      - name: Build the universal helper and package the selected revision
+        run: |
+          export WORKBENCH_LAUNCHD_HELPER_INPUT="$RUNNER_TEMP/launchd-helper"
+          export WORKBENCH_RELEASE_OUTPUT="$RUNNER_TEMP/macos-service-release"
+          node scripts/launchd-helper.mts "$WORKBENCH_LAUNCHD_HELPER_INPUT"
+          node scripts/package-workbench.mts
+      - name: Qualify the installed macOS user service
+        timeout-minutes: 5
+        run: bash scripts/check-macos-service.sh "$RUNNER_TEMP/macos-service-release/workbench-artifacts"
+      - name: Qualify the installed shared macOS service
+        timeout-minutes: 5
+        run: bash scripts/check-macos-system-service.sh "$RUNNER_TEMP/macos-service-release/workbench-artifacts"

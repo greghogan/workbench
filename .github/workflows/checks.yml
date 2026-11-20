@@ -4,7 +4,7 @@ name: Checks
 on:
   push:
     # Explicit preparation branches publish the environments that these check jobs require.
-    branches-ignore: ["ci/publication-verification-**"]
+    branches-ignore: ["ci/publication-verification-**", "ci/tsk-3-macos-candidate-20261120"]
     tags-ignore: ["**"]
   pull_request:
 
@@ -190,8 +190,28 @@ jobs:
   # image; macOS and Windows verify their native tools using the configured caches.
   # The job-level condition skips an empty matrix before matrix expansion.
   # ---------------------------------------------------------------------------
+  launchd-helper:
+    name: Build universal macOS service launcher
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: node scripts/launchd-helper.mts "$RUNNER_TEMP/launchd-helper"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: launchd-helper-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/launchd-helper/
+          if-no-files-found: error
+          retention-days: 30
+
   candidate:
     name: Build portable Workbench candidate
+    needs: launchd-helper
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     outputs:
@@ -209,7 +229,13 @@ jobs:
       - run: node bin/workbench.mjs project add .
       - name: Acquire the declared root toolchain
         run: node bin/workbench.mjs tools install --path .
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: launchd-helper-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/launchd-helper/
       - name: Build the configured root release once
+        env:
+          WORKBENCH_LAUNCHD_HELPER_INPUT: ${{ runner.temp }}/launchd-helper
         run: |
           node bin/workbench.mjs check --role release --path . --environment native --no-cache
           node --input-type=module <<'JS'

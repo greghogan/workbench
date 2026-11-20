@@ -25,7 +25,6 @@ import { configurePresentation } from "../core/diagnostics/presentation.js";
 import { terminalColumns } from "../core/diagnostics/terminal-text.js";
 import { executableIdentity } from "../core/distribution/executable-identity.js";
 import { prepareUpdate } from "../core/distribution/update-prepare.js";
-import { updateWorkbench } from "../core/distribution/update.js";
 import { checkAdvisories } from "../core/execution/checks/advisories.js";
 import { ChecksCancelled } from "../core/execution/checks/check-cancellation.js";
 import { observeCommand } from "../core/execution/checks/test-timing.js";
@@ -173,11 +172,12 @@ export function createCLI(root: string = projectRoot()) {
       action.getOptionValue("plain") as boolean | undefined,
       preferences["terminal.plain"] === true,
     );
+    const serverLogs = action.name() === "serve" || action.name() === "web-account";
     const { level, fileLevel, format, persist } = resolveDiagnosticOptions(
       cli,
       process.env,
       preferences,
-      action.name() === "serve" ? "server" : "cli",
+      serverLogs ? "server" : "cli",
     );
     configureDiagnostics({ level, format });
     process.env.WORKBENCH_LOG_LEVEL = persist ? minimumLogLevel(level, fileLevel) : level;
@@ -186,12 +186,12 @@ export function createCLI(root: string = projectRoot()) {
     if (
       persist &&
       !diagnosticSession &&
-      !commandAdmission(commandPath(action)).internal &&
+      (serverLogs || !commandAdmission(commandPath(action)).internal) &&
       !["completion", "help"].includes(commandPath(action).split(" ")[0] ?? "")
     )
       diagnosticSession = await startDiagnosticSession(
         fileLevel,
-        action.name() === "serve" ? LogScope.Server : LogScope.Cli,
+        serverLogs ? LogScope.Server : LogScope.Cli,
         userConfigValues(preferences),
       ).catch((error: unknown) => {
         diagnostic(
@@ -204,7 +204,6 @@ export function createCLI(root: string = projectRoot()) {
         );
         return undefined;
       });
-    if (diagnosticSession && action.name() === "serve") console.log(`Server logs: ${diagnosticSession.directory}`);
     recordCommand(DiagnosticOutcome.Started);
     if (
       !suppliedRoot &&
@@ -276,7 +275,7 @@ export function createCLI(root: string = projectRoot()) {
   registerExperimentCommands(program, root);
   registerReleaseCommands(program, root);
   registerFeedbackCommands(program, root);
-  registerServerCommands(program, root);
+  registerServerCommands(program, root, () => diagnosticSession?.directory);
   const review = registerCommand(program, "review")
     .description("Review protected records or record agent change and task review")
     .option("--commit <revision>", "Review protected files in one retained commit")
@@ -289,12 +288,6 @@ export function createCLI(root: string = projectRoot()) {
       checkRecordRetention(resolve(repository));
       checkReview(resolve(repository));
       checkAgentCommit(resolve(repository), process.env.WORKBENCH_REVIEW_TREE);
-    });
-  registerCommand(program, "update")
-    .description("Prepare and validate an executable-pin update; collection updates are separate")
-    .argument("<revision>", "Full Git commit for the executable; collection updates are separate")
-    .action((revision?: string) => {
-      return updateWorkbench(root, revision);
     });
   registerCommand(program, "update-prepare", { hidden: true }).action(async () => {
     if (!process.env.WORKBENCH_UPDATE_PREPARATION || realpathSync(process.env.WORKBENCH_UPDATE_PREPARATION) !== root)

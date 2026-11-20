@@ -279,6 +279,24 @@ test("snapshots preserve ordinary nested repositories and supply the independent
   expect(git(destination, "ls-files", ".git/workbench/runtime").trim()).toBe("");
 });
 
+test("snapshots can read committed history after the shared object store becomes unavailable", async () => {
+  const original = fixture();
+  initialize(original);
+  const workspace = fixture();
+  git(workspace, "clone", "--quiet", "--shared", original, "checkout");
+  const checkout = join(workspace, "checkout");
+  const snapshot = join(workspace, "snapshot");
+  const head = git(checkout, "rev-parse", "HEAD");
+  writeFileSync(join(checkout, "tracked"), "pending");
+
+  await snapshotCIProject(checkout, snapshot);
+  rmSync(original, { recursive: true });
+
+  expect(git(snapshot, "rev-parse", "HEAD")).toBe(head);
+  expect(git(snapshot, "show", "HEAD:tracked")).toBe("original");
+  expect(git(snapshot, "diff", "--cached", "--name-only", "HEAD")).toBe("tracked\n");
+});
+
 test("named profiles resolve their selected authentication metadata without changing the development pin", () => {
   const root = fixture();
   mkdirSync(join(root, "workbench"));

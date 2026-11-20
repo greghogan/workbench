@@ -12,6 +12,7 @@
 - `scripts/cache-ownership.mts`: restores shared cache ownership without following links or failing on removed entries.
 - `scripts/split-prepared-inputs.mts`: partitions prepared native inputs into tool and dependency image layers.
 - `.github/workflows/checks.yml`: runs four native platform jobs and project-wide prepared Nix/Guix environments.
+- `.github/workflows/service-macos-qualification.yml`: exercises the temporary macOS installed-service candidate.
 - `.github/actionlint.yaml`: lists verified hosted-runner labels absent from the pinned validator's built-in list.
 - `scripts/ci-run.mts`: executes shared native, compatibility, managed-environment, and standalone release phases.
 - `scripts/ci-linux`: contains the authenticated Ubuntu bootstrap image and local target/report coordinator.
@@ -43,6 +44,10 @@
 - `scripts/test-failures.mts`: Keep bounded failed-test assertions in retained gate excerpts.
 - `scripts/managed-image-import.mts`: Serialize managed archive imports and remove operation-owned source tags while preserving preexisting tags.
 - `.github/workflows/native-platform.yml`, `.github/actions/ci-cache/action.yml`, `.github/actions/prepare-runtime/action.yml`: Restores source-matched portable bundles and verified inputs before native operations, preserving platform-specific cache boundaries.
+- `scripts/check-linux-service.sh`: Qualifies user and system service installation, restart, and removal with the built
+  candidate on disposable Linux runners.
+- `scripts/check-macos-system-service.sh`: Qualifies installed launchd activation, per-account browser isolation,
+  fresh sign-in after restart, and owned removal on a disposable macOS runner.
 - `scripts/ci-platform.mts`: Groups configured target phases by operation and profile, rejecting missing or duplicated work.
 - `scripts/ci-candidate.mts`, `scripts/ci-release-ready.mts`: Binds the shared portable candidate to successful complete CI and immutable source identity.
 - `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.

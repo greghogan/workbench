@@ -1,6 +1,10 @@
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
+export function macStateDirectory(home: string): string {
+  return join(home, "Library", "Application Support", "workbench", "state");
+}
+
 /** User records are durable data; reproducible toolchains, downloads, and build products are cache. */
 export function userDirectory(kind: "config" | "data" | "cache" | "state"): string {
   const explicit = process.env[`WORKBENCH_${kind.toUpperCase()}_HOME`];
@@ -15,7 +19,7 @@ export function userDirectory(kind: "config" | "data" | "cache" | "state"): stri
   }
   if (process.platform === "darwin")
     return kind === "state"
-      ? join(homedir(), "Library", "Application Support", "workbench", "state")
+      ? macStateDirectory(homedir())
       : join(homedir(), "Library", kind === "cache" ? "Caches" : "Application Support", "workbench");
   const xdg = process.env[`XDG_${kind.toUpperCase()}_HOME`];
   return join(

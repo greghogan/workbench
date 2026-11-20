@@ -13,8 +13,6 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Writable } from "node:stream";
-import { createServer } from "node:net";
-import { once } from "node:events";
 import { stageFixtures } from "../../fixtures/check-stages.mjs";
 import { readLog } from "../../../src/core/storage/logs/log-reader.ts";
 const fixture = stageFixtures();
@@ -28,6 +26,7 @@ function invoke(root: string, args: string[], state = join(root, "state")) {
       WORKBENCH_PROJECT_ROOT: root,
       WORKBENCH_CONFIG_HOME: join(root, "preferences"),
       WORKBENCH_STATE_HOME: state,
+      WORKBENCH_SYSTEM_RUNTIME_DIRECTORY: join(root, "system-runtime"),
     },
   });
 }
@@ -111,69 +110,45 @@ test("a command failure identifies a readable retained session without mixing di
   expect(events.some((entry) => entry.operation === "command" && entry.outcome === "completed")).toBe(false);
 });
 test.each([LogLevel.Info, LogLevel.Warn])(
-  "server startup identifies its retained session at stderr level %s",
+  "failed server startup retains its diagnostics at stderr level %s",
   async (level) => {
     const { root } = fixture();
     vi.stubEnv("WORKBENCH_LOG_FILE_LEVEL", undefined);
     const registration = invoke(root, ["project", "add", root]);
     expect(registration.status, registration.stderr).toBe(0);
-    const occupied = createServer();
-    occupied.listen(0, "127.0.0.1");
-    await once(occupied, "listening");
-    try {
-      const address = occupied.address();
-      if (!address || typeof address === "string") throw new Error("Expected a bound TCP port");
-      const result = invoke(root, [
-        "serve",
-        "--port",
-        String(address.port),
-        "--log-level",
-        level,
-        "--log-format",
-        "json",
-      ]);
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("EADDRINUSE");
-      if (level === LogLevel.Warn) expect(result.stderr).not.toContain('"level":"info"');
-      const namespace = join(root, "state/logs/server");
-      const sessions = readdirSync(namespace).filter((name) => /^[a-f0-9-]{36}$/.test(name));
-      expect(sessions).toHaveLength(1);
-      const chunks: Buffer[] = [];
-      await readLog(
-        join(namespace, sessions[0] ?? ""),
-        new Writable({
-          write(bytes: Buffer, _encoding, callback) {
-            chunks.push(bytes);
-            callback();
-          },
-        }),
-      );
-      const saved = Buffer.concat(chunks).toString();
-      const session = join(namespace, sessions[0] ?? "");
-      expect(result.stdout).toContain(session);
-      const stdout = invoke(root, ["logs", "read", session, "--stream", "stdout"]);
-      expect(stdout.status, stdout.stderr).toBe(0);
-      expect(stdout.stdout).toBe(result.stdout);
-      const stderr = invoke(root, ["logs", "read", session, "--stream", "stderr"]);
-      expect(stderr.status, stderr.stderr).toBe(0);
-      expect(stderr.stdout).toContain("EADDRINUSE");
-      if (level === LogLevel.Warn) expect(stderr.stdout).not.toContain('"level":"info"');
-      const events = saved
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line) as { level: string; operation: string; outcome: string });
-      expect(events).toContainEqual(
-        expect.objectContaining({ level: "info", operation: "command", outcome: "started" }),
-      );
-      expect(saved).toContain("EADDRINUSE");
-    } finally {
-      await new Promise<void>((resolve, reject) => {
-        occupied.close((error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      });
-    }
+    const result = invoke(root, ["serve", "--port", "65536", "--log-level", level, "--log-format", "json"]);
+    const failure = "serve requires a loopback host and a port from 0 to 65535";
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(failure);
+    if (level === LogLevel.Warn) expect(result.stderr).not.toContain('"level":"info"');
+    const namespace = join(root, "state/logs/server");
+    const sessions = readdirSync(namespace).filter((name) => /^[a-f0-9-]{36}$/.test(name));
+    expect(sessions).toHaveLength(1);
+    const session = join(namespace, sessions[0] ?? "");
+    expect(result.stderr).toContain(JSON.stringify(session));
+
+    const chunks: Buffer[] = [];
+    await readLog(
+      session,
+      new Writable({
+        write(bytes: Buffer, _encoding, callback) {
+          chunks.push(bytes);
+          callback();
+        },
+      }),
+    );
+    const stderr = invoke(root, ["logs", "read", session, "--stream", "stderr"]);
+    expect(stderr.status, stderr.stderr).toBe(0);
+    expect(stderr.stdout).toContain(failure);
+    if (level === LogLevel.Warn) expect(stderr.stdout).not.toContain('"level":"info"');
+    const saved = Buffer.concat(chunks).toString();
+    const events = saved
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { level: string; operation: string; outcome: string });
+    expect(events).toContainEqual(expect.objectContaining({ level: "info", operation: "command", outcome: "started" }));
+    expect(saved).toContain(failure);
   },
 );
 test("shared enum validation rejects invalid diagnostic configuration before changing user preferences", () => {

@@ -19,6 +19,8 @@ shipped-browser workflows exercise the assembled interface separately from domai
   `src/server/routes/project-paths.ts`, `src/server/projects/project-mounts.ts`: Serve project navigation and cache
   maintenance through one local origin, with scoped routes, typed renderers, resource admission, idle view eviction, and
   draining shutdown.
+- `src/server/http/browser-auth.ts`: Check process-lifetime credentials for the private browser listener and its
+  demonstration connection.
 - `src/server/cache/cache-worker.ts`, `src/server/cache/cache-protocol.ts`, `src/server/cache/cache-inventory.ts`,
   `src/server/cache/inventory-service.ts`: Validate maintenance protocols and publish component metadata before
   persistent size measurements.
@@ -98,6 +100,8 @@ shipped-browser workflows exercise the assembled interface separately from domai
 - `test/server/review/web_reviews.test.mts`, `test/server/http/web_server.test.mts`,
   `test/server/projects/web_collections.test.mts`, `test/fixtures/web.mts`: Verify independent approvals, stale edits,
   browser boundaries, live updates, owned files, and exact collection plans.
+- `test/integration/browser/runner.mts`, `test/integration/browser/service-output.mts`: Start the private service for
+  Chromium workflows, scope browser sign-in to its origin, and retain redacted diagnostics on failure.
 - `src/server/routes/sources.ts`, `src/server/routes/record-listing.ts`: Separate selected record sources and provide
   stable incremental list ordering and cursors.
 - `src/server/review/collection-comparison.ts`: Compares adopted ADRs with verified pinned originals, including
@@ -152,6 +156,10 @@ shipped-browser workflows exercise the assembled interface separately from domai
   review workflow.
 - `src/server/http/http-listener.ts`: Apply loopback endpoint validation, transport limits, diagnostics, and listener
   startup/closure consistently to project and hub services.
+- `src/server/http/private-service.ts`, `test/server/http/private_service.test.mts`: Coordinate private listener
+  ownership, CLI discovery, background startup, and recovery from an abandoned service.
+- `src/server/http/system-service.ts`, `src/server/http/system-workers.ts`, `src/server/http/system-ownership.ts`: Admit
+  shared Unix service sign-in, coordinate handoff, and forward authorized requests to isolated account workers.
 - `src/server/views/experiment-pages.tsx`: Presents experiment execution, candidate verdicts, and completed evidence for
   human review.
 - `test/server/projects/demo_service.test.mts`, `test/server/demo/demonstration_resume.test.mts`,

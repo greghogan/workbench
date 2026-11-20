@@ -27,7 +27,10 @@ const layouts: Readonly<Record<string, Groups>> = {
         "advisories",
       ],
     ],
-    ["Workbench settings:", ["config", "skills", "cache", "logs", "update", "install", "executable", "completion"]],
+    [
+      "Workbench settings:",
+      ["config", "skills", "cache", "logs", "update", "install", "uninstall", "executable", "completion"],
+    ],
     ["Help:", ["help"]],
   ],
   collection: [
