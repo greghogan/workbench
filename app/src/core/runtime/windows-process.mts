@@ -23,6 +23,7 @@ export interface WindowsProcessOptions {
   output?: "pipe" | "inherit";
   windowsVerbatimArguments?: boolean;
   stopDescendantsOnExit?: boolean;
+  machineJobId?: string;
 }
 export interface WindowsProcess {
   child: ChildProcessByStdio<Writable | null, Readable | null, Readable | null>;
@@ -247,6 +248,7 @@ export async function spawnWindowsProcess(
         token,
         result,
         stopOnExit: options.stopDescendantsOnExit === true,
+        machineJobId: options.machineJobId,
         hide,
       }),
       { flag: "wx", mode: 0o600 },

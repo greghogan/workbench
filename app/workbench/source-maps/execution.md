@@ -47,6 +47,13 @@
 - `src/core/storage/cache-lock.ts`: serializes cache writers, protects active check logs during pruning, and preserves
   uncertain locks.
 - `src/core/execution/checks/cpu-budget.mts`: supply language worker controls from one job allocation.
+- `src/core/execution/checks/machine-admission.ts`, `src/core/execution/checks/host-activity.ts`,
+  `test/core/execution/checks/machine_admission.test.mts`: schedule work across projects using shared limits, runnable
+  project rotation, and observed CPU and memory pressure.
+- `src/core/execution/checks/unix-jobserver-protocol.ts`, `src/core/execution/checks/unix-jobserver-client.ts`,
+  `src/server/http/unix-jobserver.ts`: authenticate local ownership, connect check execution to the installed service,
+  and retain leases until their command groups finish or recover.
+- `src/core/distribution/unix-system-authority.ts`: locate and verify protected Unix service paths.
 - `src/core/execution/ci/support/ci-worker-request.mts`: validate and type private worker requests.
 - `src/core/execution/ci/ci-workspace.ts`: owns snapshot isolation, workspace locking, disposable resources, and cleanup
   recovery.

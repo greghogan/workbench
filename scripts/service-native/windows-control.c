@@ -1,7 +1,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include "windows-control.h"
 
+#include <aclapi.h>
 #include <sddl.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
 #include <tlhelp32.h>
@@ -152,9 +155,19 @@ static BOOL account_operation(enum workbench_control_operation operation) {
     return operation == workbench_resume_account || operation == workbench_retire_account;
 }
 
+static BOOL valid_job_command(const char job[workbench_job_capacity]) {
+    size_t length = 0;
+    while (length < workbench_job_capacity && job[length]) {
+        char character = job[length++];
+        if (!((character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') || character == ' '))
+            return FALSE;
+    }
+    return length > 0 && length < workbench_job_capacity;
+}
+
 static DWORD authorize_caller(HANDLE pipe, workbench_control_handler handle,
-                              enum workbench_control_operation operation, PSID requested_sid, void *context,
-                              struct control_reply *reply, PSID private_owner) {
+                              enum workbench_control_operation operation, PSID requested_sid, const char *job,
+                              void *context, struct control_reply *reply, PSID private_owner) {
     if (!ImpersonateNamedPipeClient(pipe))
         return GetLastError();
     HANDLE token = NULL;
@@ -188,15 +201,15 @@ static DWORD authorize_caller(HANDLE pipe, workbench_control_handler handle,
         if ((operation == workbench_sign_in || operation == workbench_private_drain) && level >= SecurityIdentification &&
             EqualSid(private_owner, identity.user.User.Sid)) {
             reply->length = sizeof(reply->bytes);
-            error = handle(operation, NULL, identity.user.User.Sid, context, reply->bytes, &reply->length);
+            error = handle(operation, NULL, identity.user.User.Sid, NULL, context, reply->bytes, &reply->length);
         }
     } else if (level != SecurityImpersonation) {
         error = ERROR_ACCESS_DENIED;
-    } else if (operation != workbench_sign_in) {
+    } else if (account_operation(operation)) {
         error = ERROR_ACCESS_DENIED;
         if (IsWellKnownSid(identity.user.User.Sid, WinLocalSystemSid) && IsValidSid(requested_sid)) {
             reply->length = sizeof(reply->bytes);
-            error = handle(operation, NULL, requested_sid, context, reply->bytes, &reply->length);
+            error = handle(operation, NULL, requested_sid, NULL, context, reply->bytes, &reply->length);
         }
     } else if (elevation.TokenIsElevated || IsWellKnownSid(identity.user.User.Sid, WinLocalSystemSid) ||
                IsWellKnownSid(identity.user.User.Sid, WinLocalServiceSid) ||
@@ -204,7 +217,7 @@ static DWORD authorize_caller(HANDLE pipe, workbench_control_handler handle,
         error = ERROR_ACCESS_DENIED;
     } else {
         reply->length = sizeof(reply->bytes);
-        error = handle(operation, token, identity.user.User.Sid, context, reply->bytes, &reply->length);
+        error = handle(operation, token, identity.user.User.Sid, job, context, reply->bytes, &reply->length);
     }
     if (!error && (!reply->length || reply->length > sizeof(reply->bytes)))
         error = ERROR_INVALID_DATA;
@@ -228,14 +241,22 @@ DWORD workbench_control_serve(HANDLE listener, HANDLE stop_event, workbench_cont
         BOOL drain = FALSE;
         if (!error && !memcmp(request, request_prefix, sizeof(request_prefix)) &&
             (operation == workbench_sign_in || (private_owner ? operation == workbench_private_drain
-                                                             : account_operation(operation))) &&
+                                                             : account_operation(operation) ||
+                                                               operation == workbench_job_control)) &&
             WaitForSingleObject(stop_event, 0) != WAIT_OBJECT_0) {
             struct control_reply reply = {0};
             BYTE sid[SECURITY_MAX_SID_SIZE] = {0};
+            char job[workbench_job_capacity] = {0};
             if (account_operation(operation))
                 reply.status = transfer(listener, stop_event, deadline, sid, sizeof(sid), FALSE);
+            if (operation == workbench_job_control) {
+                reply.status = transfer(listener, stop_event, deadline, (BYTE *)job, sizeof(job), FALSE);
+                if (!reply.status && !valid_job_command(job))
+                    reply.status = ERROR_INVALID_DATA;
+            }
             if (!reply.status)
                 reply.status = authorize_caller(listener, handle, operation, sid,
+                                                operation == workbench_job_control ? job : NULL,
                                                 context, &reply, private_owner);
             if (reply.status)
                 reply.length = 0;
@@ -299,7 +320,7 @@ static DWORD open_control(SC_HANDLE registration, const wchar_t *name, ULONGLONG
 }
 
 static DWORD exchange_control(HANDLE pipe, ULONGLONG deadline, enum workbench_control_operation operation, PSID sid,
-                              BYTE reply[workbench_control_capacity], DWORD *length) {
+                              const char *job, BYTE reply[workbench_control_capacity], DWORD *length) {
     BYTE request[sizeof(request_prefix) + 1];
     memcpy(request, request_prefix, sizeof(request_prefix));
     request[sizeof(request_prefix)] = (BYTE)operation;
@@ -311,6 +332,8 @@ static DWORD exchange_control(HANDLE pipe, ULONGLONG deadline, enum workbench_co
         else
             error = transfer(pipe, NULL, deadline, account, sizeof(account), TRUE);
     }
+    if (!error && operation == workbench_job_control)
+        error = transfer(pipe, NULL, deadline, (BYTE *)job, workbench_job_capacity, TRUE);
     DWORD header[2];
     if (!error)
         error = transfer(pipe, NULL, deadline, (BYTE *)header, sizeof(header), FALSE);
@@ -329,8 +352,8 @@ static DWORD exchange_control(HANDLE pipe, ULONGLONG deadline, enum workbench_co
     return header[0];
 }
 
-DWORD workbench_control_request(const wchar_t *service, enum workbench_control_operation operation, PSID sid,
-                                BYTE reply[workbench_control_capacity], DWORD *length) {
+static DWORD control_request(const wchar_t *service, enum workbench_control_operation operation, PSID sid,
+                             const char *job, BYTE reply[workbench_control_capacity], DWORD *length) {
     *length = 0;
     wchar_t name[pipe_name_capacity];
     DWORD error = pipe_name(service, name);
@@ -347,13 +370,27 @@ DWORD workbench_control_request(const wchar_t *service, enum workbench_control_o
         ULONGLONG deadline = GetTickCount64() + maximum_reply_wait;
         error = open_control(registration, name, deadline, &pipe);
         if (!error)
-            error = exchange_control(pipe, deadline, operation, sid, reply, length);
+            error = exchange_control(pipe, deadline, operation, sid, job, reply, length);
         if (pipe != INVALID_HANDLE_VALUE)
             CloseHandle(pipe);
         CloseServiceHandle(registration);
     }
     CloseServiceHandle(manager);
     return error;
+}
+
+DWORD workbench_control_request(const wchar_t *service, enum workbench_control_operation operation, PSID sid,
+                                BYTE reply[workbench_control_capacity], DWORD *length) {
+    return control_request(service, operation, sid, NULL, reply, length);
+}
+
+DWORD workbench_jobs_request(const wchar_t *service, const wchar_t *command,
+                             BYTE reply[workbench_control_capacity], DWORD *length) {
+    char job[workbench_job_capacity] = {0};
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, command, -1, job, sizeof(job), NULL, NULL) ||
+        !valid_job_command(job))
+        return ERROR_INVALID_PARAMETER;
+    return control_request(service, workbench_job_control, NULL, job, reply, length);
 }
 
 DWORD workbench_process_sid(HANDLE process, BYTE sid[SECURITY_MAX_SID_SIZE]) {
@@ -368,6 +405,91 @@ DWORD workbench_process_sid(HANDLE process, BYTE sid[SECURITY_MAX_SID_SIZE]) {
     DWORD error = GetTokenInformation(token, TokenUser, &identity, sizeof(identity), &size) &&
                   CopySid(SECURITY_MAX_SID_SIZE, sid, identity.user.User.Sid) ? NO_ERROR : GetLastError();
     CloseHandle(token);
+    return error;
+}
+
+DWORD workbench_job_observe(const wchar_t *id, const wchar_t *pid_text, const wchar_t *sid_text) {
+    if (wcslen(id) != 32 || wcsspn(id, L"0123456789abcdef") != 32)
+        return ERROR_INVALID_PARAMETER;
+    size_t digits = wcslen(pid_text);
+    if (!digits || digits > 10 || wcsspn(pid_text, L"0123456789") != digits)
+        return ERROR_INVALID_PARAMETER;
+    unsigned long long pid = _wcstoui64(pid_text, NULL, 10);
+    if (!pid || pid > MAXDWORD)
+        return ERROR_INVALID_PARAMETER;
+    BYTE self[SECURITY_MAX_SID_SIZE];
+    DWORD error = workbench_process_sid(GetCurrentProcess(), self);
+    if (error)
+        return error;
+    if (!IsWellKnownSid(self, WinLocalSystemSid))
+        return ERROR_ACCESS_DENIED;
+
+    PSID owner = NULL;
+    if (!ConvertStringSidToSidW(sid_text, &owner))
+        return GetLastError();
+    unsigned long long creation = 0;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, (DWORD)pid);
+    if (!process) {
+        error = GetLastError();
+        if (error == ERROR_INVALID_PARAMETER)
+            error = NO_ERROR; /* No process has the saved identifier. */
+    } else {
+        DWORD state = WaitForSingleObject(process, 0);
+        if (state == WAIT_TIMEOUT) {
+            BYTE controller[SECURITY_MAX_SID_SIZE];
+            error = workbench_process_sid(process, controller);
+            if (!error && EqualSid(owner, controller)) {
+                FILETIME birth, exit_time, kernel, user;
+                if (!GetProcessTimes(process, &birth, &exit_time, &kernel, &user))
+                    error = GetLastError();
+                else
+                    creation = ((unsigned long long)birth.dwHighDateTime << 32) | birth.dwLowDateTime;
+            }
+        } else if (state != WAIT_OBJECT_0) {
+            error = GetLastError();
+        }
+        CloseHandle(process);
+    }
+
+    BOOL present = FALSE;
+    DWORD active = 0;
+    if (!error) {
+        wchar_t name[64];
+        if (swprintf(name, sizeof(name) / sizeof(name[0]), L"Global\\Workbench-Check-%ls", id) < 0) {
+            error = ERROR_INVALID_PARAMETER;
+        } else {
+            HANDLE job = OpenJobObjectW(JOB_OBJECT_QUERY | READ_CONTROL, FALSE, name);
+            if (!job) {
+                error = GetLastError();
+                if (error == ERROR_FILE_NOT_FOUND)
+                    error = NO_ERROR;
+            } else {
+                PSID observed = NULL;
+                PSECURITY_DESCRIPTOR security = NULL;
+                error = GetSecurityInfo(job, SE_KERNEL_OBJECT, OWNER_SECURITY_INFORMATION, &observed,
+                                        NULL, NULL, NULL, &security);
+                if (!error && (!observed || !EqualSid(owner, observed)))
+                    error = ERROR_INVALID_OWNER;
+                if (!error) {
+                    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting;
+                    if (!QueryInformationJobObject(job, JobObjectBasicAccountingInformation, &accounting,
+                                                   sizeof(accounting), NULL))
+                        error = GetLastError();
+                    else {
+                        present = TRUE;
+                        active = accounting.ActiveProcesses;
+                    }
+                }
+                if (security)
+                    LocalFree(security);
+                CloseHandle(job);
+            }
+        }
+    }
+    LocalFree(owner);
+    if (!error && printf("{\"creation\":\"%llu\",\"present\":%s,\"active\":%lu}\n",
+                         creation, present ? "true" : "false", (unsigned long)active) < 0)
+        error = ERROR_WRITE_FAULT;
     return error;
 }
 
@@ -424,7 +546,7 @@ DWORD workbench_private_request(const wchar_t *name, PSID owner, DWORD expected_
         error = verify_parent(peer, expected_parent);
     if (!error)
         error = exchange_control(pipe, deadline, expected_parent ? workbench_private_drain : workbench_sign_in,
-                                 NULL, reply, length);
+                                 NULL, NULL, reply, length);
     if (process)
         CloseHandle(process);
     CloseHandle(pipe);

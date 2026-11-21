@@ -35,6 +35,46 @@ export function processGone(pid: number): boolean {
   }
 }
 
+export function inspectProcessOwner(value: unknown): { pid: number; token: string; abandoned: boolean } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const owner = value as Partial<Omit<ProcessOwner, "uncertain">> & { uncertain?: unknown };
+  if (
+    owner.version !== 1 ||
+    owner.host !== hostname() ||
+    !validPid(owner.pid) ||
+    typeof owner.token !== "string" ||
+    !owner.token ||
+    typeof owner.launching !== "boolean" ||
+    (owner.uncertain !== undefined && owner.uncertain !== true) ||
+    !Array.isArray(owner.children) ||
+    owner.children.length > 4096 ||
+    !owner.children.every(
+      (child: unknown) =>
+        child &&
+        typeof child === "object" &&
+        "pid" in child &&
+        validPid(child.pid) &&
+        "group" in child &&
+        typeof child.group === "boolean" &&
+        (!("confirmation" in child) || child.confirmation === true),
+    )
+  )
+    return undefined;
+  return {
+    pid: owner.pid,
+    token: owner.token,
+    abandoned:
+      owner.uncertain !== true &&
+      !owner.launching &&
+      processGone(owner.pid) &&
+      owner.children.every(
+        (child) =>
+          child.confirmation !== true &&
+          (child.group ? process.platform !== "win32" && processGone(-child.pid) : processGone(child.pid)),
+      ),
+  };
+}
+
 /** Read-only inspection. Unknown hosts, incomplete launches and surviving descendants retain ownership. */
 export function inspectProcessLock(directory: string): { pid?: number; abandoned: boolean } {
   try {
@@ -44,43 +84,10 @@ export function inspectProcessLock(directory: string): { pid?: number; abandoned
     const file = join(directory, "owner.json"),
       stat = lstatSync(file);
     if (!stat.isFile() || stat.size > 256 * 1024) return { abandoned: false };
-    const owner = JSON.parse(readBoundedFile(file, 256 * 1024, "process lock owner").toString("utf8")) as Partial<
-      Omit<ProcessOwner, "uncertain">
-    > & { uncertain?: unknown };
-    if (
-      owner.version !== 1 ||
-      owner.host !== hostname() ||
-      !validPid(owner.pid) ||
-      typeof owner.token !== "string" ||
-      !owner.token ||
-      typeof owner.launching !== "boolean" ||
-      (owner.uncertain !== undefined && owner.uncertain !== true) ||
-      !Array.isArray(owner.children) ||
-      owner.children.length > 4096 ||
-      !owner.children.every(
-        (child: unknown) =>
-          child &&
-          typeof child === "object" &&
-          "pid" in child &&
-          validPid(child.pid) &&
-          "group" in child &&
-          typeof child.group === "boolean" &&
-          (!("confirmation" in child) || child.confirmation === true),
-      )
-    )
-      return { abandoned: false };
-    return {
-      pid: owner.pid,
-      abandoned:
-        owner.uncertain !== true &&
-        !owner.launching &&
-        processGone(owner.pid) &&
-        owner.children.every(
-          (child) =>
-            child.confirmation !== true &&
-            (child.group ? process.platform !== "win32" && processGone(-child.pid) : processGone(child.pid)),
-        ),
-    };
+    const owner = inspectProcessOwner(
+      JSON.parse(readBoundedFile(file, 256 * 1024, "process lock owner").toString("utf8")),
+    );
+    return owner ? { pid: owner.pid, abandoned: owner.abandoned } : { abandoned: false };
   } catch {
     return { abandoned: false };
   }

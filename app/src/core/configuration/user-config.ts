@@ -30,6 +30,21 @@ export const userOptions = {
     local: false,
     description: "System browser sign-in lifetime (default: 2592000)",
   },
+  "daemon.job_limit": {
+    type: "integer",
+    local: false,
+    description: "Maximum active jobs in the installed service (default: logical CPU count)",
+  },
+  "daemon.worker_slots": {
+    type: "integer",
+    local: false,
+    description: "Worker slots in the installed service (default: logical CPU count)",
+  },
+  "daemon.memory_reserve_bytes": {
+    type: "integer",
+    local: false,
+    description: "Minimum available memory for job admission (default: 5% of RAM, capped at 1 GiB)",
+  },
   "server.project_idle_seconds": {
     type: "integer",
     local: false,
@@ -207,7 +222,7 @@ export const userConfigPath = (): string => join(userDirectory("config"), "confi
 
 export function validateUserOption(key: string, value: unknown): asserts key is UserOption {
   if (!Object.hasOwn(userOptions, key)) throw new Error(`unknown global option: ${key}`);
-  if (key.startsWith("execution.")) {
+  if (key.startsWith("execution.") || key === "daemon.job_limit" || key === "daemon.worker_slots") {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
       throw new Error(`${key} requires a positive integer`);
     return;
@@ -287,6 +302,9 @@ export function userConfigValues(preferences = readUserConfig()): Record<UserOpt
     "daemon.system_port": 80,
     "daemon.worker_idle_seconds": 3600,
     "daemon.session_seconds": 2592000,
+    "daemon.job_limit": undefined,
+    "daemon.worker_slots": undefined,
+    "daemon.memory_reserve_bytes": undefined,
     "server.project_idle_seconds": 1800,
     "preparation.nix_store": PreparationStore.Disabled,
     "preparation.guix_store": PreparationStore.Disabled,

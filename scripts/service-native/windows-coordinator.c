@@ -287,3 +287,17 @@ DWORD workbench_coordinator_attach(struct workbench_coordinator *coordinator, PS
     if (error) SetEvent(coordinator->stop);
     return error;
 }
+
+DWORD workbench_coordinator_jobs(struct workbench_coordinator *coordinator, PSID account, const char *job,
+                                  BYTE *reply, DWORD *length) {
+    wchar_t *sid = NULL;
+    if (!ConvertSidToStringSidW(account, &sid))
+        return GetLastError();
+    char command[command_limit];
+    int bytes = snprintf(command, sizeof(command), "jobs %ls %s\n", sid, job);
+    LocalFree(sid);
+    DWORD error = bytes > 0 && (size_t)bytes < sizeof(command) ?
+                  exchange(coordinator, command, reply, length) : ERROR_INVALID_DATA;
+    if (error) SetEvent(coordinator->stop);
+    return error;
+}

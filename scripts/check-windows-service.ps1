@@ -786,6 +786,73 @@ process.on('exit', () => fixtureFs.writeFileSync($exitedPath, String(process.pid
 
 }
 
+function Assert-MachineAdmission {
+    $helper = Join-Path (Split-Path -Parent $launcher) '.workbench-installation/workbench-scm.exe'
+    $probe = @'
+const { execFileSync } = require('node:child_process');
+const [helper, service] = process.argv.slice(1);
+const reply = JSON.parse(execFileSync(helper, ['job-control', service, 'probe'], { encoding: 'utf8' }));
+if (reply.state !== 'ready' || !/^[a-f0-9]{32}$/.test(reply.generation)) throw Error('Invalid jobserver discovery');
+console.log(reply.generation);
+'@
+    $generation = (Invoke-AccountNode $accounts[0] @('-e', $probe, $helper, $service)).Trim()
+    if ((Invoke-AccountNode $accounts[1] @('-e', $probe, $helper, $service)).Trim() -ne $generation) {
+        throw 'The ordinary accounts discovered different Windows jobserver instances.'
+    }
+    $marker = @'
+const { existsSync, writeFileSync } = require('node:fs');
+const [started, finish] = process.argv.slice(1);
+writeFileSync(started, String(process.pid), { flag: 'wx' });
+const timer = setInterval(() => { if (existsSync(finish)) clearInterval(timer); }, 25);
+'@
+    function Wait-JobMarker([string] $File, $Running) {
+        $deadline = [Diagnostics.Stopwatch]::StartNew()
+        while (-not (Test-Path -LiteralPath $File)) {
+            if ($Running.process.HasExited) { Read-FixtureOutput $Running | Out-Null; throw 'The check exited before admission.' }
+            if ($deadline.ElapsedMilliseconds -gt 45000) { throw 'The shared Windows jobserver did not admit the waiting check.' }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    $firstStarted = Join-Path ($accounts[0].project) machine-first-started
+    $firstFinish = Join-Path ($accounts[0].project) machine-first-finish
+    $secondStarted = Join-Path ($accounts[1].project) machine-second-started
+    $secondFinish = Join-Path ($accounts[1].project) machine-second-finish
+    $first = Start-FixtureNode @($launcher, 'admitted-check', $generation, ('a' * 64), '--', $nodeExe, '-e', $marker, $firstStarted, $firstFinish) $accounts[0]
+    try {
+        Wait-JobMarker $firstStarted $first
+        $firstPid = [int](Get-Content -LiteralPath $firstStarted)
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $firstPid"
+        if ((Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid).Sid -ne $accounts[0].sid) {
+            throw 'The first admitted command did not run under the requesting account.'
+        }
+        $second = Start-FixtureNode @($launcher, 'admitted-check', $generation, ('b' * 64), '--', $nodeExe, '-e', $marker, $secondStarted, $secondFinish) $accounts[1]
+        try {
+            # The second launcher must reach its named-job handshake before the first is interrupted.
+            $deadline = [Diagnostics.Stopwatch]::StartNew()
+            while (-not (Get-CimInstance Win32_Process -Filter "ParentProcessId = $($second.process.Id) AND Name = 'powershell.exe'")) {
+                if ($second.process.HasExited) { Read-FixtureOutput $second | Out-Null; throw 'The second launcher exited before admission.' }
+                if ($deadline.ElapsedMilliseconds -gt 20000) { throw 'The second launcher did not prepare an owned Windows job.' }
+                Start-Sleep -Milliseconds 100
+            }
+            if (Test-Path -LiteralPath $secondStarted) { throw 'The shared jobserver exceeded its one-job cap.' }
+            $first.process.Kill()
+            if (-not $first.process.WaitForExit(10000)) { throw 'The interrupted check launcher did not exit.' }
+            Wait-JobMarker $secondStarted $second
+            if (Get-Process -Id $firstPid -ErrorAction SilentlyContinue) {
+                throw 'A different account was admitted before the interrupted command drained.'
+            }
+            $secondPid = [int](Get-Content -LiteralPath $secondStarted)
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId = $secondPid"
+            if ((Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid).Sid -ne $accounts[1].sid) {
+                throw 'The second admitted command did not run under the requesting account.'
+            }
+            New-Item -Path $secondFinish -ItemType File | Out-Null
+            Read-FixtureOutput $second | Out-Null
+        } finally { Close-FixtureNode $second }
+    } finally { Close-FixtureNode $first }
+    Write-Output 'Windows verified cross-account job admission and reclaimed a command lease after abrupt launcher exit.'
+}
+
 try {
     New-Item -ItemType Directory -Path $root | Out-Null
     $created = $true
@@ -839,24 +906,25 @@ try {
             throw "The installed system service has startup mode $startMode. Expected Automatic."
         }
     }
-    if ($IdleWorkers) {
-        $configuration = Join-Path $root daemon-config
-        New-Item -ItemType Directory -Path $configuration | Out-Null
-        Set-Content -LiteralPath (Join-Path $configuration config.toml) -Value @('[daemon]', 'worker_idle_seconds = 8')
-        $environment = @{
-            Path = "HKLM:\SYSTEM\CurrentControlSet\Services\$service"
-            Name = 'Environment'
-            PropertyType = 'MultiString'
-            Value = @("WORKBENCH_CONFIG_HOME=$configuration")
-        }
-        New-ItemProperty @environment | Out-Null
+    $configuration = Join-Path $root daemon-config
+    New-Item -ItemType Directory -Path $configuration | Out-Null
+    $daemonSettings = @('[daemon]', 'job_limit = 1', 'worker_slots = 1', 'memory_reserve_bytes = 0')
+    if ($IdleWorkers) { $daemonSettings += 'worker_idle_seconds = 8' }
+    Set-Content -LiteralPath (Join-Path $configuration config.toml) -Value $daemonSettings
+    $environment = @{
+        Path = "HKLM:\SYSTEM\CurrentControlSet\Services\$service"
+        Name = 'Environment'
+        PropertyType = 'MultiString'
+        Value = @("WORKBENCH_CONFIG_HOME=$configuration")
     }
+    New-ItemProperty @environment | Out-Null
     if ($Handoff) { Assert-ServiceHandoff }
     Assert-PortOwnership $true
     Start-Service -Name $service
     Wait-Service 'Running'
     Assert-PortOwnership $true
     if ((Browse $null '/projects').status -ne 401) { throw 'The protected origin accepted an anonymous browser.' }
+    Assert-MachineAdmission
     $signIns = @((Sign-In $accounts[0]), (Sign-In $accounts[1]))
     for ($index = 0; $index -lt 2; $index++) {
         $project = Browse $signIns[$index] '/projects'

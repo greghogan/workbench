@@ -12,7 +12,7 @@ import {
 } from "../../diagnostics/diagnostics.mjs";
 import { startLogRun, finishLogRun, logRetention, requireActiveLogRun } from "../../storage/logs/log-storage.js";
 import type { CheckRunResult } from "./check-report.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { checkOutput, checkOutputPrelude } from "./check-output.js";
 import { prepareCheckLogs, checkLogDirectory, buildPaths, withBuildLock, cleanBuilds } from "../../artifacts/builds.js";
 import { withCacheLock } from "../../storage/cache-lock.js";
@@ -368,6 +368,13 @@ async function runConfiguredChecks(
         ["node", "{workbench}/bin/workbench.mjs"],
         distributionRoot(root),
       );
+      const projectKey = options.machineJobserver
+        ? createHash("sha256").update(registrationRoot(root)).digest("hex")
+        : undefined;
+      const admitted = (launcher: string[], command: string[]) =>
+        options.machineJobserver && projectKey
+          ? [...launcher, "admitted-check", options.machineJobserver, projectKey, "--", ...command]
+          : command;
       const script = [
         ...checkOutputPrelude(total, verbose, logID, control),
         ...(plan.cleanup
@@ -394,6 +401,7 @@ async function runConfiguredChecks(
               entry.warnSeconds === undefined
                 ? setup
                 : [...launcher, "observe", String(entry.warnSeconds), "--", ...setup];
+            const execution = (environment === "native" ? admitted(launcher, observed) : observed).map(quote).join(" ");
             const presentCoverage = entry.role === "coverage";
             const collector = resolveCheckCommand(
               directory,
@@ -403,9 +411,7 @@ async function runConfiguredChecks(
               .map(quote)
               .join(" ");
             const step = ++completed;
-            const body = presentCoverage
-              ? ["coverage_status=0", `${observed.map(quote).join(" ")} || coverage_status=$?`]
-              : [observed.map(quote).join(" ")];
+            const body = presentCoverage ? ["coverage_status=0", `${execution} || coverage_status=$?`] : [execution];
             const after = presentCoverage
               ? [
                   "workbench_check_replay=$coverage_status",
@@ -454,7 +460,14 @@ async function runConfiguredChecks(
             cancellation.checkpoint();
             const use = async () => {
               prepared.prepare();
-              await cancellation.execute(prepared.invocation, directory, prepared.env, false, owner);
+              const command =
+                environment === "native"
+                  ? prepared.invocation
+                  : admitted(
+                      [process.execPath, join(distributionRoot(root), "bin/workbench.mjs")],
+                      prepared.invocation,
+                    );
+              await cancellation.execute(command, directory, prepared.env, false, owner);
               if (
                 prepared.builds?.external &&
                 environment === "native" &&

@@ -42,6 +42,7 @@ export interface CheckSelection {
   architecture?: string;
   /** Internal worker selection from the coordinator's already validated plan. */
   checkNames?: string[];
+  machineJobserver?: string;
 }
 
 export function commandArguments(value: unknown, label: string): asserts value is string[] {

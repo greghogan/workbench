@@ -32,6 +32,7 @@ import { checkExecution } from "./check-resources.js";
 import { CheckControl, checkControlPrefix } from "./check-control.js";
 import { required } from "../../runtime/invariants.js";
 import { cpuEnvironment } from "./cpu-budget.mjs";
+import { findUnixJobserver } from "./unix-jobserver-client.js";
 import type { CheckCancellation } from "./check-cancellation.js";
 import type { ProcessLock } from "../../storage/process-lock.js";
 import { CheckLines, CheckProgress, checkEventPrefix } from "./check-progress.js";
@@ -52,6 +53,14 @@ export async function runCheckGroups(
   const total = plan.sessions.reduce((sum, session) => sum + session.checks.length, 0);
   const progress = new CheckProgress(total);
   const allocation = checkExecution(root, plan);
+  const machineJobserver = plan.cleanup
+    ? undefined
+    : process.platform === "win32"
+      ? await (
+          await import("./windows-jobserver-client.js")
+        ).findWindowsJobserver(distributionRoot(root), cancellation.signal)
+      : await findUnixJobserver(cancellation.signal);
+  if (!plan.cleanup && !machineJobserver) writeDiagnosticText("Using standalone check scheduling.");
   const { dependencies, maxJobs: concurrency } = allocation;
   const pending = new Set(plan.sessions.map((_, index) => index));
   const complete = new Set<number>();
@@ -208,6 +217,7 @@ export async function runCheckGroups(
       cancellation.checkpoint();
       const selection: CheckSelection = { ...options };
       selection.checkNames = session.checks.map((check) => check.name);
+      if (machineJobserver) selection.machineJobserver = machineJobserver;
       delete selection.path;
       delete selection.project;
       delete selection.profile;

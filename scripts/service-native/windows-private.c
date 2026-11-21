@@ -131,8 +131,9 @@ DWORD workbench_private_launch(const wchar_t *node, const wchar_t *directory, wc
     return admitted ? NO_ERROR : error;
 }
 
-static DWORD private_reply(enum workbench_control_operation operation, HANDLE token, PSID peer, void *context,
-                           BYTE *reply, DWORD *length) {
+static DWORD private_reply(enum workbench_control_operation operation, HANDLE token, PSID peer, const char *job,
+                           void *context, BYTE *reply, DWORD *length) {
+    (void)job;
     (void)token;
     (void)peer;
     if (operation == workbench_private_drain) {

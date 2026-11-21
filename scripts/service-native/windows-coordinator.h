@@ -23,5 +23,7 @@ DWORD workbench_coordinator_start(const wchar_t *executable, const wchar_t *entr
 DWORD workbench_coordinator_close(struct workbench_coordinator *coordinator);
 DWORD workbench_coordinator_attach(struct workbench_coordinator *coordinator, PSID account, const char *nonce,
                                    const char *key, BYTE *reply, DWORD *length);
+DWORD workbench_coordinator_jobs(struct workbench_coordinator *coordinator, PSID account, const char *job,
+                                  BYTE *reply, DWORD *length);
 
 #endif

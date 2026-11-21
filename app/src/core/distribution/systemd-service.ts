@@ -66,6 +66,7 @@ export function systemdServiceUnit(scope: ServiceScope, node: string, launcher: 
           "Environment=WORKBENCH_SYSTEM_SERVICE=1",
           "RuntimeDirectory=workbench",
           "RuntimeDirectoryMode=0755",
+          "RuntimeDirectoryPreserve=yes",
           "StateDirectory=workbench",
           "StateDirectoryMode=0700",
           "Environment=WORKBENCH_STATE_HOME=/var/lib/workbench",

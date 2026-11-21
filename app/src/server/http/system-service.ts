@@ -2,10 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, readFileSync, rmdirSync, unlinkSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createConnection, createServer, type Socket } from "node:net";
-import { dirname, isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { userConfigValues } from "../../core/configuration/user-config.js";
-import { launchdSocketsActivated, launchdSystemDirectory } from "../../core/distribution/distribution-identity.js";
+import { launchdSocketsActivated } from "../../core/distribution/distribution-identity.js";
+import {
+  systemRuntimeDirectory as runtimePath,
+  verifySystemPath as protectedPath,
+} from "../../core/distribution/unix-system-authority.js";
 import { executableIdentity } from "../../core/distribution/executable-identity.js";
 import {
   diagnostic,
@@ -41,6 +45,7 @@ import { activePrivateListenerProcesses } from "./system-ownership.js";
 import { checkInstalledServiceStart } from "../../core/distribution/installed-release.js";
 import { notifySystemdServiceReady, systemdServiceProcess } from "../../core/distribution/systemd-service.js";
 import { AccountWorkers, serviceAccount, type ServiceAccount } from "./system-workers.js";
+import { startUnixJobserver } from "./unix-jobserver.js";
 
 const browserCredentialBytes = 32;
 const browserCredentialPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -60,20 +65,6 @@ export function serviceRelease(distribution: string): string {
   return createHash("sha256")
     .update(JSON.stringify(revision ? [repository, revision] : [directory]))
     .digest("hex");
-}
-
-function runtimePath(): string {
-  return process.platform === "darwin"
-    ? launchdSystemDirectory
-    : (process.env.WORKBENCH_SYSTEM_RUNTIME_DIRECTORY ?? "/run/workbench");
-}
-
-function protectedPath(path: string): void {
-  if (!isAbsolute(path)) throw new Error("System service paths must be absolute");
-  const current = lstatSync(path);
-  if (current.isSymbolicLink() || current.uid !== 0 || current.mode & 0o022)
-    throw new Error(`${path}: system service requires administrator-owned, protected paths`);
-  if (dirname(path) !== path) protectedPath(dirname(path));
 }
 
 function controlPaths(runtime: string) {
@@ -347,6 +338,7 @@ export async function startSystemService(distribution: string, options: { host?:
           });
         });
         signIn.maxConnections = 16;
+        let jobserver: Awaited<ReturnType<typeof startUnixJobserver>> | undefined;
         try {
           const signal = cancellation.signal;
           checkInstalledServiceStart(distribution, launchd || systemdServiceProcess());
@@ -370,8 +362,9 @@ export async function startSystemService(distribution: string, options: { host?:
             await listenLocal(browser, host, port);
             await listenUnix(signIn, control);
             chmodSync(control, 0o666);
-            notifySystemdServiceReady();
           }
+          jobserver = await startUnixJobserver(runtime, preferences);
+          if (!launchd) notifySystemdServiceReady();
           listening = true;
           console.log(`Workbench web UI: ${origin}`);
           if (!cancellation.signal.aborted)
@@ -391,6 +384,7 @@ export async function startSystemService(distribution: string, options: { host?:
           listening = false;
           diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopping);
           await settleCleanup([
+            () => jobserver?.close(),
             async () => {
               for (const socket of controlClients) socket.destroy();
               await new Promise<void>((resolve, reject) => {

@@ -28,6 +28,7 @@ const commands: Record<string, Admission> = {
   },
 
   "checks-session": { internal: true, policy: true },
+  "admitted-check": { internal: true },
 
   ci: { project: true, registration: true, policy: true, children: { validate: { policy: false } } },
 

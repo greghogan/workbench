@@ -4,6 +4,10 @@ import { RegistryProvider } from "../core/artifacts/registry-management-contract
 import { runGate, type GateOptions } from "../core/execution/checks/check-gates.js";
 import type { CheckSelection } from "../core/execution/checks/check-plan.js";
 import { runCheckSession } from "../core/execution/checks/checks.js";
+import { withUnixJobLease } from "../core/execution/checks/unix-jobserver-client.js";
+import { distributionRoot } from "../core/projects/project-context.js";
+import { processCancellation, runOwnedChild } from "../core/runtime/owned-child.mjs";
+import { processFailure } from "../core/runtime/process-outcome.mjs";
 import { prepareHostedCI, runHostedCIJob } from "../core/execution/ci/ci-hosted-jobs.js";
 import { runHostedCITarget } from "../core/execution/ci/ci-hosted-target.js";
 import { CIProvider } from "../core/execution/ci/ci-hosting.js";
@@ -72,6 +76,35 @@ export function registerCheckCommands(program: Command, root: string): void {
   const checks = gateCommand("check");
   gateCommand("pre-commit");
   gateCommand("pre-push");
+  registerCommand(program, "admitted-check", { hidden: true })
+    .argument("<endpoint>")
+    .argument("<project>")
+    .argument("<command...>")
+    .action(async (endpoint: string, project: string, [command, ...args]: string[]) => {
+      if (!command) throw new Error("An admitted check requires a command");
+      const cancellation = processCancellation();
+      try {
+        const outcome =
+          process.platform === "win32"
+            ? await (
+                await import("../core/execution/checks/windows-jobserver-client.js")
+              ).runWindowsAdmittedCheck(distributionRoot(root), endpoint, project, command, args, cancellation.signal)
+            : await withUnixJobLease(endpoint, project, cancellation.signal, (owner, signal) =>
+                runOwnedChild(command, args, {
+                  cwd: process.cwd(),
+                  env: process.env,
+                  signal,
+                  owner,
+                  stopDescendantsOnExit: true,
+                }),
+              );
+        if (outcome.error) throw outcome.error;
+        if (outcome.status !== null && outcome.signal === null) process.exitCode = outcome.status;
+        else throw processFailure(command, outcome) ?? new Error("The admitted check returned no exit status");
+      } finally {
+        cancellation.close();
+      }
+    });
   registerCommand(program, "checks-session", { hidden: true })
     .argument("<directory>")
     .argument("<environment>")

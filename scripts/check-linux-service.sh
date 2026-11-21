@@ -201,6 +201,7 @@ JS
 if [[ $scope == system ]]; then
     check_protected_port
     "${external_installer[@]}" config set --scope global daemon.worker_idle_seconds 2
+    "${external_installer[@]}" config set --scope global daemon.job_limit 1
 fi
 "${installed[@]}" install --service "$scope" --port "$port"
 sudo -n grep -F -- "${release[1]}" "$definition" >/dev/null
@@ -248,6 +249,11 @@ entry_digest=$(sudo -n sha256sum "$fixture/damaged-launcher" | awk '{print $1}')
 sudo -n cmp -s "$fixture/damaged-launcher" "$install_bin/.workbench-installation/repair/workbench-$entry_digest"
 [[ $("${management[@]}" show --property=MainPID --value "$native_unit") == "$started_pid" ]]
 sudo -n test -f "$data"
+if [[ $scope == system ]]; then
+    sudo -n install -m 0644 app/test/integration/distribution/unix-jobserver-fixture.mts "$fixture/jobserver-test.mts"
+    sudo -n "$fixture/node" "$fixture/jobserver-test.mts" \
+        "$fixture/runtime" "${release[1]}" "$home" "$uid" "$gid" "$second_home" "$second_uid" "$second_gid"
+fi
 if [[ $scope == user ]]; then
     alternate="$home/alternate"
     elsewhere=("${account_env[@]}" "XDG_CONFIG_HOME=$alternate" "${release[@]}")

@@ -245,8 +245,11 @@ static DWORD workbench_worker_for(HANDLE caller, PSID sid, struct worker_slot **
 }
 
 static DWORD launch_worker(enum workbench_control_operation operation, HANDLE caller, PSID sid,
-                          void *context, BYTE *reply, DWORD *length) {
+                          const char *job, void *context, BYTE *reply, DWORD *length) {
     (void)context;
+    if (operation == workbench_job_control)
+        return browser_port && job ? workbench_coordinator_jobs(&browser, sid, job, reply, length)
+                                   : ERROR_NOT_SUPPORTED;
     if (operation == workbench_retire_account) {
         DWORD error = retire_worker(sid);
         const char retired[] = "{\"retired\":true}";
@@ -435,6 +438,14 @@ int wmain(int count, wchar_t **arguments) {
         if (!error && (fwrite(output, 1, length, stdout) != length || fputc('\n', stdout) == EOF))
             error = ERROR_WRITE_FAULT;
         SecureZeroMemory(output, sizeof(output));
+    } else if (count == 5 && !wcscmp(arguments[1], L"job-observe")) {
+        error = workbench_job_observe(arguments[2], arguments[3], arguments[4]);
+    } else if (count == 4 && !wcscmp(arguments[1], L"job-control")) {
+        BYTE output[workbench_control_capacity];
+        DWORD length = 0;
+        error = workbench_jobs_request(arguments[2], arguments[3], output, &length);
+        if (!error && (fwrite(output, 1, length, stdout) != length || fputc('\n', stdout) == EOF))
+            error = ERROR_WRITE_FAULT;
     } else if ((count == 3 && !wcscmp(arguments[1], L"private-read")) ||
                (count == 4 && (!wcscmp(arguments[1], L"private-listen") || !wcscmp(arguments[1], L"private-drain")))) {
         error = workbench_private_control(arguments[1], arguments[2], count == 4 ? arguments[3] : NULL);

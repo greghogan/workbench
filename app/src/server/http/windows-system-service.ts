@@ -21,6 +21,7 @@ import { WebError } from "./errors.js";
 import { createLocalServer, listenUnix } from "./http-listener.js";
 import { requestOrigin, secureResponse, send } from "./http.js";
 import { WebMetrics } from "./observability.js";
+import { startWindowsJobserver } from "./windows-jobserver.js";
 import { serviceRelease } from "./system-service.js";
 import { forwardAccountRequest } from "./system-workers.js";
 import {
@@ -440,6 +441,7 @@ export async function serveWindowsSystem(distribution: string, input: Readable, 
   const helper = resumeCapable ? windowsServiceHelper(distribution) : undefined;
   if (resumeCapable && !helper) throw new Error("The Windows service helper is unavailable");
   const preferences = userConfigValues();
+  const jobserver = helper ? startWindowsJobserver(helper, nonce, preferences) : undefined;
   const { server, attach, stopIdle } = createWindowsSystemBrowser(
     origin,
     Number(preferences["daemon.session_seconds"]) * 1000,
@@ -469,17 +471,29 @@ export async function serveWindowsSystem(distribution: string, input: Readable, 
       if (frame === "stop") break;
       let reply: unknown;
       try {
-        const account = attachAccount(frame);
-        const password = attach(account);
-        reply = { origin, username: account.username, password, pid, release };
-      } catch {
-        reply = { error: "Could not attach a Windows account worker" };
+        if (frame.startsWith("jobs ")) {
+          reply = jobserver
+            ? await jobserver.request(frame)
+            : { error: "The Windows machine jobserver is unavailable" };
+        } else {
+          const account = attachAccount(frame);
+          const password = attach(account);
+          reply = { origin, username: account.username, password, pid, release };
+        }
+      } catch (error) {
+        if (frame.startsWith("jobs ")) {
+          diagnostic(LogLevel.Warn, DiagnosticOperation.WebService, DiagnosticOutcome.Failed, {}, error);
+          reply = { error: "Could not verify the Windows machine job request" };
+        } else {
+          reply = { error: "Could not attach a Windows account worker" };
+        }
       }
       await emitFrame(output, reply);
     }
   } finally {
     stopIdle();
     shutdown.abort();
+    await jobserver?.close();
     server.closeAllConnections();
     if (relay.listening)
       await new Promise<void>((resolve, reject) => {

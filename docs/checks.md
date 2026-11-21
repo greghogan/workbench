@@ -38,6 +38,15 @@ execute fresh, since an installed service or external guest image can change ind
 Workbench's extended suite includes Miri, mutation and generated-input checks, reproducibility, managed-store
 preparation, and [installed service checks](installations.md#extended-service-checks).
 
+The installed system service coordinates check launches across projects and accounts on Linux, macOS, and Windows.
+It admits native checks individually and treats an isolated environment as one session. Each command runs as the calling
+OS account. The service rotates among projects and delays new launches when available slots, CPU contention, or memory
+require it. Without a running system service, checks report standalone scheduling and use the local allocation.
+
+The service administrator can set `[daemon]` preferences `job_limit`, `worker_slots`, and `memory_reserve_bytes`.
+The first two default to the available logical CPU count. The memory reserve defaults to 5% of host RAM, capped at
+1 GiB. Project and invocation settings can still limit local concurrency. Starting the service is explicit.
+
 Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
 push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
 tags are checked at their commit; tags pointing to non-commit objects have no project gate. Push checks leave the
