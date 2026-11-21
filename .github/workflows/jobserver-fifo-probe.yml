@@ -1,0 +1,33 @@
+name: macOS jobserver FIFO probe
+on:
+  push:
+    branches: ["ci/macos-jobserver-fifo-probe"]
+permissions:
+  contents: read
+jobs:
+  fifo:
+    runs-on: macos-26
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Prepare native tools
+        shell: bash
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install make ninja
+          rustup toolchain install 1.100.0 --profile minimal
+          gmake --version
+          ninja --version
+          cmake --version
+          rustup run 1.100.0 cargo --version
+      - name: Verify worker parking and token return
+        shell: bash
+        run: |
+          sudo --preserve-env=PATH "$(command -v node)" scripts/native-service-probes/test-jobserver-fifo.js \
+            "$(command -v gmake)" "$(command -v ninja)" "$(command -v cmake)" \
+            "$(rustup which --toolchain 1.100.0 cargo)" "$(rustup which --toolchain 1.100.0 rustc)"
