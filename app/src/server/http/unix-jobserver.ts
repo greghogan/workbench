@@ -22,8 +22,10 @@ import {
   jobserverPaths,
   jobserverProject,
   jobserverProtocol,
+  maximumJobserverWorkers,
   readJobFrames,
   sendJobFrame,
+  unixWorkerFifoSupported,
 } from "../../core/execution/checks/unix-jobserver-protocol.js";
 import type { WorkLease } from "../../core/execution/checks/work-admission.mjs";
 import { writeNew } from "../../core/runtime/file-publication.mjs";
@@ -31,6 +33,7 @@ import { readBoundedFile } from "../../core/runtime/file-reads.js";
 import { errorFrom, isRecord } from "../../core/runtime/values.mjs";
 import { inspectProcessOwner } from "../../core/storage/process-lock.js";
 import { listenUnix } from "./http-listener.js";
+import { UnixWorkerPipe } from "./unix-worker-pipe.js";
 
 interface Claim {
   uid: number;
@@ -132,7 +135,7 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
   const admission = configuredMachineAdmission(preferences);
   const sampler = new HostActivitySampler();
   const recovered = recoverClaims(paths.receipts);
-  const active = new Map<string, { claim: Claim; lease: WorkLease; socket: Socket }>();
+  const active = new Map<string, { claim: Claim; lease: WorkLease; socket: Socket; pipe?: UnixWorkerPipe }>();
   const connections = new Set<Socket>();
   const pending = new Map<Socket, string | undefined>();
   const claims = new Set<string>();
@@ -147,6 +150,7 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
     admission.close();
     for (const socket of connections) socket.destroy();
   };
+  let workerPoolRecovering = false;
   const server = createServer((socket) => {
     const disconnect = new AbortController();
     let requested = false;
@@ -173,7 +177,13 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
         typeof request.claim !== "string" ||
         !jobserverClaim.test(request.claim) ||
         typeof request.project !== "string" ||
-        !jobserverProject.test(request.project)
+        !jobserverProject.test(request.project) ||
+        (request.workers !== undefined &&
+          (!unixWorkerFifoSupported ||
+            typeof request.workers !== "number" ||
+            !Number.isSafeInteger(request.workers) ||
+            request.workers < 1 ||
+            request.workers > maximumJobserverWorkers))
       ) {
         reject("Invalid machine job request");
         return;
@@ -181,6 +191,7 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
       requested = true;
       socket.setTimeout(0);
       const identifier = request.claim;
+      const workers = typeof request.workers === "number" ? request.workers : undefined;
       const claim = authorise(join(paths.inbox, identifier));
       if (!claim || claims.has(identifier) || recovered.has(identifier)) {
         reject("Could not verify the account owning the machine job");
@@ -197,13 +208,20 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
             await lease.release();
             return;
           }
+          let pipe: UnixWorkerPipe | undefined;
           try {
+            if (workers !== undefined) {
+              pipe = new UnixWorkerPipe(join(paths.inbox, `${identifier}.fifo`), claim.uid, workers - 1, lease);
+              // Some tools check the pool only when dispatching work, so lend available slots before their first check.
+              pipe.supply(active.size === 0 ? maximumJobserverWorkers : 1);
+            }
             writeNew(join(paths.receipts, identifier), JSON.stringify(claim), 0o600);
           } catch (error) {
+            pipe?.close();
             await lease.release();
             throw error;
           }
-          active.set(identifier, { claim, lease, socket });
+          active.set(identifier, { claim, lease, socket, ...(pipe ? { pipe } : {}) });
           sendJobFrame(socket, { state: "granted" });
         })
         .catch(() => {
@@ -228,17 +246,44 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
           unlinkSync(join(paths.receipts, id));
           recovered.delete(id);
         }
-      for (const [id, { claim, lease, socket }] of active)
+      for (const [id, { claim, lease, socket, pipe }] of active)
         if (socket.destroyed && drained(join(paths.inbox, id), claim)) {
+          pipe?.close();
           unlinkSync(join(paths.receipts, id));
           active.delete(id);
           claims.delete(id);
           await lease.release();
         }
-      if (recovered.size || active.size || pending.size)
-        admission.observe(recovered.size ? { memoryPressure: true } : await sampler.sample());
-      else admission.observe({ memoryPressure: true });
-      const reason = recovered.size ? "cleanup of previously admitted work" : admission.inspect().reason;
+      const pipes = [...active.values()].flatMap(({ pipe, socket }) => (pipe ? [{ pipe, socket }] : []));
+      if (!pipes.length) workerPoolRecovering = false;
+      if (recovered.size || workerPoolRecovering || (!active.size && !pending.size))
+        admission.observe({ memoryPressure: true });
+      else admission.observe(await sampler.sample());
+      if (!recovered.size && !workerPoolRecovering) {
+        try {
+          for (const { pipe, socket } of pipes) {
+            if (admission.inspect().reason === "worker slots") pipe.withdraw();
+            else if (pending.size === 0 && !socket.destroyed)
+              pipe.supply(pipes.length === 1 ? maximumJobserverWorkers : 1);
+          }
+        } catch (error) {
+          workerPoolRecovering = true;
+          admission.observe({ memoryPressure: true });
+          diagnostic(
+            LogLevel.Warn,
+            DiagnosticOperation.WebService,
+            DiagnosticOutcome.Waiting,
+            {},
+            error,
+            "Machine worker admission paused until the current build tools exit",
+          );
+        }
+      }
+      const reason = recovered.size
+        ? "cleanup of previously admitted work"
+        : workerPoolRecovering
+          ? "worker pool recovery"
+          : admission.inspect().reason;
       if (reason)
         for (const [socket, previous] of pending)
           if (previous !== reason && !socket.destroyed && !socket.writableNeedDrain) {
@@ -260,6 +305,7 @@ export async function startUnixJobserver(runtime: string, preferences: ReturnTyp
         });
       });
       await monitoring;
+      for (const { pipe } of active.values()) pipe?.close();
       if (monitoringFailure) throw monitoringFailure;
     },
   };

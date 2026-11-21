@@ -86,3 +86,25 @@ test("unavailable memory observation permits one job, with cancellation and shut
   await active.release();
   expect(machine.inspect()).toMatchObject({ active: 0, waiting: 0 });
 });
+
+test("a command's implicit slot and its extra workers share capacity with other projects", async () => {
+  const machine = new MachineAdmission({ maxJobs: 4, workerSlots: 3, memoryReserve: 100, settlingMs: 0 });
+  machine.observe(healthy);
+  const compiler = await machine.acquire("compile");
+  expect(compiler.reserveWorkers(4)).toBe(2);
+  const pending = machine.acquire("check");
+  expect(machine.inspect()).toMatchObject({ active: 1, waiting: 1, reason: "worker slots" });
+  expect(compiler.reserveWorkers(1)).toBe(0);
+  compiler.returnWorkers(1);
+  expect(machine.inspect()).toMatchObject({ active: 2, waiting: 0 });
+  const check = await pending;
+  expect(() => {
+    check.returnWorkers(1);
+  }).toThrow(/did not reserve/);
+  await compiler.release();
+  expect(check.reserveWorkers(4)).toBe(2);
+  await check.release();
+  const next = await machine.acquire("another");
+  expect(next.reserveWorkers(4)).toBe(2);
+  await next.release();
+});

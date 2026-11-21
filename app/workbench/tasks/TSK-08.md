@@ -1,5 +1,5 @@
 ---
-status: Approved
+status: Accepted
 depends_on:
   - workbench-app:TSK-3
 added_at: 2026-11-12T12:39:15.000Z
@@ -36,7 +36,7 @@ Download reservations and disk-space admission can be planned separately.
 ## Delivery checklist
 
 - [x] Share adaptive command admission across projects and accounts through the system service.
-- [ ] Add and verify native worker cooperation with the machine-wide pool.
+- [x] Add and verify native worker cooperation with the machine-wide pool.
 
 ## Implementing-agent detail
 
@@ -77,6 +77,11 @@ projects and uses one shared job limit, CPU and memory observations, and the cal
 execute under the requesting account. Linux and macOS use protected local sockets, and Windows uses the authenticated
 SCM channel and Windows Job Objects. Interrupted work keeps its lease until its processes exit. Ordinary checks use
 local scheduling when the service is unavailable.
+
+Compatible GNU Make, Ninja, CMake with Ninja, and Cargo builds on Linux and macOS share worker slots through job-owned
+FIFOs. Each command keeps its implicit slot. The service lends and reclaims extra slots, gives waiting projects access
+to idle slots, and pauses admission when token accounting needs recovery. Windows admits commands. Explicit parallel
+settings and inherited jobservers keep their existing scheduling.
 
 ## Verification
 

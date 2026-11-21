@@ -18,6 +18,7 @@ import { prepareCheckLogs, checkLogDirectory, buildPaths, withBuildLock, cleanBu
 import { withCacheLock } from "../../storage/cache-lock.js";
 import { runCheckGroups } from "./check-runner.js";
 import { CheckCancellation } from "./check-cancellation.js";
+import { workerTool, type WorkerTool } from "./native-worker-tools.js";
 import { withCheckCoordination } from "./check-coordination.js";
 import type { ProcessLock } from "../../storage/process-lock.js";
 import { withCachedChecks } from "./check-cache.js";
@@ -371,9 +372,17 @@ async function runConfiguredChecks(
       const projectKey = options.machineJobserver
         ? createHash("sha256").update(registrationRoot(root)).digest("hex")
         : undefined;
-      const admitted = (launcher: string[], command: string[]) =>
+      const admitted = (launcher: string[], command: string[], workers?: WorkerTool) =>
         options.machineJobserver && projectKey
-          ? [...launcher, "admitted-check", options.machineJobserver, projectKey, "--", ...command]
+          ? [
+              ...launcher,
+              "admitted-check",
+              options.machineJobserver,
+              projectKey,
+              ...(workers ? ["--workers", workers] : []),
+              "--",
+              ...command,
+            ]
           : command;
       const script = [
         ...checkOutputPrelude(total, verbose, logID, control),
@@ -401,7 +410,9 @@ async function runConfiguredChecks(
               entry.warnSeconds === undefined
                 ? setup
                 : [...launcher, "observe", String(entry.warnSeconds), "--", ...setup];
-            const execution = (environment === "native" ? admitted(launcher, observed) : observed).map(quote).join(" ");
+            const execution = (environment === "native" ? admitted(launcher, observed, workerTool(entry)) : observed)
+              .map(quote)
+              .join(" ");
             const presentCoverage = entry.role === "coverage";
             const collector = resolveCheckCommand(
               directory,

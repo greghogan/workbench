@@ -28,7 +28,10 @@ interface WaitingJob {
 const maximumWaitingJobs = 4096;
 const recoverySamples = 2;
 
-export type MachineLease = WorkLease;
+export interface MachineLease extends WorkLease {
+  reserveWorkers(maximum: number): number;
+  returnWorkers(count: number): void;
+}
 
 /** The transport authenticates callers and releases a lease after its owned processes finish. */
 export class MachineAdmission {
@@ -36,6 +39,7 @@ export class MachineAdmission {
   private lastProject: string | undefined;
   private waiting = 0;
   private active = 0;
+  private reservedWorkers = 0;
   private closed = false;
   private activity: HostActivity = {};
   private cpuBlocked = false;
@@ -54,7 +58,7 @@ export class MachineAdmission {
 
   private blocked(): WaitReason | undefined {
     if (this.active >= this.limits.maxJobs) return "job limit";
-    if (this.active >= this.limits.workerSlots) return "worker slots";
+    if (this.active + this.reservedWorkers >= this.limits.workerSlots) return "worker slots";
     const { availableMemory, memoryPressure } = this.activity;
     if (
       memoryPressure ||
@@ -143,11 +147,37 @@ export class MachineAdmission {
       this.settlingUntil = this.now() + this.limits.settlingMs;
       job.unsubscribe();
       let released = false;
+      let workers = 0;
       job.resolve({
+        reserveWorkers: (maximum) => {
+          positiveInteger(maximum, "maximum workers to reserve");
+          const { availableMemory, memoryPressure } = this.activity;
+          if (
+            released ||
+            this.closed ||
+            this.waiting ||
+            this.cpuBlocked ||
+            memoryPressure ||
+            (availableMemory !== undefined && availableMemory < this.limits.memoryReserve)
+          )
+            return 0;
+          const count = Math.min(maximum, this.limits.workerSlots - this.active - this.reservedWorkers);
+          workers += count;
+          this.reservedWorkers += count;
+          return count;
+        },
+        returnWorkers: (count) => {
+          positiveInteger(count, "returned worker count");
+          if (released || count > workers) throw new Error("Machine job returned worker slots it did not reserve");
+          workers -= count;
+          this.reservedWorkers -= count;
+          this.drain();
+        },
         release: () => {
           if (released) return;
           released = true;
           this.active--;
+          this.reservedWorkers -= workers;
           this.drain();
         },
       });

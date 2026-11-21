@@ -47,6 +47,11 @@ The service administrator can set `[daemon]` preferences `job_limit`, `worker_sl
 The first two default to the available logical CPU count. The memory reserve defaults to 5% of host RAM, capped at
 1 GiB. Project and invocation settings can still limit local concurrency. Starting the service is explicit.
 
+On Linux and macOS, compatible GNU Make, Ninja, CMake with Ninja, and Cargo commands share worker slots through the
+GNU jobserver FIFO protocol. Each command receives its implicit slot and can borrow available slots up to its local
+worker limit. Explicit parallel arguments and an inherited jobserver keep their own scheduling. Isolated build
+environments and other commands use command-level admission.
+
 Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
 push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
 tags are checked at their commit; tags pointing to non-commit objects have no project gate. Push checks leave the

@@ -4,6 +4,8 @@ import { join } from "node:path";
 export const jobserverProtocol = 1;
 export const jobserverClaim = /^[a-f0-9-]{36}$/;
 export const jobserverProject = /^[a-f0-9]{64}$/;
+export const maximumJobserverWorkers = 4096;
+export const unixWorkerFifoSupported = process.platform === "linux" || process.platform === "darwin";
 
 export function jobserverPaths(runtime: string) {
   return {

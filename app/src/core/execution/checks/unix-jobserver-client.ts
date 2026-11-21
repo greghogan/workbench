@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { lstatSync } from "node:fs";
-import { createConnection } from "node:net";
+import { spawnSync } from "node:child_process";
+import { lstatSync, unlinkSync } from "node:fs";
+import { createConnection, Socket } from "node:net";
 import { join } from "node:path";
 import { systemRuntimeDirectory, verifySystemPath } from "../../distribution/unix-system-authority.js";
 import { combineFailures } from "../../diagnostics/diagnostic-errors.mjs";
@@ -49,7 +50,8 @@ export async function withUnixJobLease<T>(
   expected: string,
   project: string,
   signal: AbortSignal,
-  action: (owner: ProcessLock, signal: AbortSignal) => Promise<T>,
+  action: (owner: ProcessLock, signal: AbortSignal, workerPipe?: string) => Promise<T>,
+  workers?: number,
 ): Promise<T> {
   signal.throwIfAborted();
   if (!jobserverProject.test(project)) throw new Error("Invalid project identity for machine job admission");
@@ -62,8 +64,10 @@ export async function withUnixJobLease<T>(
   const claim = randomUUID();
   const owner = acquireProcessLock(join(paths.inbox, claim), true);
   if (!owner) throw new Error("Could not retain machine job ownership");
+  const workerPipe = workers === undefined ? undefined : join(paths.inbox, `${claim}.fifo`);
+  let madePipe = false;
   const lost = new AbortController();
-  const socket = createConnection(paths.socket);
+  const socket = new Socket();
   const stopWaiting = () => {
     socket.destroy();
   };
@@ -71,12 +75,18 @@ export async function withUnixJobLease<T>(
     signal.removeEventListener("abort", stopWaiting);
     try {
       owner.release();
+      if (madePipe && workerPipe) unlinkSync(workerPipe);
     } finally {
       socket.destroy();
     }
   };
   let result: T;
   try {
+    if (workerPipe) {
+      const result = spawnSync("/usr/bin/mkfifo", ["-m", "600", workerPipe], { stdio: "ignore" });
+      if (result.status !== 0) throw new Error("Could not create the machine worker pipe", { cause: result.error });
+      madePipe = true;
+    }
     await new Promise<void>((resolve, reject) => {
       let granted = false;
       socket.setTimeout(5000, () => socket.destroy(new Error("Machine jobserver connection timed out")));
@@ -84,7 +94,12 @@ export async function withUnixJobLease<T>(
         try {
           if (unixJobserverIdentity() !== expected) throw new Error("The machine jobserver changed while connecting");
           socket.setTimeout(0);
-          sendJobFrame(socket, { version: jobserverProtocol, project, claim });
+          sendJobFrame(socket, {
+            version: jobserverProtocol,
+            project,
+            claim,
+            ...(workers === undefined ? {} : { workers }),
+          });
         } catch (error) {
           socket.destroy(error instanceof Error ? error : new Error("Could not verify the machine jobserver"));
         }
@@ -109,11 +124,12 @@ export async function withUnixJobLease<T>(
       });
       signal.addEventListener("abort", stopWaiting, { once: true });
       if (signal.aborted) stopWaiting();
+      else socket.connect(paths.socket);
     });
     signal.removeEventListener("abort", stopWaiting);
     const execution = AbortSignal.any([signal, lost.signal]);
     execution.throwIfAborted();
-    result = await action(owner, execution);
+    result = await action(owner, execution, workerPipe);
     execution.throwIfAborted();
   } catch (error) {
     const failure: unknown = signal.aborted ? signal.reason : error;

@@ -552,9 +552,9 @@ scratch. Later runs reclaim marked abandoned scratch only after the local owner 
 confirmed dead. Unmarked, foreign, incomplete, and active ownership remains untouched; age alone does not authorize
 cleanup. Retained reports and redacted command logs are outside scratch and survive cleanup.
 
-Coverage processing uses a bounded queue. Ready workers request the next report, reuse their source-map index, and
-reduce completed reports immediately. Its admission interface accepts external capacity leases so it can join the
-planned jobserver; the jobserver itself is not part of this change.
+Coverage processing uses a bounded local queue. Ready workers request the next report, reuse their source-map index, and
+reduce completed reports immediately. Workbench admits the coverage check as a command. Its report workers use the
+check's local allocation.
 
 Cache inspection JSON uses `schema_version: 2`. Filesystem entries carry an explicit measurement state and omit unknown
 byte values. An unavailable quantity is not a zero-byte cache. Cleanup approval binds selected identities, writer

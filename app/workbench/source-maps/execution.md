@@ -54,6 +54,8 @@
   `src/server/http/unix-jobserver.ts`: authenticate local ownership, connect check execution to the installed service,
   and retain leases until their command groups finish or recover.
 - `src/core/distribution/unix-system-authority.ts`: locate and verify protected Unix service paths.
+- `src/core/execution/checks/native-worker-tools.ts`, `src/server/http/unix-worker-pipe.ts`: bind compatible Linux
+  and macOS build commands to job-owned FIFOs backed by the shared worker pool.
 - `src/core/execution/ci/support/ci-worker-request.mts`: validate and type private worker requests.
 - `src/core/execution/ci/ci-workspace.ts`: owns snapshot isolation, workspace locking, disposable resources, and cleanup
   recovery.
@@ -228,8 +230,7 @@
 - `src/core/toolchains/tool-adapters.ts`: Associate built-in tool verification probes, installation strategies,
   dependencies, and native environment contributions.
 - `src/core/execution/checks/work-admission.mts`, `test/integration/tooling/work_queue.test.mts`: Define dynamic work
-  queues with failure draining and admission leases that let processors join a future jobserver without owning its
-  transport.
+  queues with failure draining and admission leases. Coverage processing uses a local allocation within its check.
 - `src/core/configuration/runtime-parsers.mts`: Share one self-contained TOML/YAML parser runtime across copied
   managed-input helpers.
 - `test/core/artifacts/managed_image_import.test.mts`: Serialize managed archive imports and remove operation-owned
