@@ -197,6 +197,7 @@ test("desktop notifications use browser permission after an interaction and dedu
   const activation = { isActive: false };
   Object.defineProperty(web.window.navigator, "userActivation", { value: activation });
   const open = vi.spyOn(web.window, "open").mockImplementation(() => null);
+  const hasFocus = vi.spyOn(web.document, "hasFocus").mockReturnValue(true);
   const control = web.document.querySelector<HTMLButtonElement>("button");
   if (!control) throw new Error("Missing ordinary interaction control");
   control.click();
@@ -221,8 +222,11 @@ test("desktop notifications use browser permission after an interaction and dedu
       }),
     );
   announce();
-  announce();
   expect(web.document.getElementById("workflow-notice")?.textContent).toContain("needs approval");
+  expect(shown).toHaveLength(0);
+  hasFocus.mockReturnValue(false);
+  announce();
+  announce();
   expect(shown).toHaveLength(1);
   expect(shown[0]?.options.body).toBe("Preview scope");
   shown[0]?.onclick?.();

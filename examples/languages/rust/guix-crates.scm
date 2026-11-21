@@ -32,30 +32,30 @@
          (uri "https://static.crates.io/crates/anstyle-wincon/anstyle-wincon-3.0.11.crate")
          (file-name "anstyle-wincon-3.0.11.crate")
          (hash (content-hash (base16-string->bytevector "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d") sha256))))
- (list "rust-clap-4.6.7"
+ (list "rust-clap-4.6.8"
        (origin
          (method url-fetch)
-         (uri "https://static.crates.io/crates/clap/clap-4.6.7.crate")
-         (file-name "clap-4.6.7.crate")
-         (hash (content-hash (base16-string->bytevector "aa8876b300ab35ba921adea3dfd70157a46249b33f95c9084ae5709785478946") sha256))))
+         (uri "https://static.crates.io/crates/clap/clap-4.6.8.crate")
+         (file-name "clap-4.6.8.crate")
+         (hash (content-hash (base16-string->bytevector "ac230478587d0269d8d6998b82ae69ea51509d55df66d9e92edd1f986904cd4a") sha256))))
  (list "rust-clap_builder-4.6.7"
        (origin
          (method url-fetch)
          (uri "https://static.crates.io/crates/clap_builder/clap_builder-4.6.7.crate")
          (file-name "clap_builder-4.6.7.crate")
          (hash (content-hash (base16-string->bytevector "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d") sha256))))
- (list "rust-clap_derive-4.6.7"
+ (list "rust-clap_derive-4.6.8"
        (origin
          (method url-fetch)
-         (uri "https://static.crates.io/crates/clap_derive/clap_derive-4.6.7.crate")
-         (file-name "clap_derive-4.6.7.crate")
-         (hash (content-hash (base16-string->bytevector "f9c751b79415d4e559e3d1fcf128e09e720eb673a06d26cf6f392d37d75b66e0") sha256))))
- (list "rust-clap_lex-1.1.1"
+         (uri "https://static.crates.io/crates/clap_derive/clap_derive-4.6.8.crate")
+         (file-name "clap_derive-4.6.8.crate")
+         (hash (content-hash (base16-string->bytevector "895c9d8d2ac2dd8b8a29f3724a14e72aaaa6debcf8c38c82f97305c6a172767a") sha256))))
+ (list "rust-clap_lex-1.1.2"
        (origin
          (method url-fetch)
-         (uri "https://static.crates.io/crates/clap_lex/clap_lex-1.1.1.crate")
-         (file-name "clap_lex-1.1.1.crate")
-         (hash (content-hash (base16-string->bytevector "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486") sha256))))
+         (uri "https://static.crates.io/crates/clap_lex/clap_lex-1.1.2.crate")
+         (file-name "clap_lex-1.1.2.crate")
+         (hash (content-hash (base16-string->bytevector "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79") sha256))))
  (list "rust-colorchoice-1.0.5"
        (origin
          (method url-fetch)
@@ -98,12 +98,12 @@
          (uri "https://static.crates.io/crates/strsim/strsim-0.11.1.crate")
          (file-name "strsim-0.11.1.crate")
          (hash (content-hash (base16-string->bytevector "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f") sha256))))
- (list "rust-syn-3.0.9"
+ (list "rust-syn-3.0.10"
        (origin
          (method url-fetch)
-         (uri "https://static.crates.io/crates/syn/syn-3.0.9.crate")
-         (file-name "syn-3.0.9.crate")
-         (hash (content-hash (base16-string->bytevector "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b") sha256))))
+         (uri "https://static.crates.io/crates/syn/syn-3.0.10.crate")
+         (file-name "syn-3.0.10.crate")
+         (hash (content-hash (base16-string->bytevector "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79") sha256))))
  (list "rust-unicode-ident-1.0.27"
        (origin
          (method url-fetch)

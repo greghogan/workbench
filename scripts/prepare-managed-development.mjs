@@ -37,7 +37,7 @@ function guixBootstrapContext(root2, channels, context) {
   const dockerfile = readFileSync(dockerfilePath);
   const bootstrap = readFileSync(bootstrapPath);
   const contract = guixBootstrapContract(dockerfile, bootstrap);
-  if (contract !== "95ad45aedb24d505d5760a4a69b669841d2710f2c74a4c5df3bdfb76efa4e512") return;
+  if (contract !== "ff2aadfbb952e1942a81ae77b244810a930fef26d207a22baa5c282bb04131dc") return;
   const definition = readFileSync(channels);
   mkdirSync(join(context, "scripts"), { recursive: true });
   writeFileSync(join(context, "Dockerfile"), dockerfile);

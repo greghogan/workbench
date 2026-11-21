@@ -16,7 +16,7 @@ pass_environment = [
   "WORKBENCH_EXTENDED_DISPOSABLE_HOST",
   "WORKBENCH_WINDOWS_STARTUP_INPUTS",
 ]
-nix_docker_image = "nixos/nix@sha256:f159a58f390677f41e8e900a74b6e2f9c7f27b364122ae6acf7a652ce6c551c0"
+nix_docker_image = "nixos/nix@sha256:746280551ddc1c72177d1a597c05eacac86dfaa18d5d649bf86411278bcd5470"
 
 [ci]
 operating_systems = [ "linux", "macos", "windows" ]
@@ -682,12 +682,12 @@ uv = "download"
 [[toolchains.profiles]]
 name = "node-22"
 paths = ["."]
-tools.node = "22.23.4"
+tools.node = "22.23.5"
 
 [[toolchains.profiles]]
 name = "node-24"
 paths = ["."]
-tools.node = "24.22.2"
+tools.node = "24.22.3"
 
 [[toolchains.profiles]]
 name = "gcc"

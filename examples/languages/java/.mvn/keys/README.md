@@ -32,5 +32,6 @@ certificate changes through the dependency preparation workflow in
 | `D196A5E3E70732EEB2E5007F1861C322C56014B2` | [Apache Commons release keys](https://downloads.apache.org/commons/KEYS)                                               |
 | `D6F1BC78607808EC8E9F69437A8860944FAD5F62` | [Apache Commons release keys](https://downloads.apache.org/commons/KEYS)                                               |
 | `EA23DB1360D9029481E7F2EFECDFEA3CB4493B94` | [Apache Maven release keys](https://downloads.apache.org/maven/KEYS)                                                   |
+| `F4DD59C90148BDC52BEB90A4530AA5F25C25011F` | [Apache Commons release keys](https://downloads.apache.org/commons/KEYS)                                               |
 | `FA77DCFEF2EE6EB2DEBEDD2C012579464D01C06A` | [Apache Maven release keys](https://downloads.apache.org/maven/KEYS)                                                   |
 | `FF6E2C001948C5F2F38B0CC385911F425EC61B51` | [JUnit release keys](https://github.com/junit-team/junit-framework/blob/840b69fba7e0ac2f82fe9815bd497c56040be9d9/KEYS) |

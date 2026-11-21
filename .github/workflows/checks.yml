@@ -91,12 +91,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      - uses: github/codeql-action/init@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+      - uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           languages: javascript-typescript
           build-mode: none
           config-file: ./.github/codeql.yml
-      - uses: github/codeql-action/analyze@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+      - uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           output: ${{ runner.temp }}/codeql-sarif
           upload: never
@@ -104,7 +104,7 @@ jobs:
         run: node scripts/check-security-results.mjs "$RUNNER_TEMP/codeql-sarif"
       - name: Publish code-scanning results when the token permits it
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4 # v4.39.2
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: ${{ runner.temp }}/codeql-sarif
       - name: Retain analysis evidence

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "source_hashes": {
-    "Cargo.lock": "2e9e1894ade1f0ffa02f96b2e3e31afb06a729d8a0a11ca0622f515fcd0cdaf1",
-    "Cargo.toml": "0e6415fc303d7d65603fdde97ae6e3764f180eceb945e2b29db805a4764c9b97"
+    "Cargo.lock": "fe7470e29fca088112c0a4f7323ff9bbb9a0baab18b3371adcd11f4b880565bf",
+    "Cargo.toml": "a5deec14ed676b714addf50cb38cbda7cae05f3fbf3e26d6999cc61cd079db8c"
   },
   "inputs": [
     {
@@ -31,9 +31,9 @@
       "destination": "cargo/anstyle-wincon-3.0.11.crate"
     },
     {
-      "url": "https://static.crates.io/crates/clap/clap-4.6.7.crate",
-      "hash": "sha256-qoh2swCrNbqSGt6j39cBV6RiSbM/lckISuVwl4VHiUY=",
-      "destination": "cargo/clap-4.6.7.crate"
+      "url": "https://static.crates.io/crates/clap/clap-4.6.8.crate",
+      "hash": "sha256-rCMEeFh9AmnY1pmLgq5p6lFQnVXfZtnpLt0fmGkEzUo=",
+      "destination": "cargo/clap-4.6.8.crate"
     },
     {
       "url": "https://static.crates.io/crates/clap_builder/clap_builder-4.6.7.crate",
@@ -41,14 +41,14 @@
       "destination": "cargo/clap_builder-4.6.7.crate"
     },
     {
-      "url": "https://static.crates.io/crates/clap_derive/clap_derive-4.6.7.crate",
-      "hash": "sha256-+cdRt5QV1OVZ49H88SjgnnIOtnOgbSbPbzktN9dbZuA=",
-      "destination": "cargo/clap_derive-4.6.7.crate"
+      "url": "https://static.crates.io/crates/clap_derive/clap_derive-4.6.8.crate",
+      "hash": "sha256-iVydjSrC3YuKKfNyShTnKqqm3rz4w4yC+XMFxqFydno=",
+      "destination": "cargo/clap_derive-4.6.8.crate"
     },
     {
-      "url": "https://static.crates.io/crates/clap_lex/clap_lex-1.1.1.crate",
-      "hash": "sha256-HBM7xqQb4NGUwwa1UG0V5v7up7HWYEvT+DEN+yypZIY=",
-      "destination": "cargo/clap_lex-1.1.1.crate"
+      "url": "https://static.crates.io/crates/clap_lex/clap_lex-1.1.2.crate",
+      "hash": "sha256-4JIbOHazod+KHJ+RLn+UNCRYAiwuhCiAFYk9g8TWKnk=",
+      "destination": "cargo/clap_lex-1.1.2.crate"
     },
     {
       "url": "https://static.crates.io/crates/colorchoice/colorchoice-1.0.5.crate",
@@ -86,9 +86,9 @@
       "destination": "cargo/strsim-0.11.1.crate"
     },
     {
-      "url": "https://static.crates.io/crates/syn/syn-3.0.9.crate",
-      "hash": "sha256-14yN7kx78OFGcwlyVv7WFCzp07haQIGJ0HSCRCFFgjs=",
-      "destination": "cargo/syn-3.0.9.crate"
+      "url": "https://static.crates.io/crates/syn/syn-3.0.10.crate",
+      "hash": "sha256-SunMvqOnsLCUQwNkkMjzSosbdg/TReXA2uCqxxj66nk=",
+      "destination": "cargo/syn-3.0.10.crate"
     },
     {
       "url": "https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.27.crate",

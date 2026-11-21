@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "checksumSHA256": "1c801bb1feeebbb96c710dbf706ab8973e3df89c2e87800ff64c457c5935bb9c",
-  "preparedAt": "2026-11-07T00:22:33.340Z",
-  "pom": "b9f9bd3f0fda74e454c81fa5c7eb72fb66ad0b019a28cf731e9d00356a388b17",
-  "policy": "bc4f306eaeabd2ed649d171fe4e2c19929d32b099d5f08284f012610ff198eac",
-  "previousChecksums": "65bf34bec18971dede4435ef0ec40853f9a878e63695f891e6d968c39e8c38a2",
+  "checksumSHA256": "8a0c9066daa395b819cf1275a34db943ed386a0a9c39a2f7daf9cf2ffa5e6f14",
+  "pom": "ec6f3d874a1e4f8b3b1bd3673fc1b40e01abc03e899c04841a69452d3f527404",
+  "policy": "cd92a55104b95a61b5d995b26475599059423ca98a7865e40bc7546ef2772bac",
+  "preparedAt": "2026-11-21T19:04:33.090Z",
+  "previousChecksums": "1c801bb1feeebbb96c710dbf706ab8973e3df89c2e87800ff64c457c5935bb9c",
   "resolver": "org.apache.maven.plugins:maven-dependency-plugin:3.11.0:go-offline",
   "artifacts": [
     {
@@ -1004,6 +1004,36 @@
       "authentication": "reviewed-pin"
     },
     {
+      "path": "org/apache/commons/commons-lang3/3.22.0/commons-lang3-3.22.0.jar",
+      "sha256": "2ea88052c8662bf51874f4159467ba24b040b22dfd54d2596e11936896c76192",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.22.0/commons-lang3-3.22.0.jar.asc",
+      "signatures": [
+        {
+          "fingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "primaryFingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "createdAt": 1794147054,
+          "expiresAt": 0
+        }
+      ]
+    },
+    {
+      "path": "org/apache/commons/commons-lang3/3.22.0/commons-lang3-3.22.0.pom",
+      "sha256": "f2d1b011aa010af1b40c7c7ac3067914ca101f13da7f9cf6fc6771c8a9e82518",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-lang3/3.22.0/commons-lang3-3.22.0.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "primaryFingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "createdAt": 1794147054,
+          "expiresAt": 0
+        }
+      ]
+    },
+    {
       "path": "org/apache/commons/commons-parent/102/commons-parent-102.pom",
       "sha256": "1a3775fa4b265910941ca7f09c6b0df4b30f61e301f03dbebbfd35c49ca740af",
       "identity": "Previously reviewed project checksum",
@@ -1026,6 +1056,21 @@
       "sha256": "31a68daabb4b361453788b9045ac87a6ae87c705e578facd99e4d9ddb6a481e9",
       "identity": "Previously reviewed project checksum",
       "authentication": "reviewed-pin"
+    },
+    {
+      "path": "org/apache/commons/commons-parent/107/commons-parent-107.pom",
+      "sha256": "3b38ba6b152b096162e883b3f10ef1c40a8f37cf9d9392a34cab8fd580a98ffa",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/107/commons-parent-107.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "primaryFingerprint": "F4DD59C90148BDC52BEB90A4530AA5F25C25011F",
+          "createdAt": 1793191395,
+          "expiresAt": 0
+        }
+      ]
     },
     {
       "path": "org/apache/commons/commons-parent/14/commons-parent-14.pom",
@@ -2813,16 +2858,34 @@
       ]
     },
     {
-      "path": "org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.jar",
-      "sha256": "897010dfebcc9339f36abef8b3b2a6879f49a8b93d83e3881b9fb6b0b382cd5b",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
+      "path": "org/codehaus/plexus/plexus-archiver/4.16.0/plexus-archiver-4.16.0.jar",
+      "sha256": "6aa71c44a0568892c717333010f9340a2f94e00e1a0acbbf5f95fef8db213d35",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.16.0/plexus-archiver-4.16.0.jar.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794686800,
+          "expiresAt": 0
+        }
+      ]
     },
     {
-      "path": "org/codehaus/plexus/plexus-archiver/4.15.0/plexus-archiver-4.15.0.pom",
-      "sha256": "30fac4a85af7199ab3a8edbbfe7fab293c98f788cf92f33f1836a87672089106",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
+      "path": "org/codehaus/plexus/plexus-archiver/4.16.0/plexus-archiver-4.16.0.pom",
+      "sha256": "8cc6ba7b96a5f51b6b8479902acd7980d5a714e3fd832a76c76d02b61e537255",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-archiver/4.16.0/plexus-archiver-4.16.0.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794686803,
+          "expiresAt": 0
+        }
+      ]
     },
     {
       "path": "org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.pom",
@@ -3098,16 +3161,34 @@
       ]
     },
     {
-      "path": "org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.jar",
-      "sha256": "e388633a2cf05d2569c0a3887351f3f34e777dde5c5482bfb9749c2ecb9f483b",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
+      "path": "org/codehaus/plexus/plexus-io/3.8.1/plexus-io-3.8.1.jar",
+      "sha256": "004f28eecf5cf3c9b09bb947e195d153c8d98a0c2a06426ece04fc1b09b8c986",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-io/3.8.1/plexus-io-3.8.1.jar.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1792368458,
+          "expiresAt": 0
+        }
+      ]
     },
     {
-      "path": "org/codehaus/plexus/plexus-io/3.8.0/plexus-io-3.8.0.pom",
-      "sha256": "3df9925f62a2fbe0cd5d156aebd297c7b1eef4f8164d95da847359081ed30dfe",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
+      "path": "org/codehaus/plexus/plexus-io/3.8.1/plexus-io-3.8.1.pom",
+      "sha256": "92b9865e79cd54d6f2370bf49623ed3bacf0db1d3dbb96c00b8c48d99986b004",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-io/3.8.1/plexus-io-3.8.1.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1792368458,
+          "expiresAt": 0
+        }
+      ]
     },
     {
       "path": "org/codehaus/plexus/plexus-java/1.6.0/plexus-java-1.6.0.jar",
@@ -3158,16 +3239,40 @@
       "authentication": "reviewed-pin"
     },
     {
-      "path": "org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.jar",
-      "sha256": "7c2cdf8b4a02a2ee3f0514b8d74ad5eb6e2365eeb073a5cabd6f2d61d8f871df",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
-    },
-    {
       "path": "org/codehaus/plexus/plexus-utils/3.6.2/plexus-utils-3.6.2.pom",
       "sha256": "5ee26b9f0529038802fc1c205a5ce55be5eff247af0a5e5b55cf831652c173ed",
       "identity": "Previously reviewed project checksum",
       "authentication": "reviewed-pin"
+    },
+    {
+      "path": "org/codehaus/plexus/plexus-utils/3.6.4/plexus-utils-3.6.4.jar",
+      "sha256": "ce50e7e865a648d42497a53880a6860de5a85b354c58aac2502bc97b084671ec",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/3.6.4/plexus-utils-3.6.4.jar.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794699066,
+          "expiresAt": 0
+        }
+      ]
+    },
+    {
+      "path": "org/codehaus/plexus/plexus-utils/3.6.4/plexus-utils-3.6.4.pom",
+      "sha256": "96c819f798094a6f0430af0fa4b57fa0c0cb39a01f794e1fe4f40bafba3d241f",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/3.6.4/plexus-utils-3.6.4.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794699067,
+          "expiresAt": 0
+        }
+      ]
     },
     {
       "path": "org/codehaus/plexus/plexus-utils/4.0.2/plexus-utils-4.0.2.pom",
@@ -3188,16 +3293,40 @@
       "authentication": "reviewed-pin"
     },
     {
-      "path": "org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.jar",
-      "sha256": "6a2fe69e98301882bb2bb05afe36414eb82d6f7c63299cccdb2dc02b4358a968",
-      "identity": "Previously reviewed project checksum",
-      "authentication": "reviewed-pin"
-    },
-    {
       "path": "org/codehaus/plexus/plexus-utils/4.1.0/plexus-utils-4.1.0.pom",
       "sha256": "449f00ecf08a9e78ec67661ac3b155b6a4493c90aeb4dcb7e2869eef1f067127",
       "identity": "Previously reviewed project checksum",
       "authentication": "reviewed-pin"
+    },
+    {
+      "path": "org/codehaus/plexus/plexus-utils/4.2.0/plexus-utils-4.2.0.jar",
+      "sha256": "67a4240e08284c7514bf1e34de349125dfce7a3d1f51aaab32010d5b61df5068",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.2.0/plexus-utils-4.2.0.jar.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794698278,
+          "expiresAt": 0
+        }
+      ]
+    },
+    {
+      "path": "org/codehaus/plexus/plexus-utils/4.2.0/plexus-utils-4.2.0.pom",
+      "sha256": "b4a10752441147b08704359775a41db737178a70f0ef764a4672051dae9e04d6",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "authentication": "signature",
+      "proof": "https://maven-central.storage-download.googleapis.com/maven2/org/codehaus/plexus/plexus-utils/4.2.0/plexus-utils-4.2.0.pom.asc",
+      "signatures": [
+        {
+          "fingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "primaryFingerprint": "32118CF76C9EC5D918E54967CA80D1F0EB6CA4BA",
+          "createdAt": 1794698278,
+          "expiresAt": 0
+        }
+      ]
     },
     {
       "path": "org/codehaus/plexus/plexus-velocity/2.3.0/plexus-velocity-2.3.0.jar",

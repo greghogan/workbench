@@ -1,5 +1,5 @@
 import * as http from "node:http";
-import { UserFacingError } from "../../app/src/core/diagnostics/diagnostic-errors.mjs";
+import { combineFailures, UserFacingError } from "../../app/src/core/diagnostics/diagnostic-errors.mjs";
 import { decodePHPReleases } from "./php.mjs";
 import { metadataBytes } from "../../app/src/core/toolchains/acquisition/metadata-http.mts";
 import { parse as parseToml } from "smol-toml";
@@ -135,6 +135,18 @@ export class MaintenanceSources {
   constructor(readonly request: MetadataRequest = metadataRequests()) {}
   async json(url: string, accept?: string): Promise<unknown> {
     return JSON.parse(await this.request(url, accept)) as unknown;
+  }
+  private async githubFile(repository: string, ref: string, path: string, accept: string): Promise<string> {
+    try {
+      return await this.request(`https://raw.githubusercontent.com/${repository}/${ref}/${path}`, accept);
+    } catch (primary) {
+      try {
+        const url = `https://api.github.com/repos/${repository}/contents/${path}?ref=${encodeURIComponent(ref)}`;
+        return await this.request(url, "application/vnd.github.raw+json");
+      } catch (fallback) {
+        throw combineFailures(primary, fallback, `Could not read ${repository}/${path} at ${ref}`);
+      }
+    }
   }
   async github(repository: string, prefix = "v", perPage = 100): Promise<Release[]> {
     const url = `https://api.github.com/repos/${repository}/releases?per_page=${String(perPage)}`;
@@ -373,14 +385,20 @@ export class MaintenanceSources {
       return version ? [{ version, reference: url }] : [];
     });
   }
-  async ruby(): Promise<Release[]> {
-    const url = "https://raw.githubusercontent.com/ruby/www.ruby-lang.org/master/_data/releases.yml";
-    return records(parseYaml(await this.request(url, "text/plain")) as unknown, "Invalid Ruby release index").flatMap(
-      (entry) => {
-        const version = stableVersion(string(entry.version, "Missing Ruby version"));
-        return version ? [{ version, reference: url }] : [];
-      },
+  async rubyReleaseIndex(): Promise<Record<string, unknown>[]> {
+    return records(
+      parseYaml(
+        await this.githubFile("ruby/www.ruby-lang.org", "master", "_data/releases.yml", "text/plain"),
+      ) as unknown,
+      "Invalid Ruby release index",
     );
+  }
+  async ruby(): Promise<Release[]> {
+    const reference = "https://github.com/ruby/www.ruby-lang.org/blob/master/_data/releases.yml";
+    return (await this.rubyReleaseIndex()).flatMap((entry) => {
+      const version = stableVersion(string(entry.version, "Missing Ruby version"));
+      return version ? [{ version, reference }] : [];
+    });
   }
   async php(): Promise<Release[]> {
     const url = "https://www.php.net/releases/index.php?json&version=8";
@@ -437,12 +455,17 @@ export class MaintenanceSources {
     ];
   }
   async playwrightBrowser(version: string): Promise<Release> {
-    const url = `https://raw.githubusercontent.com/microsoft/playwright/v${version}/packages/playwright-core/browsers.json`;
-    const data = record(await this.json(url), "Invalid browser compatibility metadata");
+    const path = "packages/playwright-core/browsers.json",
+      ref = `v${version}`;
+    const contents = await this.githubFile("microsoft/playwright", ref, path, "application/json");
+    const data = record(JSON.parse(contents) as unknown, "Invalid browser compatibility metadata");
     const browser = records(data.browsers, "Missing browser index").find(
       (browser) => browser.name === "chromium-headless-shell",
     );
-    return { version: string(browser?.browserVersion, "Missing paired browser version"), reference: url };
+    return {
+      version: string(browser?.browserVersion, "Missing paired browser version"),
+      reference: `https://github.com/microsoft/playwright/blob/${ref}/${path}`,
+    };
   }
 }
 
