@@ -25,9 +25,18 @@ jobs:
           ninja --version
           cmake --version
           rustup run 1.100.0 cargo --version
-      - name: Verify worker parking and token return
+      - name: Verify worker limits and private grants
         shell: bash
         run: |
+          uid=5100
+          while id -nu "$uid" >/dev/null 2>&1; do uid=$((uid + 1)); done
+          account="wb-fifo-$GITHUB_RUN_ID"
+          sudo -n dscl . -create "/Users/$account"
+          trap 'sudo -n dscl . -delete "/Users/$account"' EXIT
+          sudo -n dscl . -create "/Users/$account" Password '*'
+          sudo -n dscl . -create "/Users/$account" UniqueID "$uid"
+          sudo -n dscl . -create "/Users/$account" PrimaryGroupID "$(id -g)"
+          sudo -n dscl . -create "/Users/$account" UserShell /usr/bin/false
           sudo --preserve-env=PATH "$(command -v node)" scripts/native-service-probes/test-jobserver-fifo.js \
             "$(command -v gmake)" "$(command -v ninja)" "$(command -v cmake)" \
-            "$(rustup which --toolchain 1.100.0 cargo)" "$(rustup which --toolchain 1.100.0 rustc)"
+            "$(rustup which --toolchain 1.100.0 cargo)" "$(rustup which --toolchain 1.100.0 rustc)" "$uid"

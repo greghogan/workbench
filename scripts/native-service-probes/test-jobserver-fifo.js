@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import {
-  chmodSync, chownSync, closeSync, constants, mkdirSync, mkdtempSync,
+  chmodSync, chownSync, closeSync, constants, copyFileSync, mkdirSync, mkdtempSync,
   openSync, readFileSync, readSync, rmSync, writeFileSync, writeSync,
 } from "node:fs";
 import { join } from "node:path";
 
-const [make, ninja, cmake, cargo, rustc] = process.argv.slice(2);
+const [make, ninja, cmake, cargo, rustc, otherUid] = process.argv.slice(2);
 assert(make && ninja && cmake && cargo && rustc, "Pass GNU Make, Ninja, CMake, Cargo and rustc paths");
 const uid = Number(process.env.SUDO_UID);
 const gid = Number(process.env.SUDO_GID);
@@ -52,20 +52,20 @@ if (tracked) appendFileSync(file, '- ' + name + '\\n');
 process.exitCode = result.status ?? 1;
 `, { mode: 0o755 });
 
-function setup(name) {
+function setup(name, identity = { uid, gid }) {
   const directory = join(root, name);
   mkdirSync(directory);
-  chownSync(directory, uid, gid);
+  chownSync(directory, identity.uid, identity.gid);
   const events = join(directory, "events");
   writeFileSync(events, "");
-  chownSync(events, uid, gid);
+  chownSync(events, identity.uid, identity.gid);
   return { directory, events };
 }
 
-function build(program, arguments_, directory, env) {
+function build(program, arguments_, directory, env, identity = { uid, gid }) {
   return new Promise((resolve, reject) => {
     const child = spawn(program, arguments_, {
-      cwd: directory, env, uid, gid, stdio: ["ignore", "pipe", "pipe"],
+      cwd: directory, env, ...identity, stdio: ["ignore", "pipe", "pipe"],
       signal: AbortSignal.timeout(45_000),
     });
     let output = "";
@@ -82,15 +82,19 @@ function build(program, arguments_, directory, env) {
   });
 }
 
-async function verify(name, prepare) {
-  const { directory, events } = setup(name);
-  const { program, arguments_, environment = {} } = prepare(directory, events);
+function openFifo(directory, identity = { uid, gid }) {
   const fifo = join(directory, "jobs.fifo");
   const mkfifo = spawnSync("/usr/bin/mkfifo", ["-m", "600", fifo], { stderr: "inherit" });
   assert.equal(mkfifo.status, 0);
-  chownSync(fifo, uid, gid);
+  chownSync(fifo, identity.uid, identity.gid);
   const descriptor = openSync(fifo, constants.O_RDWR | constants.O_NONBLOCK | constants.O_NOFOLLOW);
-  const flags = `-j --jobserver-auth=fifo:${fifo}`;
+  return { fifo, descriptor, flags: `-j --jobserver-auth=fifo:${fifo}` };
+}
+
+async function verify(name, prepare) {
+  const { directory, events } = setup(name);
+  const { program, arguments_, environment = {} } = prepare(directory, events);
+  const { descriptor, flags } = openFifo(directory);
   try {
     assert.equal(writeSync(descriptor, Buffer.from("+")), 1);
     await build(program, arguments_, directory, {
@@ -121,6 +125,83 @@ async function verify(name, prepare) {
     console.log(`PASS ${name}: ${seen.size} workers, peak ${peak}, borrowed token returned`);
   } finally {
     closeSync(descriptor);
+  }
+}
+
+async function verifyAcrossAccounts(secondUid) {
+  assert(Number.isSafeInteger(secondUid) && secondUid > 0 && secondUid !== uid);
+  const tool = join(root, "node");
+  copyFileSync(process.execPath, tool);
+  chmodSync(tool, 0o555);
+  const sharedLog = join(root, "shared-events");
+  writeFileSync(sharedLog, "");
+  chmodSync(sharedLog, 0o666);
+  const sharedWorker = join(root, "shared-worker.cjs");
+  writeFileSync(sharedWorker, `
+const { appendFileSync, readFileSync } = require('node:fs');
+const [file, label] = process.argv.slice(2);
+const record = state => appendFileSync(file, state + ' ' + label + ' ' + process.getuid() + '\\n');
+record('+');
+const barrier = Date.now() + 30000;
+while (readFileSync(file, 'utf8').split('\\n').filter(line => line.startsWith('+ ')).length < 3) {
+  if (Date.now() >= barrier) throw new Error('The machine budget did not admit three workers');
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+}
+record('-');
+`);
+  const first = { uid, gid };
+  const second = { uid: secondUid, gid };
+  const { directory: firstRoot } = setup("account-a", first);
+  const { directory: secondRoot } = setup("account-b", second);
+  const left = openFifo(firstRoot, first);
+  const right = openFifo(secondRoot, second);
+  function denyGrant(identity, grant) {
+    const attempt = spawnSync(tool, ["-e", `
+const { constants, openSync } = require('node:fs');
+try { openSync(process.argv[1], constants.O_RDONLY | constants.O_NONBLOCK); }
+catch (error) { if (error.code === 'EACCES') process.exit(42); throw error; }
+`, grant.fifo], { ...identity, encoding: "utf8" });
+    assert.equal(attempt.status, 42, attempt.stderr);
+  }
+  try {
+    denyGrant(first, right);
+    denyGrant(second, left);
+    const command = `${tool} ${sharedWorker} ${sharedLog}`;
+    writeFileSync(join(firstRoot, "Makefile"),
+      `.PHONY: all a1 a2\nall: a1 a2\na1:\n\t${command} a1\na2:\n\t${command} a2\n`);
+    writeFileSync(join(secondRoot, "build.ninja"),
+      `rule worker\n  command = ${command} $out\nbuild b1: worker\nbuild b2: worker\n`);
+    // Two implicit workers leave one token in a three-slot machine budget.
+    assert.equal(writeSync(left.descriptor, Buffer.from("+")), 1);
+    await Promise.all([
+      build(make, ["all"], firstRoot, { ...baseline, HOME: firstRoot, MAKEFLAGS: left.flags }, first),
+      build(ninja, [], secondRoot, { ...baseline, HOME: secondRoot, MAKEFLAGS: right.flags }, second),
+    ]);
+    const events = readFileSync(sharedLog, "utf8").trim().split("\n");
+    const firstWave = events.slice(0, 3).map(line => line.split(" ")[1]).sort();
+    assert.deepEqual(firstWave.slice(0, 2), ["a1", "a2"]);
+    assert.match(firstWave[2], /^b[12]$/u);
+    const active = new Set();
+    let peak = 0;
+    for (const line of events) {
+      const [mark, label, account] = line.split(" ");
+      assert.equal(Number(account), label.startsWith("a") ? uid : secondUid);
+      if (mark === "+") active.add(label);
+      else assert(mark === "-" && active.delete(label));
+      peak = Math.max(peak, active.size);
+    }
+    assert.equal(events.length, 8);
+    assert.equal(active.size, 0);
+    assert.equal(peak, 3);
+    const token = Buffer.alloc(1);
+    assert.equal(readSync(left.descriptor, token), 1);
+    assert.equal(token.toString(), "+");
+    assert.throws(() => readSync(left.descriptor, token), { code: "EAGAIN" });
+    assert.throws(() => readSync(right.descriptor, token), { code: "EAGAIN" });
+    console.log("PASS two accounts: private grants, three shared slots, and borrowed token returned");
+  } finally {
+    closeSync(right.descriptor);
+    closeSync(left.descriptor);
   }
 }
 
@@ -155,6 +236,7 @@ try {
     }
     return { program: cargo, arguments_: ["check", "--offline"], environment: { RUSTC_WRAPPER: compiler, PROBE_EVENTS: events } };
   });
+  if (otherUid) await verifyAcrossAccounts(Number(otherUid));
 } finally {
   rmSync(root, { recursive: true });
 }
