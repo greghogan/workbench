@@ -5,16 +5,40 @@
 #include <iphlpapi.h>
 #include <wchar.h>
 
-static const wchar_t reservation_name[] = L"WorkbenchPortReservation";
+static const wchar_t reserved_port_name[] = L"WorkbenchReservedPort";
+static const wchar_t boot_key_name[] = L"WorkbenchPortReservation";
+static const wchar_t token_name[] = L"Token";
 
-static DWORD read_owned_reservation(HKEY registration, USHORT port, ULONG64 *owner) {
-    DWORD size = sizeof(*owner);
-    LSTATUS result = RegGetValueW(registration, NULL, reservation_name, RRF_RT_REG_QWORD, NULL, owner, &size);
+static DWORD check_boot_token(HKEY registration, ULONG64 token, BOOL replace) {
+    HKEY boot;
+    LSTATUS result = RegCreateKeyExW(registration, boot_key_name, 0, NULL, REG_OPTION_VOLATILE,
+                                    KEY_QUERY_VALUE | KEY_SET_VALUE, NULL, &boot, NULL);
     if (result)
         return (DWORD)result;
-    ULONG64 found = 0;
-    DWORD error = LookupPersistentTcpPortReservation(htons(port), 1, &found);
-    return error ? error : found == *owner ? NO_ERROR : ERROR_INVALID_OWNER;
+    ULONG64 previous;
+    DWORD size = sizeof(previous);
+    result = RegGetValueW(boot, NULL, token_name, RRF_RT_REG_QWORD, NULL, &previous, &size);
+    if (replace || result == ERROR_FILE_NOT_FOUND)
+        result = RegSetValueExW(boot, token_name, 0, REG_QWORD, (const BYTE *)&token, sizeof(token));
+    else if (!result && previous != token)
+        result = ERROR_INVALID_OWNER;
+    RegCloseKey(boot);
+    return (DWORD)result;
+}
+
+static DWORD check_owned_reservation(HKEY registration, USHORT port) {
+    DWORD reserved_port;
+    DWORD size = sizeof(reserved_port);
+    LSTATUS result = RegGetValueW(registration, NULL, reserved_port_name, RRF_RT_REG_DWORD,
+                                  NULL, &reserved_port, &size);
+    if (result)
+        return (DWORD)result;
+    if (reserved_port != port)
+        return ERROR_INVALID_OWNER;
+    // Windows can issue a new token for the same persistent reservation after reboot.
+    ULONG64 token;
+    DWORD error = LookupPersistentTcpPortReservation(htons(port), 1, &token);
+    return error ? error : check_boot_token(registration, token, FALSE);
 }
 
 static DWORD owned_service(SC_HANDLE service, const wchar_t *command, HKEY registration, USHORT port) {
@@ -30,15 +54,15 @@ static DWORD owned_service(SC_HANDLE service, const wchar_t *command, HKEY regis
         wcscmp(saved.definition.lpBinaryPathName, command) ||
         _wcsicmp(saved.definition.lpServiceStartName, L"LocalSystem"))
         return ERROR_INVALID_OWNER;
-    ULONG64 owner;
-    return read_owned_reservation(registration, port, &owner);
+    return check_owned_reservation(registration, port);
 }
 
 static DWORD service_key(const wchar_t *name, HKEY *registration) {
     wchar_t key[128];
     if (swprintf(key, 128, L"SYSTEM\\CurrentControlSet\\Services\\%ls", name) < 0)
         return ERROR_INVALID_NAME;
-    return (DWORD)RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, registration);
+    return (DWORD)RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_CREATE_SUB_KEY,
+                               registration);
 }
 
 static DWORD register_service(SC_HANDLE manager, const wchar_t *name, const wchar_t *command, USHORT port) {
@@ -57,7 +81,12 @@ static DWORD register_service(SC_HANDLE manager, const wchar_t *name, const wcha
     HKEY receipt;
     error = service_key(name, &receipt);
     if (!error) {
-        error = (DWORD)RegSetValueExW(receipt, reservation_name, 0, REG_QWORD, (const BYTE *)&owner, sizeof(owner));
+        error = check_boot_token(receipt, owner, TRUE);
+        if (!error) {
+            DWORD reserved_port = port;
+            error = (DWORD)RegSetValueExW(receipt, reserved_port_name, 0, REG_DWORD,
+                                          (const BYTE *)&reserved_port, sizeof(reserved_port));
+        }
         if (!error)
             error = (DWORD)RegFlushKey(receipt);
         RegCloseKey(receipt);
@@ -77,8 +106,7 @@ static DWORD unregister_service(SC_HANDLE service, HKEY registration, USHORT por
         return GetLastError();
     if (current.dwCurrentState != SERVICE_STOPPED)
         return ERROR_SERVICE_CANNOT_ACCEPT_CTRL;
-    ULONG64 owner;
-    DWORD error = read_owned_reservation(registration, port, &owner);
+    DWORD error = check_owned_reservation(registration, port);
     if (error)
         return error;
     error = DeletePersistentTcpPortReservation(htons(port), 1);
@@ -86,10 +114,9 @@ static DWORD unregister_service(SC_HANDLE service, HKEY registration, USHORT por
         return error;
     if (!DeleteService(service)) {
         error = GetLastError();
-        if (!CreatePersistentTcpPortReservation(htons(port), 1, &owner)) {
-            RegSetValueExW(registration, reservation_name, 0, REG_QWORD, (const BYTE *)&owner, sizeof(owner));
-            RegFlushKey(registration);
-        }
+        ULONG64 owner;
+        if (!CreatePersistentTcpPortReservation(htons(port), 1, &owner))
+            check_boot_token(registration, owner, TRUE);
     }
     return error;
 }

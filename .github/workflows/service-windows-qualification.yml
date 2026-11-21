@@ -1,4 +1,4 @@
-name: Windows managed user recovery qualification
+name: Windows service reboot candidate
 on:
   push:
     branches: ["ci/tsk-3-windows-qualification-20261120"]
@@ -116,4 +116,5 @@ jobs:
           $artifacts = Join-Path $env:RUNNER_TEMP runtime-candidate/workbench-artifacts
           $archive = Join-Path $artifacts workbench.tar.gz
           $checksum = (Get-Content -LiteralPath (Join-Path $artifacts SHA256SUMS) -Raw).Split(' ')[0]
+          & scripts/check-windows-service.ps1 -Node (Get-Command node.exe).Source -Archive $archive -Digest $checksum -ResumeWorker -IdleWorkers -Handoff
           & scripts/check-windows-service.ps1 -Node (Get-Command node.exe).Source -Archive $archive -Digest $checksum -DesktopTask
