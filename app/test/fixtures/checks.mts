@@ -14,6 +14,7 @@ export function configuredCheck(overrides: Partial<ConfiguredCheck> = {}): Confi
     environment: "native",
     dockerImage: undefined,
     stages: ["commit", "ci"],
+    extended: false,
     online: false,
     requiresSetup: true,
     coverage: undefined,

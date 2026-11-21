@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { expect, test, vi } from "vitest";
 import { runChecks, inspectChecks, listChecks } from "../../../../src/core/execution/checks/checks.ts";
+import { runGate } from "../../../../src/core/execution/checks/check-gates.ts";
 import { readChecks } from "../../../../src/core/execution/checks/check-configuration.ts";
 import { planChecks } from "../../../../src/core/execution/checks/check-plan.ts";
 import { quote } from "../../../../src/core/toolchains/toolchains.ts";
@@ -29,7 +30,9 @@ test("checks executes by default while list, JSON, and excluded-plan inspection 
     expect(result.status, result.stdout + result.stderr).toBe(0);
     return result.stdout;
   };
-  expect(invoke("--list")).toContain(". test");
+  const focused = invoke("--list");
+  expect(focused).toContain(". test");
+  expect(focused).toContain("Focused role run skips structural validation.");
   expect(JSON.parse(invoke("--json"))).toMatchObject({
     selected: [
       { name: ". setup", role: "setup" },
@@ -41,6 +44,60 @@ test("checks executes by default while list, JSON, and excluded-plan inspection 
   expect(existsSync(join(root, "dependency"))).toBe(false);
   invoke();
   expect(events()).toEqual(["setup", "test"]);
+});
+
+test("the combined check list labels and separates the two gate selections", async () => {
+  const { root, config, save } = fixture();
+  config.check.push({ name: "Online advisory", role: "advisory", path: ".", online: true, command: ["unused"] });
+  save();
+  const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    await runGate(root, "check", { list: true, path: "." });
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    const [commit, push] = output.split(/\n\n=+\nOnline pre-push checks\n=+\n\n/);
+    expect(commit).toMatch(/^(=+)\nPre-commit checks\n\1\n\n[\s\S]*\. test/);
+    expect(output).not.toContain("Includes structural validation.");
+    expect(commit).not.toContain("Online advisory");
+    expect(push).toContain("Online advisory");
+    expect(push).not.toContain(". test");
+    for (const section of [commit, push]) {
+      expect(section).toContain("\n\nSources\n-------\n");
+      expect(section).toContain("\n\nExecution\n---------\n");
+    }
+  } finally {
+    log.mockRestore();
+  }
+});
+
+test("the combined extended gate selects an online check only once across both stages", async () => {
+  const { root, config, save } = fixture();
+  config.check.push({
+    name: "Extended online verification",
+    role: "integration",
+    path: ".",
+    online: true,
+    extended: true,
+    stages: ["commit", "ci"],
+    command: ["unused"],
+  });
+  save();
+  const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    const options = { list: true, json: true, path: ".", extended: true };
+    await runGate(root, "check", options);
+    const plan = JSON.parse(String(log.mock.lastCall?.[0])) as {
+      preCommit: ReturnType<typeof inspectChecks>;
+      prePush: ReturnType<typeof inspectChecks>;
+    };
+    expect(plan.preCommit.selected.map(({ name }) => name)).toContain("Extended online verification");
+    expect(plan.prePush.selected.map(({ name }) => name)).not.toContain("Extended online verification");
+
+    await runGate(root, "check", { ...options, stage: "ci" });
+    const ci = JSON.parse(String(log.mock.lastCall?.[0])) as ReturnType<typeof inspectChecks>;
+    expect(ci.selected.map(({ name }) => name)).toContain("Extended online verification");
+  } finally {
+    log.mockRestore();
+  }
 });
 
 test.skipIf(process.platform === "win32")(
@@ -244,7 +301,7 @@ test("inspection resolves the execution plan, including coverage, setup, exclusi
     log.mockClear();
     listChecks(root, { ...selected, all: true });
     const output = log.mock.calls.flat().join("\n");
-    expect(output).toContain("Excluded checks:");
+    expect(output).toContain("\n\nExcluded checks\n---------------\n");
     expect(output).toContain("SOURCE");
     expect(output).toContain("coverage");
     expect(existsSync(join(root, "events"))).toBe(false);

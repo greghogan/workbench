@@ -25,6 +25,7 @@ export interface ConfiguredCheck {
   environment: CheckEnvironment;
   dockerImage: string | undefined;
   stages: string[];
+  extended: boolean;
   online: boolean;
   requiresSetup: boolean;
   coverage: ReturnType<typeof checkPolicy>["coverage"];
@@ -83,6 +84,7 @@ function configuredChecks(root: string): ConfiguredCheck[] {
           "path",
           "command",
           "stages",
+          "extended",
           "online",
           "requires_setup",
           "environment",

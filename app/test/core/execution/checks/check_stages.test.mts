@@ -2,9 +2,10 @@ import { required } from "../../../../src/core/runtime/invariants.ts";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test, vi } from "vitest";
-import { runChecks } from "../../../../src/core/execution/checks/checks.ts";
+import { inspectChecks, runChecks } from "../../../../src/core/execution/checks/checks.ts";
 import { readChecks } from "../../../../src/core/execution/checks/check-configuration.ts";
 import { planChecks, type CheckSelection } from "../../../../src/core/execution/checks/check-plan.ts";
+import { CheckNetwork } from "../../../../src/core/execution/checks/check-network.mjs";
 import { ciTargets } from "../../../../src/core/execution/ci/ci-targets.ts";
 import { ciMatrix } from "../../../../src/core/execution/ci/ci.ts";
 import { stageFixtures } from "../../../fixtures/check-stages.mjs";
@@ -12,6 +13,45 @@ import { stageFixtures } from "../../../fixtures/check-stages.mjs";
 const distribution = resolve(import.meta.dirname, "../../../../..");
 
 const fixture = stageFixtures();
+
+test("extended checks preserve the ordinary gate and match the scope and platform preview", async () => {
+  const { root, config, save, events, clear } = fixture();
+  const extra = {
+    role: "integration",
+    command: [process.execPath, "step.cjs", "extended"],
+    extended: true,
+    ci: { operating_systems: ["linux"], environments: ["native"] },
+  };
+  config.check.unshift({ ...extra, name: "Linux exercise", path: "." });
+  config.check.push(
+    { ...extra, name: "Service exercise", path: "service" },
+    { ...extra, name: "Online exercise", path: ".", online: true },
+    {
+      ...extra,
+      name: "Always exercised",
+      path: ".",
+      stages: ["commit", "ci"],
+      command: [process.execPath, "step.cjs", "ordinary"],
+    },
+  );
+  save();
+
+  const selection = { path: ".", operatingSystem: "linux" };
+  const preview = { ...selection, extended: true };
+  const names = (options: CheckSelection) => inspectChecks(root, options).selected.map((check) => check.name);
+  expect(names(selection)).toEqual([". setup", ". test", "Always exercised"]);
+  expect(names(preview)).toEqual([". setup", ". test", "Always exercised", "Linux exercise"]);
+  expect(names({ ...preview, operatingSystem: "macos" })).toEqual(names(selection));
+  expect(names({ ...preview, stage: "ci", network: CheckNetwork.Online })).toEqual([". setup", "Online exercise"]);
+  expect(names({ project: "service", operatingSystem: "linux", extended: true })).toContain("Service exercise");
+  expect(inspectChecks(root, preview).structuralValidation).toBe(true);
+
+  await runChecks(root, selection);
+  expect(events()).toEqual(["setup", "test", "ordinary"]);
+  clear();
+  await runChecks(root, preview);
+  expect(events()).toEqual(["setup", "test", "ordinary", "extended"]);
+});
 
 test("commit, CI and manual runs execute one test variant with fresh setup", async () => {
   const { root, events, clear, config, save } = fixture();

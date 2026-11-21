@@ -116,7 +116,10 @@ export async function withCachedChecks(
     options.checkNames ||
     options.stage === "ci" ||
     plan.cleanup ||
-    plan.sessions.some((session) => session.checks.some((check) => check.role === "advisory")) ||
+    // Extended checks may probe host services and disposable environments outside the source fingerprint.
+    plan.sessions.some((session) =>
+      session.checks.some((check) => check.role === "advisory" || (options.extended && check.extended)),
+    ) ||
     !plan.sessions.length ||
     [process.env.CI, process.env.GITHUB_ACTIONS, process.env.GITLAB_CI].some(
       (value) => value && value !== "false" && value !== "0",

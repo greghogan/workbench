@@ -21,6 +21,12 @@ export interface GateOptions extends CheckInspectionOptions {
   remote?: string;
 }
 
+const gateHeadings = {
+  check: undefined,
+  "pre-commit": "Pre-commit checks",
+  "pre-push": "Online pre-push checks",
+};
+
 const connectivityUrl = "https://api.osv.dev/";
 const unavailableCodes = new Set([
   "ENETDOWN",
@@ -64,13 +70,14 @@ async function executeGate(
   options: GateOptions,
   recordReport?: (report: CheckRunResult) => void,
 ): Promise<void> {
+  if (mode !== "check" && options.extended) throw new Error("--extended applies only to check");
   if (mode !== "check" && (options.role?.length || options.excludeRole?.length))
     throw new Error(
       "role selection applies only to check; commit and push gates require their complete configured checks",
     );
   const focused = (options.role?.length ?? 0) > 0 || (options.excludeRole?.length ?? 0) > 0;
-  const online = { ...options, network: CheckNetwork.Online, stage: "ci", cache: false };
   const combined = mode === "check" && !focused && options.stage === undefined;
+  const online = { ...options, network: CheckNetwork.Online, stage: "ci", cache: false, afterCommit: combined };
   if (options.connectivityUrl !== undefined) {
     if (!combined) throw new Error("--connectivity-url applies only to the combined check gate");
     probeUrl(options.connectivityUrl);
@@ -108,9 +115,12 @@ async function executeGate(
       console.log(
         JSON.stringify({ preCommit: inspectChecks(root, options), prePush: inspectChecks(root, online) }, null, 2),
       );
+    } else if (combined) {
+      listChecks(root, selected, gateHeadings["pre-commit"]);
+      console.log();
+      listChecks(root, online, gateHeadings["pre-push"]);
     } else {
-      listChecks(root, selected);
-      if (combined) listChecks(root, online);
+      listChecks(root, selected, gateHeadings[mode]);
     }
     return;
   }
@@ -127,7 +137,9 @@ async function executeGate(
   };
   if (!inspectChecks(root, online).selected.length) {
     if (mode === "pre-push") await validateOnline();
-    console.log("No online pre-push checks are configured.");
+    console.log(
+      combined && options.extended ? "No additional online checks." : "No online pre-push checks are configured.",
+    );
     return;
   }
   if (combined && !(await onlineReachable(options.connectivityUrl))) return;

@@ -283,6 +283,7 @@ const commandFields = {
   role: text,
   command: array(text),
   stages: array(text),
+  extended: boolean,
   online: boolean,
   requires_setup: boolean,
   environment: text,

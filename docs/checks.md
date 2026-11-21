@@ -17,8 +17,9 @@ Use `workbench pre-commit` or `make pre-commit` for the commit-stage gate alone.
 `make pre-push` for required online checks without repeating offline tests. Pre-push never skips for lack of
 connectivity. Both gates validate project records. Online results always run fresh and include required setup.
 
-`workbench check --list` displays both plans without probing the network. Its `--json` output contains `preCommit` and
-`prePush` plans. `pre-commit --list` and `pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
+`workbench check --list` displays separate **Pre-commit checks** and **Online pre-push checks** sections without
+probing the network. Its `--json` output contains `preCommit` and `prePush` plans. `pre-commit --list` and
+`pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
 `check --role ROLE` runs only that selection. Repeat `--role` to select a union of roles, and repeat `--exclude-role` to
 omit roles. For example, `workbench check --role lint --role type` runs those roles in configured order with required
 setup once per session. Exclusions alone retain the commit-stage defaults; use `--stage ci` for CI selection. Unknown
@@ -26,6 +27,16 @@ roles, overlapping includes/excludes, and exclusion of required setup fail befor
 `distclean` alone. These flags apply to `check`; commit and push gates retain their complete configured requirements.
 Use `--path` or `--project` to focus any gate, and `--verbose` to stream full logs. The matching Make targets support
 the same root and project selectors.
+
+Add `--extended` to run the extended checks configured for the selected roots and platform. Combine it with
+`--list` to preview the selection. Declare an extended check with `extended = true` in project automation or in
+a language suite. It stays outside the ordinary gates unless you also assign regular `stages`. The check's
+`[check.ci]` or `[command.ci]` table restricts the platforms and environments where it can run in the extended
+suite. Online extended checks follow the combined gate's connectivity probe. Extended runs that select these checks
+execute fresh, since an installed service or external guest image can change independently of project source.
+
+Workbench's extended suite includes Miri, mutation and generated-input checks, reproducibility, managed-store
+preparation, and [installed service checks](installations.md#extended-service-checks).
 
 Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
 push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
@@ -439,8 +450,8 @@ with `make build ROOT=examples/languages/rust`. Adding projects or roots require
 sequentially. The direct Workbench CLI remains available without Make; the reference-directory Makefiles are static
 wrappers selecting their own root.
 
-Inspect the same resolved plan with `workbench check --list`: the table lists the selected root, role, environment,
-check, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
+Inspect the same resolved plans with `workbench check --list`. The tables show each check's root, role, environment,
+name, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
 imply `--list` and never execute checks. Selection flags match execution, including `--stage ci` and `--role test`. A
 focused role includes its setup but skips structural validation. `make pre-commit` and `workbench pre-commit` run
 complete commit gates. `make check` and `workbench check` additionally attempt online checks.

@@ -50,6 +50,10 @@
 - `scripts/check-windows-service.ps1`, `scripts/windows-service-helper.mts`, `scripts/service-native`: Build the
   Windows service adapter and qualify a verified release's system and private service operations on a disposable host.
 - `scripts/check-windows-startup.ps1`: Verify automatic Windows service and logon-task startup in a disposable guest.
+- `scripts/check-installed-services.mts`, `scripts/service-check-inputs.mts`: Verify extended-check candidate artifacts
+  and run the native installation scenarios on disposable hosts.
+- `scripts/check-windows-startup-vm.mts`, `scripts/windows-startup-bootstrap.ps1`: Run the Windows startup check
+  in an offline KVM guest overlay and report authenticated listener startup before discarding guest state.
 - `scripts/ci-platform.mts`: Groups configured target phases by operation and profile, rejecting missing or duplicated work.
 - `scripts/ci-candidate.mts`, `scripts/ci-release-ready.mts`: Binds the shared portable candidate to successful complete CI and immutable source identity.
 - `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.

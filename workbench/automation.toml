@@ -49,7 +49,7 @@ name = "Independent Workbench rebuilds"
 path = "."
 role = "reproducibility"
 command = [ "node", "scripts/check-reproducibility.mjs" ]
-stages = []
+extended = true
 
 [[check]]
 name = "Workbench profiling cases"
@@ -63,14 +63,74 @@ name = "Targeted mutation and partial-failure checks"
 path = "."
 role = "mutation"
 command = [ "node", "scripts/check-mutations.mjs" ]
-stages = []
+extended = true
 
 [[check]]
 name = "Generated-input exploration"
 path = "."
 role = "fuzz"
 command = [ "node", "scripts/check-fuzz.mjs" ]
-stages = []
+extended = true
+
+[[check]]
+name = "Managed Nix store preparation"
+path = "."
+role = "managed-store"
+command = [ "node", "scripts/verify-managed-preparation.mjs", "nix", "--store", "managed" ]
+extended = true
+
+[check.ci]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[check]]
+name = "Managed Guix store preparation"
+path = "."
+role = "managed-store"
+command = [ "node", "scripts/verify-managed-preparation.mjs", "guix", "--store", "managed" ]
+extended = true
+
+[check.ci]
+operating_systems = [ "linux" ]
+environments = [ "native" ]
+
+[[check]]
+name = "Native installed services"
+path = "."
+role = "installed-services"
+command = [ "node", "scripts/check-installed-services.mts" ]
+extended = true
+requires_setup = false
+
+[check.ci]
+operating_systems = [ "linux", "macos" ]
+environments = [ "native" ]
+
+[[check]]
+name = "Native installed services (Windows x64)"
+path = "."
+role = "installed-services"
+command = [ "node", "scripts/check-installed-services.mts" ]
+extended = true
+requires_setup = false
+
+[check.ci]
+operating_systems = [ "windows" ]
+architectures = [ "x64" ]
+environments = [ "native" ]
+
+[[check]]
+name = "Windows startup in a disposable guest"
+path = "."
+role = "windows-startup"
+command = [ "node", "scripts/check-windows-startup-vm.mts" ]
+extended = true
+requires_setup = false
+
+[check.ci]
+operating_systems = [ "linux" ]
+architectures = [ "x64" ]
+environments = [ "native" ]
 
 [[check]]
 name = "Development dependencies and tooling"

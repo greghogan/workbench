@@ -52,6 +52,7 @@ export function registerCheckCommands(program: Command, root: string): void {
     if (name === "check")
       command
         .option("--stage <stage>", "Run only the commit or ci stage")
+        .option("--extended", "Also run the configured extended checks")
         .option(
           "--role <role>",
           "Include a role (repeatable); includes setup and skips structural validation",

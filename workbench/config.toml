@@ -9,7 +9,13 @@ wrap_width = 120
 [checks]
 environment = "native"
 # Consumer integration acquires SDKs and upstream attestations through the GitHub API.
-pass_environment = [ "GH_TOKEN", "GITHUB_TOKEN" ]
+pass_environment = [
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "WORKBENCH_EXTENDED_ARTIFACTS",
+  "WORKBENCH_EXTENDED_DISPOSABLE_HOST",
+  "WORKBENCH_WINDOWS_STARTUP_INPUTS",
+]
 nix_docker_image = "nixos/nix@sha256:f159a58f390677f41e8e900a74b6e2f9c7f27b364122ae6acf7a652ce6c551c0"
 
 [ci]

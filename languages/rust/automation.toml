@@ -71,15 +71,24 @@ stages = []
 name = "miri portable"
 role = "miri"
 command = [ "node", "scripts/miri.mjs", "portable", "{workbench}" ]
-stages = []
+extended = true
 environment = "native"
+
+[command.ci]
+operating_systems = [ "linux" ]
+environments = [ "native", "devcontainer" ]
 
 [[command]]
 name = "miri avx2"
 role = "miri"
 command = [ "node", "scripts/miri.mjs", "avx2", "{workbench}" ]
-stages = []
+extended = true
 environment = "native"
+
+[command.ci]
+operating_systems = [ "linux" ]
+architectures = [ "x64" ]
+environments = [ "native", "devcontainer" ]
 
 
 [[command]]

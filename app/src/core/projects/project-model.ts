@@ -31,6 +31,7 @@ export interface CheckDefinition {
   path?: string;
   command: string[];
   stages?: string[];
+  extended?: boolean;
   online?: boolean;
   requires_setup?: boolean;
   environment?: string;

@@ -87,6 +87,7 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
     command: check.command,
     source: check.source,
     stages: check.stages,
+    ...(check.extended ? { extended: true } : {}),
     online: check.online,
     requiresSetup: check.requiresSetup,
   });
@@ -119,18 +120,20 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
   };
 }
 
-export function listChecks(root: string, options: CheckInspectionOptions = {}): void {
+function checkPlanSubheading(label: string): string {
+  return `\n${label}\n${"-".repeat(label.length)}`;
+}
+
+export function listChecks(root: string, options: CheckInspectionOptions = {}, heading?: string): void {
   const plan = inspectChecks(root, options);
   if (options.json) {
     console.log(JSON.stringify(plan, null, 2));
     return;
   }
-  console.log(`Check plan (${plan.stage ?? "manual selection"})`);
-  console.log(
-    plan.structuralValidation
-      ? "Includes structural validation."
-      : "Focused role run; structural validation is skipped.",
-  );
+  const title = heading ?? `Check plan (${plan.stage ?? "manual selection"})`;
+  const rule = "=".repeat(Math.min(process.stdout.columns || 72, 72));
+  console.log(`${rule}\n${title}\n${rule}\n`);
+  if (!plan.structuralValidation) console.log("Focused role run skips structural validation.\n");
   if (!plan.selected.length) {
     console.log(
       plan.allowEmpty ? "configured: structural checks only (checks.allow_empty = true)" : "configured: none selected",
@@ -149,21 +152,23 @@ export function listChecks(root: string, options: CheckInspectionOptions = {}): 
         ]),
       ),
     );
-    for (const [index, source] of sources.entries()) console.log(`${String(index + 1)}: ${source}`);
+    console.log(checkPlanSubheading("Sources"));
+    for (const [index, source] of sources.entries()) console.log(`  ${String(index + 1)}: ${source}`);
+    console.log(checkPlanSubheading("Execution"));
     console.log(
-      `Up to ${String(plan.execution.maxJobs)} groups; ${String(plan.execution.availableCpus)} CPUs available.`,
+      `  Up to ${String(plan.execution.maxJobs)} groups; ${String(plan.execution.availableCpus)} CPUs available.`,
     );
     for (const session of plan.execution.sessions) {
       const after = session.after.map(
         (dependency) => `${dependency.path} (${dependency.environment}) ${dependency.phase}`,
       );
       console.log(
-        `${session.path} (${session.environment}): ${session.cpus === null ? "tool-default parallelism" : `${String(session.cpus)} workers maximum`}${after.length ? `; after ${after.join(", ")}` : ""}.`,
+        `  ${session.path} (${session.environment}): ${session.cpus === null ? "tool-default parallelism" : `${String(session.cpus)} workers maximum`}${after.length ? `; after ${after.join(", ")}` : ""}.`,
       );
     }
   }
   if (options.all && plan.excluded.length) {
-    console.log("Excluded checks:");
+    console.log(checkPlanSubheading("Excluded checks"));
     console.log(
       terminalTable(
         ["ROOT", "ROLE", "CHECK", "REASON"],
@@ -172,7 +177,7 @@ export function listChecks(root: string, options: CheckInspectionOptions = {}): 
     );
   } else if (plan.excluded.length)
     console.log(
-      `${String(plan.excluded.length)} checks excluded; use ${options.network === CheckNetwork.Online ? "--json" : "--all or --json"} for details.`,
+      `\n${String(plan.excluded.length)} checks excluded; use ${options.network === CheckNetwork.Online ? "--json" : "--all or --json"} for details.`,
     );
 }
 

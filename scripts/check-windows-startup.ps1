@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Join-Path $env:ProgramFiles 'WorkbenchBootFixture'
 $Service = 'WorkbenchApplication'
 $Observer = 'WorkbenchBootFixtureObserver'
+$UserInstaller = 'WorkbenchBootFixtureUserInstall'
 $SystemPort = 37947
 $UserPort = 37948
 $UserName = 'wbdesktop'
@@ -25,6 +26,7 @@ $External = "$Root\workbench\bin\workbench.mjs"
 $SystemLauncher = "$Root\installed\workbench.cjs"
 $DesktopConfig = "$Root\desktop.json"
 $Marker = "$Root\phase.txt"
+$TaskHasNotRun = 0x00041303
 
 function Report([string] $Message) {
     $Message = "WB-TEST $Message"
@@ -50,6 +52,13 @@ function Clear-AutoLogon {
     Remove-ItemProperty -LiteralPath $Winlogon -Name DefaultPassword -ErrorAction SilentlyContinue
     Remove-ItemProperty -LiteralPath $Winlogon -Name AutoLogonCount -ErrorAction SilentlyContinue
 }
+function Enable-AutoLogon([string] $Password) {
+    Set-ItemProperty -LiteralPath $Winlogon -Name AutoAdminLogon -Value '1'
+    Set-ItemProperty -LiteralPath $Winlogon -Name DefaultDomainName -Value $env:COMPUTERNAME
+    Set-ItemProperty -LiteralPath $Winlogon -Name DefaultUserName -Value $UserName
+    Set-ItemProperty -LiteralPath $Winlogon -Name DefaultPassword -Value $Password
+    New-ItemProperty -LiteralPath $Winlogon -Name AutoLogonCount -PropertyType DWord -Value 1 -Force | Out-Null
+}
 function BrowserStatus([int] $Port) {
     $request = [Net.HttpWebRequest]::Create("http://127.0.0.1:$Port/projects")
     $request.Timeout = 1500
@@ -74,9 +83,10 @@ if ($stage -eq 'prepare') {
         !$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -or
         (Get-Service -Name $Service -ErrorAction SilentlyContinue) -or
         (Get-ScheduledTask -TaskName $Observer -ErrorAction SilentlyContinue) -or
+        (Get-ScheduledTask -TaskName $UserInstaller -ErrorAction SilentlyContinue) -or
         (Get-LocalUser -Name $UserName -ErrorAction SilentlyContinue) -or
         (Test-Path -LiteralPath $Root)) {
-        throw 'Use a clean disposable Windows guest with administrative access. This check reboots it twice.'
+        throw 'Use a clean disposable Windows guest with administrative access. This check reboots it.'
     }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $Archive).Hash -ne $Digest) {
         throw 'The candidate archive checksum differs from its verified record.'
@@ -112,44 +122,34 @@ try {
 
             $password = 'Az9!' + [guid]::NewGuid().ToString('N')
             $secure = ConvertTo-SecureString $password -AsPlainText -Force
-            $user = New-LocalUser -Name $UserName -Password $secure -PasswordNeverExpires
+            try {
+                $user = New-LocalUser -Name $UserName -Password $secure -PasswordNeverExpires
+            } finally {
+                $secure.Dispose()
+            }
             $users = Get-LocalGroup -SID 'S-1-5-32-545'
             if (-not (Get-LocalGroupMember -Group $users | Where-Object SID -eq $user.SID)) {
                 Add-LocalGroupMember -Group $users -Member $user
             }
-            $logon = [PSCredential]::new("$env:COMPUTERNAME\$UserName",$secure)
-            try {
-                $userInstall = @{
-                    FilePath = $Pwsh
-                    ArgumentList = "-NoProfile -ExecutionPolicy Bypass -File ""$Root\verify.ps1"" -Phase user-install"
-                    Credential = $logon
-                    WorkingDirectory = $Root
-                }
-                $installer = Start-Process @userInstall -LoadUserProfile -PassThru -Wait
-                if ($installer.ExitCode -ne 0) { throw "Per-user installation exited $($installer.ExitCode)." }
-            } finally {
-                $secure.Dispose()
-            }
-            $taskName = "Workbench.Private.$($user.SID.Value)"
-            $scheduled = Get-ScheduledTask -TaskName $taskName -TaskPath '\'
-            if ($scheduled.State -ne 'Ready' -or $scheduled.Principal.LogonType -ne 'Interactive' -or $scheduled.Principal.RunLevel -ne 'Limited') {
-                throw 'Expected an unstarted interactive logon task under the ordinary account.'
-            }
-            $previousLogon = (Get-ScheduledTaskInfo -TaskName $taskName -TaskPath '\').LastRunTime
-            $profile = (Get-CimInstance Win32_UserProfile -Filter "SID = '$($user.SID.Value)'").LocalPath
-            if (!$profile) { throw 'The ordinary account has no loaded Windows profile.' }
-            [pscustomobject]@{ sid=$user.SID.Value; task=$taskName; profile=$profile; password=$password; originalBoot=(BootTime).ToString('o'); priorTaskRun=$previousLogon.ToString('o') } |
-                ConvertTo-Json | Set-Content -LiteralPath $DesktopConfig
+            New-Item -Path $DesktopConfig -ItemType File | Out-Null
             & icacls.exe $DesktopConfig /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' /Q | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'Could not restrict the fixture password file.' }
+            [pscustomobject]@{
+                sid = $user.SID.Value
+                task = "Workbench.Private.$($user.SID.Value)"
+                password = $password
+                originalBoot = (BootTime).ToString('o')
+                priorTaskRun = $null
+            } | ConvertTo-Json | Set-Content -LiteralPath $DesktopConfig
 
             $observe = "-NoProfile -ExecutionPolicy Bypass -File ""$Root\verify.ps1"" -Phase startup$serialArgument"
             $action = New-ScheduledTaskAction -Execute $Pwsh -Argument $observe
             $trigger = New-ScheduledTaskTrigger -AtStartup
             $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
             'system' | Set-Content -LiteralPath $Marker
-            Register-ScheduledTask -TaskName $Observer -Action $action -Trigger $trigger -Principal $principal | Out-Null
-            Report 'Both Workbench registrations are installed and stopped. Rebooting for the SCM boot check.'
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+            Register-ScheduledTask -TaskName $Observer -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+            Report 'The shared Workbench service is registered and stopped. Rebooting for the SCM boot check.'
             Restart-Computer -Force
         }
         'user-install' {
@@ -166,8 +166,8 @@ try {
             $which = (Get-Content -LiteralPath $Marker -Raw).Trim()
             $cfg = Get-Content -LiteralPath $DesktopConfig -Raw | ConvertFrom-Json
             $boot = BootTime
+            if ($boot -le [DateTime]::Parse($cfg.originalBoot).ToUniversalTime()) { throw 'The Windows kernel did not reboot.' }
             if ($which -eq 'system') {
-                if ($boot -le [DateTime]::Parse($cfg.originalBoot).ToUniversalTime()) { throw 'The Windows kernel did not reboot.' }
                 Wait-Until 'SCM to start the shared listener automatically' 90 {
                     (Get-Service -Name $Service).Status -eq 'Running' -and (BrowserStatus $SystemPort) -eq 401
                 }
@@ -179,19 +179,51 @@ try {
                 Report "PASS SCM automatically started the authenticated listener before desktop sign-in (boot $($boot.ToString('o')), service PID $($scm.ProcessId))."
                 Stop-Service -Name $Service
                 Invoke-Workbench @($SystemLauncher,'uninstall','--service','system') | Out-Null
-                Set-ItemProperty -LiteralPath $Winlogon -Name AutoAdminLogon -Value '1'
-                Set-ItemProperty -LiteralPath $Winlogon -Name DefaultDomainName -Value $env:COMPUTERNAME
-                Set-ItemProperty -LiteralPath $Winlogon -Name DefaultUserName -Value $UserName
-                Set-ItemProperty -LiteralPath $Winlogon -Name DefaultPassword -Value $cfg.password
-                New-ItemProperty -LiteralPath $Winlogon -Name AutoLogonCount -PropertyType DWord -Value 1 -Force | Out-Null
+                $user = "$env:COMPUTERNAME\$UserName"
+                $argument = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""$Root\verify.ps1"" -Phase user-install"
+                $action = New-ScheduledTaskAction -Execute $Pwsh -Argument $argument -WorkingDirectory $Root
+                $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+                $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+                Register-ScheduledTask -TaskName $UserInstaller -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
                 $cfg.originalBoot = $boot.ToString('o')
+                $cfg | ConvertTo-Json | Set-Content -LiteralPath $DesktopConfig
+                'user-install' | Set-Content -LiteralPath $Marker
+                Enable-AutoLogon $cfg.password
+                Report 'Removed the system registration. Rebooting to install the private service at ordinary-user sign-in.'
+                Restart-Computer -Force
+            } elseif ($which -eq 'user-install') {
+                try {
+                    Wait-Until 'the ordinary account to install its private listener' 180 {
+                        $task = Get-ScheduledTask -TaskName $UserInstaller
+                        $result = (Get-ScheduledTaskInfo -TaskName $UserInstaller).LastTaskResult
+                        $task.State -eq 'Ready' -and $result -ne $TaskHasNotRun
+                    }
+                } catch {
+                    $state = [int](Get-ScheduledTask -TaskName $UserInstaller).State
+                    $result = (Get-ScheduledTaskInfo -TaskName $UserInstaller).LastTaskResult
+                    Report "FAIL startup 0 InstallerState${state}Result${result}"
+                    throw
+                }
+                $result = (Get-ScheduledTaskInfo -TaskName $UserInstaller).LastTaskResult
+                if ($result -ne 0) {
+                    Report "FAIL startup 0 InstallerResult${result}"
+                    throw "Per-user installation exited $result."
+                }
+                Unregister-ScheduledTask -TaskName $UserInstaller -Confirm:$false
+                $scheduled = Get-ScheduledTask -TaskName $cfg.task -TaskPath '\'
+                if ($scheduled.State -ne 'Ready' -or $scheduled.Principal.LogonType -ne 'Interactive' -or $scheduled.Principal.RunLevel -ne 'Limited') {
+                    throw 'Expected an unstarted interactive logon task under the ordinary account.'
+                }
+                $cfg.priorTaskRun = (Get-ScheduledTaskInfo -TaskName $cfg.task -TaskPath '\').LastRunTime.ToString('o')
+                $cfg.originalBoot = $boot.ToString('o')
+                Enable-AutoLogon $cfg.password
                 $cfg.password = $null
                 $cfg | ConvertTo-Json | Set-Content -LiteralPath $DesktopConfig
                 'user' | Set-Content -LiteralPath $Marker
-                Report 'Removed the system registration. Rebooting for a fresh ordinary-user desktop sign-in.'
+                Report 'The private Workbench service is registered and stopped. Rebooting for a new ordinary-user sign-in.'
                 Restart-Computer -Force
             } elseif ($which -eq 'user') {
-                if ($boot -le [DateTime]::Parse($cfg.originalBoot).ToUniversalTime()) { throw 'The Windows kernel did not restart for the logon check.' }
                 Wait-Until 'the ordinary desktop session and its Workbench listener' 120 {
                     (Get-ScheduledTask -TaskName $cfg.task -TaskPath '\').State -eq 'Running' -and
                     (BrowserStatus $UserPort) -eq 401

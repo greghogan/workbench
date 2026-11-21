@@ -326,20 +326,48 @@ Stop the user task in Task Scheduler before removing it with `workbench uninstal
 PowerShell to remove the shared service with `workbench uninstall --service system`. The installed release and its
 data remain available.
 
-### Qualify automatic Windows startup
+### Extended service checks
 
-Run this optional check in a clean, disposable Windows guest with Desktop Experience. Use an elevated 64-bit Windows
-PowerShell, a verified candidate archive and its SHA-256, and the pinned Windows Node.js runtime.
+Build the candidate release first. Set `WORKBENCH_EXTENDED_ARTIFACTS` to its absolute `workbench-artifacts`
+directory, or place it in the default `dist/workbench-artifacts` directory. The runner verifies the archive
+against its `SHA256SUMS` file. To test native service installation, restart, and removal on a disposable Linux,
+macOS, or Windows host, run the following with the permissions the installed service needs.
 
-```powershell
-.\scripts\check-windows-startup.ps1 -Node C:\test\node.exe -Archive C:\test\workbench.tar.gz -Digest SHA256 -RebootDisposableGuest
+```sh
+WORKBENCH_EXTENDED_DISPOSABLE_HOST=1 workbench check --extended --role installed-services
 ```
 
-The check creates a temporary OS account and reboots the guest twice. Its observer checks SCM startup before desktop
-sign-in, then checks Task Scheduler startup in the new ordinary account's desktop. Read the result from
-`$env:ProgramFiles\WorkbenchBootFixture\qualification.log`. Use `-SerialLog` to also send the result to a VM console
-connected to COM1. Discard the guest after collecting the result. The regular Windows CI job exercises installation,
-restart, update, rollback, and removal on its hosted runner.
+Test automatic Windows startup from a Linux x64 host with access to KVM, QEMU, and `virt-customize` with its Windows
+first-boot helper. Prepare a powered-down Windows Server 2025 Desktop Experience guest in a standalone qcow2 image
+that boots with Q35. Retain a SHA-256 for that image and for the pinned, verified Windows x64
+`node.exe`. Point `WORKBENCH_WINDOWS_STARTUP_INPUTS` to an absolute JSON file with both inputs.
+
+Use a base that `virt-inspector --format=qcow2 -a IMAGE` recognizes as Windows. If the host's NTFS reader cannot read
+Compact OS files, run `compact.exe /CompactOS:never` inside the disposable Windows guest as administrator. Shut it down
+before recording the new image checksum. [Microsoft Compact OS documentation](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/compact)
+
+```json
+{
+  "image": { "path": "/path/to/windows-server.qcow2", "sha256": "IMAGE_SHA256" },
+  "node": { "path": "/path/to/node.exe", "sha256": "NODE_SHA256" }
+}
+```
+
+For a UEFI image, add a `firmware` object with `code` and `variables` inputs in the same path-and-digest form. Use a
+matching x64 OVMF pair. The runner gives the guest a private writable copy of the variables file. Omit `firmware` for
+a BIOS image. If the VM tools are outside Workbench's native PATH, set `tools` to the absolute directory containing
+`qemu-img`, `qemu-system-x86_64`, and `virt-customize`.
+
+```sh
+WORKBENCH_WINDOWS_STARTUP_INPUTS=/path/to/windows-inputs.json workbench check --extended --role windows-startup
+```
+
+Keep the verified base image unchanged while the check is running. The runner injects the candidate and verifier
+into a fresh copy-on-write overlay, then boots without networking. The verifier checks SCM startup before desktop
+sign-in and Task Scheduler startup in a fresh ordinary user's desktop. Workbench reports both results and discards
+the writable overlay after shutdown or cancellation. If the runner is forcibly terminated, its next run can reclaim
+the overlay once its owner and guest processes have exited. The ordinary Windows CI job continues to exercise
+installation, restart, update, rollback, and removal.
 
 ## Select a project revision
 
