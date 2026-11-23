@@ -112,6 +112,7 @@ public static class ScopeProbe {
 '@
 $sid = [ScopeProbe]::Create($profile)
 try {
+  $traversal = @()
   $container = Join-Path ([ScopeProbe]::Folder($sid)) 'LocalState'
   $inputPath = Join-Path $container 'input'
   $outputPath = Join-Path $container 'output'
@@ -155,6 +156,14 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
     $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
   Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
 
+  for ($parent = Split-Path $inputPath -Parent; $parent; $parent = Split-Path $parent -Parent) {
+    $acl = Get-Acl -LiteralPath $parent
+    $attributes = [System.Security.AccessControl.FileSystemAccessRule]::new(
+      $identity, 'ReadAttributes,ReadExtendedAttributes,Traverse', 'None', 'None', 'Allow')
+    $acl.AddAccessRule($attributes)
+    Set-Acl -LiteralPath $parent -AclObject $acl
+    $traversal += @{Directory = $parent; Rule = $attributes}
+  }
   $node = Join-Path $inputPath 'node.exe'
   Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination $node
   $probe = @"
@@ -166,13 +175,16 @@ const output = $($outputPath | ConvertTo-Json -Compress);
 const omitted = $(Join-Path $outsidePath 'omitted.txt' | ConvertTo-Json -Compress);
 try {
   assert.equal(fs.readFileSync('expected.txt','utf8').trim(), 'visible');
-  const child = spawnSync(process.execPath, ['-e', 'require("node:fs").readFileSync(process.argv[1])', omitted], {encoding: 'utf8'});
+  console.log('Declared input read');
+  const child = spawnSync(process.execPath, ['-e', 'require("node:fs").readFileSync(process.argv[1])', omitted], {encoding: 'utf8', timeout: 5000});
   if (child.error) throw child.error;
   assert.equal(child.status, 1);
   assert.match(child.stderr, /EPERM|EACCES/);
+  console.log('Descendant denied omitted input');
   assert.throws(() => fs.appendFileSync('expected.txt', 'changed'), /EPERM|EACCES/);
   const pending = path.join(output, 'pending');
   fs.writeFileSync(pending, 'report');
+  console.log('Private output created');
   fs.renameSync(pending, path.join(output, 'final'));
 } catch (error) {
   console.error(error);
@@ -180,7 +192,7 @@ try {
 }
 "@
   Set-Content -LiteralPath (Join-Path $inputPath 'probe.cjs') $probe
-  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, '--preserve-symlinks-main --preserve-symlinks probe.cjs')
+  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, 'probe.cjs')
   Write-Host "AppContainer Node exit status: $exitCode"
   if (Test-Path -LiteralPath (Join-Path $outputPath 'failure')) {
     Get-Content -LiteralPath (Join-Path $outputPath 'failure') | ForEach-Object { Write-Host $_ }
@@ -188,6 +200,11 @@ try {
   if ($exitCode -ne 0) { throw "AppContainer Node exited with status $exitCode" }
   if ((Get-Content -Raw (Join-Path $outputPath 'final')).Trim() -ne 'report') { throw 'Wrong output' }
 } finally {
+  foreach ($entry in $traversal) {
+    $previous = Get-Acl -LiteralPath $entry.Directory
+    $previous.RemoveAccessRuleSpecific($entry.Rule)
+    Set-Acl -LiteralPath $entry.Directory -AclObject $previous
+  }
   [ScopeProbe]::Release($profile, $sid)
   if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Force -Recurse }
 }
