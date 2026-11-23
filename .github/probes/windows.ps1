@@ -48,6 +48,9 @@ public static class ScopeProbe {
   [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr process, uint timeout);
   [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr process, uint status);
   [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+  [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int stream);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool DuplicateHandle(IntPtr from, IntPtr handle, IntPtr to, out IntPtr copy, uint access, bool inherit, uint flags);
 
   public static IntPtr Create(string name) {
     IntPtr sid;
@@ -65,22 +68,30 @@ public static class ScopeProbe {
   public static uint Run(IntPtr sid, string directory, string executable, string commandArguments) {
     IntPtr bytes = IntPtr.Zero, attributes = IntPtr.Zero, arguments = IntPtr.Zero;
     var p = new ProcessInfo();
+    var inherited = new IntPtr[3];
+    IntPtr handles = IntPtr.Zero;
     bool initialized = false;
     try {
-      InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref bytes);
+      InitializeProcThreadAttributeList(IntPtr.Zero, 2, 0, ref bytes);
       attributes = Marshal.AllocHGlobal(bytes);
-      Require(InitializeProcThreadAttributeList(attributes, 1, 0, ref bytes));
+      Require(InitializeProcThreadAttributeList(attributes, 2, 0, ref bytes));
       initialized = true;
       int size = Marshal.SizeOf(typeof(SecurityCapabilities));
       arguments = Marshal.AllocHGlobal(size);
       Marshal.StructureToPtr(new SecurityCapabilities { sid = sid }, arguments, false);
       Require(UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x20009), arguments, new IntPtr(size), IntPtr.Zero, IntPtr.Zero));
+      handles = Marshal.AllocHGlobal(3 * IntPtr.Size);
+      for (int i = 0; i < 3; i++) {
+        Require(DuplicateHandle(GetCurrentProcess(), GetStdHandle(-10 - i), GetCurrentProcess(), out inherited[i], 0, true, 2));
+        Marshal.WriteIntPtr(handles, i * IntPtr.Size, inherited[i]);
+      }
+      Require(UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x20002), handles, new IntPtr(3 * IntPtr.Size), IntPtr.Zero, IntPtr.Zero));
       var startup = new ExtendedStartup {
-        startup = new Startup { size = (uint)Marshal.SizeOf(typeof(ExtendedStartup)) },
+        startup = new Startup { size = (uint)Marshal.SizeOf(typeof(ExtendedStartup)), flags = 0x100, input = inherited[0], output = inherited[1], error = inherited[2] },
         attributes = attributes
       };
       Require(CreateProcessW(executable, new StringBuilder("\"" + executable + "\" " + commandArguments),
-        IntPtr.Zero, IntPtr.Zero, false, 0x80000 | 0x8000000, IntPtr.Zero, directory, ref startup, out p));
+        IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x8000000, IntPtr.Zero, directory, ref startup, out p));
       if (WaitForSingleObject(p.process, 15000) != 0) {
         TerminateProcess(p.process, 124);
         throw new Exception("AppContainer child did not finish");
@@ -94,6 +105,8 @@ public static class ScopeProbe {
       if (initialized) DeleteProcThreadAttributeList(attributes);
       if (attributes != IntPtr.Zero) Marshal.FreeHGlobal(attributes);
       if (arguments != IntPtr.Zero) Marshal.FreeHGlobal(arguments);
+      if (handles != IntPtr.Zero) Marshal.FreeHGlobal(handles);
+      foreach (var h in inherited) if (h != IntPtr.Zero) CloseHandle(h);
     }
   }
 }
@@ -155,7 +168,7 @@ try {
   fs.writeFileSync(pending, 'report');
   fs.renameSync(pending, path.join(output, 'final'));
 } catch (error) {
-  fs.writeFileSync(path.join(output, 'failure'), String(error.stack));
+  console.error(error);
   process.exitCode = 1;
 }
 "@
