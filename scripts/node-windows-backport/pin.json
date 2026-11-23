@@ -9,5 +9,6 @@
   "nasm": {
     "version": "3.02",
     "sha256": "161d0bfaff53c2f9e9f3e69fd0672323ebabafd1268976a5cec11be92a19aee7"
-  }
+  },
+  "rustVersion": "1.99.0"
 }

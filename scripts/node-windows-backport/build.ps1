@@ -61,6 +61,7 @@ $keysHome = Join-Path $work 'gnupg'
 $source = Join-Path $work 'src'
 New-Item -ItemType Directory -Path $work | Out-Null
 $originalPath = $env:PATH
+$originalRustToolchain = $env:RUSTUP_TOOLCHAIN
 try {
   New-Item -ItemType Directory -Path $keysHome, $source | Out-Null
   foreach ($name in @('SHASUMS256.txt', 'SHASUMS256.txt.sig', $sourceName, $archiveName)) {
@@ -97,6 +98,14 @@ try {
   if ($nasm.Count -ne 1) { throw 'Expected one NASM executable' }
   $env:PATH = "$($nasm[0].DirectoryName);$env:PATH"
 
+  # Rust 1.100's Windows standard library adds synchronization.lib to its native link inputs.
+  # Match the Windows linker inputs in this Node release by selecting Rust 1.99.
+  $rustVersion = $pin.rustVersion
+  if ($rustVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid Rust version pin' }
+  Invoke-Checked 'rustup' @('toolchain', 'install', $rustVersion, '--profile', 'minimal')
+  $env:RUSTUP_TOOLCHAIN = $rustVersion
+  Invoke-Checked 'rustc' @('--version')
+
   Invoke-Checked 'tar.exe' @('-xzf', (Join-Path $work $sourceName), '-C', $source, '--strip-components=1')
   Push-Location $source
   try {
@@ -120,5 +129,6 @@ try {
   Write-Host "Windows Node archive SHA-256 $((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant())"
 } finally {
   $env:PATH = $originalPath
+  $env:RUSTUP_TOOLCHAIN = $originalRustToolchain
   Remove-Item -LiteralPath $work -Recurse -Force
 }
