@@ -173,7 +173,7 @@ const output = $($outputPath | ConvertTo-Json -Compress);
 const omitted = $(Join-Path $outsidePath 'omitted.txt' | ConvertTo-Json -Compress);
 try {
   assert.equal(fs.readFileSync('expected.txt','utf8').trim(), 'visible');
-  console.log('Declared input read');
+  console.log('Declared input read with Node', process.version, 'libuv', process.versions.uv);
   const child = spawnSync(process.execPath, ['-e', 'require("node:fs").readFileSync(process.argv[1])', omitted], {encoding: 'utf8', timeout: 5000});
   if (child.error) throw child.error;
   assert.equal(child.status, 1);
