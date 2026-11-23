@@ -100,14 +100,18 @@ try {
   $descendant = @"
 @echo off
 type "$outsidePath\omitted.txt" > nul 2> nul
-if not errorlevel 1 exit /b 3
+if not errorlevel 1 (
+  echo Child could read omitted input
+  exit /b 3
+)
+echo Child was denied omitted input
 exit /b 0
 "@
   Set-Content -LiteralPath (Join-Path $inputPath 'child.cmd') $descendant
   $fixture = @"
 @echo off
 type "$inputPath\expected.txt" > "$outputPath\readback" || exit /b 2
-call "%ComSpec%" /D /C child.cmd || exit /b 3
+call "%SystemRoot%\System32\cmd.exe" /D /C child.cmd > "$outputPath\descendant.txt" 2>&1 || exit /b 3
 (echo changed >> expected.txt) 2>nul
 if not errorlevel 1 exit /b 4
 echo report > "$outputPath\pending" || exit /b 5
@@ -122,9 +126,20 @@ move "$outputPath\pending" "$outputPath\final" > nul || exit /b 6
       $identity, $rights, 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
     Set-Acl -LiteralPath $directory -AclObject $acl
   }
+  # The source remains inaccessible even if inherited RunnerTemp ACLs grant broad read access.
+  $outsideAcl = Get-Acl -LiteralPath $outsidePath
+  $outsideAcl.SetAccessRuleProtection($true, $false)
+  $parentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+  $outsideAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+    $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+  Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
+
   $exitCode = [ScopeProbe]::Run($sid, $inputPath, $env:ComSpec)
   Write-Host "AppContainer exit status: $exitCode"
-  Get-ChildItem -LiteralPath $outputPath | Select-Object Name,Length
+  foreach ($log in Get-ChildItem -LiteralPath $outputPath) {
+    Write-Host "Output: $($log.Name)"
+    if ($log.Name -eq 'descendant.txt') { Get-Content -LiteralPath $log.FullName | ForEach-Object { Write-Host $_ } }
+  }
   if ($exitCode -ne 0) { throw "AppContainer child exited with status $exitCode" }
   if ((Get-Content -Raw (Join-Path $outputPath 'readback')).Trim() -ne 'visible') { throw 'Wrong input' }
   if ((Get-Content -Raw (Join-Path $inputPath 'expected.txt')).Trim() -ne 'visible') { throw 'Source changed' }

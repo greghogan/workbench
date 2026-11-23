@@ -4,7 +4,7 @@ workspace=$(mktemp -d "${RUNNER_TEMP:-/tmp}/workbench-app-sandbox.XXXXXX")
 trap 'rm -rf -- "$workspace"' EXIT
 cd "$workspace"
 workspace=$(pwd -P)
-mkdir input output outside
+mkdir -p input output outside Probe.app/Contents/MacOS
 printf 'visible\n' > input/expected
 printf 'private\n' > outside/omitted
 cat > launch.c <<'C'
@@ -40,12 +40,20 @@ entitlements = {
 }
 with open("entitlements.plist", "wb") as out:
     plistlib.dump(entitlements, out)
+with open("Probe.app/Contents/Info.plist", "wb") as out:
+    plistlib.dump({
+        "CFBundleIdentifier": "org.workbench.scopeprobe",
+        "CFBundleName": "Workbench Scope Probe",
+        "CFBundleExecutable": "workbench-scope-probe",
+        "CFBundlePackageType": "APPL",
+    }, out)
 PY
 clang -Wall -Wextra -Werror launch.c -o workbench-scope-probe
 cp workbench-scope-probe seatbelt-probe
-codesign --force --sign - --entitlements entitlements.plist ./workbench-scope-probe
-codesign --verify --strict ./workbench-scope-probe
-if ./workbench-scope-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"; then
+mv workbench-scope-probe Probe.app/Contents/MacOS/
+codesign --force --sign - --entitlements entitlements.plist Probe.app
+codesign --verify --strict Probe.app
+if ./Probe.app/Contents/MacOS/workbench-scope-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"; then
   echo "App Sandbox passed"
 else
   echo "App Sandbox failed ($?). Testing a per-process Seatbelt profile."
@@ -56,6 +64,8 @@ else
 (allow process-exec process-fork)
 (allow signal (target self))
 (allow sysctl-read)
+(allow mach-lookup)
+(allow process-info*)
 (allow file-read-metadata)
 (allow file-read* (subpath "/usr/lib") (subpath "/System/Library")
    (subpath "/usr/bin") (subpath "/bin") (literal "$workspace/seatbelt-probe")
@@ -63,7 +73,10 @@ else
    (literal "/dev/null") (literal "/dev/urandom"))
 (allow file-write* (subpath "$workspace/output") (literal "/dev/null"))
 POLICY
-  /usr/bin/sandbox-exec -f scope.sb ./seatbelt-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+  if ! /usr/bin/sandbox-exec -f scope.sb ./seatbelt-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"; then
+    log show --last 1m --style compact --predicate 'eventMessage CONTAINS[c] "seatbelt-probe"' || true
+    exit 1
+  fi
   echo "Seatbelt passed"
 fi
 test "$(cat output/final)" = report
