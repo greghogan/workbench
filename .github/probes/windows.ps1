@@ -180,7 +180,7 @@ try {
 }
 "@
   Set-Content -LiteralPath (Join-Path $inputPath 'probe.cjs') $probe
-  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, 'probe.cjs')
+  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, '--preserve-symlinks-main --preserve-symlinks probe.cjs')
   Write-Host "AppContainer Node exit status: $exitCode"
   if (Test-Path -LiteralPath (Join-Path $outputPath 'failure')) {
     Get-Content -LiteralPath (Join-Path $outputPath 'failure') | ForEach-Object { Write-Host $_ }
