@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 workspace=$(mktemp -d "${RUNNER_TEMP:-/tmp}/workbench-app-sandbox.XXXXXX")
+probe_id=$(uuidgen | tr '[:upper:]' '[:lower:]')
+export probe_id
 trap 'rm -rf -- "$workspace"' EXIT
 cd "$workspace"
 workspace=$(pwd -P)
@@ -31,6 +33,7 @@ int main(int argc, char **argv) {
 }
 C
 python3 - "$workspace" <<'PY'
+import os
 import plistlib
 import sys
 
@@ -44,14 +47,14 @@ with open("entitlements.plist", "wb") as out:
     plistlib.dump(entitlements, out)
 with open("Probe.app/Contents/Info.plist", "wb") as out:
     plistlib.dump({
-        "CFBundleIdentifier": "org.workbench.scopeprobe",
+        "CFBundleIdentifier": "org.workbench.scopeprobe." + os.environ["probe_id"],
         "CFBundleName": "Workbench Scope Probe",
         "CFBundleExecutable": "workbench-scope-probe",
         "CFBundlePackageType": "APPL",
     }, out)
 with open("Copy.app/Contents/Info.plist", "wb") as out:
     plistlib.dump({
-        "CFBundleIdentifier": "org.workbench.scopeshell",
+        "CFBundleIdentifier": "org.workbench.scopeshell." + os.environ["probe_id"],
         "CFBundleName": "Workbench Scope Shell",
         "CFBundleExecutable": "scope-shell",
         "CFBundlePackageType": "APPL",
@@ -104,3 +107,11 @@ SH
 
 test "$(cat output/copy)" = report
 echo "Signed shell passed"
+for name in scopeprobe scopeshell; do
+  container="$HOME/Library/Containers/org.workbench.$name.$probe_id"
+  if [ -d "$container" ]; then
+    rm -rf -- "$container"
+    test ! -d "$container"
+    echo "Removed owned container $name"
+  fi
+done
