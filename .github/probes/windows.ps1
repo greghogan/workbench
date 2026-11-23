@@ -1,6 +1,5 @@
 $ErrorActionPreference = 'Stop'
 $work = Join-Path $env:RUNNER_TEMP ('workbench-scope-' + [guid]::NewGuid().ToString('N'))
-$inputPath = Join-Path $work 'input'
 $outsidePath = Join-Path $work 'outside'
 $profile = 'wb.scope.' + [guid]::NewGuid().ToString('N')
 Add-Type -TypeDefinition @'
@@ -113,7 +112,9 @@ public static class ScopeProbe {
 '@
 $sid = [ScopeProbe]::Create($profile)
 try {
-  $outputPath = Join-Path ([ScopeProbe]::Folder($sid)) 'LocalState'
+  $container = Join-Path ([ScopeProbe]::Folder($sid)) 'LocalState'
+  $inputPath = Join-Path $container 'input'
+  $outputPath = Join-Path $container 'output'
   New-Item -Force -ItemType Directory $inputPath,$outputPath,$outsidePath | Out-Null
   Set-Content -LiteralPath (Join-Path $inputPath 'expected.txt') 'visible'
   Set-Content -LiteralPath (Join-Path $outsidePath 'omitted.txt') 'private'
@@ -136,6 +137,12 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
   foreach ($directory in @($inputPath, $outputPath)) {
     $rights = if ($directory -eq $inputPath) { 'ReadAndExecute' } else { 'Modify' }
     $acl = Get-Acl -LiteralPath $directory
+    if ($directory -eq $inputPath) {
+      $acl.SetAccessRuleProtection($true, $false)
+      $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+      $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $owner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+    }
     $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
       $identity, $rights, 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
     Set-Acl -LiteralPath $directory -AclObject $acl
