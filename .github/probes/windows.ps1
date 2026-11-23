@@ -62,7 +62,7 @@ public static class ScopeProbe {
     return new SecurityIdentifier(sid).Value;
   }
   static void Require(bool value) { if(!value) throw new Win32Exception(); }
-  public static uint Run(IntPtr sid, string directory, string executable) {
+  public static uint Run(IntPtr sid, string directory, string executable, string commandArguments) {
     IntPtr bytes = IntPtr.Zero, attributes = IntPtr.Zero, arguments = IntPtr.Zero;
     var p = new ProcessInfo();
     bool initialized = false;
@@ -79,7 +79,7 @@ public static class ScopeProbe {
         startup = new Startup { size = (uint)Marshal.SizeOf(typeof(ExtendedStartup)) },
         attributes = attributes
       };
-      Require(CreateProcessW(executable, new StringBuilder("\"" + executable + "\" /D /C probe.cmd"),
+      Require(CreateProcessW(executable, new StringBuilder("\"" + executable + "\" " + commandArguments),
         IntPtr.Zero, IntPtr.Zero, false, 0x80000 | 0x8000000, IntPtr.Zero, directory, ref startup, out p));
       if (WaitForSingleObject(p.process, 15000) != 0) {
         TerminateProcess(p.process, 124);
@@ -135,18 +135,37 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
     $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
   Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
 
-  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $env:ComSpec)
-  Write-Host "AppContainer exit status: $exitCode"
-  foreach ($log in Get-ChildItem -LiteralPath $outputPath) {
-    Write-Host "Output: $($log.Name)"
-    if ($log.Name -in @('descendant.txt', 'rename.log')) { Get-Content -LiteralPath $log.FullName | ForEach-Object { Write-Host $_ } }
+  $node = Join-Path $inputPath 'node.exe'
+  Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination $node
+  $probe = @"
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const assert = require('node:assert/strict');
+const output = $($outputPath | ConvertTo-Json -Compress);
+const omitted = $(Join-Path $outsidePath 'omitted.txt' | ConvertTo-Json -Compress);
+try {
+  assert.equal(fs.readFileSync('expected.txt','utf8').trim(), 'visible');
+  const child = spawnSync(process.execPath, ['-e', 'require("node:fs").readFileSync(process.argv[1])', omitted], {encoding: 'utf8'});
+  if (child.error) throw child.error;
+  assert.equal(child.status, 1);
+  assert.match(child.stderr, /EPERM|EACCES/);
+  assert.throws(() => fs.appendFileSync('expected.txt', 'changed'), /EPERM|EACCES/);
+  const pending = path.join(output, 'pending');
+  fs.writeFileSync(pending, 'report');
+  fs.renameSync(pending, path.join(output, 'final'));
+} catch (error) {
+  fs.writeFileSync(path.join(output, 'failure'), String(error.stack));
+  process.exitCode = 1;
+}
+"@
+  Set-Content -LiteralPath (Join-Path $inputPath 'probe.cjs') $probe
+  $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, 'probe.cjs')
+  Write-Host "AppContainer Node exit status: $exitCode"
+  if (Test-Path -LiteralPath (Join-Path $outputPath 'failure')) {
+    Get-Content -LiteralPath (Join-Path $outputPath 'failure') | ForEach-Object { Write-Host $_ }
   }
-  if ($exitCode -ne 0) { throw "AppContainer child exited with status $exitCode" }
-  $outOfScope = Join-Path $outputPath 'unscoped'
-  if (!(Test-Path -LiteralPath $outOfScope)) { throw 'Child did not run' }
-  if ((Get-Item -LiteralPath $outOfScope).Length -ne 0) { throw 'Child read undeclared input' }
-  if ((Get-Content -Raw (Join-Path $outputPath 'readback')).Trim() -ne 'visible') { throw 'Wrong input' }
-  if ((Get-Content -Raw (Join-Path $inputPath 'expected.txt')).Trim() -ne 'visible') { throw 'Source changed' }
+  if ($exitCode -ne 0) { throw "AppContainer Node exited with status $exitCode" }
   if ((Get-Content -Raw (Join-Path $outputPath 'final')).Trim() -ne 'report') { throw 'Wrong output' }
 } finally {
   [ScopeProbe]::Release($profile, $sid)
