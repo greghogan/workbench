@@ -156,7 +156,8 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
     $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
   Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
 
-  for ($parent = Split-Path $inputPath -Parent; $parent; $parent = Split-Path $parent -Parent) {
+  for ($directory = [IO.DirectoryInfo]::new($inputPath).Parent; $null -ne $directory; $directory = $directory.Parent) {
+    $parent = $directory.FullName
     $acl = Get-Acl -LiteralPath $parent
     $attributes = [System.Security.AccessControl.FileSystemAccessRule]::new(
       $identity, 'ReadAttributes,ReadExtendedAttributes,Traverse', 'None', 'None', 'Allow')
