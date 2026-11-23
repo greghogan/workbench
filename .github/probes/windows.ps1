@@ -109,7 +109,7 @@ type "$inputPath\expected.txt" > "$outputPath\readback" || exit /b 2
 call "%SystemRoot%\System32\cmd.exe" /D /C child.cmd > "$outputPath\descendant.txt" 2>&1 || exit /b 3
 (echo changed >> expected.txt) 2>nul
 echo report > "$outputPath\pending" || exit /b 5
-move "$outputPath\pending" "$outputPath\final" > nul || exit /b 6
+ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
 "@
   Set-Content -LiteralPath (Join-Path $inputPath 'probe.cmd') $fixture
   $identity = [System.Security.Principal.SecurityIdentifier]::new([ScopeProbe]::Identity($sid))
@@ -128,11 +128,13 @@ move "$outputPath\pending" "$outputPath\final" > nul || exit /b 6
     $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
   Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
 
+  & icacls $outputPath /setintegritylevel '(OI)(CI)L'
+  if ($LASTEXITCODE -ne 0) { throw 'Could not label the private output directory' }
   $exitCode = [ScopeProbe]::Run($sid, $inputPath, $env:ComSpec)
   Write-Host "AppContainer exit status: $exitCode"
   foreach ($log in Get-ChildItem -LiteralPath $outputPath) {
     Write-Host "Output: $($log.Name)"
-    if ($log.Name -eq 'descendant.txt') { Get-Content -LiteralPath $log.FullName | ForEach-Object { Write-Host $_ } }
+    if ($log.Name -in @('descendant.txt', 'rename.log')) { Get-Content -LiteralPath $log.FullName | ForEach-Object { Write-Host $_ } }
   }
   if ($exitCode -ne 0) { throw "AppContainer child exited with status $exitCode" }
   $outOfScope = Join-Path $outputPath 'unscoped'

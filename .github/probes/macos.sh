@@ -92,11 +92,13 @@ test "$(cat input/expected)" = visible
 cp /bin/sh Copy.app/Contents/MacOS/scope-shell
 codesign --force --sign - --entitlements entitlements.plist Copy.app
 codesign --verify --strict Copy.app
-./Copy.app/Contents/MacOS/scope-shell -eu -c '
-  test "$(cat "$1")" = visible
-  if /bin/sh -c '''cat "$1"''' descendant "$2"; then exit 6; fi
-  if echo changed >> "$1"; then exit 7; fi
-  cp "$3/final" "$3/copy"
-' probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+cat > input/check.sh <<'SH'
+test "$(cat "$1")" = visible
+if /bin/sh -c 'cat "$1"' descendant "$2"; then exit 6; fi
+if echo changed >> "$1"; then exit 7; fi
+cp "$3/final" "$3/copy"
+SH
+./Copy.app/Contents/MacOS/scope-shell -eu "$workspace/input/check.sh" "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+
 test "$(cat output/copy)" = report
 echo "Signed shell passed"
