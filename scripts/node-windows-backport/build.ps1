@@ -66,11 +66,18 @@ try {
   foreach ($name in @('SHASUMS256.txt', 'SHASUMS256.txt.sig', $sourceName, $archiveName)) {
     Fetch-File $name
   }
-  Invoke-Checked $gpg @('--homedir', $keysHome, '--batch', '--import', $keys)
-  $signature = Invoke-Checked $gpg @(
-    '--homedir', $keysHome, '--batch', '--no-auto-key-retrieve', '--status-fd', '1',
-    '--verify', (Join-Path $work 'SHASUMS256.txt.sig'), (Join-Path $work 'SHASUMS256.txt')
-  )
+  # Git for Windows ships an MSYS GnuPG. Relative paths also work with a native GnuPG.
+  Copy-Item -LiteralPath $keys -Destination (Join-Path $work 'node-release.asc')
+  Push-Location $work
+  try {
+    Invoke-Checked $gpg @('--homedir', 'gnupg', '--batch', '--import', 'node-release.asc')
+    $signature = Invoke-Checked $gpg @(
+      '--homedir', 'gnupg', '--batch', '--no-auto-key-retrieve', '--status-fd', '1',
+      '--verify', 'SHASUMS256.txt.sig', 'SHASUMS256.txt'
+    )
+  } finally {
+    Pop-Location
+  }
   $valid = @($signature | Where-Object {
     $_ -match '^\[GNUPG:\] VALIDSIG ' -and $pin.signer -in ($_ -split ' ')
   })
