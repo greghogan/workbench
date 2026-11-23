@@ -4,7 +4,7 @@ workspace=$(mktemp -d "${RUNNER_TEMP:-/tmp}/workbench-app-sandbox.XXXXXX")
 trap 'rm -rf -- "$workspace"' EXIT
 cd "$workspace"
 workspace=$(pwd -P)
-mkdir -p input output outside Probe.app/Contents/MacOS
+mkdir -p input output outside Probe.app/Contents/MacOS Copy.app/Contents/MacOS
 printf 'visible\n' > input/expected
 printf 'private\n' > outside/omitted
 cat > launch.c <<'C'
@@ -47,6 +47,13 @@ with open("Probe.app/Contents/Info.plist", "wb") as out:
         "CFBundleExecutable": "workbench-scope-probe",
         "CFBundlePackageType": "APPL",
     }, out)
+with open("Copy.app/Contents/Info.plist", "wb") as out:
+    plistlib.dump({
+        "CFBundleIdentifier": "org.workbench.scopeshell",
+        "CFBundleName": "Workbench Scope Shell",
+        "CFBundleExecutable": "scope-shell",
+        "CFBundlePackageType": "APPL",
+    }, out)
 PY
 clang -Wall -Wextra -Werror launch.c -o workbench-scope-probe
 cp workbench-scope-probe seatbelt-probe
@@ -81,3 +88,15 @@ POLICY
 fi
 test "$(cat output/final)" = report
 test "$(cat input/expected)" = visible
+
+cp /bin/sh Copy.app/Contents/MacOS/scope-shell
+codesign --force --sign - --entitlements entitlements.plist Copy.app
+codesign --verify --strict Copy.app
+./Copy.app/Contents/MacOS/scope-shell -eu -c '
+  test "$(cat "$1")" = visible
+  if /bin/sh -c '''cat "$1"''' descendant "$2"; then exit 6; fi
+  if echo changed >> "$1"; then exit 7; fi
+  cp "$3/final" "$3/copy"
+' probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+test "$(cat output/copy)" = report
+echo "Signed shell passed"
