@@ -86,6 +86,38 @@ function replacement(root: string, tools?: unknown) {
   );
 }
 
+test("the temporary Node artifact overrides only its Windows platform and version", () => {
+  const { base } = fixture();
+  const scripts = join(base, "scripts");
+  mkdirSync(join(scripts, "node-windows-backport"), { recursive: true });
+  const current = { name: "node", version: "26.0.0", source: "fixture" };
+  const previous = { ...current, version: "24.0.0" };
+  const archive = (filename: string) => ({
+    url: "https://example.invalid/" + filename,
+    sha256: "a".repeat(64),
+    format: "zip",
+    strip: 1,
+    bin: ".",
+    authenticationUnavailable: "Fixture metadata",
+  });
+  const windows = archive("windows.zip");
+  const linux = archive("linux.zip");
+  const backport = archive("windows-backport.zip");
+  writeFileSync(
+    join(scripts, "native-assets.json"),
+    JSON.stringify({
+      node: {
+        [current.version]: { "linux-x64": linux, "win32-x64": windows },
+        [previous.version]: { "win32-x64": windows },
+      },
+    }),
+  );
+  writeFileSync(join(scripts, "node-windows-backport/assets.json"), JSON.stringify({ [current.version]: backport }));
+  expect(assetFor(base, current, undefined, "win32-x64")).toEqual(backport);
+  expect(assetFor(base, current, undefined, "linux-x64")).toEqual(linux);
+  expect(assetFor(base, previous, undefined, "win32-x64")).toEqual(windows);
+});
+
 test("missing native Java selectors identify the root and stop before the runner or acquisition", () => {
   const { base, root, directory } = fixture();
   selectors(root);

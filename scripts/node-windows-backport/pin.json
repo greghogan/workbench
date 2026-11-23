@@ -1,0 +1,14 @@
+{
+  "version": "26.13.1",
+  "signer": "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356",
+  "sourceSha256": "60c6cdf11c3e9d5932fccd0eafae77f1152661584e129047684cb8646f228d3e",
+  "windowsArchiveSha256": "e2edda75bfb089654705cf65a13b58933bfd5f57148e8ebda916f58a2474f1f7",
+  "patchSha256": "6e4b3c5c629134c7bc2a4dc7d590680a789b8d57bd4a2635d7e913c4e4179246",
+  "upstreamFix": "https://github.com/libuv/libuv/commit/2cadaa40167050baf7c6905ac897e6fb57afb2c6",
+  "upstreamTracking": "https://github.com/nodejs/node/pull/66282",
+  "nasm": {
+    "version": "3.02",
+    "sha256": "161d0bfaff53c2f9e9f3e69fd0672323ebabafd1268976a5cec11be92a19aee7"
+  },
+  "rustVersion": "1.99.0"
+}

@@ -217,7 +217,14 @@ export function assetFor(
         string,
         Record<string, Record<string, ToolAsset>>
       >;
-      const selected = assets[tool.name]?.[tool.version]?.[platform];
+      const backportCatalog = "node-windows-backport/assets";
+      const windowsNodeBackports =
+        tool.name === "node" &&
+        platform === "win32-x64" &&
+        existsSync(join(distribution, `scripts/${backportCatalog}.json`))
+          ? (assetCatalog(distribution, backportCatalog) as Record<string, ToolAsset>)
+          : undefined;
+      const selected = windowsNodeBackports?.[tool.version] ?? assets[tool.name]?.[tool.version]?.[platform];
       const asset = selected ? structuredClone(selected) : undefined;
       if (!asset) return undefined;
       if (

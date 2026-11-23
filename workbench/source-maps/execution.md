@@ -59,6 +59,8 @@
 - `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.
 - `scripts/release-contract.mts`, `scripts/github-release.mts`: Separate release proof validation from authenticated GitHub transport, including exact pending-draft and published-tag lookup, retried read operations, and private complete-download publication.
 - `scripts/accessibility-criteria.mts`: Maps automated browser results to partial WCAG criterion evidence without claiming full conformance.
+- `.github/workflows/windows-node-backport.yml`, `.github/probes/windows.ps1`,
+  `scripts/node-windows-backport`: Build, qualify, and attest the temporary Windows Node runtime.
 - `scripts/ci-actions.json`: Own immutable workflow component pins shared by generation, maintenance discovery, derived workflow publication and strict workflow checks.
 - `scripts/ci-acquire.mts`, `scripts/ci-errors.mts`: Apply acquisition policy and actionable annotations and summaries at hosted CI boundaries without replaying tests.
 - `scripts/java-test-reports.mts`: Replace complete Java test report sets with run outcomes and rollback, preserving previous evidence when replacement cannot complete.
