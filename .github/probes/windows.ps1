@@ -106,7 +106,7 @@ exit /b 0
   Set-Content -LiteralPath (Join-Path $inputPath 'child.cmd') $descendant
   $fixture = @"
 @echo off
-findstr /x visible expected.txt > nul || exit /b 2
+type "$inputPath\expected.txt" > "$outputPath\readback" || exit /b 2
 call "%ComSpec%" /D /C child.cmd || exit /b 3
 (echo changed >> expected.txt) 2>nul
 if not errorlevel 1 exit /b 4
@@ -123,7 +123,10 @@ move "$outputPath\pending" "$outputPath\final" > nul || exit /b 6
     Set-Acl -LiteralPath $directory -AclObject $acl
   }
   $exitCode = [ScopeProbe]::Run($sid, $inputPath, $env:ComSpec)
+  Write-Host "AppContainer exit status: $exitCode"
+  Get-ChildItem -LiteralPath $outputPath | Select-Object Name,Length
   if ($exitCode -ne 0) { throw "AppContainer child exited with status $exitCode" }
+  if ((Get-Content -Raw (Join-Path $outputPath 'readback')).Trim() -ne 'visible') { throw 'Wrong input' }
   if ((Get-Content -Raw (Join-Path $inputPath 'expected.txt')).Trim() -ne 'visible') { throw 'Source changed' }
   if ((Get-Content -Raw (Join-Path $outputPath 'final')).Trim() -ne 'report') { throw 'Wrong output' }
 } finally {

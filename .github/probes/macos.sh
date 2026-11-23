@@ -13,6 +13,7 @@ cat > launch.c <<'C'
 #include <unistd.h>
 int main(int argc, char **argv) {
   if (argc != 4) return 2;
+  fputs("scope launcher entered\n", stderr);
   int fd = open(argv[1], O_RDONLY);
   if (fd < 0) { perror("declared input"); return 3; }
   close(fd);
@@ -41,8 +42,29 @@ with open("entitlements.plist", "wb") as out:
     plistlib.dump(entitlements, out)
 PY
 clang -Wall -Wextra -Werror launch.c -o workbench-scope-probe
+cp workbench-scope-probe seatbelt-probe
 codesign --force --sign - --entitlements entitlements.plist ./workbench-scope-probe
 codesign --verify --strict ./workbench-scope-probe
-./workbench-scope-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+if ./workbench-scope-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"; then
+  echo "App Sandbox passed"
+else
+  echo "App Sandbox failed ($?). Testing a per-process Seatbelt profile."
+  log show --last 1m --style compact --predicate 'eventMessage CONTAINS[c] "workbench-scope-probe"' || true
+  cat > scope.sb <<POLICY
+(version 1)
+(deny default)
+(allow process-exec process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow file-read-metadata)
+(allow file-read* (subpath "/usr/lib") (subpath "/System/Library")
+   (subpath "/usr/bin") (subpath "/bin") (literal "$workspace/seatbelt-probe")
+   (subpath "$workspace/input") (subpath "$workspace/output")
+   (literal "/dev/null") (literal "/dev/urandom"))
+(allow file-write* (subpath "$workspace/output") (literal "/dev/null"))
+POLICY
+  /usr/bin/sandbox-exec -f scope.sb ./seatbelt-probe "$workspace/input/expected" "$workspace/outside/omitted" "$workspace/output"
+  echo "Seatbelt passed"
+fi
 test "$(cat output/final)" = report
 test "$(cat input/expected)" = visible
