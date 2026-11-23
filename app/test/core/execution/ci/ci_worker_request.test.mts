@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "vitest";
@@ -147,6 +147,59 @@ test("malformed worker requests are rejected with a useful diagnostic before fil
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("Invalid local CI worker request: target.path");
     expect(existsSync(value.reports)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the local prepared worker preserves a failed operation result and passes its resource allocation", () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-prepared-worker-"));
+  try {
+    const reports = join(root, "reports");
+    mkdirSync(join(root, "bin"));
+    mkdirSync(reports);
+    const value = {
+      ...request(),
+      profile: "native",
+      operation: "checks",
+      workspace: root,
+      distribution: root,
+      reports,
+    };
+    writeFileSync(
+      join(root, "bin/workbench.mjs"),
+      `
+      import assert from "node:assert/strict";
+      import { readFileSync, writeFileSync } from "node:fs";
+      import { join } from "node:path";
+      const args = process.argv.slice(2);
+      const option = (name) => args[args.indexOf(name) + 1];
+      assert.deepEqual(args.slice(0, 2), ["ci-image-job", "native"]);
+      assert.equal(option("--local-image"), "fixture-image");
+      assert.equal(option("--operation"), "checks");
+      assert.equal(process.env.WORKBENCH_CPU_BUDGET, "4");
+      const [target] = JSON.parse(readFileSync(option("--targets"), "utf8"));
+      writeFileSync(join(option("--reports"), "job-results.json"), JSON.stringify({
+        version: 1,
+        targets: [{ id: target.id, success: false, report: "/reports", error: "advisory failed",
+          started: "2026-01-01T00:00:00Z", finished: "2026-01-01T00:01:00Z" }],
+        errors: [],
+      }));
+      process.exitCode = 1;
+    `,
+    );
+    const input = join(root, "request.json");
+    writeFileSync(input, JSON.stringify(value));
+    const result = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, "../../../../../scripts/ci-linux/job.mjs"), input],
+      { encoding: "utf8" },
+    );
+    expect(result.status, result.stdout + result.stderr).toBe(1);
+    expect(JSON.parse(readFileSync(join(reports, "job-results.json"), "utf8"))).toMatchObject({
+      targets: [{ id: "fixture", error: "advisory failed", success: false }],
+      errors: [],
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

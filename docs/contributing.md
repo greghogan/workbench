@@ -579,8 +579,9 @@ local CI resource limits. Reports retain one outcome per configured target, with
 when a target has multiple operations. Ordinary `workbench check` keeps its configured gate scope.
 
 Linux acquires its prepared image by immutable identity and checks its platform, input and builder labels before
-execution. Offline-declared checks run with container networking disabled; online-declared checks run freshly with
-networking. Ordinary acquisition does not repeat standalone image qualification. Missing published images fail
+execution. Local and hosted prepared-image jobs run offline checks with container networking disabled and online
+checks with networking. Toolchain images acquire the operation's locked dependencies once and share them across the
+two containers. Ordinary acquisition does not repeat standalone image qualification. Missing published images fail
 preparation before operation jobs start; routine CI never rebuilds them. Prepare, verify, and publish changed images
 explicitly before pushing the source that selects them. Standalone development image preparation and publication keep
 their full offline verification; [preparation guidance](ci.md#preparing-and-retaining-project-images) covers native and
@@ -595,6 +596,9 @@ After accepted stable `main` is committed and pushed and complete Checks succeed
 release** with that Checks run ID (or `gh workflow run release.yml --ref main -f checks_run=RUN_ID`). Publication uses
 the package version as the `vVERSION` tag, downloads the successful run's release proof and exact candidate, verifies
 source and checksums, uploads a draft, and verifies downloaded assets before and after publication. Existing releases
-are preserved; a retry can resume the same identified draft or confirm matching published bytes. No build or full CI
-rerun occurs in publication. The release contains `workbench.tar.gz` and `SHA256SUMS`; Node remains a declared runtime
-requirement. Development-image registry publication remains the separate explicit workflow.
+are preserved, and a retry can resume the same identified draft or confirm matching published bytes. The release
+contains `workbench.tar.gz`, its `SHA256SUMS`, and the ZIP archives verified on macOS ARM64 and Windows x64. All three
+archives require Node. Release notes and the release record contain the published archive digests. Publication reuses
+the tested archives from the selected run. The workflow retains the release record as the `workbench-release-record` run artifact.
+Extract the run artifact at the repository root and run `workbench sync` to update the derived maps and index.
+Development image publication uses the separate image workflow.

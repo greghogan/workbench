@@ -4,6 +4,7 @@ import { required } from "../../../src/core/runtime/invariants.ts";
 import {
   chmodSync,
   cpSync,
+  createWriteStream,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -14,6 +15,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { createHash } from "node:crypto";
+import tar from "tar-stream";
 import { parse, stringify } from "smol-toml";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
@@ -21,6 +25,7 @@ import {
   withOfflineProfileLock,
   offlineInputs,
   offlineImageReference,
+  offlineCandidateReference,
   offlineReceiptPath,
   preparedOfflineProfile,
   validateOfflineDefinition,
@@ -28,11 +33,18 @@ import {
   verifyOfflineProfile,
   publishOfflineProfile,
   inspectOfflineImages,
-  executePreparedProfile,
+  withPreparedProfile,
+  verifyStoreArchive,
 } from "../../../src/core/artifacts/offline-profiles.ts";
 import * as preparedImages from "../../../src/core/artifacts/prepared-images.ts";
+import * as localImages from "../../../src/core/artifacts/local-images.ts";
+import { dockerQuery } from "../../../src/core/artifacts/docker-query.ts";
+import { exportPreparedImage, importPreparedImage } from "../../../src/core/artifacts/image-transfer.ts";
 import { validateDevelopmentProfiles, type DevelopmentProfile } from "../../../src/core/artifacts/profile-schema.ts";
 import { validateConfig } from "../../../src/core/configuration/config-schema.ts";
+import { inspectArtifactStates } from "../../../src/core/artifacts/artifact-status.ts";
+import { AcquisitionReason, AcquisitionRejected } from "../../../src/core/toolchains/acquisition/network-retry.mts";
+import type { ArtifactPlanEntry } from "../../../src/core/artifacts/artifact-catalog.ts";
 
 const linuxTest = test.skipIf(process.platform !== "linux" || !["x64", "arm64"].includes(process.arch));
 
@@ -49,6 +61,8 @@ interface OfflineState {
   image: string;
   target: string;
   digest: string;
+  registryDigest: string | undefined;
+  registryImage: string | undefined;
   daemon: string;
   policy: string;
   tree: string | undefined;
@@ -68,6 +82,8 @@ const state = vi.hoisted((): OfflineState => ({
   image: `sha256:${"a".repeat(64)}`,
   target: "ghcr.io/example/offline:test",
   digest: `ghcr.io/example/offline@sha256:${"b".repeat(64)}`,
+  registryDigest: undefined,
+  registryImage: undefined,
   daemon: "",
   policy: "fixture-policy",
   tree: undefined,
@@ -88,11 +104,12 @@ vi.mock("../../../src/core/collections/policy-compatibility.js", () => ({
 vi.mock("../../../src/core/artifacts/image-emulation.js", () => ({
   profileRequiresBinfmt: () => state.binfmtUnavailable,
 }));
+vi.mock("../../../src/core/artifacts/docker-query.ts", { spy: true });
 vi.mock("../../../src/core/artifacts/image-finalization.js", () => ({
   finalizeImage: vi.fn<typeof import("../../../src/core/artifacts/image-finalization.js").finalizeImage>(
-    (source, target) =>
+    (source, target, labels) =>
       promised(() => {
-        state.calls.push(["finalize", source, target]);
+        state.calls.push(["finalize", source, target, labels]);
       }),
   ),
 }));
@@ -162,30 +179,34 @@ vi.mock("../../../src/core/execution/ci/support/ci-lifecycle.mjs", async (import
         }
         if (command === "docker" && args[0] === "image" && args[1] === "ls")
           return state.stagedAfterFailure && args.includes(`reference=${state.stagedAfterFailure}`) ? state.image : "";
-        if (command === "node") return JSON.stringify({ configuration: state.config });
+        if (command === "docker" && args[0] === "buildx" && args[1] === "imagetools") {
+          if (!state.registryDigest) throw new AcquisitionRejected("Tag missing", undefined, AcquisitionReason.Missing);
+          return JSON.stringify(state.registryDigest);
+        }
+        if (command === "docker" && args[0] === "push") state.registryDigest = state.digest.split("@")[1];
+        if (command === process.execPath) return JSON.stringify({ configuration: state.config });
         if (command === "docker" && args[0] === "info")
           return args.includes("{{.Architecture}}") ? (process.arch === "arm64" ? "aarch64" : "x86_64") : state.daemon;
         if (command === "git") return "frozen-head";
         if (command === "docker" && args[0] === "exec" && args.at(-2) === "uname" && args.at(-1) === "-m")
           return state.guestMachine ?? (state.platform === "amd64" ? "x86_64" : "aarch64");
         if (args[0] === "image" && args[1] === "inspect") {
-          if (
-            (args.at(-1) === state.target && !args.includes("{{json .RepoDigests}}")) ||
-            args[2]?.startsWith("workbench-prepared-")
-          )
+          if (args.at(-1) === state.target || args[2]?.startsWith("workbench-prepared-"))
             throw new Error("No such image");
-          if (args.includes("{{json .RepoDigests}}")) return JSON.stringify([state.digest]);
-          if (args.includes("{{.Id}}")) return state.image;
+          if (args.includes("{{.Id}}"))
+            return args.at(-1)?.includes("@sha256:") ? (state.registryImage ?? state.image) : state.image;
+          const inputs = offlineInputs(
+            root,
+            offlineProfile(root, "offline"),
+            state.platform === "amd64" ? "x64" : "arm64",
+          );
+          if (args.some((arg) => arg.startsWith("{{.Id}} {{index"))) return `${state.image} ${inputs}`;
           return JSON.stringify({
             Os: "linux",
             Architecture: state.platform,
             Config: {
               Labels: {
-                "org.workbench.inputs": offlineInputs(
-                  root,
-                  offlineProfile(root, "offline"),
-                  state.platform === "amd64" ? "x64" : "arm64",
-                ),
+                "org.workbench.inputs": inputs,
                 "org.workbench.builder": offlineProfile(root, "offline").builder,
               },
             },
@@ -215,6 +236,8 @@ beforeEach(() => {
   state.guestMachine = undefined;
   state.target = "ghcr.io/example/offline:test";
   state.digest = `ghcr.io/example/offline@sha256:${"b".repeat(64)}`;
+  state.registryDigest = undefined;
+  state.registryImage = undefined;
   state.onBuild = undefined;
   state.afterSnapshot = undefined;
   state.recipeEnvironment = undefined;
@@ -257,6 +280,128 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   rmSync(temporary, { recursive: true, force: true });
+});
+
+linuxTest(
+  "artifact status distinguishes an image needing checkout verification, stale images, and registry failures",
+  async () => {
+    const config = configFromData(
+      {
+        schema_version: 1,
+        markdown: { wrap_width: 120 },
+        compatibility: { required: false },
+        development: {
+          profiles: [{ ...profile, offline: { ...profile.offline, registry: "ghcr.io/example/fixture" } }],
+        },
+      },
+      undefined,
+      "fixture",
+    );
+    writeFileSync(join(root, "workbench/config.toml"), stringify(config));
+    const platform = process.arch === "arm64" ? "linux-arm64" : "linux-x64";
+    const row: ArtifactPlanEntry = {
+      profile: "native",
+      builder: "native",
+      workspace: "host",
+      target: "local",
+      platform,
+      requirements: { platform },
+      kind: "development",
+      format: "oci",
+      recipe: "fixture",
+      definition: { owner: "app", offlineProfile: "offline" },
+      archive: undefined,
+    };
+    const reference = offlineImageReference(root, "offline");
+    const available = vi.spyOn(localImages, "localImageReferences").mockReturnValue(new Set([reference]));
+    const local = vi.spyOn(preparedImages, "inspectPreparedImages").mockReturnValue({
+      location: "local",
+      issues: [],
+      entries: [
+        {
+          key: "fixture",
+          checkout: root,
+          profile: "offline",
+          reference,
+          image: state.image,
+          bytes: 10,
+          lock: "fixture",
+          identity: "fixture",
+          catalog: "fixture",
+          receipt: "fixture",
+          platform,
+          verified: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const registry = vi
+      .spyOn(preparedImages, "registryImageStatus")
+      .mockResolvedValueOnce({ state: "missing" })
+      .mockResolvedValueOnce({ state: "unavailable", detail: "registry timed out" });
+    try {
+      local.mockReturnValueOnce({ location: "local", issues: [], entries: [] });
+      expect((await inspectArtifactStates(root, [row])).get(row)).toMatchObject({ state: "unverified", reference });
+      expect(existsSync(offlineReceiptPath(root, "offline"))).toBe(false);
+      await verifyOfflineProfile(root, "offline");
+      expect(preparedOfflineProfile(root, offlineProfile(root, "offline")).image).toBe(state.image);
+      expect(state.calls.some((call) => call.includes("--network=none"))).toBe(true);
+      expect(state.calls.some((call) => call[0] === "docker" && ["pull", "build"].includes(String(call[1])))).toBe(
+        false,
+      );
+      expect((await inspectArtifactStates(root, [row])).get(row)).toMatchObject({ state: "verified", reference });
+      expect(registry).not.toHaveBeenCalled();
+      writeFileSync(join(root, "app/pin"), "new preparation input");
+      const missing = (await inspectArtifactStates(root, [row], { registry: true })).get(row);
+      expect(missing).toMatchObject({ state: "outdated", image: { reference }, registry: { state: "missing" } });
+      expect(missing?.reference).not.toBe(reference);
+      expect((await inspectArtifactStates(root, [row], { registry: true })).get(row)?.registry).toEqual({
+        state: "unavailable",
+        detail: "registry timed out",
+      });
+    } finally {
+      available.mockRestore();
+      local.mockRestore();
+      registry.mockRestore();
+    }
+  },
+);
+
+linuxTest("managed qualification runs only after offline restore and removes the receiver on failure", async () => {
+  vi.stubEnv("GH_TOKEN", "irrelevant-to-offline-qualification");
+  const source = join(temporary, "qualification");
+  mkdirSync(source);
+  const file = join(temporary, "archive.nix-export");
+  writeFileSync(file, "authenticated fixture archive");
+  const architecture = process.arch === "arm64" ? "arm64" : "x64";
+  const store = { file, expected: { builder: "nix", architecture, kind: "development", roots: ["app"] } } as const;
+  const definition = { ...offlineProfile(root, "offline"), builder: "nix" } as const;
+  const qualify = () =>
+    verifyStoreArchive(root, definition, state.image, source, {
+      ...store,
+      expected: { ...store.expected, roots: [...store.expected.roots] },
+    });
+  state.fail = "/workspace/scripts/restore-store-archive.mjs";
+  await expect(qualify()).rejects.toThrow(/selected failure/);
+  const created = required(
+    state.calls.find((call) => call[0] === "docker" && call[1] === "create"),
+    "Missing verifier container",
+  );
+  expect(created).toContain("--network=none");
+  expect(created).toContain(`type=bind,src=${file},dst=/tmp/workbench-store-archive,readonly`);
+  expect(state.calls.some((call) => call.includes("/workspace/verify.mjs"))).toBe(false);
+  expect(state.calls.at(-1)?.slice(0, 3)).toEqual(["docker", "rm", "--force"]);
+
+  state.calls = [];
+  state.fail = "";
+  await qualify();
+  const verification = state.calls.findIndex((call) => call.includes("/workspace/verify.mjs"));
+  expect(verification).toBeGreaterThan(
+    state.calls.findIndex((call) => call.includes("/workspace/scripts/restore-store-archive.mjs")),
+  );
+  const invocation = state.calls[verification];
+  expect(invocation).toContain("1000:1000");
+  expect(invocation).toContain("WORKBENCH_OFFLINE=1");
+  expect(invocation).not.toContain("GH_TOKEN");
 });
 
 async function registryFixture({
@@ -448,6 +593,9 @@ linuxTest("preparation accepts only a fresh offline execution and records immuta
     ),
   ).toMatch(/verification/);
   expect(state.calls.some((call) => call[1] === "exec" && call.includes("/workbench/verify.mjs"))).toBe(true);
+  const reads = state.calls.filter((call) => call.includes("read-configuration"));
+  expect(reads[0]).not.toContain("--include-merged-configuration");
+  expect(reads.at(-1)).toEqual(expect.arrayContaining(["--container-id", "--include-merged-configuration"]));
   await verifyOfflineProfile(root, "offline");
   expect(readdirSync(root, { recursive: true }).sort()).toEqual(projectFiles);
   writeFileSync(join(root, "app/pin"), "different");
@@ -459,11 +607,8 @@ linuxTest.each(["absent", "inherited", "overridden"] as const)(
   async (mode) => {
     vi.stubEnv("GH_TOKEN", mode === "absent" ? undefined : "credential-inherited");
     await prepareOfflineProfile(root, "offline");
-    await executePreparedProfile(
-      root,
-      "offline",
-      ["node", "/workbench/verify.mjs"],
-      mode === "overridden" ? { env: { GH_TOKEN: "credential-override" } } : {},
+    await withPreparedProfile(root, "offline", {}, (run) =>
+      run(["node", "/workbench/verify.mjs"], mode === "overridden" ? { env: { GH_TOKEN: "credential-override" } } : {}),
     );
     const { executeCI } = await import("../../../src/core/execution/ci/support/ci-lifecycle.mjs");
     const invocation = required(
@@ -543,6 +688,24 @@ linuxTest("publication is explicit, verifies a pulled registry digest, and clean
   expect(preparedOfflineProfile(root, profile).published).toBe(state.digest);
   expect(state.calls.filter((call) => call[1] === "exec" && call.includes("/workbench/verify.mjs"))).toHaveLength(1);
   expect(state.calls).toContainEqual(["docker", "image", "rm", state.target]);
+});
+
+linuxTest("immutable image delivery resumes matching uploads and preserves a conflicting registry tag", async () => {
+  await prepareOfflineProfile(root, "offline");
+  state.target = `ghcr.io/example/offline:linux-${process.arch}-${"c".repeat(64)}`;
+  state.registryDigest = `sha256:${"d".repeat(64)}`;
+  const remote = `ghcr.io/example/offline@${state.registryDigest}`;
+  state.calls = [];
+  await publishOfflineProfile(root, "offline", state.target);
+  expect(preparedOfflineProfile(root, profile).published).toBe(remote);
+  expect(state.calls).toContainEqual(["docker", "pull", remote]);
+  expect(state.calls).not.toContainEqual(["docker", "push", state.target]);
+
+  state.registryImage = `sha256:${"e".repeat(64)}`;
+  state.calls = [];
+  await expect(publishOfflineProfile(root, "offline", state.target)).rejects.toThrow(/points to a different image/);
+  expect(state.calls).not.toContainEqual(["docker", "push", state.target]);
+  expect(preparedOfflineProfile(root, profile).published).toBe(remote);
 });
 
 linuxTest(
@@ -699,6 +862,23 @@ linuxTest.each(["nix", "guix"] as const)("%s CI cannot bypass registry acquisiti
   }
 });
 
+linuxTest.each(["nix", "guix"] as const)(
+  "%s explicit artifact preparation builds and qualifies a missing image in CI",
+  async (builder) => {
+    profile.builder = builder;
+    vi.stubEnv("GITHUB_ACTIONS", "true");
+    const registry = await registryFixture({ failure: "manifest unknown" });
+    try {
+      await prepareOfflineProfile(root, "offline", { allowHostedBuild: true });
+      expect(state.calls.some((call) => call[0] === "build")).toBe(true);
+      expect(state.calls.some((call) => call[1] === "create" && call.includes("--network=none"))).toBe(true);
+      expect(preparedOfflineProfile(root, offlineProfile(root, "offline")).image).toBe(state.image);
+    } finally {
+      registry.restore();
+    }
+  },
+);
+
 linuxTest("registry-only acquisition requires a configured registry", async () => {
   await expect(prepareOfflineProfile(root, "offline", { pullOnly: true })).rejects.toThrow(/requires offline.registry/);
   expect(state.calls).toEqual([]);
@@ -848,8 +1028,8 @@ linuxTest(
     });
     try {
       await Promise.all([
-        executePreparedProfile(root, "offline", ["parallel-job"]),
-        executePreparedProfile(root, "offline", ["parallel-job"]),
+        withPreparedProfile(root, "offline", {}, (run) => run(["parallel-job"])),
+        withPreparedProfile(root, "offline", {}, (run) => run(["parallel-job"])),
       ]);
       expect(executions).toBe(2);
     } finally {
@@ -890,8 +1070,14 @@ linuxTest("the preparation tag and label use the captured inputs through a trans
   };
   await prepareOfflineProfile(root, "offline");
   expect(preparedOfflineProfile(root, profile).inputs).toBe(expected);
-  const metadata = state.calls.find((call) => call[0] === "finalize");
-  expect(required(metadata, "Expected fixture value: metadata")[2]).toBe(reference);
+  const candidate = offlineCandidateReference(root, "offline", expected, process.arch);
+  expect(state.calls).toContainEqual([
+    "finalize",
+    expect.stringMatching(/^workbench-offline:prepare-/),
+    candidate,
+    expect.objectContaining({ "org.workbench.inputs": expected }),
+  ]);
+  expect(state.calls).toContainEqual(["docker", "tag", state.image, reference]);
 });
 
 linuxTest(
@@ -1052,6 +1238,76 @@ linuxTest(
   },
 );
 
+linuxTest("an exported candidate preserves the accepted image until authenticated local qualification", async () => {
+  await prepareOfflineProfile(root, "offline");
+  const accepted = preparedOfflineProfile(root, profile);
+  const config = JSON.stringify({ architecture: state.platform, os: "linux" });
+  state.image = `sha256:${createHash("sha256").update(config).digest("hex")}`;
+  await prepareOfflineProfile(root, "offline", { build: true, assembleOnly: true });
+  const inputs = offlineInputs(root, profile);
+  const candidate = offlineCandidateReference(root, "offline", inputs, process.arch);
+  const reference = offlineImageReference(root, "offline");
+  expect(preparedOfflineProfile(root, profile)).toEqual(accepted);
+  expect(state.calls.findLast((call) => call[0] === "finalize")?.[2]).toBe(candidate);
+  expect(state.calls).not.toContainEqual(["docker", "tag", state.image, reference]);
+
+  const transferCalls = vi.mocked(dockerQuery);
+  const writeImageArchive = async (path: string, tags: string[] | null = null) => {
+    const pack = tar.pack();
+    const written = pipeline(pack, createWriteStream(path));
+    const name = `${state.image.slice("sha256:".length)}.json`;
+    pack.entry({ name }, config);
+    pack.entry({ name: "manifest.json" }, JSON.stringify([{ Config: name, RepoTags: tags, Layers: [] }]));
+    pack.finalize();
+    await written;
+  };
+  transferCalls.mockImplementation(async (args) => {
+    if (args[1] === "save") {
+      expect(args.at(-1)).toBe(state.image);
+      await writeImageArchive(required(args[3], "Archive destination"));
+    }
+    if (args[1] === "inspect") return state.image;
+    if (
+      args[1] === "ls" &&
+      (args.includes(`reference=${candidate}`) ||
+        args.some((arg) => arg.startsWith("reference=workbench-offline:transfer-")))
+    )
+      return state.image;
+    return "";
+  });
+  const output = join(temporary, "transfers", "export");
+  const exported = () => exportPreparedImage(root, "offline", process.arch, output, true);
+  const transfer = await exported();
+  expect(transfer.verification).toBe("unverified");
+  expect(await exported()).toEqual(transfer);
+  expect(transferCalls.mock.calls.filter(([args]) => args[1] === "save")).toHaveLength(1);
+  const receiving = () =>
+    importPreparedImage(root, "offline", process.arch, transfer.directory, transfer.manifestSha256);
+  await expect(importPreparedImage(root, "offline", process.arch, transfer.directory, "0".repeat(64))).rejects.toThrow(
+    "manifest does not match",
+  );
+  const archive = join(transfer.directory, "image.tar");
+  const original = readFileSync(archive);
+  await writeImageArchive(archive, ["unrelated:latest"]);
+  await expect(exported()).rejects.toThrow(/byte limit|untagged image/);
+  await expect(receiving()).rejects.toThrow(/authenticated manifest size|one untagged image/);
+  expect(transferCalls.mock.calls.every(([args]) => args[1] !== "load")).toBe(true);
+  writeFileSync(archive, original);
+
+  state.fail = "exec";
+  await expect(receiving()).rejects.toThrow("selected failure");
+  expect(preparedOfflineProfile(root, profile)).toEqual(accepted);
+  expect(state.calls).not.toContainEqual(["docker", "tag", state.image, reference]);
+  expect(
+    transferCalls.mock.calls.some(
+      ([args]) => args[1] === "rm" && args.at(-1)?.startsWith("workbench-offline:transfer-"),
+    ),
+  ).toBe(true);
+  state.fail = "";
+  expect((await receiving()).receipt.image).toBe(state.image);
+  expect(state.calls).toContainEqual(["docker", "tag", state.image, reference]);
+});
+
 linuxTest(
   "explicit foreign preparation verifies and publishes via binfmt without replacing the native receipt",
   async () => {
@@ -1119,7 +1375,7 @@ linuxTest(
     cpSync(join(root, "languages"), join(distribution, "languages"), { recursive: true });
     writeFileSync(join(distribution, "verify.mjs"), "// external runtime fixture\n");
     vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
-    await executePreparedProfile(root, "offline", ["node", "{workbench}/verify.mjs"]);
+    await withPreparedProfile(root, "offline", {}, (run) => run(["node", "{workbench}/verify.mjs"]));
     const create = state.calls.filter((call) => call[1] === "create").at(-1);
     expect(create).toContain(`type=bind,src=${distribution},dst=/opt/workbench-runtime,readonly`);
     expect(state.calls.some((call) => call[1] === "exec" && call.includes("/opt/workbench-runtime/verify.mjs"))).toBe(
@@ -1129,6 +1385,52 @@ linuxTest(
     expect(readFileSync(join(distribution, "verify.mjs"), "utf8")).toBe("// external runtime fixture\n");
   },
 );
+
+linuxTest("a CI operation restores only its selected toolchain inputs once for both network partitions", async () => {
+  profile.offline.kind = "toolchain";
+  profile.offline.paths = ["app", "unrelated"];
+  mkdirSync(join(root, "unrelated"));
+  writeFileSync(
+    join(root, "workbench/projects.toml"),
+    readFileSync(join(root, "workbench/projects.toml"), "utf8") +
+      '\n[[language_root]]\nlanguage="go"\npath="unrelated"\n',
+  );
+  const config = join(root, "workbench/config.toml");
+  writeFileSync(config, stringify({ ...parse(readFileSync(config, "utf8")), development: { profiles: [profile] } }));
+  await withPreparedProfile(
+    root,
+    "offline",
+    {
+      image: state.image,
+      selections: [
+        { path: "app", toolchain: "alternate" },
+        { path: "app", toolchain: "alternate" },
+      ],
+    },
+    async (run) => {
+      await run(["offline-checks"], { network: "none" });
+      await run(["online-checks"], { network: "host" });
+    },
+  );
+  const acquisitions = state.calls.filter((call) => call[1] === "exec" && call.includes("--acquire-only"));
+  expect(acquisitions).toHaveLength(1);
+  expect(acquisitions[0]?.slice(-5)).toEqual(["--acquire-only", "--path", "app", "--toolchain", "alternate"]);
+  const containers = state.calls.filter((call) => call[1] === "create");
+  expect(containers.map((call) => call.find((arg) => typeof arg === "string" && arg.startsWith("--network=")))).toEqual(
+    ["--network=host", "--network=none", "--network=host"],
+  );
+  const dependencies = containers.map((call) =>
+    call.filter((arg) => typeof arg === "string" && arg.includes("dst=/opt/workbench/cache/")),
+  );
+  expect(dependencies[0]).toContainEqual(expect.stringContaining("dst=/opt/workbench/cache/go-mod"));
+  expect(dependencies[1]).toEqual(dependencies[0]);
+  expect(dependencies[2]).toEqual(dependencies[0]);
+  const workspaces = containers.map((call) =>
+    call.find((arg) => typeof arg === "string" && arg.endsWith("dst=/workbench")),
+  );
+  expect(workspaces[0]).toContain("/checkout,dst=/workbench");
+  expect(workspaces.slice(1)).toEqual(Array.from({ length: 2 }, () => `type=bind,src=${root},dst=/workbench`));
+});
 
 linuxTest("architecture operations overlap while another operation on the same architecture waits", async () => {
   const firstGate = Promise.withResolvers<undefined>();

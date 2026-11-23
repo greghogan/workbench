@@ -52,6 +52,18 @@
 - `src/core/artifacts`: Builds and verifies development images and release packages, including input and publication
   identities.
 
+- `src/core/artifacts/artifact-catalog.ts`, `src/core/artifacts/artifact-files.ts`: Resolve project artifact profiles, bind
+  output and verification identities, and transfer authenticated file artifacts.
+
+- `src/core/artifacts/release-directory.ts`: Packs and extracts Linux tarballs and macOS and Windows ZIPs. CI verifies
+  extracted files before retaining the archive.
+
+- `src/core/artifacts/image-transfer.ts`, `src/core/artifacts/image-transfer-archive.ts`: Transfer authenticated
+  untagged Docker archives and qualify the image on the receiving host before activation.
+
+- `src/core/artifacts/artifact-release.ts`, `src/core/artifacts/github-release.mts`, `src/core/artifacts/gitlab-release.ts`:
+  Deliver verified artifacts and record hosted release outputs.
+
 - `src/core/artifacts/preparation-store.ts`, `src/core/storage/managed-builder-store.ts`: Select preparation backends,
   verify Docker's access to local cache directories, and attach shared stores.
 

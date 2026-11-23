@@ -1,6 +1,6 @@
-import { Command, Option } from "commander";
+import { Argument, Command, Option } from "commander";
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 import { buildProjectImage } from "../core/artifacts/buildkit.js";
 import { buildPaths, prepareBuild } from "../core/artifacts/builds.js";
 import { executeDevcontainer } from "../core/artifacts/devcontainers.js";
@@ -12,6 +12,7 @@ import { runCommand } from "../core/execution/checks/check-command.js";
 import { nativeCheckEnvironment } from "../core/execution/checks/check-environment.js";
 import { executeManagedCommand } from "../core/execution/environments/managed-input-environment.js";
 import { distributionRoot } from "../core/projects/project-context.js";
+import { readConfig } from "../core/projects/project-configuration.js";
 import { required } from "../core/runtime/invariants.js";
 import { withCacheSizeChanges } from "../core/storage/cache-size.js";
 import { managedGuixBootstrap, prepareManagedBuilderStore } from "../core/storage/managed-builder-store.js";
@@ -137,6 +138,36 @@ export function registerToolInternals(program: Command, root: string): void {
   registerCommand(program, "native-image-inputs", { hidden: true }).action(() =>
     prepareNativeImageInputs(process.cwd(), distributionRoot(root)),
   );
+  registerCommand(program, "image-tool-probe", { hidden: true })
+    .addArgument(new Argument("<builder>").choices(["native", "nix", "guix"]))
+    .option("--path <path>", "Select registered language roots", collect, [])
+    .option("--toolchain <name>")
+    .action((builder: "native" | "nix" | "guix", options: { path: string[]; toolchain?: string }) => {
+      const config = readConfig(root);
+      const platform = `linux-${process.arch}`;
+      const profiles = builder === "native" && !options.toolchain ? (config.toolchains?.profiles ?? []) : [];
+      for (const path of imageRoots(root, options.path.length ? options.path : undefined)) {
+        const alternate = profiles.filter(
+          ({ name, paths, platforms }) =>
+            config.ci?.toolchains?.includes(name) &&
+            paths.includes(path) &&
+            (!platforms || platforms.includes(platform)),
+        );
+        for (const toolchain of [options.toolchain, ...alternate.map(({ name }) => name)])
+          runCommand(
+            resolve(root, path),
+            `verify tools for ${path}`,
+            ["node", "--version"],
+            builder,
+            root,
+            undefined,
+            true,
+            false,
+            { ...(toolchain ? { toolchain } : {}), verbose: true },
+            { toolProbesOnly: true },
+          );
+      }
+    });
 
   registerCommand(program, "php-package-manager-exec", { hidden: true })
     .option("--bootstrap-path", "Verify and print the Composer PHAR used for API analysis")

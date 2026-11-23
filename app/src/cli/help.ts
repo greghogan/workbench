@@ -10,7 +10,7 @@ const layouts: Readonly<Record<string, Groups>> = {
       "Records and context:",
       ["record", "task", "queue", "experiment", "citation", "sync", "feedback", "rebase", "merge"],
     ],
-    ["Development:", ["development", "shell", "tools", "paths", "release"]],
+    ["Development:", ["development", "artifact", "shell", "tools", "paths", "release"]],
     [
       "Checks and review:",
       [
@@ -47,8 +47,11 @@ const layouts: Readonly<Record<string, Groups>> = {
   citation: [["Commands:", ["add", "fetch", "import"]]],
   feedback: [["Commands:", ["add", "show", "resolve"]]],
   development: [["Commands:", ["profiles", "use", "images", "locks", "recover", "prepare", "verify", "publish"]]],
+  artifact: [
+    ["Commands:", ["list", "add", "edit", "remove", "build", "inspect", "verify", "export", "import", "publish"]],
+  ],
   tools: [["Commands:", ["profiles", "install"]]],
-  release: [["Commands:", ["profiles", "prepare"]]],
+  release: [["Commands:", ["profiles", "prepare", "publish"]]],
   check: [["Commands:", ["matrix"]]],
   config: [["Commands:", ["get", "set", "unset"]]],
   skills: [["Commands:", ["enable", "disable"]]],

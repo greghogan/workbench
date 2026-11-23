@@ -1,6 +1,7 @@
 import { compilerFamilies, isCompilerFamily } from "../app/src/core/toolchains/compiler-catalog.mjs";
 import { isRecord as object, isStringArray as strings } from "../app/src/core/runtime/values.mjs";
 import type { CompatibilityRuntime } from "../app/src/core/execution/ci/support/ci-contract.mjs";
+import type { CIPackageJob } from "../app/src/core/execution/ci/ci-packages.ts";
 interface HostedTarget extends Record<string, unknown> {
   path: string;
   paths: string[];
@@ -22,12 +23,14 @@ export interface HostedPlan {
     include: (HostedTarget & { environment: string; architecture: string; runner: string; node: string })[];
   };
   devcontainer: { paths: string[] };
+  packages?: { include: (CIPackageJob & Record<string, unknown>)[]; excluded: { id: string; reason: string }[] };
 }
 interface MatrixShape {
   native: { include: Record<string, unknown>[] };
   compatibility: { include: Record<string, unknown>[] };
   environments: { include: Record<string, unknown>[] };
   devcontainer: { paths: string[] };
+  packages?: { include: Record<string, unknown>[]; excluded: Record<string, unknown>[] };
 }
 function fail(path: string): never {
   throw new Error(`Invalid CI plan: ${path}`);
@@ -78,6 +81,40 @@ function hostedTargets(value: MatrixShape): asserts value is HostedPlan {
       }
     }
   uniqueStrings(value.devcontainer.paths, "devcontainer.paths");
+  if (value.packages) {
+    uniqueStrings(
+      value.packages.include.map(({ id }) => id),
+      "packages.include IDs",
+    );
+    uniqueStrings(
+      value.packages.excluded.map(({ id }) => id),
+      "packages.excluded IDs",
+    );
+    for (const { reason } of value.packages.excluded)
+      if (!text(reason) || !reason.trim()) fail("packages.excluded requires a reason");
+    const assigned: string[] = [];
+    for (const [index, job] of value.packages.include.entries()) {
+      const location = `packages.include[${String(index)}]`;
+      uniqueStrings(job.packages, `${location}.packages`, true);
+      uniqueStrings(job.paths, `${location}.paths`, true);
+      if (job.builder !== "native" && job.builder !== "nix" && job.builder !== "guix")
+        fail(`${location}.builder is unknown`);
+      if (job.abi !== undefined && !text(job.abi)) fail(`${location}.abi must be nonempty`);
+      const paths = job.paths;
+      if (
+        !value.native.include.some(
+          (native) =>
+            native.os === job.os &&
+            native.architecture === job.architecture &&
+            native.runner === job.runner &&
+            paths.every((path) => strings(native.paths) && native.paths.includes(path)),
+        )
+      )
+        fail(`${location} requires a matching native runner and check roots`);
+      assigned.push(...job.packages);
+    }
+    uniqueStrings(assigned, "Assigned release packages");
+  }
 }
 
 function assertMatrix(matrix: unknown): asserts matrix is MatrixShape {
@@ -89,15 +126,23 @@ function assertMatrix(matrix: unknown): asserts matrix is MatrixShape {
   }
   if (!object(matrix.devcontainer) || !strings(matrix.devcontainer.paths))
     fail("devcontainer.paths must contain strings");
+  if (matrix.packages !== undefined) {
+    if (!object(matrix.packages)) fail("packages must be an object");
+    for (const key of ["include", "excluded"] as const) {
+      const entries = matrix.packages[key];
+      if (!Array.isArray(entries) || !entries.every(object)) fail(`packages.${key} must contain objects`);
+    }
+  }
 }
 
 /** The planner and aggregate status agree on which empty groups intentionally skip. */
-export function matrixJobGroups(matrix: unknown): Record<"native" | "environments" | "devcontainer", boolean> {
+export function matrixJobGroups(matrix: unknown): Record<string, boolean> {
   assertMatrix(matrix);
   return {
     native: matrix.native.include.length > 0,
     environments: matrix.environments.include.length > 0,
     devcontainer: matrix.devcontainer.paths.length > 0,
+    ...(matrix.packages ? { "release-packages": matrix.packages.include.length > 0 } : {}),
   };
 }
 

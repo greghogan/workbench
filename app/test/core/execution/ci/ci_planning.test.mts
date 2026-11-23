@@ -5,6 +5,9 @@ import { readHostedPlan } from "../../../../../scripts/ci-plan-contract.mts";
 import { aggregateCI } from "../../../../../scripts/ci-status.mts";
 import { ciMatrix } from "../../../../src/core/execution/ci/ci.ts";
 import { groupedCIMatrix, ciTargets } from "../../../../src/core/execution/ci/ci-targets.ts";
+import { ciPackageMatrix, plannedCIPackages } from "../../../../src/core/execution/ci/ci-packages.ts";
+import { ciJobGroups } from "../../../../src/core/execution/ci/ci-job-plan.ts";
+import { offlineProfile } from "../../../../src/core/artifacts/offline-profiles.ts";
 
 interface PlanInput {
   native: { include: ((Record<string, unknown> & { paths: string[] }) | null)[] };
@@ -78,6 +81,55 @@ test("hosted grouping preserves every configured target and its selected roots",
   const targets = ciTargets(root);
   expect(targets.length).toBeGreaterThan(0);
   expect(new Set(targets.map((target) => target.id)).size).toBe(targets.length);
+});
+
+test("Workbench's Linux check groups use toolchain-only OCI images on both architectures", () => {
+  const selections = new Set<string>();
+  for (const { os, architecture, environment, profile } of ciJobGroups(root)) {
+    if (os !== "linux" || !profile) continue;
+    expect(offlineProfile(root, profile).offline.kind).toBe("toolchain");
+    selections.add(`${environment}/${architecture}`);
+  }
+  expect([...selections].sort()).toEqual([
+    "guix/arm64",
+    "guix/x64",
+    "native/arm64",
+    "native/x64",
+    "nix/arm64",
+    "nix/x64",
+  ]);
+});
+
+test("reference package jobs include each catalog variant once on its native target", () => {
+  const plan = groupedCIMatrix(ciMatrix(root));
+  const packages = ciPackageMatrix(root, plan.native.include);
+  expect(readHostedPlan({ ...plan, packages }).packages).toEqual(packages);
+  expect(packages.include.flatMap((job) => job.packages).sort()).toEqual(
+    plannedCIPackages(root)
+      .selected.map(({ id }) => id)
+      .sort(),
+  );
+  expect(
+    packages.include
+      .filter(({ abi }) => abi === "musl")
+      .map(({ architecture }) => architecture)
+      .sort(),
+  ).toEqual(["arm64", "x64"]);
+  const go = required(
+    packages.include.find(({ id }) => id === "workbench-go.linux-x64.guix"),
+    "Guix Go packages",
+  );
+  expect(go.paths).toEqual(["examples/languages/go"]);
+  expect(go.packages.filter((id) => id.split(".")[2] === "squashfs")).toEqual([
+    "go-guix-squashfs.linux-x64.squashfs.go-guix-squashfs",
+  ]);
+  expect(() => readHostedPlan({ ...plan, packages: { ...packages, include: [...packages.include, go] } })).toThrow(
+    /duplicates/,
+  );
+  expect(aggregateCI({}, { ...plan, packages })).toContain("release-packages: missing (expected success)");
+  expect(
+    aggregateCI({ "release-packages": { result: "skipped" } }, { ...plan, packages: { ...packages, include: [] } }),
+  ).not.toContain("release-packages: skipped (expected success)");
 });
 
 test("hosted plans reject missing platform data, duplicate roots, and invalid environments before expansion", () => {

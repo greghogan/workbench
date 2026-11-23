@@ -20,7 +20,10 @@ export class CheckCancellation {
   private readonly message = (message: unknown) => {
     if (readCheckMessage(message)?.type === CheckMessage.Cancel) this.interrupt();
   };
-  constructor(private readonly subject = "Checks") {
+  constructor(
+    private readonly subject = "Checks",
+    private readonly output: NodeJS.WriteStream = process.stdout,
+  ) {
     process.on("SIGINT", this.interrupt);
     process.on("SIGTERM", this.interrupt);
     process.on("message", this.message);
@@ -83,13 +86,22 @@ export class CheckCancellation {
     this.checkpoint();
     const [command, ...args] = invocation;
     if (!command) throw new Error("Command requires an executable");
+    const redirected = this.output !== process.stdout;
     if (process.platform === "win32") {
       const outcome = await runOwnedChild(command, args, {
         cwd: directory,
         env,
         signal: this.signal,
         inheritInput,
-        inheritOutput: inheritInput,
+        inheritOutput: inheritInput && !redirected,
+        ...(redirected
+          ? {
+              output: (stdout: NodeJS.ReadableStream, stderr: NodeJS.ReadableStream) => {
+                stdout.pipe(this.output, { end: false });
+                stderr.pipe(process.stderr, { end: false });
+              },
+            }
+          : {}),
         stopDescendantsOnExit: true,
         ...(owner ? { owner } : {}),
       });
@@ -112,7 +124,7 @@ export class CheckCancellation {
         detached: !foreground,
         windowsHide: true,
         // A redirected stdin does not make stdout/stderr noninteractive.
-        stdio: inheritInput ? "inherit" : ["ignore", "pipe", "pipe"],
+        stdio: inheritInput ? ["inherit", this.output, process.stderr] : ["ignore", "pipe", "pipe"],
       });
       let failure: Error | undefined;
       let completed: (() => void) | undefined;
@@ -159,7 +171,7 @@ export class CheckCancellation {
           }, 10000),
         );
       };
-      child.stdout?.pipe(process.stdout, { end: false });
+      child.stdout?.pipe(this.output, { end: false });
       child.stderr?.pipe(process.stderr, { end: false });
       child.once("error", (error) => {
         failure ??= error;

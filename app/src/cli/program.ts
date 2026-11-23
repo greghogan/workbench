@@ -61,6 +61,7 @@ import { registerCommitCommands } from "./commits.js";
 import { completionCandidates, completionScript, installCompletion } from "./completion.js";
 import { registerConfigurationCommands } from "./configuration.js";
 import { registerDevelopmentCommands } from "./development.js";
+import { registerArtifactCommands } from "./artifacts.js";
 import { registerEnvironmentInternals } from "./environment-internals.js";
 import { registerExperimentCommands } from "./experiments.js";
 import { registerFeedbackCommands } from "./feedback-commands.js";
@@ -334,6 +335,7 @@ export function createCLI(root: string = projectRoot()) {
     .action((requested?: string) => validate(requested ? resolve(requested) : root));
   registerEnvironmentInternals(program, root);
   registerDevelopmentCommands(program, root);
+  registerArtifactCommands(program, root);
   registerToolCommands(program, root);
   registerToolInternals(program, root);
   registerCheckCommands(program, root);
@@ -402,8 +404,8 @@ export function createCLI(root: string = projectRoot()) {
       showFullHelp = false;
     }
   }
-  function sync(): number {
-    return synchronize(root);
+  function sync(report?: (message: string) => void): number {
+    return synchronize(root, true, report);
   }
   // Inspection and reconciliation remain available while compatibility review is stale.
   program.hook("preAction", async (_program, action) => {

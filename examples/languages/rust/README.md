@@ -85,9 +85,9 @@ Portable Linux releases use explicit profiles, selected independently of the dev
 
 ```sh
 # From the Workbench repository root, on the matching native Linux architecture:
-workbench release prepare rust-linux-x64-musl
+workbench artifact build rust-linux-x64-musl --kind release
 # On an ARM64 builder instead:
-workbench release prepare rust-linux-arm64-musl
+workbench artifact build rust-linux-arm64-musl --kind release
 ```
 
 Install the declared native Rust tools first. `release-musl.json` pins the additional `cross` driver by Git revision
@@ -110,11 +110,9 @@ Containers share the builder's kernel, so this is not an independent old-kernel 
 clear inherited host-specific compiler/linker flags. Each architecture requires its own native builder, without
 emulation. CI selects each profile on that architecture; local verification uses the same command.
 
-Accepted artifacts and verification receipts are under `dist/releases/PROFILE/`, within the checkout root's external
-build-cache generation when external storage is enabled. `workbench release prepare PROFILE --json` reports the exact
-path. Copy the desired profile into a consumer's `workbench/config.toml` and adapt its registered root and behavioral
-verifier. Selecting all configured profiles still requires a builder matching every selected platform; select the
-matching profile explicitly when a configuration includes both architectures. Nix/Guix package profiles remain
+The build reports the retained archive and its verification receipt. Add `--export DIRECTORY` to transfer them, or
+`--json` to report their exact paths to automation. Copy the recipe and matching profile into a consumer's
+`workbench/profiles.toml` and adapt its project owner and behavioral verifier. Nix/Guix package profiles remain
 independent and include their runtime closures.
 
 `make clean` and `make distclean` remove this root's Workbench build cache and local artifacts, preserving shared Cargo

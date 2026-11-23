@@ -31,10 +31,14 @@
   fast regressions for its execution and CI selection.
 - `src/core/toolchains/tool-profiles.ts`: Resolves named compiler/runtime selections and the roots and platforms where
   they apply.
-- `src/core/execution/ci/ci.ts`: derives CI coverage and installation versions from configured language roots and native
-  pins.
+- `src/core/execution/ci/ci.ts`: derives CI targets and installation versions, then checks their prepared image recipes
+  against the artifact catalog.
 - `src/core/execution/ci/ci-targets.ts`: catalogs configured targets and groups shared hosted setup without dropping
   roots.
+- `src/core/execution/ci/ci-packages.ts`: plans distinct release packages and verifies them on the target host.
+
+- `src/core/execution/ci/ci-release.ts`: packages release files on each selected target and verifies complete
+  transfers before tagged publication.
 - `src/core/execution/ci/ci-runtime.ts`: selects verified compatibility runtimes independently of development pins.
 - `src/core/execution/ci/local-ci.ts`: selects Linux x64 targets and coordinates isolated jobs and combined rehearsal
   reports.
@@ -140,6 +144,8 @@
   the selected language definition.
 - `src/core/artifacts/offline-profiles.ts`: prepares, verifies, and explicitly publishes offline development images and
   tracks input identities in user-cache receipts.
+- `src/core/artifacts/native-archive.ts`: transfers native tool downloads and package caches, then verifies
+  restoration and installation with fresh paths and no network access.
 - `src/core/execution/ci/support/ci-image.mts`: share the authenticated native CI image recipe and platform checks.
 - `src/core/execution/environments/managed-inputs.ts`, `src/core/execution/environments/managed-input-environment.ts`,
   `src/core/execution/environments/managed-registry.ts`: Validate realized dependency sources and provide local

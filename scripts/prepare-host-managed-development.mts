@@ -13,6 +13,7 @@ const plan = validateManagedPlan(JSON.parse(readFileSync(join(output, "host-prof
 if (plan.builder !== builder || plan.output !== output) throw new Error("Managed plan does not match this invocation");
 await withManagedProcesses(async (scope) => {
   const run = (command: string, args: string[], capture = false) => scope.run(command, args, { capture });
+  const exporting = process.env.WORKBENCH_MANAGED_PROFILE_EXPORT === "1";
   scope.defer(() => {
     rmSync(plan.imageRoot, { force: true });
   });
@@ -21,11 +22,12 @@ await withManagedProcesses(async (scope) => {
   process.env.WORKBENCH_MANAGED_IMAGE_ROOT = plan.imageRoot;
   if (builder === "guix") {
     const env = await prepareGuixProfiles(plan, scope);
-    await scope.run("sh", [".devcontainer/guix/prepare.sh"], { env });
+    if (!exporting) await scope.run("sh", [".devcontainer/guix/prepare.sh"], { env });
   } else {
     process.env.WORKBENCH_MANAGED_PLAN = join(output, "host-profiles.json");
     await run(process.execPath, [join(import.meta.dirname, "prepare-nix-profiles.mjs")]);
   }
+  if (exporting) return;
   const archive = readFileSync(join(output, "image-path"), "utf8").trim();
   if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
     throw new Error("Invalid managed image archive");

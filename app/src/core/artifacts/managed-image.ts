@@ -35,6 +35,7 @@ export async function prepareHostManagedImage(
     throw new Error("Managed image preparation requires a Linux x64 or ARM64 host");
   if (builder !== "nix" && builder !== "guix") throw new Error("Managed image preparation requires nix or guix");
   const system = managedSystem(architecture);
+  const role = process.env.WORKBENCH_ARTIFACT_KIND === "toolchain" ? "toolchain" : "environment";
   const roots = imageRoots(root, JSON.parse(readFileSync(rootsFile, "utf8")));
   const paths = roots.map((path) => buildPaths(root, resolve(root, path), builder, { architecture }));
   const first = paths[0];
@@ -60,7 +61,7 @@ export async function prepareHostManagedImage(
   const preparation = validateManagedPlan({
     builder,
     system,
-    roots: paths.map((path, index) => ({ path: roots[index], profile: managedProfilePath(path) })),
+    roots: paths.map((path, index) => ({ path: roots[index], profile: managedProfilePath(path, role) })),
     runtime,
     guix,
     imageRoot: archive,
@@ -76,7 +77,7 @@ export async function prepareHostManagedImage(
       prepareBuildDependencies(path);
       const selected = preparation.roots[index];
       if (!selected) throw new Error("Managed profile plan lost a selected root");
-      prepareManagedProfile(path, selected.profile);
+      prepareManagedProfile(path, selected.profile, role);
     }
     for (const group of preparation.guix ?? []) {
       const owner = paths[group.roots[0] ?? -1];

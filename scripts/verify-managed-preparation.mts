@@ -1,4 +1,4 @@
-import { isRecord, isStringArray, records, required } from "../app/src/core/runtime/values.mjs";
+import { isRecord, isStringArray, record, records, required, string } from "../app/src/core/runtime/values.mjs";
 import {
   constants,
   copyFileSync,
@@ -116,9 +116,8 @@ test -f /etc/group && test ! -L /etc/group
 test -r /opt/workbench-environments/0/bin/hello
 /opt/workbench-environments/0/bin/hello --version
 `
-        : `mkdir -p /tmp /root
-chmod 1777 /tmp
-nix --extra-experimental-features 'nix-command flakes' --option flake-registry '' develop --offline /opt/workbench-environments/0 --command hello
+        : `if [ "$(id -u)" = 0 ]; then mkdir -p /tmp /root; chmod 1777 /tmp; fi
+nix --extra-experimental-features 'nix-command flakes' --option flake-registry '' develop --offline "\${WORKBENCH_ENVIRONMENTS:-/opt/workbench-environments}/0" --command hello
 `),
   );
 }
@@ -254,6 +253,8 @@ async function verifyManagedStore(scope: ManagedProcessScope, manager: StoreMana
         "-c",
         "core.hooksPath=/dev/null",
         "-c",
+        "commit.gpgsign=false",
+        "-c",
         "user.name=Workbench",
         "-c",
         "user.email=verification@example.invalid",
@@ -358,6 +359,86 @@ async function verifyManagedStore(scope: ManagedProcessScope, manager: StoreMana
     throw new Error("The two pinned closures must share runtime objects and have distinct project profiles");
   if (readdirSync(storage).filter((name) => /^[a-f0-9]{24}$/.test(name)).length !== 1)
     throw new Error(`Both projects must share one compatible ${manager} store`);
+  if (manager === "nix") {
+    writeFileSync(
+      join(first, "workbench/profiles.toml"),
+      `schema_version = 1
+[targets.local]
+platform = "linux-${process.arch}"
+[recipes.archive]
+owner = "nix-0"
+store_profile = "${fixtureProfile}"
+bootstrap_image = ${JSON.stringify(managedStoreMaintenanceImage(directory))}
+[profiles.archive]
+builder = "nix"
+projects = ["nix-0"]
+variants = [{ target = "local", kind = "development", recipe = "archive", formats = ["nix-export"] }]
+`,
+    );
+    const selected = ["--kind", "development", "--format", "nix-export", "--json"];
+    const candidates = records(
+      JSON.parse(
+        await workbench(
+          first,
+          ["artifact", "build", "archive", ...selected, "--unverified", "--export", join(base, "archive")],
+          { capture: true },
+        ),
+      ),
+      "Invalid prepared Nix export",
+    );
+    const delivery = record(required(candidates[0], "No prepared Nix export").delivered, "Invalid Nix export delivery");
+    const received = record(
+      JSON.parse(
+        await workbench(
+          first,
+          [
+            "artifact",
+            "import",
+            "archive",
+            string(delivery.directory, "Missing Nix export directory"),
+            ...selected,
+            "--sha256",
+            string(delivery.manifestSha256, "Missing Nix export digest"),
+          ],
+          { capture: true },
+        ),
+      ),
+      "Invalid Nix import result",
+    );
+    const result = record(received.manifest, "Nix import did not retain a manifest");
+    if (record(result.verification, "Nix import was not qualified").platform !== `linux-${process.arch}`)
+      throw new Error("Nix import did not record the verified target platform");
+    const checkout = lstatSync(first);
+    const marker = "archive-shell-output.txt";
+    const output = await workbench(
+      first,
+      [
+        "shell",
+        "--artifact",
+        "archive",
+        "--generation",
+        string(received.generation, "Missing archive generation"),
+        "--",
+        "sh",
+        "-ec",
+        'test "$WORKBENCH_OFFLINE" = 1; test "$(git rev-parse --show-toplevel)" = "$PWD"; hello | tee "$1"',
+        "archive-shell",
+        marker,
+      ],
+      { capture: true },
+    );
+    const written = join(first, marker);
+    const stat = lstatSync(written);
+    if (
+      !output.includes("Hello, world!") ||
+      !readFileSync(written, "utf8").includes("Hello, world!") ||
+      stat.uid !== checkout.uid ||
+      stat.gid !== checkout.gid ||
+      lstatSync(first).uid !== checkout.uid ||
+      lstatSync(first).gid !== checkout.gid
+    )
+      throw new Error("Managed archive shell must use the imported profile and preserve checkout ownership");
+  }
   await prune(first, "builders");
   if (
     [pins(first, original.inputs), pins(second, other.inputs)].some((generation) =>

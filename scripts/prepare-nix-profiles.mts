@@ -4,6 +4,7 @@ import { validateManagedPlan } from "../app/src/core/execution/environments/mana
 import { managedSystem } from "../app/src/core/execution/environments/managed/managed-system.mjs";
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { exportManagedProfiles } from "../app/src/core/execution/environments/managed/profile-transfer.mjs";
 
 const project = realpathSync(process.cwd());
 const roots = strings(
@@ -22,6 +23,8 @@ if (
 )
   throw new Error("Nix preparation plan does not match the selected roots");
 const system = plan?.system ?? managedSystem();
+const shell = process.env.WORKBENCH_ARTIFACT_KIND === "toolchain" ? "toolchain" : "default";
+const installable = (root: string) => `path:${project}/${root}#devShells.${system}.${shell}`;
 const options = [
   "--extra-experimental-features",
   "nix-command flakes",
@@ -34,28 +37,23 @@ const options = [
 ];
 await withManagedProcesses(async (scope) => {
   const run = (args: string[], capture = false) => scope.run("nix", [...options, ...args], { capture });
-  await run([
-    "build",
-    "--no-update-lock-file",
-    "--no-link",
-    ...roots.map((root) => `path:${project}/${root}#devShells.${system}.default`),
-  ]);
-  const profiles = [];
+  await run(["build", "--no-update-lock-file", "--no-link", ...roots.map(installable)]);
+  const profiles: string[] = [];
   // Capture shell exports after the shared dependency graph has finished; no project commands run here.
   for (const [index, root] of roots.entries()) {
     const profile = plan?.roots[index]?.profile ?? join(output, "profiles", String(index));
-    await run([
-      "develop",
-      "--no-update-lock-file",
-      "--profile",
-      profile,
-      `path:${project}/${root}#devShells.${system}.default`,
-      "--command",
-      "true",
-    ]);
+    await run(["develop", "--no-update-lock-file", "--profile", profile, installable(root), "--command", "true"]);
     profiles.push(realpathSync(profile));
   }
   writeFileSync(join(output, "profiles.json"), JSON.stringify(profiles));
+  if (process.env.WORKBENCH_MANAGED_PROFILE_EXPORT === "1") {
+    await exportManagedProfiles(
+      "nix",
+      roots.map((path, index) => ({ path, profile: required(profiles[index], "Missing Nix profile") })),
+      output,
+    );
+    return;
+  }
   const image = (
     await run(
       [

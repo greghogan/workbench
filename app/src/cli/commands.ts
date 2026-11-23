@@ -12,6 +12,13 @@ interface Admission {
 const commands: Record<string, Admission> = {
   advisories: { project: true, registration: true },
 
+  artifact: {
+    project: true,
+    registration: true,
+    policy: true,
+    children: { list: { registration: false, policy: false }, inspect: { registration: false, policy: false } },
+  },
+
   "build-clean": { internal: true },
 
   "buildkit-build": { internal: true, policy: true },
@@ -38,7 +45,7 @@ const commands: Record<string, Admission> = {
 
   "ci-image-acquire": { internal: true, policy: true },
 
-  "ci-image-exec": { internal: true, policy: true },
+  "ci-image-job": { internal: true, policy: true },
 
   citation: { project: true, registration: true },
 
@@ -107,6 +114,7 @@ const commands: Record<string, Admission> = {
   "managed-image-prepare": { internal: true, policy: true },
 
   "image-roots": { internal: true, policy: true },
+  "image-tool-probe": { internal: true, policy: true },
 
   "managed-inputs-exec": { internal: true, policy: true },
 
@@ -147,7 +155,11 @@ const commands: Record<string, Admission> = {
   experiment: { project: true, registration: true, policy: true, children: { show: { policy: false } } },
   queue: { project: true, registration: true },
 
-  release: { project: true, registration: true, children: { profiles: { policy: false }, prepare: { policy: true } } },
+  release: {
+    project: true,
+    registration: true,
+    children: { profiles: { policy: false }, prepare: { policy: true }, publish: { policy: true } },
+  },
 
   review: {
     project: true,

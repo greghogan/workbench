@@ -299,26 +299,30 @@ jobs:
       candidate: ${{ needs.candidate.outputs.artifact }}
       baseline: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
 
-  # Portable Rust artifacts are explicit releases, separate from each platform's
-  # ordinary native release. Each architecture builds and executes without emulation.
-  rust-portable:
-    needs: candidate
-    name: Rust musl / Linux ${{ matrix.architecture }}
-    runs-on: ${{ matrix.runner }}
+  release-packages:
+    needs: [plan, candidate]
+    if: fromJSON(needs.plan.outputs.matrix).packages.include[0] != null
+    name: Release packages / ${{ matrix.id }}
+    # Ubuntu 24.04 supplies the host Guix daemon. The project channels select the build.
+    runs-on: ${{ matrix.builder == 'guix' && (matrix.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') || matrix.runner }}
     permissions:
       contents: read
       packages: read
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.builder == 'native' && 30 || 180 }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { architecture: x64, runner: ubuntu-26.04 }
-          - { architecture: arm64, runner: ubuntu-26.04-arm }
+        include: ${{ fromJSON(needs.plan.outputs.matrix).packages.include }}
     steps:
+      - name: Configure checkout text and symlinks
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+          git config --global core.longpaths true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
@@ -326,44 +330,68 @@ jobs:
       - uses: ./.github/actions/prepare-runtime
         with:
           artifact: ${{ needs.candidate.outputs.artifact }}
-      - name: Install declared Rust tools and the pinned cross driver
+      - run: node bin/workbench.mjs project add .
+      - name: Make room for managed release closures
+        if: matrix.builder != 'native'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+      - name: Start the host Guix daemon
+        if: matrix.builder == 'guix'
         run: |
-          node bin/workbench.mjs project add .
-          node bin/workbench.mjs tools install --path examples/languages/rust
+          node scripts/ci-acquire.mts "Refresh Ubuntu package lists" sudo apt-get -o APT::Update::Error-Mode=any update
+          node scripts/ci-acquire.mts "Install the Guix bootstrap" sudo apt-get install -y --no-install-recommends guix
+          sudo systemctl start guix-daemon.service
+          for key in /usr/share/guix/*.pub; do
+            sudo sh -c 'exec guix archive --authorize < "$1"' guix-authorize "$key"
+          done
+          guix gc --list-roots >/dev/null
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: runner.os == 'Windows'
+      - name: Install native SDK prerequisites and declared tools
+        if: matrix.builder == 'native'
+        env:
+          CHECK_ROOTS: ${{ toJSON(matrix.paths) }}
+        run: |
+          node scripts/ci-native-prerequisites.mts
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          for (const root of JSON.parse(process.env.CHECK_ROOTS))
+            execFileSync(process.execPath, [
+              'bin/workbench.mjs', 'tools', 'install', '--path', root, '--exclude-tool', 'miri',
+            ], { stdio: 'inherit' });
+          NODE
+      - name: Install the pinned Rust cross driver
+        if: matrix.builder == 'native' && matrix.abi == 'musl' && matrix.paths[0] == 'examples/languages/rust'
+        run: |
           cross_revision=$(node -p 'require("./examples/languages/rust/release-musl.json").cross_revision')
           node bin/workbench.mjs shell --path examples/languages/rust --environment native -- \
             node "${GITHUB_WORKSPACE}/scripts/ci-acquire.mts" "Acquire pinned cross driver" cargo install --git https://github.com/cross-rs/cross --rev "$cross_revision" --locked \
               --root "${CARGO_HOME:-$HOME/.cargo}" cross
           echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
-      # The configured release recipe acquires the qualified native SDK by immutable digest.
-      # Its OS toolset includes musl; routine CI does not construct another compiler image.
       - name: Authenticate for read-only prepared-image access
+        if: matrix.builder == 'native' && matrix.abi == 'musl' && matrix.paths[0] == 'examples/languages/rust'
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY_USER: ${{ github.actor }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
-      - name: Test, package, and verify portable release in glibc and musl containers
-        id: portable
+      - name: Build and verify catalog packages
         env:
-          ARCHITECTURE: ${{ matrix.architecture }}
+          PACKAGE_IDS: ${{ toJSON(matrix.packages) }}
+          WORKBENCH_CI_CANDIDATE: ${{ runner.temp }}/runtime-candidate
+          WORKBENCH_CI_REPOSITORY: ${{ github.repository }}
         run: |
-          profile="rust-linux-${ARCHITECTURE}-musl"
-          node bin/workbench.mjs release prepare "$profile"
-          node bin/workbench.mjs release prepare "$profile" --json > "$RUNNER_TEMP/rust-release-plan.json"
-          node --input-type=module - "$RUNNER_TEMP/rust-release-plan.json" <<'JS'
-          import { appendFileSync, readFileSync } from 'node:fs';
-          const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-          appendFileSync(process.env.GITHUB_OUTPUT, `directory=${plan.profiles[0].output}\n`);
-          JS
-      - name: Retain verified portable release
+          node bin/workbench.mjs ci verify-packages --selection "$PACKAGE_IDS" \
+            --output "$RUNNER_TEMP/release-packages"
+      - name: Retain package results
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: rust-musl-${{ matrix.architecture }}
-          path: ${{ steps.portable.outputs.directory }}
+          name: release-packages-${{ matrix.id }}-${{ needs.candidate.outputs.artifact }}
+          path: ${{ runner.temp }}/release-packages
           retention-days: 30
+          overwrite: true
 
       - name: Remove transient registry credentials
-        if: always()
+        if: always() && matrix.builder == 'native' && matrix.abi == 'musl' && matrix.paths[0] == 'examples/languages/rust'
         run: docker logout ghcr.io >/dev/null 2>&1 || true
 
   # Nix and Guix keep their own tool authority. The same retained image serves
@@ -496,7 +524,19 @@ jobs:
   # A stable required status accepts only explicitly empty groups as skipped.
   status:
     name: Checks passed
-    needs: [plan, validation, candidate, native, environments, devcontainer, rust-portable, screen-reader, security, engineering]
+    needs:
+      [
+        plan,
+        validation,
+        candidate,
+        native,
+        environments,
+        devcontainer,
+        release-packages,
+        screen-reader,
+        security,
+        engineering,
+      ]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5
@@ -517,6 +557,11 @@ jobs:
         with:
           name: ${{ needs.candidate.outputs.artifact }}
           path: ${{ runner.temp }}/candidate
+      - name: Fetch the verified Workbench ZIPs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-packages-workbench-app.[mw]*.native-${{ needs.candidate.outputs.artifact }}
+          path: ${{ runner.temp }}/release-packages
       - name: Record the release-ready candidate
         env:
           WORKBENCH_CI_CANDIDATE: ${{ runner.temp }}/candidate

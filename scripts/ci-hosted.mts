@@ -1,7 +1,6 @@
-import { appendBrowserTimings } from "../app/src/core/execution/ci/support/ci-browser-timings.mjs";
 import { CILifecycle, executeCI } from "../app/src/core/execution/ci/support/ci-lifecycle.mjs";
 import { runCIEntry } from "./ci-errors.mts";
-import { readAcquiredCIImage } from "../app/src/core/execution/ci/support/ci-image-contract.mjs";
+import { CIOperation } from "../app/src/core/execution/ci/support/ci-operations.mjs";
 import { required, record, string, strings, stringRecord } from "../app/src/core/runtime/values.mjs";
 
 interface HostedMatrix {
@@ -12,7 +11,7 @@ interface HostedMatrix {
   runtime?: string;
   version?: string;
 }
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { targetEnvironment, targetPhases, readCITargets } from "../app/src/core/execution/ci/support/ci-contract.mjs";
 import {
@@ -73,42 +72,18 @@ await runCIEntry("Hosted CI operation", async () => {
     const reports = join(required(process.env.RUNNER_TEMP, "RUNNER_TEMP is required"), "workbench-reports");
     mkdirSync(reports, { recursive: true });
     if (profile) {
-      if (["nix", "guix"].includes(builder)) await run([cli, "development", "images", profile, "--require"]);
-      await run([cli, "tools", "install", "--devcontainer"]);
-      const metadata = join(reports, "image.json");
-      await run([cli, "ci-image-acquire", profile, "--output", metadata]);
-      const acquired = readAcquiredCIImage(JSON.parse(readFileSync(metadata, "utf8")));
-      const image = acquired.image;
-      writeFileSync(join(reports, "targets.json"), JSON.stringify(targets));
-      for (const network of kind === "environment" ? ["offline", "online"] : ["all"]) {
-        const partition = kind === "environment" ? join(reports, network) : reports;
-        mkdirSync(partition, { recursive: true });
-        writeFileSync(join(partition, "targets.json"), JSON.stringify(targets));
-        try {
-          await run([
-            cli,
-            "ci-image-exec",
-            profile,
-            "--image",
-            image,
-            "--network",
-            network === "offline" ? "none" : "host",
-            "--reports",
-            partition,
-            "--env-json",
-            JSON.stringify({
-              RUNNER_TEMP: "/reports",
-              WORKBENCH_CI_TARGETS: "/reports/targets.json",
-              WORKBENCH_CI_CHECK_NETWORK: network,
-            }),
-            "--",
-            "node",
-            "{workbench}/scripts/ci-linux/run.mjs",
-          ]);
-        } finally {
-          appendBrowserTimings(partition, targets.map((target) => target.id).join(", "));
-        }
-      }
+      const selection = join(reports, "targets.json");
+      writeFileSync(selection, JSON.stringify(targets));
+      await run([
+        cli,
+        "ci-image-job",
+        profile,
+        "--targets",
+        selection,
+        "--reports",
+        reports,
+        ...(kind === "environment" ? ["--operation", CIOperation.Checks] : []),
+      ]);
     } else {
       if (builder === "devcontainer") await run([cli, "tools", "install", "--devcontainer"]);
       const result = createRunReport(

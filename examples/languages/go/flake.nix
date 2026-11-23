@@ -6,12 +6,16 @@
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = function: nixpkgs.lib.genAttrs systems (system: function nixpkgs.legacyPackages.${system});
     in rec {
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          inputsFrom = [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
-          nativeBuildInputs = [ (import ./check-inputs.nix { inherit pkgs; }) ];
-          packages = with pkgs; [ git nodejs_24 openssh rsync which less vim ];
+      devShells = forAllSystems (pkgs: let
+        shell = withDependencies: pkgs.mkShell {
+          inputsFrom = pkgs.lib.optionals withDependencies [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
+          nativeBuildInputs = pkgs.lib.optionals withDependencies [ (import ./check-inputs.nix { inherit pkgs; }) ];
+          packages = (with pkgs; [ git nodejs_24 openssh rsync which less vim ])
+            ++ pkgs.lib.optionals (!withDependencies) (with pkgs; [ go_latest ]);
         };
+      in {
+        default = shell true;
+        toolchain = shell false;
       });
       packages = forAllSystems (pkgs:
         let

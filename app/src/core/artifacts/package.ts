@@ -25,6 +25,7 @@ import { required } from "../runtime/invariants.js";
 import { packageOutput } from "./package-output.js";
 export { packageOutput } from "./package-output.js";
 export { verifyWorkbenchPackage } from "./package-verify.js";
+export { verifyPackedRelease } from "./release-directory.js";
 export {
   decodeJavaRuntime,
   javaRuntime,

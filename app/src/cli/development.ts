@@ -143,6 +143,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
     .option("--fresh")
     .option("--refresh-bootstrap")
     .option("--assemble-only")
+    .option("--allow-hosted-build")
     .option("--pull-only")
     .addOption(new Option("--architecture <architecture>").choices(["x64", "arm64"]))
     .action(
@@ -157,6 +158,7 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
           refreshBootstrap?: boolean;
           architecture?: string;
           assembleOnly?: boolean;
+          allowHostedBuild?: boolean;
         },
       ) => {
         if (operation === "prepare" || operation === "verify" || operation === "publish") {
@@ -190,8 +192,17 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
     });
   registerCommand(program, "shell")
     .description("Use the selected environment and platform shell, or run a literal command")
-    .option("--path <path>", "Registered language root relative to the repository", ".")
+    .option("--path <path>", "Registered language root relative to the repository")
     .option("--profile <profile>", "Select a named development profile")
+    .option("--artifact <profile>", "Use a verified native, Nix, or Guix archive from an artifact profile")
+    .option("--generation <id>", "Select an exact retained archive generation")
+    .addOption(
+      new Option("--kind <kind>", "Select the archive kind (default: development)").choices([
+        "toolchain",
+        "development",
+      ]),
+    )
+    .option("--target <target>", "Select a declared archive target (default: this host)")
     .addOption(
       new Option("--workspace <workspace>", "Override the profile's workspace").choices(["host", "devcontainer"]),
     )
@@ -206,19 +217,57 @@ export function registerDevelopmentCommands(program: Command, root: string): voi
     )
     .argument("[command...]", "Command and literal arguments after --; omit for an interactive shell")
     .action(
-      (
+      async (
         command: string[],
-        options: { path: string; environment?: string; profile?: string; toolchain?: string; workspace?: string },
-      ) =>
-        developmentShell(
+        options: {
+          path?: string;
+          environment?: string;
+          profile?: string;
+          toolchain?: string;
+          workspace?: string;
+          artifact?: string;
+          generation?: string;
+          kind?: string;
+          target?: string;
+        },
+      ) => {
+        if (options.artifact) {
+          if (options.profile || options.environment || options.workspace)
+            throw new Error(
+              "--artifact selects the environment; use it without --profile, --environment, or --workspace",
+            );
+          if (!command.length && !process.stdin.isTTY)
+            throw new Error("An interactive shell needs a terminal; supply a command after -- for automation");
+          const { artifactPlan, readArtifactCatalog } = await import("../core/artifacts/artifact-catalog.js");
+          const { useDevelopmentArchive } = await import("../core/artifacts/artifact-files.js");
+          const catalog = readArtifactCatalog(root);
+          const builder = Object.hasOwn(catalog.profiles, options.artifact)
+            ? catalog.profiles[options.artifact]?.builder
+            : undefined;
+          const rows = artifactPlan(catalog, {
+            profiles: [options.artifact],
+            kinds: [options.kind ?? "development"],
+            format: builder === "nix" || builder === "guix" ? `${builder}-export` : "archive",
+            ...(options.target ? { target: options.target } : {}),
+          });
+          const [row] = rows;
+          if (!row || rows.length !== 1)
+            throw new Error("Select one archive; use --target if the profile has several targets on this host");
+          process.exitCode = await useDevelopmentArchive(root, row, command, options);
+          return;
+        }
+        if (options.generation || options.kind || options.target)
+          throw new Error("--generation, --kind, and --target require --artifact");
+        await developmentShell(
           root,
-          options.path,
+          options.path ?? ".",
           options.environment,
           command,
           options.profile,
           options.toolchain,
           options.workspace,
-        ),
+        );
+      },
     );
   registerCommand(program, "shell-session", { hidden: true })
     .argument("<context>")

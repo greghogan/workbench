@@ -159,6 +159,9 @@ test("acquisition signatures distinguish transient service failures from authent
     "compiler error: missing symbol",
   ])
     expect(classifyAcquisitionOutput(text), text).not.toBe(AcquisitionReason.Unavailable);
+  expect(classifyAcquisitionOutput("ERROR: docker.io/library/alpine:unknown-tag: not found")).toBe(
+    AcquisitionReason.Missing,
+  );
 });
 
 test("a real acquisition child recovers from an outage while a deterministic failure runs once", async () => {

@@ -1,5 +1,5 @@
 import { selectedValues as selection } from "../checks/check-targets.js";
-import { compilerCatalog, type CompilerFamily } from "../../toolchains/compiler-catalog.mjs";
+import { compilerCatalog, isCompilerFamily, type CompilerFamily } from "../../toolchains/compiler-catalog.mjs";
 import { guixChannelFile } from "../environments/managed/managed-contract.mjs";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -12,6 +12,7 @@ import { coverageApplies, planChecks } from "../checks/check-plan.js";
 import { exactVersion as exact, standaloneTools } from "../../toolchains/toolchains.js";
 import { toolProfiles } from "../../toolchains/tool-profiles.js";
 import { devcontainerConfig } from "../../artifacts/devcontainers.js";
+import { readArtifactCatalog } from "../../artifacts/artifact-catalog.js";
 import { selectedCompiler } from "../../toolchains/compilers.js";
 import { rubyMinimum, phpMinimum } from "../../configuration/script-language-config.js";
 import { exactJavaVersion, javaSupport } from "../../toolchains/java-config.js";
@@ -104,13 +105,60 @@ export function ciCoverage(root: string, config: Pick<Config, "ci"> = readConfig
     selectedProfiles.some((name) => !profiles.some((p) => p.name === name))
   )
     throw new Error("ci.toolchains must select distinct configured tool profiles");
-  for (const [builder, name] of Object.entries(config.ci.images ?? {})) {
-    const profile = readConfig(root).development?.profiles?.find((p) => p.name === name);
-    if (!profile?.offline || profile.builder !== builder)
-      throw new Error(`ci.images.${builder} must select a prepared ${builder} development profile`);
-  }
   if (!paths.size) throw new Error("[ci] requires at least one registered language root");
   return { operatingSystems, platforms, roots: [...paths.values()] };
+}
+
+/** Require the same image recipes for artifact builds and the configured CI target matrix. */
+function validatePreparedCIProfiles(
+  root: string,
+  config: Config,
+  targets: readonly { path: string; os: string; architecture: string; environment: string }[],
+): void {
+  const images = Object.entries(config.ci?.images ?? {});
+  if (!images.length) return;
+  const catalog = readArtifactCatalog(root);
+  const hasCatalogImages = Object.values(catalog.recipes).some((recipe) => "offlineProfile" in recipe);
+  const variants = Object.values(catalog.profiles).flatMap(({ builder, variants }) =>
+    variants
+      .filter(({ formats }) => formats.includes("oci"))
+      .map(({ kind, recipe, target }) => ({
+        builder,
+        kind,
+        recipe: catalog.recipes[recipe],
+        platform: catalog.targets[target]?.platform,
+      })),
+  );
+  for (const [builder, name] of images) {
+    const profile = config.development?.profiles?.find((entry) => entry.name === name);
+    if (!profile?.offline || profile.builder !== builder)
+      throw new Error(`ci.images.${builder} must select a prepared ${builder} profile`);
+    const selected = targets.filter(
+      ({ os, environment }) => os === "linux" && (environment === "nix-docker" ? "nix" : environment) === builder,
+    );
+    const roots = profile.offline.paths;
+    const omitted = roots && selected.find(({ path }) => !roots.includes(path));
+    if (omitted) throw new Error(`ci.images.${builder}: '${name}' omits CI language root '${omitted.path}'`);
+    if (!hasCatalogImages) continue;
+    const kind = profile.offline.kind ?? "development";
+    const supported = new Set<string | undefined>(
+      variants
+        .filter(
+          (variant) =>
+            variant.builder === builder &&
+            variant.kind === kind &&
+            variant.recipe &&
+            "offlineProfile" in variant.recipe &&
+            variant.recipe.offlineProfile === name,
+        )
+        .map(({ platform }) => platform),
+    );
+    for (const architecture of new Set(selected.map((target) => target.architecture))) {
+      const platform = `linux-${architecture}`;
+      if (!supported.has(platform))
+        throw new Error(`ci.images.${builder}: '${name}' needs a ${kind} OCI artifact for ${platform}`);
+    }
+  }
 }
 
 function toolVersions(directory: string) {
@@ -334,6 +382,15 @@ export function ciMatrix(root: string) {
     ...native.map((target) => ({ ...target, environment: "native" })),
     ...managed.map((target) => ({ ...target, os: "linux", toolchain: undefined })),
   ];
+  validatePreparedCIProfiles(root, config, [
+    ...targets,
+    ...compatibility.map(({ path, runtime, architecture = "x64" }) => ({
+      path,
+      os: isCompilerFamily(runtime) ? compilerCatalog[runtime].compatibilityOS : "linux",
+      architecture,
+      environment: "native",
+    })),
+  ]);
   for (const target of targets)
     planChecks(root, allChecks, {
       toolchain: target.toolchain ?? false,

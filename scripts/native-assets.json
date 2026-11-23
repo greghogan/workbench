@@ -484,10 +484,7 @@
           "signer": "https://dotcom.releases.github.com",
           "subject": "shfmt_v3.14.1_linux_amd64",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "mvdan/sh",
-            "tag": "v3.14.1"
-          }
+          "release": { "repository": "mvdan/sh", "tag": "v3.14.1" }
         }
       },
       "darwin-arm64": {
@@ -502,10 +499,7 @@
           "signer": "https://dotcom.releases.github.com",
           "subject": "shfmt_v3.14.1_darwin_arm64",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "mvdan/sh",
-            "tag": "v3.14.1"
-          }
+          "release": { "repository": "mvdan/sh", "tag": "v3.14.1" }
         }
       },
       "win32-x64": {
@@ -520,10 +514,7 @@
           "signer": "https://dotcom.releases.github.com",
           "subject": "shfmt_v3.14.1_windows_amd64.exe",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "mvdan/sh",
-            "tag": "v3.14.1"
-          }
+          "release": { "repository": "mvdan/sh", "tag": "v3.14.1" }
         }
       },
       "linux-arm64": {
@@ -538,10 +529,7 @@
           "signer": "https://dotcom.releases.github.com",
           "subject": "shfmt_v3.14.1_linux_arm64",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "mvdan/sh",
-            "tag": "v3.14.1"
-          }
+          "release": { "repository": "mvdan/sh", "tag": "v3.14.1" }
         }
       }
     }
@@ -667,10 +655,7 @@
           "subject": "cargo-nextest-0.9.152-x86_64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "nextest-rs/nextest",
-            "tag": "cargo-nextest-0.9.152"
-          }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "darwin-arm64": {
@@ -684,10 +669,7 @@
           "subject": "cargo-nextest-0.9.152-universal-apple-darwin.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "nextest-rs/nextest",
-            "tag": "cargo-nextest-0.9.152"
-          }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "win32-x64": {
@@ -701,10 +683,7 @@
           "subject": "cargo-nextest-0.9.152-x86_64-pc-windows-msvc.zip",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "nextest-rs/nextest",
-            "tag": "cargo-nextest-0.9.152"
-          }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "linux-arm64": {
@@ -718,10 +697,7 @@
           "subject": "cargo-nextest-0.9.152-aarch64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "nextest-rs/nextest",
-            "tag": "cargo-nextest-0.9.152"
-          }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       }
     }
@@ -739,10 +715,7 @@
           "subject": "cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "taiki-e/cargo-llvm-cov",
-            "tag": "v0.9.2"
-          }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "darwin-arm64": {
@@ -756,10 +729,7 @@
           "subject": "cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "taiki-e/cargo-llvm-cov",
-            "tag": "v0.9.2"
-          }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "win32-x64": {
@@ -773,10 +743,7 @@
           "subject": "cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "taiki-e/cargo-llvm-cov",
-            "tag": "v0.9.2"
-          }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "linux-arm64": {
@@ -790,10 +757,7 @@
           "subject": "cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": {
-            "repository": "taiki-e/cargo-llvm-cov",
-            "tag": "v0.9.2"
-          }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       }
     }

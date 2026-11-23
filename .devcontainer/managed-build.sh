@@ -51,5 +51,7 @@ while :; do
 done
 setpriv --reuid=1000 --regid=1000 --clear-groups --bounding-set=-all --no-new-privs \
     /bin/sh ".devcontainer/$builder/prepare.sh"
-# Durable roots are required even when automatic garbage collection is disabled.
-node "${WORKBENCH_PREPARATION_DISTRIBUTION:-/workbench}/scripts/builder-store-gc.mjs" "$builder"
+# Images depend on durable store roots. A completed file export carries the full closure itself.
+if [ "${WORKBENCH_MANAGED_PROFILE_EXPORT:-}" != 1 ]; then
+    node "${WORKBENCH_PREPARATION_DISTRIBUTION:-/workbench}/scripts/builder-store-gc.mjs" "$builder"
+fi

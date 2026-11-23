@@ -1,0 +1,3 @@
+# Charter
+
+Example JavaScript application.

@@ -9,6 +9,7 @@ import {
   validateManagedPlan,
 } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { managedSystem, writeGuixSystemFile } from "../app/src/core/execution/environments/managed/managed-system.mjs";
+import { exportManagedProfiles } from "../app/src/core/execution/environments/managed/profile-transfer.mjs";
 
 function link(target: string, path: string) {
   const temporary = `${path}.${randomUUID()}.partial`;
@@ -105,6 +106,7 @@ export async function prepareGuixProfiles(
   writeFileSync(file, JSON.stringify(profiles));
   writeFileSync(join(plan.output, "guix-runtime"), realpathSync(runtimeProfile));
   writeFileSync(join(plan.output, "guix-manager"), realpathSync(required(groups[0], "Missing Guix group").manager));
+  if (process.env.WORKBENCH_MANAGED_PROFILE_EXPORT === "1") await exportManagedProfiles("guix", profiles, plan.output);
   return {
     ...process.env,
     GUIX_BUILD_OPTIONS: undefined,

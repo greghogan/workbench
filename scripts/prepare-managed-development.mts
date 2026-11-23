@@ -12,15 +12,17 @@ import {
   type ManagedStorePin,
 } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
+import { managedProfileArchive } from "../app/src/core/execution/environments/managed/profile-transfer.mjs";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, relative } from "node:path";
+import { dirname, join, resolve, relative } from "node:path";
 
 // Builder recipes assemble only declared closures. Verification is a separate fresh-source invocation.
-const [builder, image] = process.argv.slice(2);
-if ((builder !== "nix" && builder !== "guix") || !image)
-  throw new Error("Use prepare-managed-development.mjs nix|guix IMAGE");
+const exporting = process.env.WORKBENCH_MANAGED_PROFILE_EXPORT === "1";
+const [builder, destination] = process.argv.slice(2);
+if ((builder !== "nix" && builder !== "guix") || !destination)
+  throw new Error("Use prepare-managed-development.mjs nix|guix DESTINATION");
 const root = process.cwd();
 const inputs = process.env.WORKBENCH_IMAGE_INPUTS;
 if (!/^[a-f0-9]{64}$/.test(inputs ?? ""))
@@ -73,7 +75,7 @@ await withManagedProcesses(async (scope) => {
     }),
   );
   if (!isStringArray(roots) || !roots.length) throw new Error("Prepared managed images need configured language roots");
-  const temporary = mkdtempSync(join(tmpdir(), "workbench-managed-image-"));
+  const temporary = mkdtempSync(join(exporting ? dirname(resolve(destination)) : tmpdir(), ".workbench-managed-"));
   scope.defer(() => {
     rmSync(temporary, { recursive: true, force: true });
   });
@@ -85,14 +87,14 @@ await withManagedProcesses(async (scope) => {
   mkdirSync(join(temporary, "profiles"));
   if (store === PreparationStore.System) {
     console.log(
-      `Preparing ${builder} image using the host store at ${builder === "nix" ? "/nix/store" : "/gnu/store"}`,
+      `Preparing ${builder} ${exporting ? "profile archive" : "image"} using the host store at ${builder === "nix" ? "/nix/store" : "/gnu/store"}`,
     );
     await run(
       [
         join(distribution, "bin/workbench.mjs"),
         "managed-image-prepare",
         builder,
-        image,
+        destination,
         join(temporary, "roots.json"),
         temporary,
       ],
@@ -159,7 +161,9 @@ await withManagedProcesses(async (scope) => {
     const managed = record(selected, "Invalid managed builder store");
     const { key, directory } = managed;
     if (typeof key !== "string" || typeof directory !== "string") throw new Error("Invalid managed builder identity");
-    console.log(`Preparing ${builder} image using the managed Docker store at ${directory}`);
+    console.log(
+      `Preparing ${builder} ${exporting ? "profile archive" : "image"} using the managed Docker store at ${directory}`,
+    );
     const volumes = records(managed.volumes, "Invalid managed builder volumes");
     const mounts = volumes.flatMap(({ name, destination }) => {
       if (typeof name !== "string" || typeof destination !== "string") throw new Error("Invalid managed builder mount");
@@ -203,6 +207,9 @@ await withManagedProcesses(async (scope) => {
       "--env",
       `WORKBENCH_IMAGE_ARCHITECTURE=${architecture}`,
       "--env",
+      `WORKBENCH_ARTIFACT_KIND=${process.env.WORKBENCH_ARTIFACT_KIND ?? "development"}`,
+      ...(exporting ? ["--env", "WORKBENCH_MANAGED_PROFILE_EXPORT=1"] : []),
+      "--env",
       `WORKBENCH_PRIVATE_BUILDER=${key}`,
       ...(standard ? ["--env", `WORKBENCH_GUIX_BOOTSTRAP_CHANNELS=${standard.channelDigest}`] : []),
       "--env",
@@ -217,16 +224,22 @@ await withManagedProcesses(async (scope) => {
     ]);
     await run(["start", "--attach", container]);
     const status = await run(["inspect", "--format", "{{.State.ExitCode}}", container], true);
-    if (status !== "0") throw new Error(`${builder} image assembly failed: exit ${status}`);
-    // The builder produces a Docker archive; Docker owns importing its layers and metadata.
-    const archive = readFileSync(join(temporary, "image-path"), "utf8").trim();
-    if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
-      throw new Error("Builder returned an invalid image store path");
-    if (result) {
-      pin = managedStorePin(JSON.parse(readFileSync(join(temporary, "store-pin.json"), "utf8")));
-      if (pin.builder !== builder || pin.key !== key) throw new Error("Builder reported a different store pin");
+    if (status !== "0") throw new Error(`${builder} preparation failed: exit ${status}`);
+    if (!exporting) {
+      // The builder produces a Docker archive; Docker owns importing its layers and metadata.
+      const archive = readFileSync(join(temporary, "image-path"), "utf8").trim();
+      if (!archive.startsWith(builder === "guix" ? "/gnu/store/" : "/nix/store/"))
+        throw new Error("Builder returned an invalid image store path");
+      if (result) {
+        pin = managedStorePin(JSON.parse(readFileSync(join(temporary, "store-pin.json"), "utf8")));
+        if (pin.builder !== builder || pin.key !== key) throw new Error("Builder reported a different store pin");
+      }
+      await importManagedImage(scope, archive, destination, container);
     }
-    await importManagedImage(scope, archive, image, container);
+  }
+  if (exporting) {
+    linkSync(join(temporary, managedProfileArchive), destination);
+    return;
   }
   if (builder === "guix") {
     const { materialize } = guixImageDefinition(root);
@@ -234,8 +247,8 @@ await withManagedProcesses(async (scope) => {
       [
         join(distribution, "bin/workbench.mjs"),
         "image-finalize",
-        image,
-        image,
+        destination,
+        destination,
         ...(materialize.length ? ["--materialize", ...materialize] : []),
       ],
       false,

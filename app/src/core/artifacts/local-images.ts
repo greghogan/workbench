@@ -195,6 +195,12 @@ export function storePinForImage(
     .reverse()
     .find((pin) => pin.profile === profile && pin.image === image && pin.inputs === inputs)?.storePin;
 }
+
+export function preparedImageRecord(checkout: string, reference: string): ImageRecord | undefined {
+  const path = catalogPath({ checkout, reference });
+  if (existsSync(path)) return readRecord(path);
+  return undefined;
+}
 /** Drop retired roots without discarding the image's verification or newer pin evidence. */
 export function forgetPreparedStorePin(path: string, owner: string, inputs: string, pin: ManagedStorePin): void {
   withCacheLockSync(path, () => {
@@ -247,18 +253,25 @@ export function preparedImageEvidence(issues: string[], checkout?: string): { pa
   return result;
 }
 
+export function localImageReferences(): ReadonlySet<string> {
+  return new Set(run("docker", ["image", "ls", "--format", "{{.Repository}}:{{.Tag}}"]).split("\n").filter(Boolean));
+}
+
 /** Inspect recorded ownership. Docker protects all container references, including stopped containers. */
-export function inspectPreparedImages(checkout?: string, references?: ReadonlySet<string>): LocalImageReport {
+export function inspectPreparedImages(
+  checkout?: string,
+  references?: ReadonlySet<string>,
+  protections = true,
+  inventory?: ReadonlySet<string>,
+): LocalImageReport {
   const report: LocalImageReport = { location: "local", entries: [], issues: [] };
-  const kept = keptCacheAssets();
+  const kept = protections ? keptCacheAssets() : new Set<string>();
   const owned = preparedImageEvidence(report.issues, checkout).filter(
     ({ record }) => !references || references.has(record.reference),
   );
   if (!owned.length) return report;
   try {
-    const listed = new Set(
-      run("docker", ["image", "ls", "--format", "{{.Repository}}:{{.Tag}}"]).split("\n").filter(Boolean),
-    );
+    const listed = inventory ?? localImageReferences();
     const selected = owned.filter(({ record }) => listed.has(record.reference));
     const images = new Map<string, DockerImage>();
     for (let offset = 0; offset < selected.length; offset += 100) {
@@ -282,7 +295,7 @@ export function inspectPreparedImages(checkout?: string, references?: ReadonlySe
       if (image.Id !== record.image || image.Config.Labels?.["org.workbench.inputs"] !== record.inputs)
         reason = "changed";
       else if (kept.has(path)) reason = "retained";
-      else {
+      else if (protections) {
         if (!attached.has(record.image))
           attached.set(
             record.image,

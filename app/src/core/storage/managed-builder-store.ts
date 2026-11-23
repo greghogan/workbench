@@ -55,6 +55,26 @@ export function managedStoreGeneration(builder: StoreManager, key: string): stri
   return ownedPath(cache, `managed-stores/${builder}/${key}`);
 }
 
+/** A different Docker engine may still own a mounted store, even if its containers are invisible here. */
+export function assertManagedStoreEngine(builder: StoreManager, engine: string): void {
+  if (!engine) throw new Error("Cannot identify the Docker engine for managed store recovery");
+  const root = managedStoreDirectory(userDirectory("cache"), builder);
+  if (!lstatSync(root, { throwIfNoEntry: false })) return;
+  for (const name of readdirSync(root)) {
+    if (!/^[a-f0-9]{24}$/.test(name)) continue;
+    const path = ownedPath(managedStoreGeneration(builder, name), storeMarker);
+    const record: unknown = JSON.parse(readBoundedFile(path, 4096, "managed store owner").toString("utf8"));
+    if (
+      !isRecord(record) ||
+      record.version !== 1 ||
+      record.builder !== builder ||
+      record.key !== name ||
+      record.engine !== engine
+    )
+      throw new Error(`${path}: managed store engine ownership could not be established`);
+  }
+}
+
 export function managedStoreMaintenanceImage(directory: string): string {
   const image = readBoundedFile(ownedPath(directory, ".workbench-maintenance-image"), 128, "managed store bootstrap")
     .toString()

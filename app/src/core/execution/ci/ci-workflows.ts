@@ -17,6 +17,7 @@ import {
 import { ciDestination, pairedRegistries, remoteTransport } from "./ci-destinations.js";
 import { ciTargets } from "./ci-targets.js";
 import { ciJobGroups, type CIJobGroup } from "./ci-job-plan.js";
+import { plannedCIPackages } from "./ci-packages.js";
 import { editToml } from "../../configuration/toml-edit.js";
 import { ProjectEdits } from "../../projects/project-edits.js";
 import { distributionRoot } from "../../projects/project-context.js";
@@ -25,9 +26,20 @@ import { ownedPath } from "../../runtime/paths.js";
 import { withConfigurationSnapshot } from "../../configuration/configuration-snapshot.js";
 import { readCIActionPins, ciActionManifest } from "./support/ci-actions.mjs";
 import { RegistryProvider, readRegistryManagement } from "../../artifacts/registry-management-contract.js";
+import { readArtifactCatalog, type ArtifactPublicationRule } from "../../artifacts/artifact-catalog.js";
+import { offlineProfile } from "../../artifacts/offline-profiles.js";
+import { required } from "../../runtime/invariants.js";
 
 const quote = (value: string, os = "linux") => `'${value.replaceAll("'", os === "windows" ? "''" : "'\\''")}'`;
 const reports = ".workbench-ci/reports";
+const branchPublicationReports = `${reports}/branch-publication`;
+const branchTransfers = "workbench-branch-images";
+const branchTransferDirectory = `"$RUNNER_TEMP/${branchTransfers}"`;
+const gitlabBranchTransfers = ".workbench-ci/branch-transfers";
+const branchPreparationJob = "prepare-branch-images";
+const releaseTransfers = ".workbench-ci/release-transfers";
+const verifiedPackages = ".workbench-ci/verified-packages";
+const packageJob = (target: string) => `package-release-${target}`;
 const platformWorkflow = ".github/workflows/workbench-platform.yml";
 interface CIRenderContext {
   command: string;
@@ -36,6 +48,9 @@ interface CIRenderContext {
   node: string;
   actions: Record<string, { version: string; revision: string }>;
   groups: CIJobGroup[];
+  packagePlatforms: ReadonlySet<string>;
+  publication: { branch?: ArtifactPublicationRule; tag?: ArtifactPublicationRule };
+  branchRegistry?: string;
 }
 function renderContext(root: string): CIRenderContext {
   return withConfigurationSnapshot(() => {
@@ -45,6 +60,14 @@ function renderContext(root: string): CIRenderContext {
     if (!pin && !existsSync(join(root, "bin/workbench.mjs")))
       throw new Error("CI setup requires a pinned Workbench executable in [tool]");
     const distribution = distributionRoot(root);
+    const groups = ciJobGroups(root, ciTargets(root));
+    const { publication, destinations } = readArtifactCatalog(root);
+    const branch = publication.branch && destinations[publication.branch.destination];
+    const nativePlatforms = new Set(
+      groups
+        .filter(({ environment }) => environment === "native")
+        .map(({ os, architecture }) => `${os}-${architecture}`),
+    );
     return {
       command: pin ? `node ${directory}/bin/workbench.mjs` : "node bin/workbench.mjs",
       source: pin ? directory : ".",
@@ -56,12 +79,25 @@ function renderContext(root: string): CIRenderContext {
             `git -C ${quote(directory)} checkout --detach ${quote(pin.revision)}`,
             `node ${quote(directory + "/scripts/setup-development.mjs")} --build-only`,
           ]
-        : [],
+        : existsSync(join(root, "scripts/setup-development.mjs"))
+          ? ["node scripts/setup-development.mjs --build-only"]
+          : [],
       node: readText(join(distribution, ".node-version")).trim(),
       actions: readCIActionPins(readText(join(distribution, ciActionManifest))),
-      groups: ciJobGroups(root, ciTargets(root)),
+      groups,
+      packagePlatforms: new Set(plannedCIPackages(root, nativePlatforms).selected.map(({ row }) => row.platform)),
+      publication,
+      ...(branch?.kind === "registry" ? { branchRegistry: branch.repository } : {}),
     };
   });
+}
+
+function branchRegistry(context: CIRenderContext, destination: CIDestination): CIDestination {
+  return { ...destination, registries: { native: required(context.branchRegistry, "Branch publication registry") } };
+}
+
+function verifiesPackages(context: CIRenderContext, group: CIJobGroup): boolean {
+  return group.environment === "native" && context.packagePlatforms.has(`${group.os}-${group.architecture}`);
 }
 function action(context: CIRenderContext, name: string): string {
   const pin = context.actions[name];
@@ -83,9 +119,14 @@ function registryLogin(destination: CIDestination, os: string): string[] {
       ]
     : [];
 }
-function githubSteps(context: CIRenderContext, destination?: CIDestination) {
+function githubSteps(context: CIRenderContext, destination?: CIDestination, loginBefore = true) {
   const login = destination ? registryLogin(destination, "linux") : [];
   const auth = login.length ? { DOCKER_CONFIG: "${{ runner.temp }}/workbench-docker-auth" } : {};
+  const signIn = login.map((run) => ({
+    run,
+    if: "runner.os == 'Linux'",
+    env: { ...auth, WORKBENCH_REGISTRY_TOKEN: "${{ github.token }}" },
+  }));
   return {
     before: [
       {
@@ -94,14 +135,11 @@ function githubSteps(context: CIRenderContext, destination?: CIDestination) {
       { uses: action(context, "actions/checkout"), with: { "persist-credentials": false, "fetch-depth": 0 } },
       { uses: action(context, "actions/setup-node"), with: { "node-version": context.node } },
       { uses: action(context, "ilammy/msvc-dev-cmd"), if: "runner.os == 'Windows'" },
-      ...login.map((run) => ({
-        run,
-        if: "runner.os == 'Linux'",
-        env: { ...auth, WORKBENCH_REGISTRY_TOKEN: "${{ github.token }}" },
-      })),
+      ...(loginBefore ? signIn : []),
       ...[...context.bootstrap, `${context.command} project add .`].map((run) => ({ run })),
     ],
     auth,
+    signIn,
     after: login.length
       ? [{ run: 'rm -rf -- "$DOCKER_CONFIG"', if: "always() && runner.os == 'Linux'", env: auth }]
       : [],
@@ -109,6 +147,127 @@ function githubSteps(context: CIRenderContext, destination?: CIDestination) {
 }
 function runnerTags(destination: CIDestination, group: CIJobGroup): string[] {
   return destination.runners?.[`${group.os}-${group.architecture}`] ?? [`workbench-${group.os}-${group.architecture}`];
+}
+
+function publicationRows(context: CIRenderContext) {
+  return (["branch", "tag"] as const).flatMap((trigger) => {
+    const rule = context.publication[trigger];
+    if (!rule) return [];
+    const targets = rule.targets.map(({ name, platform }) => {
+      const group = context.groups.find(
+        (item) => `${item.os}-${item.architecture}` === platform && item.environment === "native",
+      );
+      if (!group) throw new Error(`Publication target ${name} needs configured native ${platform} CI coverage`);
+      return { name, group };
+    });
+    return [{ trigger, rule, targets }];
+  });
+}
+
+function branchImageSelection(rule: ArtifactPublicationRule, target: string) {
+  return `--target ${quote(target)} --kind ${quote(rule.kind)} --format oci`;
+}
+
+const requireBranchRevision = 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA:-$CI_COMMIT_SHA}"';
+
+function branchImageTransferCommands(
+  context: CIRenderContext,
+  rule: ArtifactPublicationRule,
+  target: string,
+  directory: string,
+) {
+  const selection = branchImageSelection(rule, target);
+  return rule.profiles.map((profile) => {
+    const output = `${directory}/${quote(profile)}`;
+    return `${context.command} artifact build ${quote(profile)} ${selection} --export ${output} --json > ${output}.json`;
+  });
+}
+
+function branchImageImportCommands(
+  context: CIRenderContext,
+  rule: ArtifactPublicationRule,
+  target: string,
+  directory: string,
+) {
+  const selection = branchImageSelection(rule, target);
+  const readManifest = [
+    "const [path, profile, target, kind] = process.argv.slice(1);",
+    "const rows = JSON.parse(require('node:fs').readFileSync(path, 'utf8'));",
+    "const [row] = rows;",
+    "const sha = row?.delivered?.manifestSha256;",
+    "if (rows.length !== 1 || row.profile !== profile || row.kind !== kind || row.target !== target ||",
+    "row.format !== 'oci' || row.delivered?.verification !== 'verified' || !/^[a-f0-9]{64}$/.test(sha))",
+    "throw new Error('Invalid verified image transfer');",
+    "console.log(sha);",
+  ].join(" ");
+  return rule.profiles.map((profile) => {
+    const input = `${directory}/${quote(profile)}`;
+    return (
+      `digest=$(node -e ${quote(readManifest)} ${input}.json ${quote(profile)} ${quote(target)} ${quote(rule.kind)}) && ` +
+      `${context.command} artifact import ${quote(profile)} ${input}/"image-$digest" ${selection} --sha256 "$digest"`
+    );
+  });
+}
+
+function branchPublicationCommands(context: CIRenderContext, rule: ArtifactPublicationRule, target: string) {
+  const selection = branchImageSelection(rule, target);
+  const describe = [
+    "const { GITHUB_REF_NAME, GITHUB_SHA, CI_COMMIT_BRANCH, CI_COMMIT_SHA } = process.env;",
+    "const [destination, target, kind] = process.argv.slice(1);",
+    "const branch = GITHUB_REF_NAME || CI_COMMIT_BRANCH;",
+    "const revision = GITHUB_SHA || CI_COMMIT_SHA;",
+    "console.log(JSON.stringify({ branch, revision, destination, target, kind }, null, 2));",
+  ].join(" ");
+  return [
+    requireBranchRevision,
+    `mkdir -p ${quote(reports)} && mkdir ${quote(branchPublicationReports)}`,
+    `node -e ${quote(describe)} ${quote(rule.destination)} ${quote(target)} ${quote(rule.kind)} > ${quote(`${branchPublicationReports}/channel.json`)}`,
+    ...rule.profiles.map((profile) => {
+      const report = quote(`${branchPublicationReports}/image-${profile}.json`);
+      const pending = quote(`${branchPublicationReports}/image-${profile}.pending`);
+      return (
+        `${context.command} artifact publish ${quote(profile)} ${selection} --destination ${quote(rule.destination)} --json > ${pending}` +
+        ` && mv ${pending} ${report}`
+      );
+    }),
+  ];
+}
+
+function gitlabBranchRegistry(context: CIRenderContext) {
+  const repository = required(context.branchRegistry, "Branch publication registry");
+  return {
+    check: [
+      `destination=${quote(repository)}`,
+      'if [ -n "${CI_REGISTRY_IMAGE:-}" ]; then',
+      '  case "$destination" in',
+      '    "$CI_REGISTRY_IMAGE"|"$CI_REGISTRY_IMAGE"/*)',
+      "      printf '%s\\n' 'Branch publication needs a registry destination outside the source project. GitLab job tokens can push to the source project registry.' >&2",
+      "      exit 1 ;;",
+      "  esac",
+      "fi",
+    ].join("\n"),
+    signIn: [
+      ': "${WORKBENCH_PUBLISH_REGISTRY_USER:?Set the publishing registry user for this GitLab environment}"',
+      ': "${WORKBENCH_PUBLISH_REGISTRY_PASSWORD:?Set the publishing registry password for this GitLab environment}"',
+      "DOCKER_CONFIG=$(mktemp -d) && export DOCKER_CONFIG",
+      "trap 'rm -rf -- \"$DOCKER_CONFIG\"' EXIT",
+      `printf '%s' "$WORKBENCH_PUBLISH_REGISTRY_PASSWORD" | docker login ${quote(repository.split("/")[0] ?? "")} --username "$WORKBENCH_PUBLISH_REGISTRY_USER" --password-stdin`,
+      "unset WORKBENCH_PUBLISH_REGISTRY_PASSWORD",
+    ],
+  };
+}
+
+const gitlabTag = (os: string) => (os === "windows" ? '"$env:CI_COMMIT_TAG"' : '"$CI_COMMIT_TAG"');
+
+function packageReleaseCommand(context: CIRenderContext, target: string, os: string, tag: string, evidence?: string) {
+  return (
+    `${context.command} ci package-release ${quote(target, os)} --tag ${tag} --output ${quote(`${releaseTransfers}/${target}`, os)}` +
+    (evidence ? ` --verified-packages ${quote(evidence, os)}` : "")
+  );
+}
+
+function publishReleaseCommand(context: CIRenderContext, os: string, tag: string) {
+  return `${context.command} ci publish-release --tag ${tag} --input ${quote(releaseTransfers, os)}`;
 }
 export function renderCIPipeline(root: string, destination: CIDestination, groupID?: string): string {
   const context = renderContext(root);
@@ -134,6 +293,7 @@ export function renderCIPipeline(root: string, destination: CIDestination, group
             runner: githubRunner(group.os, group.architecture),
             paths: [...new Set(group.targets.map((target) => target.path))],
             hostPrerequisites: !group.profile && group.environment === "native",
+            verifyPackages: verifiesPackages(context, group),
           })),
         },
         null,
@@ -176,9 +336,115 @@ export function renderCIPipeline(root: string, destination: CIDestination, group
         ],
         artifacts: { when: "always", paths: [`${reports}/${group.id}/${job.artifact}/`], expire_in: "14 days" },
       };
+    if (verifiesPackages(context, group)) {
+      const directory = `${reports}/${group.id}/packages`;
+      jobs[`verify-packages-${group.id}`] = {
+        ...base,
+        stage: "check",
+        needs: [{ job: prepare, artifacts: false }],
+        cache: { ...cache, policy: "pull" },
+        script: [
+          ...commands,
+          `${context.command} ci verify-packages --tag=${gitlabTag(group.os)} --output ${quote(directory, group.os)}`,
+        ],
+        artifacts: { when: "always", paths: [`${directory}/`], expire_in: "14 days" },
+      };
+    }
+  }
+  const publication = publicationRows(context);
+  for (const { trigger, rule, targets } of publication) {
+    const { name, group } = required(targets[0], "Publication runner");
+    const ref = trigger === "tag" ? "$CI_COMMIT_TAG" : "$CI_COMMIT_BRANCH";
+    // Rule syntax is generated only from decoded Git ref names and optional trailing wildcards.
+    const match = rule.refs
+      .map((name) =>
+        name.endsWith("*")
+          ? `${ref} =~ /^${name.slice(0, -1).replaceAll(".", "\\.").replaceAll("/", "\\/")}/`
+          : `${ref} == "${name}"`,
+      )
+      .join(" || ");
+    const rules = [{ if: `$WORKBENCH_PARENT_SOURCE == "push" && $CI_MERGE_REQUEST_ID == null && (${match})` }];
+    const preparation = [...context.bootstrap, `${context.command} project add .`];
+    const registry = trigger === "branch" ? gitlabBranchRegistry(context) : undefined;
+    if (!registry) {
+      for (const { name: target, group: runner } of targets) {
+        const checked = verifiesPackages(context, runner);
+        jobs[packageJob(target)] = {
+          stage: "package",
+          tags: runnerTags(destination, runner),
+          rules,
+          dependencies: checked ? [`verify-packages-${runner.id}`] : [],
+          timeout: "2h",
+          script: [
+            ...registryLogin(destination, runner.os),
+            ...preparation,
+            packageReleaseCommand(
+              context,
+              target,
+              runner.os,
+              gitlabTag(runner.os),
+              checked ? `${reports}/${runner.id}/packages` : undefined,
+            ),
+          ],
+          artifacts: { paths: [`${releaseTransfers}/${target}/`], expire_in: "1 day" },
+        };
+      }
+    } else {
+      jobs[branchPreparationJob] = {
+        stage: "package",
+        tags: runnerTags(destination, group),
+        rules,
+        dependencies: [],
+        timeout: "2h",
+        script: [
+          requireBranchRevision,
+          registry.check,
+          ...registryLogin(destination, group.os),
+          ...preparation,
+          `mkdir -p .workbench-ci && mkdir ${quote(gitlabBranchTransfers)}`,
+          ...branchImageTransferCommands(context, rule, name, quote(gitlabBranchTransfers)),
+        ],
+        artifacts: { access: "developer", paths: [`${gitlabBranchTransfers}/`], expire_in: "1 day" },
+      };
+    }
+    const channel = `workbench-publication-${rule.destination}`;
+    jobs[`publish-${trigger}`] = {
+      stage: "publish",
+      tags: runnerTags(destination, group),
+      rules,
+      resource_group: channel,
+      timeout: "2h",
+      script: [
+        ...preparation,
+        ...(registry
+          ? [
+              requireBranchRevision,
+              registry.check,
+              ...branchImageImportCommands(context, rule, name, quote(gitlabBranchTransfers)),
+              ...registry.signIn,
+              ...branchPublicationCommands(context, rule, name),
+            ]
+          : [publishReleaseCommand(context, group.os, gitlabTag(group.os))]),
+      ],
+      ...(registry
+        ? {
+            environment: { name: channel },
+            needs: [{ job: branchPreparationJob, artifacts: true }],
+            artifacts: { when: "always", paths: [`${branchPublicationReports}/*.json`], expire_in: "30 days" },
+          }
+        : {
+            needs: targets.map(({ name: target }) => ({ job: packageJob(target), artifacts: true })),
+            artifacts: { paths: ["**/workbench/releases/"], expire_in: "30 days" },
+          }),
+    };
   }
   return stringify({
-    stages: ["prepare", "check"],
+    stages: [
+      "prepare",
+      "check",
+      ...(publication.length ? ["package"] : []),
+      ...(publication.length ? ["publish"] : []),
+    ],
     variables: {
       GIT_DEPTH: "0",
       WORKBENCH_CACHE_HOME: "$CI_PROJECT_DIR/.workbench-ci/cache",
@@ -286,6 +552,26 @@ function githubPlatformWorkflow(context: CIRenderContext, destination: CIDestina
           ...steps.after,
         ],
       },
+      packages: {
+        ...common,
+        if: "fromJSON(inputs.platform).verifyPackages",
+        needs: ["prepare"],
+        env: { WORKBENCH_CHECK_TAG: "${{ github.ref_type == 'tag' && github.ref_name || '' }}" },
+        steps: [
+          ...steps.before,
+          cache,
+          { run: prerequisites.run },
+          {
+            run: `${context.command} ci verify-packages --tag="$WORKBENCH_CHECK_TAG" --output ${reports}/packages`,
+            ...authentication,
+          },
+          {
+            ...upload("packages-${{ fromJSON(inputs.platform).id }}", `${reports}/packages/`),
+            if: "always()",
+          },
+          ...steps.after,
+        ],
+      },
     },
   });
 }
@@ -308,6 +594,7 @@ function workflow(context: CIRenderContext, destination: CIDestination): string 
           { if: '$CI_PIPELINE_SOURCE == "merge_request_event"' },
           { if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS", when: "never" },
           { if: "$CI_COMMIT_BRANCH" },
+          ...(context.publication.tag ? [{ if: "$CI_COMMIT_TAG" }] : []),
           { if: '$CI_PIPELINE_SOURCE == "web"' },
         ],
       },
@@ -324,11 +611,155 @@ function workflow(context: CIRenderContext, destination: CIDestination): string 
       },
       "workbench-checks": {
         stage: "check",
+        ...(publicationRows(context).length ? { variables: { WORKBENCH_PARENT_SOURCE: "$CI_PIPELINE_SOURCE" } } : {}),
         trigger: { include: [{ artifact: ".workbench-ci/pipeline.yml", job: "workbench-plan" }], strategy: "mirror" },
       },
     });
   }
   const steps = githubSteps(context);
+  const publication = Object.fromEntries(
+    publicationRows(context).flatMap<readonly [string, unknown]>(({ trigger, rule, targets }) => {
+      const { name, group } = required(targets[0], "Publication runner");
+      const refType = trigger === "tag" ? "refs/tags/" : "refs/heads/";
+      const matches = rule.refs
+        .map((name) =>
+          name.endsWith("*")
+            ? `startsWith(github.ref, '${refType}${name.slice(0, -1)}')`
+            : `github.ref == '${refType}${name}'`,
+        )
+        .join(" || ");
+      const condition = `github.event_name == 'push' && (${matches})`;
+      const branch = trigger === "branch";
+      const preparation = githubSteps(context, destination);
+      const authenticated = githubSteps(context, branch ? branchRegistry(context, destination) : undefined, false);
+      return [
+        ...(trigger === "tag"
+          ? targets.map(({ name: target, group: runner }) => {
+              const checked = verifiesPackages(context, runner);
+              return [
+                packageJob(target),
+                {
+                  if: condition,
+                  needs: ["platforms"],
+                  "runs-on": githubRunner(runner.os, runner.architecture),
+                  "timeout-minutes": 120,
+                  permissions: { contents: "read", packages: "read" },
+                  steps: [
+                    ...preparation.before,
+                    ...(checked
+                      ? [
+                          {
+                            uses: action(context, "actions/download-artifact"),
+                            with: { name: `packages-${runner.id}`, path: verifiedPackages },
+                          },
+                        ]
+                      : []),
+                    {
+                      run: packageReleaseCommand(
+                        context,
+                        target,
+                        "linux",
+                        '"$GITHUB_REF_NAME"',
+                        checked ? verifiedPackages : undefined,
+                      ),
+                      env: preparation.auth,
+                    },
+                    {
+                      uses: action(context, "actions/upload-artifact"),
+                      with: {
+                        name: `release-transfer-${target}`,
+                        path: `${releaseTransfers}/${target}/`,
+                        "include-hidden-files": true,
+                        "if-no-files-found": "error",
+                      },
+                    },
+                    ...preparation.after,
+                  ],
+                },
+              ] as const;
+            })
+          : [
+              [
+                branchPreparationJob,
+                {
+                  if: condition,
+                  needs: ["platforms"],
+                  "runs-on": githubRunner(group.os, group.architecture),
+                  "timeout-minutes": 120,
+                  permissions: { contents: "read", packages: "read" },
+                  steps: [
+                    ...preparation.before,
+                    { run: requireBranchRevision },
+                    { run: `mkdir ${branchTransferDirectory}` },
+                    ...branchImageTransferCommands(context, rule, name, branchTransferDirectory).map((run) => ({
+                      run,
+                      env: preparation.auth,
+                    })),
+                    {
+                      uses: action(context, "actions/upload-artifact"),
+                      with: {
+                        name: branchTransfers,
+                        path: `\${{ runner.temp }}/${branchTransfers}`,
+                        "if-no-files-found": "error",
+                      },
+                    },
+                    ...preparation.after,
+                  ],
+                },
+              ] as const,
+            ]),
+        [
+          `publish-${trigger}`,
+          {
+            if: condition,
+            needs: branch ? [branchPreparationJob] : targets.map(({ name: target }) => packageJob(target)),
+            "runs-on": githubRunner(group.os, group.architecture),
+            "timeout-minutes": 120,
+            concurrency: { group: `workbench-publication-${rule.destination}`, "cancel-in-progress": false },
+            permissions: {
+              contents: trigger === "tag" ? "write" : "read",
+              packages: trigger === "branch" ? "write" : "read",
+            },
+            ...(branch ? { env: { GH_TOKEN: "" } } : {}),
+            steps: [
+              ...authenticated.before,
+              ...(trigger === "tag"
+                ? [
+                    ...targets.map(({ name: target }) => ({
+                      uses: action(context, "actions/download-artifact"),
+                      with: { name: `release-transfer-${target}`, path: `${releaseTransfers}/${target}` },
+                    })),
+                    { run: publishReleaseCommand(context, "linux", '"$GITHUB_REF_NAME"') },
+                    {
+                      uses: action(context, "actions/upload-artifact"),
+                      with: { name: "published-release-record", path: "**/workbench/releases/" },
+                    },
+                  ]
+                : [
+                    { run: requireBranchRevision },
+                    {
+                      uses: action(context, "actions/download-artifact"),
+                      with: { name: branchTransfers, path: `\${{ runner.temp }}/${branchTransfers}` },
+                    },
+                    ...branchImageImportCommands(context, rule, name, branchTransferDirectory).map((run) => ({ run })),
+                    ...authenticated.signIn,
+                    ...branchPublicationCommands(context, rule, name).map((run) => ({
+                      run,
+                      env: authenticated.auth,
+                    })),
+                    {
+                      if: "always()",
+                      uses: action(context, "actions/upload-artifact"),
+                      with: { name: "published-branch-images", path: `${branchPublicationReports}/*.json` },
+                    },
+                  ]),
+              ...authenticated.after,
+            ],
+          },
+        ] as const,
+      ];
+    }),
+  );
   return githubYAML(context, {
     name: "Workbench checks",
     on: { push: {}, pull_request: {}, workflow_dispatch: {} },
@@ -354,6 +785,7 @@ function workflow(context: CIRenderContext, destination: CIDestination): string 
         uses: `./${platformWorkflow}`,
         with: { platform: "${{ toJSON(matrix) }}", destination: destination.remote },
       },
+      ...publication,
     },
   });
 }
@@ -401,7 +833,15 @@ export function setupCI(root: string, options: CISetupOptions): void {
       : {}),
     registries:
       options.registry || previous?.provider !== provider
-        ? pairedRegistries(provider, repository, Object.keys(config.ci.images ?? {}), options.registry)
+        ? pairedRegistries(
+            provider,
+            repository,
+            Object.entries(config.ci.images ?? {}).map(([builder, name]) => [
+              builder,
+              offlineProfile(root, name).offline.kind ?? "development",
+            ]),
+            options.registry,
+          )
         : previous.registries,
     ...(previous?.runners ? { runners: previous.runners } : {}),
   };

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { dependencyInputHash } from "../../toolchains/dependency-identity.mjs";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { readText } from "../../runtime/files.js";
 
 export type { ManagedSource } from "./managed/managed-source-contract.mjs";
 import { managedDeclaration, type ManagedDeclaration } from "./managed/managed-source-contract.mjs";
+import { stringRecord } from "../../runtime/values.mjs";
 export interface ManagedInputRepository {
   directory: string;
   declaration: ManagedDeclaration;
@@ -13,7 +14,12 @@ export interface ManagedInputRepository {
 
 /** The environment selects a realized package; current language declarations must still match it. */
 export function managedInputRepository(directory: string): ManagedInputRepository | undefined {
-  const selected = process.env.WORKBENCH_CHECK_INPUTS;
+  let selected = process.env.WORKBENCH_CHECK_INPUTS;
+  if (!selected && process.env.WORKBENCH_CI_MANAGED_INPUTS && process.env.WORKBENCH_PROJECT_ROOT) {
+    const declared = stringRecord(JSON.parse(process.env.WORKBENCH_CI_MANAGED_INPUTS), "Invalid CI dependency roots");
+    const path = relative(process.env.WORKBENCH_PROJECT_ROOT, directory).replaceAll("\\", "/") || ".";
+    selected = Object.hasOwn(declared, path) ? declared[path] : undefined;
+  }
   if (!selected) return undefined;
   if (!isAbsolute(selected)) throw new Error("Managed check inputs require an absolute package location");
   directory = process.env.WORKBENCH_CHECK_INPUT_ROOT ?? directory;

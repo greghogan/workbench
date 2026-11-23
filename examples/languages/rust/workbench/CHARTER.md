@@ -1,0 +1,3 @@
+# Charter
+
+Example Rust application.

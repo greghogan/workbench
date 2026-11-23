@@ -1,5 +1,6 @@
 import { projectPaths } from "../../projects/project-paths.js";
 import { writeDiagnosticText } from "../../diagnostics/diagnostics.mjs";
+import { terminalTable } from "../../diagnostics/terminal-table.js";
 import { buildProjectImage } from "../../artifacts/buildkit.js";
 import { ciImageContext, verifyCIImage } from "./support/ci-image.mjs";
 import { provisionCollectionSnapshot } from "../../collections/collection-provision.js";
@@ -9,7 +10,7 @@ import { ciTargets, printCITargets, type CITarget } from "./ci-targets.js";
 import { prepareOfflineProfile, preparedOfflineProfile, offlineProfile } from "../../artifacts/offline-profiles.js";
 import { distributionRoot } from "../../projects/project-context.js";
 import { readText } from "../../runtime/files.js";
-import { readConfig } from "../../projects/project-configuration.js";
+import { readConfig, readProjects } from "../../projects/project-configuration.js";
 import { CILifecycle, CIInterrupted, executeCI } from "./support/ci-lifecycle.mjs";
 import { parseCIWorkerRequest, type CIWorkerRequest } from "./support/ci-worker-request.mjs";
 import { userDirectory } from "../../storage/storage.js";
@@ -22,6 +23,7 @@ import { runCIWorkers, type CIWorker } from "./local-ci-workers.js";
 import { ciCacheEnvironment } from "./support/ci-layout.mjs";
 import { configuredCIJobs, assertOperationCoverage } from "./support/ci-operations.mjs";
 import { targetPhases } from "./support/ci-contract.mjs";
+import { plannedCIPackages } from "./ci-packages.js";
 import {
   createRunReport,
   parseRunReport,
@@ -73,8 +75,39 @@ export function localCIPlan(root: string, options: LocalCIOptions = {}) {
   if (!selected.length) throw new Error("Local CI selection has no configured Linux x64 targets");
   const operations = configuredCIJobs(selected);
   assertOperationCoverage(selected, operations);
+  const native = targets.filter((target) => target.kind === "native");
+  const packages = plannedCIPackages(root, new Set(native.map(({ os, architecture }) => `${os}-${architecture}`)));
+  const scopePaths = new Map(packages.selected.length ? readProjects(root).map(({ id, path }) => [id, path]) : []);
+  const localPackages = [];
+  for (const { id, row } of packages.selected) {
+    const path = required(scopePaths.get(row.definition.owner), "CI package owner");
+    const checkRoot = native
+      .filter(({ path: directory }) => directory === "." || path === directory || path.startsWith(directory + "/"))
+      .sort((left, right) => right.path.length - left.path.length)[0]?.path;
+    const inSelection = selected.some(
+      (target) =>
+        target.path === checkRoot &&
+        (!options.target ||
+          (target.kind === "native"
+            ? row.builder === "native" && !target.toolchain
+            : target.kind === "environment" &&
+              row.builder === (target.environment === "nix-docker" ? "nix" : target.environment))),
+    );
+    const reason =
+      options.release === false
+        ? "release verification disabled for this run"
+        : row.platform !== "linux-x64"
+          ? `requires native ${row.platform}`
+          : (options.path || options.target) && !inSelection
+            ? "outside selected check roots"
+            : undefined;
+    if (reason) packages.excluded.push({ id, reason });
+    else localPackages.push({ id, row });
+  }
   return {
     operations,
+    packages: localPackages,
+    excludedPackages: packages.excluded,
     platform: "linux-x64",
     network: "host",
     image: baseImage,
@@ -111,6 +144,15 @@ export function listLocalCI(root: string, options: LocalCIOptions, json = false)
   console.log(
     `${String(plan.excluded.length)} targets excluded; --plan --json includes reasons and resolved commands.`,
   );
+  if (plan.packages.length) {
+    console.log("\nRelease packages");
+    console.log(
+      terminalTable(
+        ["Profile", "Target", "Format"],
+        plan.packages.map(({ row }) => [row.profile, row.target, row.archive ?? row.format]),
+      ),
+    );
+  }
   console.log(
     "Configured prepared images are shared with development; other native targets use Ubuntu and verified caches.",
   );
@@ -357,6 +399,44 @@ export async function runLocalCI(root: string, options: LocalCIOptions = {}): Pr
       });
     }
     await runCIWorkers(workers, plan.resources.maxJobs, lifecycle, root);
+    if (plan.packages.length) {
+      const id = "release-packages";
+      try {
+        await lifecycle.checkpoint();
+        const workspace = await resources.fork(id);
+        const runtime = join(workspace, guestDistribution);
+        await executeCI(
+          process.execPath,
+          [
+            join(runtime, "bin/workbench.mjs"),
+            "ci",
+            "verify-packages",
+            ...plan.packages.map(({ id }) => id),
+            "--output",
+            join(resources.reports, id),
+          ],
+          {
+            cwd: workspace,
+            env: {
+              ...process.env,
+              ...shared,
+              ...cpuEnvironment(plan.resources.cpusPerJob),
+              WORKBENCH_CI_CANDIDATE: undefined,
+              WORKBENCH_COLLECTIONS_MATERIALIZED: "1",
+              WORKBENCH_PROJECT_ROOT: workspace,
+              WORKBENCH_EPHEMERAL_CHECKOUT: "1",
+              WORKBENCH_LOCAL_CONFIG_ROOT: root,
+              WORKBENCH_DISTRIBUTION_ROOT: runtime,
+            },
+          },
+        );
+      } catch (error) {
+        if (error instanceof CIInterrupted) throw error;
+        run.errors.push({ phase: id, message: errorMessage(error) });
+      } finally {
+        run.errors.push(...(await resources.release(id)));
+      }
+    }
     save();
   } catch (error) {
     if (!(error instanceof CIInterrupted))

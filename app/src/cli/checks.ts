@@ -11,6 +11,9 @@ import { processCancellation, runOwnedChild } from "../core/runtime/owned-child.
 import { processFailure } from "../core/runtime/process-outcome.mjs";
 import { prepareHostedCI, runHostedCIJob } from "../core/execution/ci/ci-hosted-jobs.js";
 import { runHostedCITarget } from "../core/execution/ci/ci-hosted-target.js";
+import { packageCIRelease, publishCIRelease } from "../core/execution/ci/ci-release.js";
+import { ciPackageMatrix, verifyCIPackages } from "../core/execution/ci/ci-packages.js";
+import { strings } from "../core/runtime/values.mjs";
 import { CIProvider } from "../core/execution/ci/ci-hosting.js";
 import {
   compatibilityRuntimePlan,
@@ -210,6 +213,33 @@ export function registerCheckCommands(program: Command, root: string): void {
     .action(async (options: { destination: string; live?: boolean }) => {
       console.log(JSON.stringify(await validateHostedCI(root, options.destination, options.live), null, 2));
     });
+  ci.command("package-release", { hidden: true })
+    .argument("<target>")
+    .requiredOption("--tag <tag>")
+    .requiredOption("--output <path>")
+    .option("--verified-packages <directory>", "Reuse verified packages from the completed checks")
+    .action(async (target: string, options: { tag: string; output: string; verifiedPackages?: string }) => {
+      console.log(await packageCIRelease(root, options.tag, target, options.output, options.verifiedPackages));
+    });
+  ci.command("verify-packages", { hidden: true })
+    .argument("[ids...]")
+    .option("--tag <tag>", "Select the version under verification")
+    .option("--selection <json>", "Read package IDs from the checked CI matrix")
+    .requiredOption("--output <path>")
+    .action((ids: string[], options: { output: string; selection?: string; tag?: string }) => {
+      if (options.selection !== undefined) {
+        if (ids.length) throw new Error("Select package IDs or --selection");
+        ids = strings(JSON.parse(options.selection), "CI package selection must contain package IDs");
+        if (!ids.length) throw new Error("CI package selection is empty");
+      }
+      return verifyCIPackages(root, ids, options.output, options.tag);
+    });
+  ci.command("publish-release", { hidden: true })
+    .requiredOption("--tag <tag>")
+    .requiredOption("--input <path>")
+    .action(async (options: { tag: string; input: string }) => {
+      console.log(JSON.stringify(await publishCIRelease(root, options.tag, options.input), null, 2));
+    });
   ci.command("target")
     .description("Execute one configured CI target on its native platform")
     .argument("<id>")
@@ -251,7 +281,11 @@ export function registerCheckCommands(program: Command, root: string): void {
       if (options.targets) console.log(JSON.stringify(ciTargets(root)));
       else {
         const matrix = ciMatrix(root);
-        console.log(JSON.stringify(options.grouped ? groupedCIMatrix(matrix) : matrix));
+        if (!options.grouped) console.log(JSON.stringify(matrix));
+        else {
+          const grouped = groupedCIMatrix(matrix);
+          console.log(JSON.stringify({ ...grouped, packages: ciPackageMatrix(root, grouped.native.include) }));
+        }
       }
     });
 }

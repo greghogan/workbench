@@ -111,9 +111,13 @@ test("local default preserves every configured Linux x64 native, compatibility, 
     },
   ]);
   expect(focused.excluded.some(({ reason }) => reason === "outside selected targets")).toBe(true);
+  expect(focused.packages).toEqual([]);
+  expect(plan.packages.some(({ row }) => row.requirements.abi === "musl")).toBe(true);
+  expect(plan.packages.some(({ row }) => row.builder === "guix")).toBe(true);
   const python = localCIPlan(repository, { path: "examples/languages/python" });
   expect(python.selected.every(({ path }) => path === "examples/languages/python")).toBe(true);
   expect(python.excluded.some(({ reason }) => reason === "outside selected root")).toBe(true);
+  expect(python.packages.map(({ row }) => row.profile).sort()).toEqual(["python-guix-portable", "python-nix-closure"]);
   expect(() => localCIPlan(repository, { target: ["missing"] })).toThrow(/configured CI target/);
   expect(() => localCIPlan(repository, { path: "missing" })).toThrow(/configured CI root/);
   expect(() => localCIPlan(repository, { target: [] })).toThrow(/no configured Linux x64 targets/);

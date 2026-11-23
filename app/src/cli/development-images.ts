@@ -27,6 +27,8 @@ export function runOfflineOperation(
     refreshBootstrap?: boolean;
     architecture?: string;
     assembleOnly?: boolean;
+    allowHostedBuild?: boolean;
+    json?: boolean;
   } = {},
 ): void {
   runCommand(
@@ -44,12 +46,16 @@ export function runOfflineOperation(
       ...(options.fresh ? ["--fresh"] : []),
       ...(options.refreshBootstrap ? ["--refresh-bootstrap"] : []),
       ...(options.assembleOnly ? ["--assemble-only"] : []),
+      ...(options.allowHostedBuild ? ["--allow-hosted-build"] : []),
       ...(options.architecture ? ["--architecture", options.architecture] : []),
     ],
     "native",
     root,
     undefined,
     false,
+    false,
+    {},
+    options.json ? { output: "stderr" } : {},
   );
 }
 

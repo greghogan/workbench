@@ -9,14 +9,18 @@
       packages = forAllSystems (pkgs: { default = import ./package.nix { inherit pkgs; }; });
     in {
       inherit packages;
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          inputsFrom = [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
-          nativeBuildInputs = [ (import ./check-inputs.nix { inherit pkgs; }) ];
+      devShells = forAllSystems (pkgs: let
+        shell = withDependencies: pkgs.mkShell {
+          inputsFrom = pkgs.lib.optionals withDependencies [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
+          nativeBuildInputs = pkgs.lib.optionals withDependencies [ (import ./check-inputs.nix { inherit pkgs; }) ];
           # Coverage readers must match the LLVM used by the selected Rust compiler.
-          packages = with pkgs; [ git nodejs_24 cargo-nextest (cargo-llvm-cov.override { llvmPackages_22 = rustc.llvmPackages; }) rustc.llvmPackages.llvm clippy docker-client rustfmt openssh rsync which less vim ];
+          packages = (with pkgs; [ git nodejs_24 cargo-nextest (cargo-llvm-cov.override { llvmPackages_22 = rustc.llvmPackages; }) rustc.llvmPackages.llvm clippy docker-client rustfmt openssh rsync which less vim ])
+            ++ pkgs.lib.optionals (!withDependencies) (with pkgs; [ cargo rustc ]);
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
         };
+      in {
+        default = shell true;
+        toolchain = shell false;
       });
     };
 }

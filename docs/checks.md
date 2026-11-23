@@ -626,8 +626,8 @@ stages = []
 ```
 
 The Workbench examples explicitly select their sample artifact verifier. That verifier is specific to the sample APIs;
-consumers supply their own command. Named release profiles independently declare their `prepare` and `verify` commands
-in project configuration. See the [profile guide](profiles.md).
+consumers supply their own command. Artifact recipes independently declare their `build` and `verify` commands in the
+shared profile catalog. See the [profile guide](profiles.md).
 
 Failed checks print a copyable `workbench logs read PATH` command. The reader accepts the reported logical path even
 after retention compresses it with Zstandard. The terminal shows the failed step once; full group logs and structured

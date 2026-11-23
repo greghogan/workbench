@@ -1,0 +1,134 @@
+name: Prepare and deliver one artifact image
+on:
+  workflow_call:
+    inputs:
+      kind:
+        type: string
+        required: true
+      builder:
+        type: string
+        required: true
+      architecture:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  ARTIFACT_KIND: ${{ inputs.kind }}
+  BUILDER: ${{ inputs.builder }}
+  TARGET: linux-${{ inputs.architecture }}
+
+jobs:
+  prepare:
+    name: Prepare and verify
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
+    timeout-minutes: 120
+    steps:
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - &node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          architecture: ${{ inputs.architecture }}
+      - &bootstrap
+        name: Set up the selected checkout
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node scripts/setup-development.mjs --build-only
+          node bin/workbench.mjs project add .
+          node bin/workbench.mjs tools install --devcontainer
+      - &disk
+        name: Make room for the image and temporary files
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          df -h /
+      - name: Build, verify, and export the OCI image
+        run: |
+          case "$BUILDER" in
+            nix|guix) node bin/workbench.mjs config set --scope global "preparation.${BUILDER}_store" managed ;;
+          esac
+          transfer="$RUNNER_TEMP/workbench-image"
+          mkdir "$transfer"
+          node bin/workbench.mjs artifact build "$BUILDER" --kind "$ARTIFACT_KIND" --target "$TARGET" --format oci \
+            --export "$transfer" --json > "$transfer/selection.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ inputs.kind }}-${{ inputs.builder }}-${{ inputs.architecture }}
+          path: ${{ runner.temp }}/workbench-image/
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+          retention-days: 1
+      - name: Retain preparation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preparation-${{ inputs.kind }}-${{ inputs.builder }}-${{ inputs.architecture }}-${{ github.run_attempt }}
+          path: |
+            ~/.cache/workbench/offline-profiles/*/*.json
+            ~/.cache/workbench/check-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: Publish verified image
+    needs: prepare
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - *checkout
+      - *node
+      - *bootstrap
+      - *disk
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-${{ inputs.kind }}-${{ inputs.builder }}-${{ inputs.architecture }}
+          path: ${{ runner.temp }}/workbench-image
+      - name: Authenticate and qualify the transferred bytes
+        run: |
+          transfer="$RUNNER_TEMP/workbench-image"
+          digest=$(node --input-type=module - "$transfer/selection.json" <<'JS'
+          import { readFileSync } from 'node:fs';
+          const rows = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const [row] = rows;
+          const digest = row?.delivered?.manifestSha256;
+          if (rows.length !== 1 || row.profile !== process.env.BUILDER || row.kind !== process.env.ARTIFACT_KIND ||
+              row.target !== process.env.TARGET || row.format !== 'oci' || row.delivered?.verification !== 'verified' ||
+              !/^[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid verified OCI image transfer');
+          console.log(digest);
+          JS
+          )
+          node bin/workbench.mjs artifact import "$BUILDER" "$transfer/image-$digest" --kind "$ARTIFACT_KIND" \
+            --target "$TARGET" --format oci --sha256 "$digest"
+      - name: Publish and verify by registry digest
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          DOCKER_CONFIG=$(mktemp -d) && export DOCKER_CONFIG
+          trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          unset REGISTRY_TOKEN
+          mkdir "$RUNNER_TEMP/publication-evidence"
+          node bin/workbench.mjs artifact publish "$BUILDER" --kind "$ARTIFACT_KIND" --target "$TARGET" --format oci \
+            --json > "$RUNNER_TEMP/published-image.json"
+          mv "$RUNNER_TEMP/published-image.json" "$RUNNER_TEMP/publication-evidence/image.json"
+      - name: Retain publication evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: publication-${{ inputs.kind }}-${{ inputs.builder }}-${{ inputs.architecture }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publication-evidence/
+          if-no-files-found: ignore
+          retention-days: 14

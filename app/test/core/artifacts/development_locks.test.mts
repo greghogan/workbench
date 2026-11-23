@@ -10,19 +10,29 @@ import {
 } from "../../../src/core/artifacts/development-locks.ts";
 import { inspectCacheMetadataLock, CacheLockState } from "../../../src/core/storage/cache-lock.ts";
 import { imageProfileLock } from "../../../src/core/artifacts/image-contract.ts";
-import { managedStoreCleanupActivity } from "../../../src/core/execution/environments/managed/managed-contract.mjs";
+import {
+  managedStoreCleanupActivity,
+  managedStoreDirectory,
+} from "../../../src/core/execution/environments/managed/managed-contract.mjs";
 import { prepareManagedBuilderStore } from "../../../src/core/storage/managed-builder-store.ts";
-const state = vi.hoisted(() => ({ directory: "", containers: "" }));
+const state = vi.hoisted(() => ({ directory: "", containers: "", builder: "native", mounts: "" }));
 vi.mock("../../../src/core/artifacts/buildkit.js", () => ({
   projectBuildkitLock: () => join(state.directory, "buildkit"),
 }));
 vi.mock("../../../src/core/artifacts/offline-profiles.js", () => ({
-  offlineProfile: () => ({ builder: "native" }),
+  offlineProfile: () => ({ builder: state.builder }),
 }));
 vi.mock("../../../src/core/projects/project-configuration.js", () => ({
-  readConfig: () => ({ development: { profiles: [{ name: "native", offline: {} }] } }),
+  readConfig: () => ({ development: { profiles: [{ name: "native", builder: state.builder, offline: {} }] } }),
 }));
-vi.mock("../../../src/core/artifacts/image-process.js", () => ({ imageQuery: () => state.containers }));
+vi.mock("../../../src/core/artifacts/image-process.js", () => ({
+  imageQuery: (_command: string, args: string[]) => {
+    if (args[0] === "info") return "fixture-docker";
+    if (args[0] === "container") return state.mounts;
+    if (args.includes("--no-trunc")) return state.mounts ? "a".repeat(64) : "";
+    return state.containers;
+  },
+}));
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -31,6 +41,8 @@ afterEach(() => {
 function fixture(architecture: string = process.arch) {
   state.directory = mkdtempSync(join(tmpdir(), "workbench-lock-recovery-"));
   state.containers = "";
+  state.builder = "native";
+  state.mounts = "";
   vi.stubEnv("WORKBENCH_CACHE_HOME", state.directory);
   const target = imageProfileLock("/fixture", "native", architecture),
     lock = `${target}.lock`,
@@ -114,6 +126,40 @@ test("BuildKit recovery resolves its engine-bound lock without touching the mana
   recoverDevelopmentLock("/fixture", "native", DevelopmentLock.Buildkit, digest);
   expect(existsSync(buildkit)).toBe(false);
   expect(existsSync(f.lock)).toBe(true);
+});
+
+test("managed preparation recovery preserves a mounted store and ignores unrelated Docker builders", () => {
+  const f = fixture();
+  state.builder = "nix";
+  const store = managedStoreDirectory(state.directory, "nix");
+  mkdirSync(`${store}.lock`, { recursive: true });
+  writeFileSync(join(`${store}.lock`, "owner.json"), JSON.stringify(f.owner));
+  mkdirSync(f.activity);
+  writeFileSync(
+    join(f.activity, "owner.json"),
+    JSON.stringify({ ...f.owner, version: 1, launching: false, children: [] }),
+  );
+  state.mounts = JSON.stringify([{ Name: "workbench-managed-nix-key-store" }]);
+  const inspection = () =>
+    inspectDevelopmentLocks("/fixture", "native").find((entry) => entry.kind === DevelopmentLock.Store);
+  const digest = inspection()?.digest;
+  if (!digest) throw new Error("Missing managed store lock digest");
+  expect(inspection()).toMatchObject({ recoverable: false, reason: /still mounted/ });
+  expect(() => {
+    recoverDevelopmentLock("/fixture", "native", DevelopmentLock.Store, digest);
+  }).toThrow(/still mounted/);
+  state.mounts = JSON.stringify([{ Name: "buildx_buildkit_separate_state" }]);
+  const key = "f".repeat(24);
+  const generation = join(store, key);
+  mkdirSync(generation, { recursive: true });
+  const owner = join(generation, ".workbench-store.json");
+  writeFileSync(owner, JSON.stringify({ version: 1, builder: "nix", key, engine: "old-docker" }));
+  expect(inspection()).toMatchObject({ recoverable: false, reason: /could not be established/ });
+  writeFileSync(owner, JSON.stringify({ version: 1, builder: "nix", key, engine: "fixture-docker" }));
+  expect(inspection()?.recoverable).toBe(true);
+  recoverDevelopmentLock("/fixture", "native", DevelopmentLock.Store, digest);
+  expect(inspectCacheMetadataLock(store).state).toBe(CacheLockState.Unlocked);
+  expect(existsSync(f.activity)).toBe(true);
 });
 
 test("abandoned cleanup locks require both drained owned processes and absent Docker containers", async () => {

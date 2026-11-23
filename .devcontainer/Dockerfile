@@ -21,19 +21,28 @@ ENV WORKBENCH_CACHE_HOME=/opt/workbench/cache WORKBENCH_DATA_HOME=/opt/workbench
     GOMODCACHE=/opt/workbench/cache/go-mod GOCACHE=/tmp/go-build npm_config_cache=/opt/workbench/cache/npm PIP_CACHE_DIR=/opt/workbench/cache/pip \
     CARGO_HOME=/opt/workbench/cache/ci/cargo RUSTUP_HOME=/opt/workbench/cache/ci/rustup
 
-FROM base AS preparation
+FROM base AS acquisition
 WORKDIR /tmp/preparation
 COPY . .
 ARG TARGETARCH
 RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
     --mount=type=cache,id=workbench-native-${TARGETARCH},target=/opt/workbench,sharing=locked \
-    node scripts/prepare-development.mjs native \
-    && node scripts/split-prepared-inputs.mjs /opt/workbench /prepared-tools /prepared-dependencies
-FROM base
-COPY --from=preparation --chown=ubuntu:ubuntu /prepared-tools /opt/workbench
-COPY --from=preparation --chown=ubuntu:ubuntu /prepared-dependencies /opt/workbench
+    node scripts/prepare-development.mjs native --tools-only \
+    && node scripts/split-prepared-inputs.mjs --tools-only /opt/workbench /prepared-tools
 
+FROM base AS toolchain
+COPY --from=acquisition --chown=ubuntu:ubuntu /prepared-tools /opt/workbench
 # The selected Rust compiler is mounted by cross; these linkers use distribution-managed musl.
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     CC_x86_64_unknown_linux_musl=musl-gcc CC_aarch64_unknown_linux_musl=musl-gcc
+
+FROM acquisition AS preparation
+RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
+    --mount=type=cache,id=workbench-native-${TARGETARCH},target=/opt/workbench,sharing=locked \
+    cp -a /prepared-tools/. /opt/workbench/ \
+    && node scripts/prepare-development.mjs native --dependencies-only \
+    && node scripts/split-prepared-inputs.mjs /opt/workbench /retained-tools /prepared-dependencies
+
+FROM toolchain AS development
+COPY --from=preparation --chown=ubuntu:ubuntu /prepared-dependencies /opt/workbench

@@ -20,7 +20,7 @@
 - `scripts/ci-guix-bootstrap.mts`, `scripts/ci-guix-bootstrap.scm`: retain and import signed pinned Guix runtime closures on disposable hosted runners.
 - `scripts/ci-native-prerequisites.mts`: prepares hosted SDK dependencies for native Ruby and PHP runtimes.
 - `scripts/ci-cache-metrics.mts`: records cache footprint and elapsed verification-window evidence.
-- `.github/workflows/publication.yml`: separately prepares, natively verifies, and publishes development images with package write authority.
+- `.github/workflows/publication.yml`, `.github/workflows/publish-image.yml`: schedule each prepared image independently and isolate registry write authority from image builds.
 - `scripts/ci-hosted.mts`: Runs the exact configured targets on a hosted native platform or in its prepared environment.
 - `scripts/prepare-development.mts`: Prepares toolchains, dependency archives and pnpm policy metadata, and verifies fresh offline builds.
 - `scripts/managed-input-recipes.mts`, `scripts/refresh-managed-inputs.mts`: Derive standalone Nix/Guix source packages and refresh pinned proof metadata.
@@ -32,6 +32,9 @@
 - `scripts/prepare-screen-reader.mts`, `scripts/check-screen-reader.mts`, `scripts/screen-reader-assets.json`: Prepare verified platform browsers and Windows NVDA/macOS VoiceOver tools and retain real screen-reader workflow evidence from the disposable demonstration.
 - `scripts/check-workflows.mts`: Validates workflow files and project runner configuration without requiring Git metadata.
 - `scripts/managed-process.mts`: Own preparation child lifetimes, bounded capture, cancellation, safe shutdown despite uncertain ownership, release only after confirmed drainage, and command discovery.
+- `app/src/core/execution/environments/managed/profile-transfer.mts`, `scripts/verify-guix-profile-archive.scm`: Transfer selected profiles with
+  target and root metadata, and verify Guix archive signatures before restoring store objects.
+- `scripts/restore-store-archive.mts`: Restore and pin transferred profiles in the disposable offline verification store.
 - `scripts/managed-files.mts`: Validate source declarations and atomically replace generated metadata after acquisition and generation finish.
 - `scripts/verify-managed-preparation.mts`: Rehearses offline Nix and Guix images with host pins or a disposable managed store, including remount and pruning.
 - `scripts/prepare-guix-profiles.mts`: Realizes independent Guix channel groups, retains per-root profiles and matching runtimes, and passes only realized store paths to image assembly.
@@ -56,8 +59,9 @@
   in an offline KVM guest overlay and report authenticated listener startup before discarding guest state.
 - `scripts/ci-platform.mts`: Groups configured target phases by operation and profile, rejecting missing or duplicated work.
 - `scripts/ci-candidate.mts`, `scripts/ci-release-ready.mts`: Binds the shared portable candidate to successful complete CI and immutable source identity.
-- `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.
-- `scripts/release-contract.mts`, `scripts/github-release.mts`: Separate release proof validation from authenticated GitHub transport, including exact pending-draft and published-tag lookup, retried read operations, and private complete-download publication.
+- `.github/workflows/release.yml`, `scripts/publish-release.mts`: Promote the exact tested main candidate and native ZIPs to GitHub Releases and verify published bytes.
+- `scripts/release-contract.mts`, `app/src/core/artifacts/github-release.mts`: Validate release proof and share immutable
+  GitHub publication between the CLI and hosted workflows.
 - `scripts/accessibility-criteria.mts`: Maps automated browser results to partial WCAG criterion evidence without claiming full conformance.
 - `.github/workflows/windows-node-backport.yml`, `.github/probes/windows.ps1`,
   `scripts/node-windows-backport`: Build, qualify, and attest the temporary Windows Node runtime.

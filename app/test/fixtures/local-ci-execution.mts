@@ -45,6 +45,11 @@ export function localCIFixture() {
     }
     for (const entry of ["scripts/ci-run.mjs", "scripts/ci-linux/job.mjs", "scripts/ci-linux/run.mjs"])
       await copyScriptClosure(repository, root, entry);
+    mkdirSync(join(root, "bundle"), { recursive: true });
+    writeFileSync(
+      join(root, "bundle/package.cjs"),
+      `module.exports = require(${JSON.stringify(join(repository, "bundle/package.cjs"))});\n`,
+    );
     const clients = join(root, "clients");
     mkdirSync(clients);
     cpSync(join(repository, "app/test/fixtures/ci-docker.mjs"), join(clients, "docker"));

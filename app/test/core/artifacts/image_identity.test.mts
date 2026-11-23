@@ -1,4 +1,5 @@
 import { readConfig } from "../../../src/core/projects/project-configuration.ts";
+import { projectPaths } from "../../../src/core/projects/project-paths.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,13 +29,13 @@ function fixture(builder: string) {
     offline: required(selected.offline, "Offline configuration"),
   };
   for (const path of new Set([
-    "workbench/config.toml",
-    "workbench/projects.toml",
+    projectPaths.config,
+    projectPaths.projects,
     profile.container_config,
-    ...profile.offline.inputs,
+    ...offlineInputManifest(distribution, profile).files.map(([path]) => path),
   ])) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
-    cpSync(join(distribution, path), join(root, path), { recursive: true });
+    cpSync(join(distribution, path), join(root, path));
   }
   return { root, profile };
 }

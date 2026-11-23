@@ -135,20 +135,22 @@ test("native tool installation preserves literal arguments and explicit executio
 
 test("language settings are scoped to their registered root and generated selections remain authoritative", () => {
   const { root } = fixture(["typescript"]);
+  vi.stubEnv("WORKBENCH_CPUS", undefined);
+  vi.stubEnv("WORKBENCH_CPU_BUDGET", "1");
   vi.stubEnv("NODE_OPTIONS", "--no-warnings");
   vi.stubEnv("RUSTFLAGS", "-C opt-level=2");
   vi.stubEnv("GOFLAGS", "-tags=custom");
   const env = nativeCheckEnvironment(root, root, {}, 2);
   expect(env).not.toHaveProperty("NODE_OPTIONS");
   for (const name of ["RUSTFLAGS", "GOFLAGS", "CARGO_BUILD_JOBS", "GOMAXPROCS"]) expect(env).not.toHaveProperty(name);
-  expect(env.WORKBENCH_CPU_BUDGET).toBe("2");
-  expect(env.UV_THREADPOOL_SIZE).toBe("2");
+  expect(env.WORKBENCH_CPU_BUDGET).toBe("1");
+  expect(env.UV_THREADPOOL_SIZE).toBe("1");
   writeFileSync(
     join(root, "workbench/projects.toml"),
     stringify({ project: [{ id: "fixture", path: "." }], language_root: [{ language: "go", path: "." }] }),
   );
   const go = nativeCheckEnvironment(root, root, {}, 2);
-  expect(go.GOFLAGS).toBe("-p=2");
+  expect(go.GOFLAGS).toBe("-p=1");
   expect(go.GOTOOLCHAIN).toBe("local");
   expect(go.GOENV).toBe("off");
   expect(go).not.toHaveProperty("NODE_OPTIONS");

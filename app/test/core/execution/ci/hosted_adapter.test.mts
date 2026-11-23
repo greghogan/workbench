@@ -55,7 +55,7 @@ writeFileSync(join(process.env.WORKBENCH_STATE_HOME,'registration'), 'private re
 test
   .skipIf(process.platform !== "linux")
   .each(["nix", "guix"].flatMap((builder) => [true, false].map((available) => [builder, available])))(
-  "hosted %s checks require a registry image (available: %s)",
+  "hosted %s delegates one required image operation (available: %s)",
   (builder, available) => {
     const root = mkdtempSync(join(tmpdir(), "workbench-hosted-managed-"));
     try {
@@ -87,16 +87,10 @@ appendFileSync('calls.jsonl',JSON.stringify(args)+'\\n');
 if(args[0]==='project' && args[1]==='add') {}
 else if(args[0]==='check') console.log(readFileSync('catalog.json','utf8'));
 else if(args[0]==='config') console.log(JSON.stringify({${String(builder)}:'managed'}));
-else if(args[0]==='tools') {}
-else if(args[0]==='development' && args[1]==='images') {
-  if(!args.includes('--require')) throw new Error('Hosted image preflight must require registry availability');
+else if(args[0]==='ci-image-job') {
   if(process.env.IMAGE_AVAILABLE!=='true') process.exitCode=1;
+  else writeFileSync('executed','verified', { flag:'wx' });
 }
-else if(args[0]==='ci-image-acquire') {
-  if(args.includes('--allow-build')) throw new Error('Managed CI must never build');
-  if(process.env.IMAGE_AVAILABLE!=='true') process.exitCode=1;
-  else writeFileSync(args[args.indexOf('--output')+1],JSON.stringify({version:1,profile:args[1],platform:'linux-'+process.arch,inputs:'c'.repeat(64),reference:'ghcr.io/owner/image:inputs',image:'sha256:'+'a'.repeat(64),published:'ghcr.io/owner/image@sha256:'+'b'.repeat(64)}));
-} else if(args[0]==='ci-image-exec') writeFileSync('executed','verified');
 else throw new Error('unexpected operation');
 `,
       );
@@ -116,13 +110,19 @@ else throw new Error('unexpected operation');
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as string[]);
-      const preflight = calls.findIndex((args) => args[0] === "development" && args[1] === "images");
-      const setup = calls.findIndex((args) => args[0] === "tools");
-      expect(preflight).toBeGreaterThan(-1);
-      if (available) {
-        expect(preflight).toBeLessThan(setup);
-        expect(JSON.parse(readFileSync(join(root, "workbench-reports", "targets.json"), "utf8"))).toEqual([native]);
-      } else expect(setup).toBe(-1);
+      expect(calls.filter(([command]) => command === "ci-image-job")).toEqual([
+        [
+          "ci-image-job",
+          "managed",
+          "--targets",
+          join(root, "workbench-reports", "targets.json"),
+          "--reports",
+          join(root, "workbench-reports"),
+          "--operation",
+          "checks",
+        ],
+      ]);
+      expect(JSON.parse(readFileSync(join(root, "workbench-reports", "targets.json"), "utf8"))).toEqual([native]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -183,9 +183,7 @@ appendFileSync('calls.jsonl',JSON.stringify(args)+'\\n');
 if(args[0]==='project' && args[1]==='add') {}
 else if(args[0]==='check') console.log(readFileSync('catalog.json','utf8'));
 else if(args[0]==='config') console.log(JSON.stringify({native:'offline'}));
-else if(args[0]==='tools') {}
-else if(args[0]==='ci-image-acquire') { writeFileSync('prepared','verified'); writeFileSync(args[args.indexOf('--output')+1],JSON.stringify({version:1,profile:args[1],platform:'linux-x64',inputs:'c'.repeat(64),reference:'ghcr.io/owner/image:inputs',image:'sha256:'+'a'.repeat(64),published:'ghcr.io/owner/image@sha256:'+'b'.repeat(64)})); }
-else if(args[0]==='ci-image-exec' && existsSync('prepared')) writeFileSync('executed','complete');
+else if(args[0]==='ci-image-job' && args[1]==='offline') writeFileSync('executed','complete', { flag:'wx' });
 else throw new Error('unexpected or unauthorized operation');
 `,
       );

@@ -27,7 +27,7 @@ test("native cache keys retain acquisition identity without caching redownloaded
   );
   writeFileSync(
     join(root, "workbench/projects.toml"),
-    '[[project]]\nid="app"\npath="."\n[[language_root]]\nlanguage="typescript"\npath="."\n',
+    '[[project]]\nid="workbench"\npath="."\n[[project]]\nid="workbench-app"\npath="app"\n[[language_root]]\nlanguage="typescript"\npath="."\n',
   );
   const environment = join(root, "environment");
   const output = join(root, "output");

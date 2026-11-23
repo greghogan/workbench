@@ -25,6 +25,7 @@ export interface CheckCommandRequest {
   inspectTools?: boolean;
   lockBuild?: boolean;
   compilerSelection?: CompilerSelection & { verbose?: boolean };
+  toolProbesOnly?: boolean;
 }
 
 export function prepareCheckCommand({
@@ -37,6 +38,7 @@ export function prepareCheckCommand({
   inspectTools = true,
   lockBuild = false,
   compilerSelection = {},
+  toolProbesOnly = false,
 }: CheckCommandRequest) {
   compilerSelection = { ...compilerSelection, environment: selected };
   const compilerEnv = inspectTools ? compilerEnvironment(directory, compilerSelection) : {};
@@ -97,6 +99,7 @@ export function prepareCheckCommand({
   const managedCommand =
     repositoryRoot &&
     inspectTools &&
+    !toolProbesOnly &&
     ["nix", "guix", "nix-docker"].includes(selected) &&
     existsSync(join(directory, "managed-check-inputs.json"))
       ? ["node", join(distributionRoot(repositoryRoot), "bin/workbench.mjs"), "managed-inputs-exec", "--", ...checked]

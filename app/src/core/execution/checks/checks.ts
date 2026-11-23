@@ -422,7 +422,13 @@ async function runConfiguredChecks(
               .map(quote)
               .join(" ");
             const step = ++completed;
-            const body = presentCoverage ? ["coverage_status=0", `${execution} || coverage_status=$?`] : [execution];
+            const releaseInput =
+              environment === "native" && entry.role === "release-verify"
+                ? 'WORKBENCH_DIST_DIR="${WORKBENCH_RELEASE_ARTIFACT:-$WORKBENCH_DIST_DIR}" '
+                : "";
+            const body = presentCoverage
+              ? ["coverage_status=0", `${execution} || coverage_status=$?`]
+              : [releaseInput + execution];
             const after = presentCoverage
               ? [
                   "workbench_check_replay=$coverage_status",

@@ -217,3 +217,35 @@ test
     );
   },
 );
+
+test.skipIf(process.platform === "win32")("release ZIP restores relative links within the package", async () => {
+  const { archive, destination } = fixture(
+    zip([
+      { name: "release/bin/tool", mode: 0o100755, content: "packaged tool" },
+      { name: "release/links/tool", mode: 0o120777, content: "../bin/tool" },
+    ]),
+  );
+  const content = await extractZipArchive(archive, destination, 1, artifactLimits, "contained");
+  expect(readFileSync(join(content, "links/tool"), "utf8")).toBe("packaged tool");
+});
+
+test.skipIf(process.platform === "win32")(
+  "release ZIP rejects links that escape or introduce a linked parent",
+  async () => {
+    const prefix = [{ name: "release/bin/tool", content: "packaged tool" }];
+    const escaping = fixture(zip([...prefix, { name: "release/link", mode: 0o120777, content: "../outside" }]));
+    await expect(
+      extractZipArchive(escaping.archive, escaping.destination, 1, artifactLimits, "contained"),
+    ).rejects.toThrow(/escapes the retained root/);
+    const nested = fixture(
+      zip([
+        ...prefix,
+        { name: "release/link", mode: 0o120777, content: "bin" },
+        { name: "release/link/other", mode: 0o120777, content: "../bin/tool" },
+      ]),
+    );
+    await expect(extractZipArchive(nested.archive, nested.destination, 1, artifactLimits, "contained")).rejects.toThrow(
+      /another link as its parent/,
+    );
+  },
+);

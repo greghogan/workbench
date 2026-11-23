@@ -8,6 +8,60 @@ id = "workbench-app"
 name = "app"
 path = "app"
 
+[[project]]
+id = "workbench-c"
+name = "c"
+path = "examples/languages/c"
+
+[[project]]
+id = "workbench-cpp"
+name = "cpp"
+path = "examples/languages/cpp"
+
+[[project]]
+id = "workbench-go"
+name = "go"
+path = "examples/languages/go"
+
+[[project]]
+id = "workbench-java"
+name = "java"
+path = "examples/languages/java"
+
+[[project]]
+id = "workbench-javascript"
+name = "javascript"
+path = "examples/languages/javascript"
+
+[[project]]
+id = "workbench-php"
+name = "php"
+path = "examples/languages/php"
+
+[[project]]
+id = "workbench-python"
+name = "python"
+path = "examples/languages/python"
+
+[[project]]
+id = "workbench-react"
+name = "react"
+path = "examples/frameworks/react"
+
+[[project]]
+id = "workbench-ruby"
+name = "ruby"
+path = "examples/languages/ruby"
+
+[[project]]
+id = "workbench-rust"
+name = "rust"
+path = "examples/languages/rust"
+
+[[project]]
+id = "workbench-typescript"
+name = "typescript"
+path = "examples/languages/typescript"
 
 [[language_root]]
 ci_compatibility = false

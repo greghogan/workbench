@@ -2,6 +2,27 @@ import { isMainScript } from "./script-entry.mjs";
 import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+const toolLocations = [
+  "cache/toolchains",
+  "cache/uv-python",
+  "cache/package-managers",
+  "cache/container-tools",
+  "cache/ci/rustup",
+  "cache/ci/cargo/bin",
+];
+
+export function copyPreparedTools(source: string, output: string) {
+  if (existsSync(output)) throw new Error("Prepared tool output already exists");
+  mkdirSync(output, { recursive: true });
+  for (const location of toolLocations) {
+    const path = join(source, location);
+    if (!existsSync(path)) continue;
+    const destination = join(output, location);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(path, destination, { recursive: true, verbatimSymlinks: true });
+  }
+}
+
 /** Copy retained inputs into disjoint layer trees without copying disposable build and dependency caches. */
 export function splitPreparedInputs(source: string, tools: string, dependencies: string) {
   source = resolve(source);
@@ -47,14 +68,7 @@ export function splitPreparedInputs(source: string, tools: string, dependencies:
     linkSync(first, duplicate);
   }
   mkdirSync(tools, { recursive: true });
-  for (const name of [
-    "cache/toolchains",
-    "cache/uv-python",
-    "cache/package-managers",
-    "cache/container-tools",
-    "cache/ci/rustup",
-    "cache/ci/cargo/bin",
-  ]) {
+  for (const name of toolLocations) {
     const path = join(dependencies, name);
     if (!existsSync(path)) continue;
     const destination = join(tools, name);
@@ -65,5 +79,6 @@ export function splitPreparedInputs(source: string, tools: string, dependencies:
 if (isMainScript(import.meta.url)) {
   const [source, tools, dependencies] = process.argv.slice(2);
   if (!source || !tools || !dependencies) throw new Error("Supply source, tools, and dependency layer directories");
-  splitPreparedInputs(source, tools, dependencies);
+  if (source === "--tools-only") copyPreparedTools(tools, dependencies);
+  else splitPreparedInputs(source, tools, dependencies);
 }

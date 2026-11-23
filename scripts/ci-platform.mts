@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CILifecycle, executeCI } from "../app/src/core/execution/ci/support/ci-lifecycle.mjs";
 import { readCITargets } from "../app/src/core/execution/ci/support/ci-contract.mjs";
@@ -7,14 +7,11 @@ import {
   assertOperationCoverage,
   nativeCIJobs,
   operationPhases,
-  CIOperation,
 } from "../app/src/core/execution/ci/support/ci-operations.mjs";
-import { readAcquiredCIImage } from "../app/src/core/execution/ci/support/ci-image-contract.mjs";
 import { readCandidate } from "./ci-candidate.mts";
 import { runSucceeded } from "../app/src/core/execution/ci/support/ci-results.mjs";
 import { executeCITargets } from "../app/src/core/execution/ci/support/ci-execution.mjs";
 import { record, required, string, stringRecord } from "../app/src/core/runtime/values.mjs";
-import { acquireRegistryImage } from "../app/src/core/toolchains/acquisition/image-acquisition.mts";
 import { runCIEntry } from "./ci-errors.mts";
 
 const lifecycle = new CILifecycle();
@@ -89,57 +86,23 @@ await runCIEntry("Native platform operation", async () => {
       const reports = join(temporary, "workbench-reports");
       mkdirSync(reports, { recursive: true });
       if (profile) {
-        await run([cli, "tools", "install", "--devcontainer"]);
-        const directory = join(temporary, "platform-inputs");
-        const value = readAcquiredCIImage(JSON.parse(readFileSync(join(directory, "image.json"), "utf8")));
-        if (value.profile !== profile || value.platform !== `linux-${architecture}`)
-          throw new Error("Prepared CI inputs belong to another platform or profile");
-        const image = value.image;
-
-        const published = value.published;
-        await lifecycle.checkpoint();
-        await acquireRegistryImage(published, { profile, quiet: false });
-        const actual = await executeCI("docker", ["image", "inspect", "--format", "{{.Id}}", published], {
-          capture: true,
-        });
-        if (actual.trim() !== image) throw new Error("Transferred image differs from the acquired image");
-        // Every network partition receives its own retained reports. Phase ownership remains unchanged.
-        for (const network of job.operation === CIOperation.Checks &&
-        job.targets.every((target) => target.kind === "native")
-          ? ["offline", "online"]
-          : ["all"]) {
-          const partition = join(reports, network);
-          mkdirSync(partition);
-          writeFileSync(join(partition, "targets.json"), JSON.stringify(job.targets));
-          // The same exact portable candidate is mounted with reports, outside the source checkout.
-          const { cpSync } = await import("node:fs");
-          cpSync(candidate, join(partition, "candidate"), { recursive: true });
-          await run([
-            cli,
-            "ci-image-exec",
-            profile,
-            "--image",
-            image,
-            "--reports",
-            partition,
-            "--network",
-            network === "offline" ? "none" : "host",
-            "--env-json",
-            JSON.stringify({
-              RUNNER_TEMP: "/reports",
-              WORKBENCH_CI_TARGETS: "/reports/targets.json",
-              WORKBENCH_CI_OPERATION: job.operation,
-              WORKBENCH_CI_CHECK_NETWORK: network,
-              WORKBENCH_CI_CANDIDATE: "/reports/candidate",
-              ...(process.env.WORKBENCH_COVERAGE_BASE
-                ? { WORKBENCH_COVERAGE_BASE: process.env.WORKBENCH_COVERAGE_BASE }
-                : {}),
-            }),
-            "--",
-            "node",
-            "{workbench}/scripts/ci-linux/run.mjs",
-          ]);
-        }
+        const selection = join(reports, "targets.json");
+        writeFileSync(selection, JSON.stringify(job.targets));
+        await run([
+          cli,
+          "ci-image-job",
+          profile,
+          "--prepared",
+          join(temporary, "platform-inputs", "image.json"),
+          "--targets",
+          selection,
+          "--operation",
+          job.operation,
+          "--reports",
+          reports,
+          "--candidate",
+          candidate,
+        ]);
       } else {
         const result = await executeCITargets({
           targets: job.targets,

@@ -17,11 +17,48 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, afterEach, vi } from "vitest";
+import {
+  importManagedProfiles,
+  readManagedProfileArchive,
+} from "../../../src/core/execution/environments/managed/profile-transfer.mjs";
 const distribution = resolve(import.meta.dirname, "../../../..");
 const temporary: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const directory of temporary.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+test("a managed transfer matches the requested roots before any payload reaches a manager", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "workbench-manager-transfer-"));
+  temporary.push(folder);
+  const file = join(folder, "dev.archive");
+  const expected = { builder: "nix", architecture: "x64", kind: "development", roots: [".", "apps/client"] } as const;
+  const profiles = [
+    { path: ".", profile: `/nix/store/${"a".repeat(32)}-root` },
+    { path: "apps/client", profile: `/nix/store/${"b".repeat(32)}-client` },
+  ];
+  const payload = Buffer.from([0, 148, 255]);
+  const writeArchive = (selected: typeof profiles) => {
+    const metadata = Buffer.from(JSON.stringify({ version: 1, ...expected, profiles: selected }));
+    const prefix = Buffer.alloc(4);
+    prefix.writeUInt32BE(metadata.length);
+    writeFileSync(file, Buffer.concat([prefix, metadata, payload]));
+  };
+
+  writeArchive(profiles);
+  const selection = { ...expected, roots: [...expected.roots] };
+  const opened = await readManagedProfileArchive(file, selection);
+  expect(opened.profiles).toEqual(profiles);
+  const chunks: Buffer[] = [];
+  for await (const chunk of opened.payload()) chunks.push(chunk as Buffer);
+  expect(Buffer.concat(chunks)).toEqual(payload);
+  const isolated = { env: { PATH: folder } };
+  await expect(importManagedProfiles(file, { ...selection, architecture: "arm64" }, isolated)).rejects.toThrow(
+    /manager, architecture, and kind/,
+  );
+  await expect(importManagedProfiles(file, { ...selection, roots: ["."] }, isolated)).rejects.toThrow(/project roots/);
+  writeArchive([{ path: ".", profile: `/gnu/store/${"a".repeat(32)}-wrong-store` }]);
+  await expect(importManagedProfiles(file, selection, isolated)).rejects.toThrow(/immutable store output/);
 });
 
 test.skipIf(process.platform !== "linux")(

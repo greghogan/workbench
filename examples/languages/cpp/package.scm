@@ -21,7 +21,7 @@
      (build-system cmake-build-system)
      (arguments
       (list #:generator "Ninja"
-            #:cmake (specification->package "cmake-minimal@4.3.3")
+            #:cmake selected-cmake
             #:phases
             #~(modify-phases %standard-phases
                 (replace 'check
@@ -33,7 +33,7 @@
             #~(list "-DWORKBENCH_COMPILER_FAMILY=gcc"
                     "-DCMAKE_C_COMPILER=gcc" "-DCMAKE_CXX_COMPILER=g++"
                     "-DWORKBENCH_LTO=full")))
-     (native-inputs (list (specification->package "ninja")))
+     (native-inputs (list selected-ninja))
      (inputs (list (with-selected-gcc fmt-reference)))
      (synopsis "Workbench C++ byte-counting reference")
      (description "A C++ example with independently selectable managed packaging.")

@@ -29,7 +29,7 @@ export const nativeSources: ReadonlySet<string> = new Set([
   "scripts/ci-platform.mts",
   "scripts/ci-release-ready.mts",
   "scripts/ci-status.mts",
-  "scripts/github-release.mts",
+  "app/src/core/artifacts/github-release.mts",
   "scripts/release-contract.mts",
   "scripts/publish-release.mts",
   "app/src/core/toolchains/acquisition/metadata-http.mts",
@@ -104,6 +104,7 @@ export const bootstrapSources: ReadonlySet<string> = new Set([
   "scripts/managed-input-recipes.mts",
   "scripts/managed-inputs.mts",
   "scripts/managed-process.mts",
+  "app/src/core/execution/environments/managed/profile-transfer.mts",
   "app/src/core/execution/environments/managed/managed-source-contract.mts",
   "app/src/core/execution/environments/managed/managed-system.mts",
   "scripts/native-c-checks.mts",
@@ -127,9 +128,11 @@ export const bootstrapSources: ReadonlySet<string> = new Set([
   "app/src/core/runtime/process-outcome.mts",
   "scripts/python-checks.mts",
   "scripts/release-rust.mts",
+  "scripts/restore-store-archive.mts",
   "scripts/ruby-coverage.mts",
   "app/src/core/configuration/runtime-parsers.mts",
   "scripts/split-prepared-inputs.mts",
+  "scripts/workbench-release-archive.mts",
   "app/src/core/runtime/values.mts",
   "scripts/verify-managed.mts",
   "app/src/core/runtime/windows-arguments.mts",
@@ -204,6 +207,7 @@ export const maintainerSources: ReadonlySet<string> = new Set([
 ]);
 const bundledSources = new Set<string>([
   "scripts/check-web-browser.mts",
+  "scripts/workbench-release-archive.mts",
   "scripts/evaluate-skills.mts",
   "scripts/verify-managed-preparation.mts",
   // Sent as a standalone program into managed shells; no checkout-relative imports may remain.
