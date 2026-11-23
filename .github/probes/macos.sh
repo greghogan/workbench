@@ -40,7 +40,10 @@ import sys
 
 workspace = sys.argv[1]
 entitlements = {
+
     "com.apple.security.app-sandbox": True,
+    "com.apple.security.network.client": True,
+    "com.apple.security.network.server": True,
     "com.apple.security.temporary-exception.files.absolute-path.read-only": [workspace + "/input/", os.path.dirname(os.path.dirname(os.path.realpath(shutil.which("node")))) + "/"],
     "com.apple.security.temporary-exception.files.absolute-path.read-write": [workspace + "/output/"],
 }
@@ -127,6 +130,16 @@ assert.equal(child.status, 1);
 assert.match(child.stderr, /EPERM|EACCES/);
 writeFileSync(output + "/pending.json", "{}");
 renameSync(output + "/pending.json", output + "/stable.json");
+const server = require("node:http").createServer((_, reply) => reply.end("scope"));
+server.listen(0, "127.0.0.1", async () => {
+  try {
+    const response = await fetch("http://127.0.0.1:" + server.address().port, { signal: AbortSignal.timeout(5000) });
+    assert.equal(await response.text(), "scope");
+    console.log("Loopback check passed");
+  } finally {
+    server.close();
+  }
+});
 JS
 node=$(command -v node)
 ./Copy.app/Contents/MacOS/scope-shell -eu -c 'cd "$1"; shift; exec "$@"' probe "$workspace/input" "$node" \
