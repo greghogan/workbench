@@ -1,7 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $work = Join-Path $env:RUNNER_TEMP ('workbench-scope-' + [guid]::NewGuid().ToString('N'))
 $inputPath = Join-Path $work 'input'
-$outputPath = Join-Path $work 'output'
 $outsidePath = Join-Path $work 'outside'
 $profile = 'wb.scope.' + [guid]::NewGuid().ToString('N')
 Add-Type -TypeDefinition @'
@@ -34,6 +33,13 @@ public static class ScopeProbe {
   [DllImport("userenv.dll", CharSet=CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string displayName, string description, IntPtr capabilities, uint count, out IntPtr sid);
   [DllImport("userenv.dll", CharSet=CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);
   [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);
+  [DllImport("userenv.dll", CharSet=CharSet.Unicode)] static extern int GetAppContainerFolderPath(string sid, out IntPtr path);
+  public static string Folder(IntPtr sid) {
+    IntPtr path;
+    Marshal.ThrowExceptionForHR(GetAppContainerFolderPath(Identity(sid), out path));
+    try { return Marshal.PtrToStringUni(path); }
+    finally { Marshal.FreeCoTaskMem(path); }
+  }
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref IntPtr size);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr key, IntPtr value, IntPtr size, IntPtr oldValue, IntPtr returned);
   [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
@@ -94,7 +100,8 @@ public static class ScopeProbe {
 '@
 $sid = [ScopeProbe]::Create($profile)
 try {
-  New-Item -ItemType Directory $inputPath,$outputPath,$outsidePath | Out-Null
+  $outputPath = Join-Path ([ScopeProbe]::Folder($sid)) 'LocalState'
+  New-Item -Force -ItemType Directory $inputPath,$outputPath,$outsidePath | Out-Null
   Set-Content -LiteralPath (Join-Path $inputPath 'expected.txt') 'visible'
   Set-Content -LiteralPath (Join-Path $outsidePath 'omitted.txt') 'private'
   $descendant = @"
@@ -128,8 +135,6 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
     $parentIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
   Set-Acl -LiteralPath $outsidePath -AclObject $outsideAcl
 
-  & icacls $outputPath /setintegritylevel '(OI)(CI)L'
-  if ($LASTEXITCODE -ne 0) { throw 'Could not label the private output directory' }
   $exitCode = [ScopeProbe]::Run($sid, $inputPath, $env:ComSpec)
   Write-Host "AppContainer exit status: $exitCode"
   foreach ($log in Get-ChildItem -LiteralPath $outputPath) {

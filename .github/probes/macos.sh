@@ -7,6 +7,8 @@ workspace=$(pwd -P)
 mkdir -p input output outside Probe.app/Contents/MacOS Copy.app/Contents/MacOS
 printf 'visible\n' > input/expected
 printf 'private\n' > outside/omitted
+chmod 755 . outside
+chmod 644 outside/omitted
 cat > launch.c <<'C'
 #include <fcntl.h>
 #include <stdio.h>
