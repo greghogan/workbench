@@ -35,12 +35,13 @@ C
 python3 - "$workspace" <<'PY'
 import os
 import plistlib
+import shutil
 import sys
 
 workspace = sys.argv[1]
 entitlements = {
     "com.apple.security.app-sandbox": True,
-    "com.apple.security.temporary-exception.files.absolute-path.read-only": [workspace + "/input/"],
+    "com.apple.security.temporary-exception.files.absolute-path.read-only": [workspace + "/input/", os.path.dirname(os.path.dirname(os.path.realpath(shutil.which("node")))) + "/"],
     "com.apple.security.temporary-exception.files.absolute-path.read-write": [workspace + "/output/"],
 }
 with open("entitlements.plist", "wb") as out:
@@ -107,6 +108,32 @@ SH
 
 test "$(cat output/copy)" = report
 echo "Signed shell passed"
+mkdir repository
+git -C repository init --quiet
+printf "staged snapshot\n" > repository/input.txt
+git -C repository add input.txt
+printf "working edit\n" > repository/input.txt
+git -C repository show :input.txt > input/staged.txt
+cat > input/verify.cjs <<'JS'
+const { readFileSync, appendFileSync, writeFileSync, renameSync } = require("node:fs");
+const { spawnSync } = require("node:child_process");
+const assert = require("node:assert/strict");
+const [, , original, output] = process.argv;
+assert.equal(readFileSync("staged.txt", "utf8"), "staged snapshot\n");
+assert.throws(() => appendFileSync("staged.txt", "denied"), { code: "EPERM" });
+const child = spawnSync(process.execPath, ["-e", "require('node:fs').readFileSync(process.argv[1])", original],
+                        { encoding: "utf8", timeout: 5000 });
+assert.equal(child.status, 1);
+assert.match(child.stderr, /EPERM|EACCES/);
+writeFileSync(output + "/pending.json", "{}");
+renameSync(output + "/pending.json", output + "/stable.json");
+JS
+node=$(command -v node)
+./Copy.app/Contents/MacOS/scope-shell -eu -c 'cd "$1"; shift; exec "$@"' probe "$workspace/input" "$node" \
+    verify.cjs "$workspace/repository/input.txt" "$workspace/output"
+test "$(cat output/stable.json)" = '{}'
+test "$(cat repository/input.txt)" = 'working edit'
+echo "Pinned Node passed with the staged snapshot"
 for name in scopeprobe scopeshell; do
   container="$HOME/Library/Containers/org.workbench.$name.$probe_id"
   if [ -d "$container" ]; then
