@@ -1,3 +1,5 @@
+param([string]$RuntimePath = (Get-Command node.exe).Source)
+
 $ErrorActionPreference = 'Stop'
 $work = Join-Path $env:RUNNER_TEMP ('workbench-scope-' + [guid]::NewGuid().ToString('N'))
 $outsidePath = Join-Path $work 'outside'
@@ -163,15 +165,15 @@ ren "$outputPath\pending" final > "$outputPath\rename.log" 2>&1 || exit /b 6
   $inputPath = "$drive\input"
   $outputPath = "$drive\output"
   $node = Join-Path $inputPath 'node.exe'
-  Copy-Item -LiteralPath (Get-Command node.exe).Source -Destination $node
+  Copy-Item -LiteralPath $RuntimePath -Destination $node
   $probe = @"
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { fork, spawnSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const output = $($outputPath | ConvertTo-Json -Compress);
 const omitted = $(Join-Path $outsidePath 'omitted.txt' | ConvertTo-Json -Compress);
-try {
+(async () => {
   assert.equal(fs.readFileSync('expected.txt','utf8').trim(), 'visible');
   console.log('Declared input read with Node', process.version, 'libuv', process.versions.uv);
   const child = spawnSync(process.execPath, ['-e', 'require("node:fs").readFileSync(process.argv[1])', omitted], {encoding: 'utf8', timeout: 5000});
@@ -179,16 +181,33 @@ try {
   assert.equal(child.status, 1);
   assert.match(child.stderr, /EPERM|EACCES/);
   console.log('Descendant denied omitted input');
+  await new Promise((resolve, reject) => {
+    const ipc = fork('ipc.cjs', [], { silent: true });
+    let message;
+    ipc.once('message', (value) => { message = value; });
+    ipc.once('error', reject);
+    ipc.once('close', (code, signal) => {
+      try {
+        assert.equal(code, 0, signal);
+        assert.equal(message, 'child IPC');
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+  console.log('Node child IPC worked inside AppContainer');
   assert.throws(() => fs.appendFileSync('expected.txt', 'changed'), /EPERM|EACCES/);
   const pending = path.join(output, 'pending');
   fs.writeFileSync(pending, 'report');
   console.log('Private output created');
   fs.renameSync(pending, path.join(output, 'final'));
-} catch (error) {
+})().catch((error) => {
   console.error(error);
   process.exitCode = 1;
-}
+});
 "@
+  Set-Content -LiteralPath (Join-Path $inputPath 'ipc.cjs') "process.send('child IPC', () => process.disconnect());"
   Set-Content -LiteralPath (Join-Path $inputPath 'probe.cjs') $probe
   $exitCode = [ScopeProbe]::Run($sid, $inputPath, $node, 'probe.cjs')
   Write-Host "AppContainer Node exit status: $exitCode"
