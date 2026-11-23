@@ -253,6 +253,26 @@ test("shutdown cancels scans while draining an admitted mutation", async () => {
   expect(closed).toBe(true);
 });
 
+test("an explicit cleanup preview can run while both inventory measurements are busy", async () => {
+  const tasks = new CacheTasks(distribution);
+  const scans = Promise.allSettled([
+    tasks.run({ kind: "inventory" }),
+    tasks.run({ kind: "measure", directory: state }),
+  ]);
+  const preview = tasks.run({ kind: "assets" });
+  const checked = expect(preview).resolves.toMatchObject({ entries: [], bytes: 0 });
+  try {
+    await expect(tasks.run({ kind: "measure", directory: state })).rejects.toMatchObject({ status: 503 });
+    await expect(tasks.run({ kind: "assets" })).rejects.toMatchObject({ status: 503 });
+    workers[2]?.emit("message", { value: { entries: [], digest: "a".repeat(64), bytes: 0, issues: [] } });
+    workers[2]?.emit("exit", 0);
+    await checked;
+  } finally {
+    await tasks.close();
+    await scans;
+  }
+});
+
 test("worker messages validate typed results and reject malformed or unexpected progress", async () => {
   const tasks = new CacheTasks(distribution);
   const result = tasks.run({ kind: "keep", identity: "/fixture", keep: true });

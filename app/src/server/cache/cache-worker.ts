@@ -148,6 +148,7 @@ export class CacheTasks {
   private readonly running = new Set<Promise<unknown>>();
   private readonly inspections = new Set<Worker>();
   private readonly mutations = new Set<Worker>();
+  private measurements = 0;
   private closed = false;
   private stopping = false;
   constructor(
@@ -163,13 +164,15 @@ export class CacheTasks {
     progress?: (event: CacheProgress) => void,
     signal?: AbortSignal,
   ): Promise<CacheResults[T["kind"]]> {
+    const measuring = task.kind === "inventory" || task.kind === "measure";
     const readOnly =
-      task.kind === "inventory" ||
-      task.kind === "measure" ||
+      measuring ||
       task.kind === "project" ||
       (task.kind === "recover" && task.digest === undefined) ||
       (task.kind === "assets" && task.digest === undefined);
-    if (this.closed || (this.stopping && readOnly) || this.running.size >= 2)
+    // A scan and a remeasurement may overlap. Leave a slot for an explicit user action in that case.
+    const capacity = !measuring && this.measurements === 2 ? 3 : 2;
+    if (this.closed || (this.stopping && readOnly) || this.running.size >= capacity)
       return Promise.reject(new WebError(503, "Cache maintenance is busy; retry when the current operation completes"));
     const operation = new Promise<CacheResults[T["kind"]]>((resolve, reject) => {
       const worker = this.createWorker(task);
@@ -224,7 +227,13 @@ export class CacheTasks {
       if (signal?.aborted) cancel();
     });
     this.running.add(operation);
-    void operation.finally(() => this.running.delete(operation)).catch(() => undefined);
+    if (measuring) this.measurements++;
+    void operation
+      .finally(() => {
+        this.running.delete(operation);
+        if (measuring) this.measurements--;
+      })
+      .catch(() => undefined);
     return operation;
   }
   async close(): Promise<void> {

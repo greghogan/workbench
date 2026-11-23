@@ -1143,8 +1143,8 @@ test("outcome navigation stays in Reviews while record browsing includes numeric
   const first = await readWebPage(web, outcome),
     document = parseDOM(first.html).window.document;
   expect(first.response.status).toBe(200);
-  expect(document.querySelector('button[aria-label="Previous record"]')?.hasAttribute("disabled")).toBe(true);
-  expect(document.querySelector<HTMLButtonElement>('button[aria-label="Next record"]')?.disabled).toBe(true);
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="Previous review"]')?.disabled).toBe(true);
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="Next review"]')?.disabled).toBe(true);
   expect(document.querySelector('a.nav-item[aria-current="page"] > span')?.textContent).toBe("Reviews");
   const ordinary = parseDOM((await readWebPage(web, "/records/demo:TSK-1")).html).window.document;
   const next = ordinary.querySelector<HTMLAnchorElement>('a[rel="next"]')?.getAttribute("href");
