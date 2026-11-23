@@ -4,7 +4,7 @@ name: Checks
 on:
   push:
     # Explicit preparation branches publish the environments that these check jobs require.
-    branches-ignore: ["ci/publication-verification-**"]
+    branches-ignore: ["ci/publication-verification-**", "ci/tsk-a-scope-probes"]
     tags-ignore: ["**"]
   pull_request:
 
