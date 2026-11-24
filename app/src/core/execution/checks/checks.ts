@@ -123,6 +123,7 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
     ...(check.extended ? { extended: true } : {}),
     online: check.online,
     requiresSetup: check.requiresSetup,
+    ...(check.requiresBuild ? { requiresBuild: check.requiresBuild } : {}),
     ...(check.inputs ? { inputs: check.inputs } : {}),
   });
   return {
@@ -265,7 +266,11 @@ export async function runChecks(
                   ),
               );
               if (setup && shouldPrepareSource(options)) {
-                const env = { ...checkBaseEnvironment(root, root), WORKBENCH_OFFLINE: "1" };
+                const env = {
+                  ...checkBaseEnvironment(root, root),
+                  WORKBENCH_DISTRIBUTION_ROOT: distributionRoot(root),
+                  WORKBENCH_OFFLINE: "1",
+                };
                 const command = [process.execPath, join(root, "scripts/setup-development.mjs"), "--reuse-prepared"];
                 // Generated helpers are inputs to other groups. Finish publishing them before any fingerprint or view.
                 await cancellation.execute(
@@ -281,7 +286,8 @@ export async function runChecks(
                 root,
                 options,
                 plan,
-                (selected, cache) => runCheckGroups(root, options, selected, cancellation, owner, recordReport, cache),
+                (selected, cache, products) =>
+                  runCheckGroups(root, options, selected, cancellation, owner, recordReport, cache, products),
                 cancellation.signal,
                 recordReport,
                 {
@@ -572,7 +578,8 @@ async function runConfiguredChecks(
           const use = async () => {
             prepared.prepare();
             if (scriptPath) {
-              if (scoped?.length) isolated = prepareIsolatedChecks(root, directory, scoped, prepared.env);
+              if (scoped?.length)
+                isolated = prepareIsolatedChecks(root, directory, scoped, prepared.env, prepared.builds?.directory);
               writeFileSync(scriptPath, script(isolated?.wrap));
             }
             const command =
@@ -581,6 +588,27 @@ async function runConfiguredChecks(
                 : admitted([process.execPath, join(distributionRoot(root), "bin/workbench.mjs")], prepared.invocation);
             const execution = options.offline ? linuxOfflineCommand(command, currentExecutionEnvironment()) : command;
             await cancellation.execute(execution, directory, prepared.env, false, owner);
+            cancellation.checkpoint();
+            for (const retain of isolated?.retainBuildOutputs ?? [])
+              try {
+                retain();
+              } catch (error) {
+                diagnostic(
+                  LogLevel.Warn,
+                  DiagnosticOperation.CheckCache,
+                  DiagnosticOutcome.Unavailable,
+                  {},
+                  error,
+                  "checks passed; declared build output could not be retained",
+                );
+              }
+            const products = isolated?.productIdentities;
+            if (products?.size && process.send && process.connected)
+              await new Promise<void>((resolve) => {
+                process.send?.({ type: CheckMessage.BuildProducts, products: [...products] }, () => {
+                  resolve();
+                });
+              });
             if (
               prepared.builds?.external &&
               environment === "native" &&

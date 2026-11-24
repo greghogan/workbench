@@ -432,6 +432,12 @@ and `checks.inputs` in every scoped gate. Include any shared fixtures, scripts, 
 Use `outputs` for generated checkout-relative directories a check must write. Workbench gives each scoped run empty,
 private copies of those directories and rejects overlap with captured files.
 
+A check that needs another command's generated files can list its build checks by name with
+`requires_build = ["Build application"]`. Declare each producer as a `build` check, with its source inputs and
+output directories in `input_groups`. The named builds run ahead of their consumers in the same root and
+environment. An isolated check receives a read-only view of the declared products. A matching retained build
+supplies verified output when available. Missing or damaged output triggers a rebuild.
+
 `workbench check --list` and `--json` show the effective scopes. Native gates with declared inputs can reuse successful
 results independently for checks with different input scopes in the same root and environment. Commands still run in
 their configured order. Put outputs needed by other checks in declared setup so fresh checks can recreate them when

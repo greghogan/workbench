@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { dependencyInputHash } from "../../toolchains/dependency-identity.mjs";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { readText } from "../../runtime/files.js";
 
 export type { ManagedSource } from "./managed/managed-source-contract.mjs";
 import { managedDeclaration, type ManagedDeclaration } from "./managed/managed-source-contract.mjs";
@@ -24,7 +23,7 @@ export function managedInputRepository(directory: string): ManagedInputRepositor
   if (!isAbsolute(selected)) throw new Error("Managed check inputs require an absolute package location");
   directory = process.env.WORKBENCH_CHECK_INPUT_ROOT ?? directory;
   const root = realpathSync(selected);
-  const declaration = managedDeclaration(JSON.parse(readText(join(root, "manifest.json"))));
+  const declaration = managedDeclaration(JSON.parse(readFileSync(join(root, "manifest.json"), "utf8")));
   for (const [file, expected] of Object.entries(declaration.source_hashes)) {
     if (!file || isAbsolute(file) || file.split(/[\\/]/).some((part) => !part || part === ".." || part === "."))
       throw new Error("Invalid managed check-input source path");
@@ -104,7 +103,7 @@ export async function verifiedBootstrapSources(
 ): Promise<string[]> {
   const bootstrap = managedBootstrap(repository);
   const { verifyAttestation } = await import("../../toolchains/acquisition/attestation-verification.js");
-  const roots = readText(join(distribution, "scripts/keys/sigstore-trusted-root.jsonl"));
+  const roots = readFileSync(join(distribution, "scripts/keys/sigstore-trusted-root.jsonl"), "utf8");
   const sources = [];
   for (const [path, entry] of Object.entries(bootstrap.package_lock.packages)) {
     if (

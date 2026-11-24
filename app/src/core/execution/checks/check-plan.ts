@@ -254,6 +254,14 @@ export function planChecks(
   }
   if (!cleanup) {
     for (const session of sessions.values()) {
+      const buildNames = new Set(session.checks.flatMap((check) => check.requiresBuild ?? []));
+      const builds = checks.filter((check) => buildNames.has(check.name));
+      for (const build of builds) {
+        const exclusion = ciExclusion(build);
+        if (exclusion || excludedRoles.includes("build"))
+          throw new InvalidInput(`Required build '${build.name}' is unavailable: ${exclusion ?? "build is excluded"}`);
+      }
+      if (builds.length) session.checks = [...builds, ...session.checks.filter((check) => !buildNames.has(check.name))];
       const dependent = session.checks.find((check) => check.role !== "setup" && check.requiresSetup);
       if (!dependent) continue;
       // Resolve prerequisites after grouping so an independent first check cannot hide later requirements.

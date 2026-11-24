@@ -109,7 +109,12 @@ test.skipIf(process.platform === "win32")(
       const make = (target: string) =>
         spawnSync(
           "sh",
-          ["-c", 'make=$(command -v make) && PATH= "$make" --no-print-directory "$1"', "make-test", target],
+          [
+            "-c",
+            'make=$(command -v make) && shell=$(command -v sh) && PATH= "$make" "SHELL=$shell" --no-print-directory "$1"',
+            "make-test",
+            target,
+          ],
           {
             cwd: root,
             env: { ...process.env, WORKBENCH: undefined },

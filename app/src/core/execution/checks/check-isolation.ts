@@ -32,6 +32,8 @@ import { composerArchive } from "../../toolchains/php-manager.js";
 import { phpCoverageInstallation } from "../../toolchains/php-coverage.js";
 import { toolDownloadPath } from "../../toolchains/tool-downloads.js";
 import { artifactProofPath } from "../../toolchains/acquisition/artifact-proofs.js";
+import { required } from "../../runtime/invariants.js";
+import { checkBuildProducts } from "./check-build-products.js";
 
 export interface CheckPathMount {
   source: string;
@@ -65,6 +67,8 @@ export interface CheckIsolationGroup {
   backend: CheckIsolationBackend;
   coverage?: { path: string; digest: string | null };
   setup: { directory: string; command: string[] }[];
+  build?: { name: string; outputs: string[]; key: string; reuse: boolean };
+  requiresBuild?: string[];
 }
 
 const linuxRuntime = [
@@ -388,6 +392,7 @@ export function prepareIsolatedChecks(
   directory: string,
   groups: readonly CheckIsolationGroup[],
   env: NodeJS.ProcessEnv,
+  buildDirectory?: string,
 ) {
   const storage = env.WORKBENCH_STORAGE_ROOT;
   const parent = join(storage && !within(project, storage) ? storage : tmpdir(), "workbench-checks");
@@ -425,6 +430,10 @@ export function prepareIsolatedChecks(
       }
     >();
     const initialized = new Set<CheckIsolationGroup>();
+    const buildOutputs = new Map<string, CheckPathMount[]>();
+    const restoredBuilds = new Set<CheckIsolationGroup>();
+    const productIdentities = new Map<string, string>();
+    const retainBuildOutputs: (() => void)[] = [];
     const distributionBundle = join(project, "bundle");
     const bundledTools = join(scratch.directory, "bundle");
     if (toolRoot === project && existsSync(distributionBundle))
@@ -514,7 +523,10 @@ export function prepareIsolatedChecks(
         ) {
           throw new Error(`Check output overlaps a read-only workspace: ${destination}`);
         }
-        const output = join(scope, "outputs", String(outputs.length));
+        const output =
+          group.backend.kind === "macos" && within(project, destination)
+            ? join(source, relative(project, destination))
+            : join(scope, "outputs", String(outputs.length));
         mkdirSync(output, { recursive: true });
         outputs.push({ source: output, destination });
         return output;
@@ -632,7 +644,48 @@ export function prepareIsolatedChecks(
         tools.push({ source: baseline, destination });
         environment.WORKBENCH_CHECK_BASELINE = destination;
       }
-      for (const name of group.outputs) appendOutput(join(project, name), outputs);
+      const prerequisites = (group.requiresBuild ?? []).flatMap((name) =>
+        required(buildOutputs.get(name), `Missing outputs from prerequisite build '${name}'`),
+      );
+      for (const name of group.outputs) {
+        const path = join(project, name);
+        if (prerequisites.every(({ destination }) => !within(destination, path))) appendOutput(path, outputs);
+      }
+      for (const output of prerequisites) {
+        if (actual.entries.some(([path]) => within(output.destination, join(project, path))))
+          throw new Error(`Prerequisite build output overlaps captured source: ${output.destination}`);
+        mkdirSync(join(source, relative(project, output.destination)), { recursive: true });
+        tools.push({ ...output, link: true });
+      }
+      if (group.build) {
+        const { name, key, reuse } = group.build;
+        const products = group.build.outputs.map((path) => {
+          const destination = join(project, path);
+          const parent = required(
+            outputs.find((output) => within(output.destination, destination)),
+            `Missing declared build output: ${path}`,
+          );
+          const physical = join(parent.source, relative(parent.destination, destination));
+          mkdirSync(physical, { recursive: true });
+          return { source: physical, destination };
+        });
+        buildOutputs.set(name, products);
+        if (buildDirectory && reuse) {
+          const retained = checkBuildProducts(
+            buildDirectory,
+            key,
+            products.map(({ source }) => source),
+          );
+          const digest = retained.restore();
+          if (digest) {
+            restoredBuilds.add(group);
+            productIdentities.set(key, digest);
+          } else
+            retainBuildOutputs.push(() => {
+              productIdentities.set(key, retained.retain());
+            });
+        }
+      }
       const isolation = { project, directory, source, temporary, runtime: [...runtime], outputs, tools, environment };
       const macos = group.backend.kind === "macos" ? macosCheckInvocation(scope, isolation, env) : undefined;
       if (macos) releaseLaunchers.push(macos.release);
@@ -647,6 +700,8 @@ export function prepareIsolatedChecks(
         const options = commands.get(name);
         if (!options) return command;
         const { group, launch, translate } = options;
+        if (restoredBuilds.has(group))
+          return ["/bin/sh", "-c", 'printf "%s\\n" "$1"', "workbench", `Reused verified outputs from ${name}.`];
         const translated = (arguments_: string[]) =>
           arguments_.map((value) => (isAbsolute(value) ? translate(value) : value));
         command = translated(command);
@@ -662,6 +717,8 @@ export function prepareIsolatedChecks(
         }
         return launch(command);
       },
+      retainBuildOutputs,
+      productIdentities,
       release,
     };
   } catch (error) {

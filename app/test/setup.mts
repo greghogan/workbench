@@ -1,11 +1,9 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect } from "vitest";
 import { traceCoverageProducers } from "./fixtures/coverage-producers.mts";
 import { isolateFixtureGit } from "./fixtures/git-environment.mjs";
-
-isolateFixtureGit(process.env);
 
 // Worker environments are case-sensitive, including on Windows; native child processes require a canonical PATH.
 if (process.platform === "win32") {
@@ -133,6 +131,9 @@ for (const name of Object.keys(process.env))
 
 // Tests and their CLI subprocesses must not inspect or alter a developer's tool installations.
 const storage = mkdtempSync(join(tmpdir(), "workbench-test-storage-"));
+const gitConfiguration = join(storage, "gitconfig");
+writeFileSync(gitConfiguration, "[user]\n\tname = Workbench Test\n\temail = workbench-test@example.invalid\n");
+isolateFixtureGit(process.env, gitConfiguration);
 process.env.WORKBENCH_CONFIG_HOME = join(storage, "config");
 process.env.WORKBENCH_DATA_HOME = join(storage, "data");
 process.env.WORKBENCH_CACHE_HOME = join(storage, "cache");

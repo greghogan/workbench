@@ -40,10 +40,17 @@ const forPhase = (session: Session, phase: Phase) =>
 function checkPartitions(session: Session): ConfiguredCheck[][] {
   const partitions = new Map<string, ConfiguredCheck[]>();
   for (const check of session.checks) {
+    const build = check.role === "build" && !!check.inputs?.outputs?.length;
     const key =
       check.role === "setup" || check.role === "secret"
         ? check.role
-        : JSON.stringify([check.inputs?.paths ?? null, check.inputs?.outputs ?? [], requiresWholeProjectCheck(check)]);
+        : JSON.stringify([
+            check.inputs?.paths ?? null,
+            check.inputs?.outputs ?? [],
+            requiresWholeProjectCheck(check),
+            build ? check.name : null,
+            check.requiresBuild ?? [],
+          ]);
     const partition = partitions.get(key);
     if (partition) partition.push(check);
     else partitions.set(key, [check]);
@@ -68,18 +75,22 @@ export function scopedCheckGroups(root: string, plan: CheckPlan, requireIsolatio
   return plan.sessions.flatMap((session, index) => {
     const needed = prerequisites(dependencies, index);
     const setup = forPhase(session, "setup");
+    const requiredBySession = new Set(session.checks.flatMap((check) => check.requiresBuild ?? []));
     return (partitions[index] ?? []).map((checks) => {
       const reusable = checks.every((check) => check.role !== "secret");
-      const local = checks.some((check) => check.role !== "setup" && check.requiresSetup)
-        ? [...setup, ...checks]
-        : checks;
+      const requiredBuilds = new Set(checks.flatMap((check) => check.requiresBuild ?? []));
+      const builds = session.checks.filter((check) => requiredBuilds.has(check.name));
+      const local = [...builds, ...checks];
+      if (local.some((check) => check.role !== "setup" && check.requiresSetup)) local.unshift(...setup);
       const evidence = plan.sessions.flatMap((candidate, position) => {
         const phase = needed.get(position);
         if (candidate === session) return [{ ...session, checks: local }];
         return phase ? [{ ...candidate, checks: forPhase(candidate, phase) }] : [];
       });
       const declared = checkScopes(
-        evidence.flatMap((candidate) => candidate.checks.filter((check) => check.role !== "secret")),
+        evidence.flatMap((candidate) =>
+          candidate.checks.filter((check) => check.role !== "secret" && !requiredBuilds.has(check.name)),
+        ),
         additional,
       );
       const requiredSetup = evidence.flatMap((candidate) =>
@@ -110,6 +121,8 @@ export function scopedCheckGroups(root: string, plan: CheckPlan, requireIsolatio
         prerequisites: needed,
         scope,
         setup: requiredSetup,
+        builds,
+        build: checks.find((check) => requiredBySession.has(check.name)),
         reusable,
         evidence: { ...plan, sessions: evidence, resourceSessions: plan.sessions.length },
       };
@@ -135,7 +148,7 @@ export function checkGroupExecution(
     isolation.backend &&
     !missingModules &&
     group.reusable &&
-    !group.session.checks.some(requiresWholeProjectCheck) &&
+    !group.session.checks.some((check) => check !== group.build && requiresWholeProjectCheck(check)) &&
     group.evidence.sessions.every(
       (session) =>
         session.directory === group.session.directory || session.checks.every((check) => check.role === "setup"),
@@ -166,7 +179,8 @@ export function freshCheckSessions(plan: CheckPlan, groups: readonly Group[], hi
     if (hits[position]) continue;
     const local = required(selected[group.index], "Missing check group selection");
     for (const check of group.session.checks) local.add(check);
-    if (group.session.checks.some((check) => check.role !== "setup" && check.requiresSetup)) {
+    for (const build of group.builds) local.add(build);
+    if ([...group.session.checks, ...group.builds].some((check) => check.role !== "setup" && check.requiresSetup)) {
       const session = required(plan.sessions[group.index], "Missing check session");
       for (const check of forPhase(session, "setup")) local.add(check);
     }

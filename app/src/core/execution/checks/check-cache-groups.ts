@@ -8,6 +8,7 @@ import {
   writeDiagnosticText,
 } from "../../diagnostics/diagnostics.mjs";
 import { required } from "../../runtime/invariants.js";
+import { buildPaths } from "../../artifacts/builds.js";
 import { NativeToolUnavailable } from "../../toolchains/tool-probes.js";
 import { checkGroupExecution, freshCheckSessions, scopedCheckGroups } from "./check-cache-plan.js";
 import { openCheckReceipt } from "./check-cache-store.js";
@@ -15,6 +16,7 @@ import { changedRunInputs, checkFingerprintBatch, inputDigest, type CheckFingerp
 import { checkBackendName, type CheckIsolationBackend } from "./check-isolation.js";
 import type { CheckPlan, CheckSelection } from "./check-plan.js";
 import type { CheckCacheReport, CheckGateRunner, CheckRunResult } from "./check-report.js";
+import { checkBuildProductIdentity } from "./check-build-products.js";
 
 type Groups = NonNullable<ReturnType<typeof scopedCheckGroups>>;
 
@@ -54,17 +56,12 @@ export async function withScopedCheckGroups(
     });
     return;
   }
-  const observations = groups.map((group) => {
-    const { setup } = group;
-    const { scope, backend } = checkGroupExecution(root, group, isolation);
+  const observe = (group: Groups[number], { scope, backend }: ReturnType<typeof checkGroupExecution>) => {
     let inputs: CheckFingerprint | undefined;
-    let entry: ReturnType<typeof openCheckReceipt>;
     if (group.reusable) {
       try {
         inputs = batch.fingerprint(group.evidence, scope);
         if (backend && inputs.scopedSource) inputs.key = inputDigest([inputs.key, backend.identity]);
-        if (!freshOnly)
-          entry = openCheckReceipt(root, options, { ...plan, sessions: [group.session] }, inputs, group.path);
       } catch (error) {
         if (error instanceof NativeToolUnavailable) throw error;
         diagnostic(
@@ -76,12 +73,62 @@ export async function withScopedCheckGroups(
         );
       }
     }
-    return { group, inputs, entry, scope, backend, setup };
-  });
+    return { group, inputs, scope, backend };
+  };
+  const observations = groups.map((group) => observe(group, checkGroupExecution(root, group, isolation)));
+  const hasBuildOutputs = (group: Groups[number]) => group.build !== undefined || group.builds.length > 0;
+  const buildFallback = new Set(
+    observations.flatMap(({ group, backend, inputs }) =>
+      hasBuildOutputs(group) && (!backend || !inputs?.scopedSource) ? [group.index] : [],
+    ),
+  );
+  for (const [index, { group, backend, scope }] of observations.entries())
+    if (hasBuildOutputs(group) && backend && buildFallback.has(group.index)) {
+      observations[index] = observe(group, {
+        backend: undefined,
+        scope: {
+          mode: "whole-project",
+          ...(scope.paths ? { paths: scope.paths } : {}),
+          reason: "Build and consumer need a shared execution scope",
+        },
+      });
+    }
+  const builders = new Map(
+    observations.flatMap((observation) =>
+      observation.group.build ? [[observation.group.build.name, observation] as const] : [],
+    ),
+  );
+  const directories = new Map<number, string>();
+  const savedProducts = new Map<string, string | undefined>();
+  const receiptFor = (
+    { group, inputs, backend }: (typeof observations)[number],
+    executedProducts?: ReadonlyMap<string, string>,
+  ) => {
+    if (!inputs || freshOnly) return undefined;
+    let receiptInputs = inputs;
+    if (backend && group.builds.length) {
+      let directory = directories.get(group.index);
+      if (!directory) {
+        directory = buildPaths(root, group.session.directory, "native", options).directory;
+        directories.set(group.index, directory);
+      }
+      const identities = group.builds.map(({ name }) => {
+        const key = builders.get(name)?.inputs?.key;
+        if (!key) return undefined;
+        if (executedProducts) return executedProducts.get(key);
+        if (!savedProducts.has(key)) savedProducts.set(key, checkBuildProductIdentity(directory, key));
+        return savedProducts.get(key);
+      });
+      if (identities.some((identity) => identity === undefined)) return undefined;
+      receiptInputs = { ...inputs, key: inputDigest([inputs.key, identities]) };
+    }
+    return openCheckReceipt(root, options, { ...plan, sessions: [group.session] }, receiptInputs, group.path);
+  };
+  const entries = observations.map((observation) => receiptFor(observation));
   const fresh = freshCheckSessions(
     plan,
     groups,
-    observations.map(({ entry }) => !!entry?.hit),
+    entries.map((entry) => !!entry?.hit),
   );
   const freshChecks = new Set(fresh.flatMap((session) => session.checks));
   const scopeFor = ({ group, inputs, scope, backend }: (typeof observations)[number]) => ({
@@ -96,8 +143,9 @@ export async function withScopedCheckGroups(
         : scope),
   });
   let reused = 0;
-  for (const observation of observations) {
-    const { group, entry } = observation;
+  for (const [index, observation] of observations.entries()) {
+    const { group } = observation;
+    const entry = entries[index];
     if (!entry?.hit) {
       entry?.invalidate();
       continue;
@@ -135,7 +183,7 @@ export async function withScopedCheckGroups(
     ...(options.cache === false ? { reason: "Fresh run requested" } : {}),
     groups: scopes,
   };
-  const isolated = observations.flatMap(({ group, inputs, backend, setup }) => {
+  const isolated = observations.flatMap(({ group, inputs, backend }) => {
     const checks = group.session.checks.filter((check) => freshChecks.has(check)).map((check) => check.name);
     if (!checks.length || !backend || inputs?.inputScope?.mode !== "scoped" || !inputs.scopedSource) return [];
     const coveragePath =
@@ -152,13 +200,25 @@ export async function withScopedCheckGroups(
           ...(group.session.checks.some((check) => check.role === "coverage" || check.role === "test")
             ? { coverage: { path: coveragePath, digest: inputs.coverageBaselines?.[coveragePath] ?? null } }
             : {}),
-          setup,
+          setup: group.setup,
+          ...(group.builds.length ? { requiresBuild: group.builds.map(({ name }) => name) } : {}),
+          ...(group.build?.inputs?.outputs?.length
+            ? {
+                build: {
+                  name: group.build.name,
+                  outputs: group.build.inputs.outputs,
+                  key: inputs.key,
+                  reuse: options.cache !== false && !freshOnly,
+                },
+              }
+            : {}),
         },
       },
     ];
   });
   const freshPlan = { ...plan, sessions: fresh, resourceSessions: plan.sessions.length, isolated };
-  const report = await run(freshPlan, cache);
+  const executedProducts = new Map<string, string>();
+  const report = await run(freshPlan, cache, executedProducts);
   if (freshOnly && !security) return;
   try {
     const current = checkFingerprintBatch(root, options);
@@ -168,6 +228,12 @@ export async function withScopedCheckGroups(
       if (!inputs) continue;
       const next = current.fingerprint(group.evidence, scope);
       const key = backend && next.scopedSource ? inputDigest([next.key, backend.identity]) : next.key;
+      if (backend && !group.session.checks.some((check) => freshChecks.has(check)))
+        for (const build of group.builds) {
+          const buildKey = builders.get(build.name)?.inputs?.key;
+          if (buildKey && freshChecks.has(build) && savedProducts.get(buildKey) !== executedProducts.get(buildKey))
+            throw new Error(`Prerequisite outputs from '${build.name}' changed while checking; rerun the gate`);
+        }
       if (key === inputs.key) continue;
       const changed = changedRunInputs(inputs, next);
       throw new Error(
@@ -189,7 +255,9 @@ export async function withScopedCheckGroups(
   await nextTurn();
   signal?.throwIfAborted();
   for (const observation of observations) {
-    const { group, entry } = observation;
+    const { group } = observation;
+    if (!group.session.checks.some((check) => freshChecks.has(check))) continue;
+    const entry = receiptFor(observation, executedProducts);
     if (!entry || entry.hit) continue;
     const scope = scopeFor(observation);
     const selected = selectReport(report, group.session);

@@ -25,7 +25,7 @@ test.each([true, false])(
       const packageManager = (
         JSON.parse(readFileSync(join(distribution, "package.json"), "utf8")) as { packageManager: string }
       ).packageManager;
-      writeFileSync(join(root, ".node-version"), readFileSync(join(distribution, ".node-version")));
+      writeFileSync(join(root, ".node-version"), `${process.versions.node}\n`);
       writeFileSync(join(root, "package.json"), JSON.stringify({ packageManager, dependencies: { library: "1.0.0" } }));
       mkdirSync(join(f.base, "config"), { recursive: true });
       writeFileSync(join(f.base, "config/config.toml"), `[cache]\nauto_prune=${String(enabled)}\n`);

@@ -399,6 +399,7 @@ test.skipIf(process.platform === "win32")(
       ...process.env,
       WORKBENCH_PROJECT_ROOT: root,
       WORKBENCH_EPHEMERAL_CHECKOUT: "1",
+      WORKBENCH_MAX_JOBS: "1",
       WORKBENCH_CACHE_HOME: join(storage, "cache"),
       WORKBENCH_STORAGE_ROOT: join(storage, "builds"),
       WORKBENCH_CONFIG_HOME: join(storage, "config"),

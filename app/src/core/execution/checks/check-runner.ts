@@ -55,6 +55,7 @@ export async function runCheckGroups(
   owner: ProcessLock,
   recordReport?: (report: CheckRunResult) => void,
   cache?: CheckCacheReport,
+  buildProducts?: Map<string, string>,
 ): Promise<CheckRunResult> {
   const total = plan.sessions.reduce((sum, session) => sum + session.checks.length, 0);
   const progress = new CheckProgress(total);
@@ -228,6 +229,7 @@ export async function runCheckGroups(
         selection.isolationGroups = plan.isolated
           .filter(({ directory }) => directory === session.directory)
           .map(({ group }) => group);
+      const productKeys = new Set(selection.isolationGroups?.flatMap(({ build }) => (build ? [build.key] : [])));
       if (machineJobserver) selection.machineJobserver = machineJobserver;
       delete selection.path;
       delete selection.project;
@@ -264,6 +266,10 @@ export async function runCheckGroups(
         workers.add(child);
         child.on("message", (value: unknown) => {
           const message = readCheckMessage(value);
+          if (message?.type === CheckMessage.BuildProducts) {
+            for (const [key, digest] of message.products) if (productKeys.has(key)) buildProducts?.set(key, digest);
+            return;
+          }
           if (message && typeof message === "object" && "type" in message && message.type === CheckMessage.Failure) {
             workerFailure = restoreDiagnosticError("error" in message ? message.error : undefined);
             return;

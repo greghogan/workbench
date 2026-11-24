@@ -297,6 +297,7 @@ const commandFields = {
   extended: boolean,
   online: boolean,
   requires_setup: boolean,
+  requires_build: array(text),
   environment: text,
   warn_seconds: positive,
   ci: table({

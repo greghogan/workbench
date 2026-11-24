@@ -175,9 +175,17 @@ verification. The C and C++ documentation checks build the debug binary they exe
 build directory. Checks keep matching application dependencies in place and retain staged outputs through the last
 worker.
 
-Workbench refreshes its generated helpers before capturing check inputs. The setup step verifies the prepared dependency
-graph without regenerating files while other checks use them.
+Source acquisition installs into the configured dependency store from the start. Workbench refreshes its generated
+helpers before capturing check inputs. The setup step verifies the prepared graph without regenerating files while other
+checks use them. Cold package-manager setup preserves machine-readable query output.
 
-Native CI acquires verified package-manager bootstraps and locked dependencies before offline execution. Development
-images carry those inputs alongside the toolchain. A fresh Linux x64 image built and ran the smoke checks with only the
-image's prepared inputs. Local online advisories run independently of the pre-push image availability check.
+Checks can name prerequisite builds. Workbench gives isolated consumers read-only access to the declared products in the
+same execution root. Reuse verifies the saved products and rebuilds when they are missing or damaged. Check results
+record the product identity verified in that run.
+
+Native CI acquires verified package-manager bootstraps and locked dependencies before offline execution. A fresh
+checkout restores its locked dependency graph from the prepared store. Development images carry those inputs alongside
+the toolchain. A fresh Linux x64 image built and ran the smoke checks with only the image's prepared inputs. Managed
+check workers receive the selected local sources, and the managed loopback registry serves npm metadata and verified
+archives. CI fixtures use their own Git identity and check the selected runtime. Local online advisories run
+independently of the pre-push image availability check.

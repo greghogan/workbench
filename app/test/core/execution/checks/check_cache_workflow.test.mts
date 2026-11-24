@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { parse, stringify } from "smol-toml";
@@ -8,6 +8,7 @@ import { synchronize } from "../../../../src/core/records/sync.ts";
 import { nativeCheckBackend } from "../../../../src/core/execution/checks/check-isolation.ts";
 import type { CheckRunResult } from "../../../../src/core/execution/checks/check-report.ts";
 import { required } from "../../../../src/core/runtime/invariants.ts";
+import { buildPaths } from "../../../../src/core/artifacts/builds.ts";
 import { consumer, distribution, git } from "../../../fixtures/adoption.mjs";
 
 const temporary: string[] = [];
@@ -124,6 +125,101 @@ test("a full gate reuses independent checks and rebuilds setup needed by a fresh
   expect(hook.status, hook.stdout + hook.stderr).toBe(0);
   if (scopedExecution) expect(hook.stderr).toContain("Reusing 2 successful checks; 3 run fresh");
 });
+
+test.runIf(scopedExecution)(
+  "a fresh test receives verified read-only build products and rebuilds damaged products",
+  async () => {
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    vi.stubEnv("WORKBENCH_STORAGE_EXTERNAL", "true");
+    const root = await consumer();
+    temporary.push(root);
+    const write = (name: string, value: string) => {
+      writeFileSync(join(root, name), value);
+    };
+    const config = parse(readFileSync(join(root, "workbench/config.toml"), "utf8"));
+    delete config.check;
+    write("workbench/config.toml", stringify(config));
+    write(".gitignore", "product/\n");
+    write(
+      "build.cjs",
+      `const fs = require("node:fs");
+fs.copyFileSync("source.txt", "product/program");
+console.log("BUILT PROGRAM");
+`,
+    );
+    write(
+      "test.cjs",
+      `const fs = require("node:fs");
+const assert = require("node:assert/strict");
+assert.equal(fs.readFileSync("product/program", "utf8"), fs.readFileSync("expected.txt", "utf8"));
+assert.throws(() => fs.writeFileSync("product/program", "mutated"));
+assert.throws(() => fs.readFileSync("source.txt"));
+`,
+    );
+    write("source.txt", "first\n");
+    write("expected.txt", "first\n");
+    write(
+      "workbench/automation.toml",
+      stringify({
+        input_groups: {
+          compilation: { paths: ["build.cjs", "source.txt"], outputs: ["product"] },
+          verification: { paths: ["test.cjs", "expected.txt"] },
+        },
+        check: [
+          {
+            name: "Verify product",
+            role: "test",
+            requires_build: ["Build product"],
+            input_groups: ["verification"],
+            command: [process.execPath, "test.cjs"],
+          },
+          {
+            name: "Build product",
+            role: "build",
+            stages: [],
+            input_groups: ["compilation"],
+            command: [process.execPath, "build.cjs"],
+          },
+        ],
+      }),
+    );
+    synchronize(root);
+    git(root, "add", ".");
+    git(root, "commit", "-m", "Synthetic build products");
+    const env = {
+      ...process.env,
+      PATH: [dirname(process.execPath), join(distribution, "bin"), process.env.PATH].join(delimiter),
+      CI: undefined,
+      GITHUB_ACTIONS: undefined,
+      GITLAB_CI: undefined,
+    };
+    function gate() {
+      const result = spawnSync(
+        process.execPath,
+        [join(distribution, "bin/workbench.mjs"), "check", "--stage", "commit", "--verbose"],
+        {
+          cwd: root,
+          encoding: "utf8",
+          timeout: 20000,
+          env,
+        },
+      );
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      return result.stdout + result.stderr;
+    }
+    expect(gate()).toContain("BUILT PROGRAM");
+    write("test.cjs", readFileSync(join(root, "test.cjs"), "utf8") + "// Fresh verification.\n");
+    expect(gate()).toContain("Reused verified outputs from Build product.");
+    const directory = join(buildPaths(root, root, "native").directory, ".workbench-check-products");
+    const [entry] = readdirSync(directory);
+    writeFileSync(join(directory, required(entry, "retained build"), "0/program"), "damaged\n");
+    write("test.cjs", readFileSync(join(root, "test.cjs"), "utf8") + "// Verify repaired output.\n");
+    expect(gate()).toContain("BUILT PROGRAM");
+    write("source.txt", "second\n");
+    write("expected.txt", "second\n");
+    expect(gate()).toContain("BUILT PROGRAM");
+  },
+);
 
 test("cached CLI checks validate changed records and scan sidecars without rerunning behavioral tests", async () => {
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);

@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { packageManagerInstallationPlan } from "../../../src/core/artifacts/package-manager.ts";
 import { retainPnpmMetadata } from "../../../../scripts/pnpm-metadata.mjs";
@@ -24,7 +24,7 @@ afterEach(() => {
   for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("metadata queries cross the real Workbench CLI argument boundary without consuming manager flags", async () => {
+test("a cold package-manager bootstrap leaves metadata query stdout as JSON", async () => {
   const { root } = await fixture();
   mkdirSync(join(root, "languages"));
   writeFileSync(join(root, "languages/index.toml"), "");
@@ -34,20 +34,35 @@ test("metadata queries cross the real Workbench CLI argument boundary without co
   writeFileSync(join(root, "package.json"), readFileSync(join(repository, "package.json")));
   writeFileSync(join(root, "pnpm-lock.yaml"), 'packages:\n  "transitive@1.2.3": {}\n');
   vi.stubEnv("WORKBENCH_CACHE_HOME", join(root, "private-cache"));
+  vi.stubEnv("WORKBENCH_CHECK_SCOPED", undefined);
   const plan = packageManagerInstallationPlan(root, root);
-  mkdirSync(join(plan.directory, "node_modules/pnpm/bin"), { recursive: true });
-  mkdirSync(join(plan.directory, "bin"));
-  writeFileSync(join(plan.directory, ".workbench-bootstrap"), plan.identity);
-  for (const launcher of ["pnpm", "pnpm.cmd"]) writeFileSync(join(plan.directory, "bin", launcher), "fixture");
+  const commands = join(root, "commands");
+  mkdirSync(commands);
+  vi.stubEnv("PATH", [commands, dirname(process.execPath), process.env.PATH].join(delimiter));
+  writeFileSync(join(commands, "npm"), '#!/bin/sh\nexec node "$(dirname "$0")/npm-fixture.mjs" "$@"\n', {
+    mode: 0o755,
+  });
   writeFileSync(
-    join(plan.directory, "node_modules/pnpm/bin/pnpm.mjs"),
+    join(commands, "npm-fixture.mjs"),
     `
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+const operation = process.argv[2];
+appendFileSync(${JSON.stringify(join(root, "bootstrap.log"))}, operation + '\\n');
+console.log('Installing and authenticating the pinned package manager');
+if (operation === 'ci') {
+  mkdirSync('node_modules/pnpm/bin', { recursive: true });
+  writeFileSync('node_modules/pnpm/bin/pnpm.mjs', ${JSON.stringify(`
 import { writeFileSync, readFileSync } from 'node:fs';
+if (process.argv[2] === '--version') { console.log(${JSON.stringify(plan.version)}); process.exit(0); }
 writeFileSync(${JSON.stringify(join(root, "manager-args.json"))}, JSON.stringify({args: process.argv.slice(2), dependencies: JSON.parse(readFileSync('package.json', 'utf8')).dependencies}));
 console.log('{}'); process.exitCode = 1;
+`)});
+}
 `,
   );
   await retainPnpmMetadata(root, join(repository, "bundle/main.cjs"), ["."]);
+  expect(readFileSync(join(root, "bootstrap.log"), "utf8")).toBe("ci\naudit\n");
+  expect(readFileSync(join(plan.directory, ".workbench-bootstrap"), "utf8")).toBe(plan.identity);
   expect(JSON.parse(readFileSync(join(root, "manager-args.json"), "utf8"))).toEqual({
     args: ["outdated", "--long", "--json"],
     dependencies: { transitive: "1.2.3" },

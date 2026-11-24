@@ -19,8 +19,10 @@ import * as assets from "../../../src/core/toolchains/native/native-assets.ts";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
 const compatibilityNode = required(
-  readConfig(distribution).toolchains?.profiles?.find(({ name }) => name === "node-22")?.tools?.node,
-  "Missing the distribution's Node 22 toolchain pin",
+  readConfig(distribution).toolchains?.profiles?.find(
+    ({ name, tools }) => ["node-22", "node-24"].includes(name) && tools?.node !== process.versions.node,
+  )?.tools?.node,
+  "Missing an alternate Node.js toolchain pin",
 );
 const temporary: string[] = [];
 afterEach(() => {
@@ -56,7 +58,7 @@ async function fixture() {
     join(root, "workbench/automation.toml"),
     stringify({ check_suite: [{ language: "typescript", path: "." }] }),
   );
-  writeFileSync(join(root, ".node-version"), readFileSync(join(distribution, ".node-version")));
+  writeFileSync(join(root, ".node-version"), `${process.versions.node}\n`);
   writeFileSync(
     join(root, "package.json"),
     JSON.stringify({ name: "different-widget", type: "module", engines: { node: `>=${compatibilityNode}` } }),
@@ -146,7 +148,7 @@ test("a complete local definition owns ordinary, compatibility, and release exec
     ).command.at(-1),
   ).toBe(compatibilityNode);
   const first = buildPaths(root, root, "native", {}, true, { name: "node", version: compatibilityNode });
-  const second = buildPaths(root, root, "native", {}, true, { name: "node", version: "24.22.1" });
+  const second = buildPaths(root, root, "native", {}, true, { name: "node", version: process.versions.node });
   expect(first.directory).not.toBe(second.directory);
   expect(first.dependencies).not.toBe(second.dependencies);
 });

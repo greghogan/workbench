@@ -337,7 +337,7 @@ test("read-only defaults and invalid write requests are explicit", () =>
     const formatted = run("format", path);
     assert.notEqual(formatted, original);
     assert.equal(readFileSync(path, "utf8"), original);
-    assert.match(fail("format", path, "--check"), /formatting differs/);
+    assert.match(fail("format", path, "--check"), /formatting\s+differs/);
     assert.match(fail("format", path, "--write", "--check"), /cannot be used/);
     assert.equal(readFileSync(path, "utf8"), original);
     run("format", path, "--write");

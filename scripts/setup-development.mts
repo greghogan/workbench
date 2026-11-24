@@ -100,6 +100,8 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
   };
   let temporary: string | undefined;
   let initialLocalStore = false;
+  const configuredVirtualStore = process.env.PNPM_CONFIG_VIRTUAL_STORE_DIR;
+  const localVirtualStore = join(root, "node_modules/.pnpm");
   try {
     if (provider && !existsSync(join(root, "node_modules"))) {
       const metadata = (directory: string) =>
@@ -167,25 +169,51 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       throw new Error(
         "The linked dependency provider no longer matches its source pins; repair the provider before running source setup",
       );
-    if (
-      !lifecycle &&
-      !values["build-only"] &&
-      !(values["reuse-prepared"] && prepared) &&
-      existsSync(join(root, "bundle/main.cjs"))
-    ) {
-      await run(process.execPath, [
-        join(root, "bin/workbench.mjs"),
-        "package-manager-exec",
-        "--",
-        "install",
-        "--frozen-lockfile",
-        "--ignore-scripts",
-      ]);
+    const offline = process.env.WORKBENCH_OFFLINE === "1";
+    const distribution = resolve(process.env.WORKBENCH_DISTRIBUTION_ROOT ?? root);
+    const bundledInstaller = !lifecycle && !values["build-only"] && existsSync(join(distribution, "bundle/main.cjs"));
+    const managed =
+      offline &&
+      !prepared &&
+      bundledInstaller &&
+      (await import("../app/src/core/execution/environments/managed-inputs.ts")).managedInputRepository(root)
+        ?.declaration.registry;
+    const cachedStore = process.env.WORKBENCH_CACHE_HOME && join(process.env.WORKBENCH_CACHE_HOME, "downloads/pnpm");
+    // Recreate a fresh checkout's links from the locked package store transferred by preparation.
+    const nativeStore =
+      offline &&
+      !prepared &&
+      bundledInstaller &&
+      !managed &&
+      values["reuse-prepared"] &&
+      cachedStore &&
+      existsSync(cachedStore)
+        ? cachedStore
+        : undefined;
+    if (offline && !prepared && !managed && !nativeStore)
+      throw new Error(
+        "Source dependencies are not prepared; run source setup online or supply matching prepared dependencies",
+      );
+    if ((!offline || managed || nativeStore) && bundledInstaller && !(values["reuse-prepared"] && prepared)) {
+      await run(
+        process.execPath,
+        [
+          join(distribution, "bin/workbench.mjs"),
+          "package-manager-exec",
+          "--",
+          "install",
+          "--frozen-lockfile",
+          "--ignore-scripts",
+          ...(nativeStore ? ["--offline", "--store-dir", nativeStore] : []),
+        ],
+        root,
+        {
+          ...environment,
+          WORKBENCH_DISTRIBUTION_ROOT: distribution,
+          ...(nativeStore ? { WORKBENCH_PREPARED: "1" } : {}),
+        },
+      );
     } else if (!prepared) {
-      if (process.env.WORKBENCH_OFFLINE === "1")
-        throw new Error(
-          "Source dependencies are not prepared; run source setup online or supply matching prepared dependencies",
-        );
       const npm = npmCommand();
       const manager = join(root, "scripts/package-manager");
       const manifest = record(JSON.parse(readFileSync(join(root, "package.json"), "utf8")), "Invalid package metadata");
@@ -228,7 +256,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         throw new Error(
           "Preserving a node_modules link without pnpm metadata; prepare matching dependencies before source setup",
         );
-      initialLocalStore = !existsSync(join(root, "node_modules/.pnpm"));
+      initialLocalStore = !configuredVirtualStore && !existsSync(localVirtualStore);
       await run(process.execPath, [
         join(manager, "node_modules/pnpm/bin/pnpm.mjs"),
         "install",
@@ -238,7 +266,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         "--store-dir",
         process.env.PNPM_CONFIG_STORE_DIR ?? join(temporary, "store"),
         "--virtual-store-dir",
-        join(root, "node_modules/.pnpm"),
+        configuredVirtualStore ?? localVirtualStore,
       ]);
     }
     if (!prepared && !preparedDependenciesMatch(root))
@@ -255,7 +283,7 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       verifyRuntimeDependencies({ root, artifacts: collectToolingArtifacts(root), ...bundles });
       publishBundles(root, bundles);
     }
-    if (temporary && !values["build-only"] && !lifecycle) {
+    if (temporary && !configuredVirtualStore && !values["build-only"] && !lifecycle) {
       await run(process.execPath, [
         join(root, "bin/workbench.mjs"),
         "package-manager-exec",
@@ -268,15 +296,14 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       const modules = parse(readFileSync(join(root, "node_modules/.modules.yaml"), "utf8")) as {
         virtualStoreDir?: string;
       };
-      const local = join(root, "node_modules/.pnpm");
       if (
         initialLocalStore &&
         modules.virtualStoreDir &&
-        resolve(realpathSync.native(join(root, "node_modules")), modules.virtualStoreDir) !== local &&
-        existsSync(local) &&
-        !lstatSync(local).isSymbolicLink()
+        resolve(realpathSync.native(join(root, "node_modules")), modules.virtualStoreDir) !== localVirtualStore &&
+        existsSync(localVirtualStore) &&
+        !lstatSync(localVirtualStore).isSymbolicLink()
       )
-        rmSync(local, { recursive: true });
+        rmSync(localVirtualStore, { recursive: true });
     }
   } finally {
     cancellation.close();

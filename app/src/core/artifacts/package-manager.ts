@@ -99,7 +99,11 @@ async function packageManagerInstallation(directory: string, distribution: strin
       },
     };
   };
-  if (process.env.WORKBENCH_CHECK_SCOPED === "1") return installed();
+  if (
+    process.env.WORKBENCH_CHECK_SCOPED === "1" ||
+    (!managed && process.env.WORKBENCH_OFFLINE === "1" && process.env.WORKBENCH_PREPARED === "1")
+  )
+    return installed();
   const declaredSources =
     managed && !existsSync(destination) ? await verifiedBootstrapSources(managed, distribution) : undefined;
   return withCacheLockSync(destination, () => {
@@ -111,7 +115,9 @@ async function packageManagerInstallation(directory: string, distribution: strin
         writeFileSync(join(staging, "package.json"), manifest);
         writeFileSync(join(staging, "package-lock.json"), lockBytes);
         const cache = process.env.npm_config_cache ?? join(userDirectory("cache"), "downloads", "npm");
-        if (declaredSources) execute("npm", ["cache", "add", ...declaredSources, "--offline", "--cache", cache]);
+        // Installation diagnostics must leave stdout to the caller's package-manager command.
+        if (declaredSources)
+          execute("npm", ["cache", "add", ...declaredSources, "--offline", "--cache", cache], { stdoutToStderr: true });
         execute(
           "npm",
           [
@@ -122,9 +128,9 @@ async function packageManagerInstallation(directory: string, distribution: strin
             "--no-fund",
             ...(managed ? ["--offline", "--cache", cache] : []),
           ],
-          { cwd: staging },
+          { cwd: staging, stdoutToStderr: true },
         );
-        if (!managed) execute("npm", ["audit", "signatures"], { cwd: staging });
+        if (!managed) execute("npm", ["audit", "signatures"], { cwd: staging, stdoutToStderr: true });
         const executable = ownedPath(staging, `node_modules/${name}/${binary}`);
         // Expose this same locked manager to nested package scripts, without depending on a global shim.
         const launchers = join(staging, "bin");

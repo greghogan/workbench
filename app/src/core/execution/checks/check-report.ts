@@ -18,6 +18,7 @@ export interface CheckCacheReport {
 export type CheckGateRunner = (
   plan: import("./check-plan.js").CheckPlan,
   cache: CheckCacheReport,
+  buildProducts?: Map<string, string>,
 ) => Promise<CheckRunResult>;
 
 export interface CheckResult {

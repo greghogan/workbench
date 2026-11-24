@@ -50,6 +50,8 @@ jobs:
           artifact: ${{ needs.candidate.outputs.artifact }}
       - run: node bin/workbench.mjs project add .
       - run: node bin/workbench.mjs tools install --path .
+      - name: Prepare source dependencies
+        run: node scripts/setup-development.mjs --reuse-prepared
       - name: Explore inputs, verify test sensitivity, rebuild independently, and profile read-only workflows
         run: node bin/workbench.mjs check --path . --role fuzz --role mutation --role reproducibility --role profile --no-cache --plain --report "$RUNNER_TEMP/engineering-checks.json"
       - name: Locate retained evidence

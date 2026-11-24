@@ -29,6 +29,7 @@ export interface ConfiguredCheck {
   extended: boolean;
   online: boolean;
   requiresSetup: boolean;
+  requiresBuild?: string[];
   coverage: ReturnType<typeof checkPolicy>["coverage"];
   ciTargets?: import("./check-targets.js").CheckTargets;
   source?: string;
@@ -98,6 +99,7 @@ function configuredChecks(root: string): ConfiguredCheck[] {
           "extended",
           "online",
           "requires_setup",
+          "requires_build",
           "environment",
           "warn_seconds",
           "coverage",
@@ -141,6 +143,16 @@ function configuredChecks(root: string): ConfiguredCheck[] {
     if (selectedEnvironment === "nix-docker" && !dockerImage)
       throw new Error(`check '${entry.name}' needs checks.nix_docker_image`);
     const inputs = inputGroups(entry.input_groups, `check '${entry.name}'`);
+    const requiresBuild = entry.requires_build;
+    if (
+      requiresBuild !== undefined &&
+      (!Array.isArray(requiresBuild) ||
+        !requiresBuild.length ||
+        requiresBuild.some((name) => typeof name !== "string" || !name.trim()) ||
+        new Set(requiresBuild).size !== requiresBuild.length ||
+        ["setup", "acquire", "build", "clean", "distclean"].includes(role))
+    )
+      throw new Error(`check '${entry.name}': requires_build must name distinct prerequisite build checks`);
     return {
       ...policy,
       name: entry.name,
@@ -154,8 +166,31 @@ function configuredChecks(root: string): ConfiguredCheck[] {
       dockerImage,
       source: sources.get(entry.name) ?? `project: ${projectSource}`,
       ...(inputs === undefined ? {} : { inputs }),
+      ...(requiresBuild === undefined ? {} : { requiresBuild }),
     };
   });
+  const byName = new Map(checks.map((check) => [check.name, check]));
+  for (const check of checks) {
+    const outputs: string[] = [];
+    for (const name of check.requiresBuild ?? []) {
+      const prerequisite = byName.get(name);
+      if (
+        prerequisite?.role !== "build" ||
+        prerequisite.directory !== check.directory ||
+        prerequisite.environment !== check.environment ||
+        prerequisite.online ||
+        !prerequisite.inputs?.outputs?.length
+      )
+        throw new Error(
+          `check '${check.name}': '${name}' must be a build in the same root and environment with declared outputs`,
+        );
+      for (const path of prerequisite.inputs.outputs) {
+        if (outputs.some((other) => path === other || path.startsWith(other + "/") || other.startsWith(path + "/")))
+          throw new Error(`check '${check.name}': prerequisite build outputs overlap at '${path}'`);
+        outputs.push(path);
+      }
+    }
+  }
   readCheckOrder(root, checks);
   return checks;
 }

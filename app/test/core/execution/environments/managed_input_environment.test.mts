@@ -76,10 +76,14 @@ test("managed environments select public local-source interfaces and a writable 
     ["maven/org/a/1/a-1.jar", "jar"],
   ]);
   const maven = join(fixture(), "maven");
+  vi.stubEnv("WORKBENCH_CHECK_INPUTS", undefined);
+  vi.stubEnv("WORKBENCH_PROJECT_ROOT", root);
+  vi.stubEnv("WORKBENCH_CI_MANAGED_INPUTS", JSON.stringify({ ".": store }));
   vi.stubEnv("WORKBENCH_MAVEN_REPOSITORY", maven);
   vi.stubEnv("MAVEN_ARGS", "--batch-mode");
   const env = await managedInputEnvironment(root);
   expect(env).toMatchObject({
+    WORKBENCH_CHECK_INPUTS: realpathSync(store),
     WORKBENCH_CHECK_INPUT_ROOT: root,
     PNPM_CONFIG_OFFLINE: "true",
     npm_config_offline: "true",

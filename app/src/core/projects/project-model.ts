@@ -35,6 +35,7 @@ export interface CheckDefinition {
   extended?: boolean;
   online?: boolean;
   requires_setup?: boolean;
+  requires_build?: string[];
   environment?: string;
   warn_seconds?: number;
   ci?: TargetDefinition;
