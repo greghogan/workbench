@@ -5,7 +5,7 @@ COPY --from=node-bootstrap /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-
 RUN printf 'Acquire::Retries "3";\nAPT::Update::Error-Mode "any";\n' > /etc/apt/apt.conf.d/80workbench-retries \
     && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt update \
     && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt upgrade --no-install-recommends -y \
-    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates curl git gnupg python3 gcc g++ make musl-tools \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates curl git gnupg python3 gcc g++ make musl-tools bubblewrap \
        zip unzip xz-utils zstd pkg-config binutils libzstd1 libedit2 libncurses6 zlib1g liblzma5 libssl-dev libyaml-dev libffi-dev libxml2-dev libonig-dev zlib1g-dev libcurl4-openssl-dev autoconf \
        libglib2.0-0t64 libnspr4 libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libdbus-1-3 \
        libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 libexpat1 libxcb1 libxkbcommon0 libudev1 libasound2t64 libatspi2.0-0t64 fonts-liberation \
@@ -26,8 +26,8 @@ WORKDIR /tmp/preparation
 COPY . .
 ARG TARGETARCH
 RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
-    --mount=type=cache,id=workbench-native-${TARGETARCH},target=/opt/workbench,sharing=locked \
-    node scripts/prepare-development.mjs native --tools-only \
+    --mount=type=cache,id=workbench-native-v2-${TARGETARCH},target=/opt/workbench,sharing=locked \
+    node scripts/prepare-image-tools.mjs \
     && node scripts/split-prepared-inputs.mjs --tools-only /opt/workbench /prepared-tools
 
 FROM base AS toolchain
@@ -39,7 +39,7 @@ ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
 
 FROM acquisition AS preparation
 RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
-    --mount=type=cache,id=workbench-native-${TARGETARCH},target=/opt/workbench,sharing=locked \
+    --mount=type=cache,id=workbench-native-v2-${TARGETARCH},target=/opt/workbench,sharing=locked \
     cp -a /prepared-tools/. /opt/workbench/ \
     && node scripts/prepare-development.mjs native --dependencies-only \
     && node scripts/split-prepared-inputs.mjs /opt/workbench /retained-tools /prepared-dependencies

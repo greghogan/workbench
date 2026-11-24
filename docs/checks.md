@@ -16,6 +16,16 @@ advisories, authentication errors, unavailable services, or a connection lost du
 Use `workbench pre-commit` or `make pre-commit` for the commit-stage gate alone. Use `workbench pre-push` or
 `make pre-push` for required online checks without repeating offline tests. Pre-push never skips for lack of
 connectivity. Both gates validate project records. Online results always run fresh and include required setup.
+Pre-push also verifies published CI images.
+
+Run `workbench prepare` to acquire locked dependencies. Use `--staged` to select the Git index when the next commit has
+different inputs from the working tree. Preparation runs on a private checkout of the selected Git snapshot.
+Use the same project, path, environment, and toolchain selectors for preparation and checks.
+
+Linux runs ordinary checks and builds with external networking blocked. A private network namespace preserves
+loopback for tests that start their own servers. Linux containers that already have only loopback use that network.
+The combined gate runs live checks separately. macOS permits networking because App Sandbox's TCP permissions also
+cover loopback. Windows runs with its regular network access and whole-project inputs.
 
 `workbench check --list` displays separate **Pre-commit checks** and **Online pre-push checks** sections without
 probing the network. Its `--json` output contains `preCommit` and `prePush` plans. `pre-commit --list` and
@@ -419,12 +429,27 @@ including additions, removals, and renames. A named file or an entry in `checks.
 Use `input_groups` on an individual `[[check]]`, or set an override in `check_inputs` on a suite, keyed by the
 check's name in its language automation. Groups may depend on other groups. Workbench includes project configuration
 and `checks.inputs` in every scoped gate. Include any shared fixtures, scripts, and other files the commands read.
+Use `outputs` for generated checkout-relative directories a check must write. Workbench gives each scoped run empty,
+private copies of those directories and rejects overlap with captured files.
 
 `workbench check --list` and `--json` show the effective scopes. Native gates with declared inputs can reuse successful
 results independently for checks with different input scopes in the same root and environment. Commands still run in
 their configured order. Put outputs needed by other checks in declared setup so fresh checks can recreate them when
-their neighbors are reused. A group with an incomplete or unreliable scope falls back to whole-project inputs or runs
-fresh.
+their neighbors are reused. A fresh scoped check and its subprocesses see the declared source read-only. They have
+private build and temporary directories, and coverage commands can write a separate report. When native isolation or
+the declared inputs cannot be verified, Workbench uses whole-project inputs or runs fresh.
+
+Scoped setup uses the prepared package stores for its selected toolchain. Tools receive private writable installation
+directories. Package stores that require writable metadata get a private copy-on-write view or copy. Run
+`workbench prepare` for the affected root when locked packages are missing.
+
+When checking Workbench itself, its generated helpers and launcher are refreshed before the gate captures its inputs.
+The gate rebuilds those files using prepared dependencies and then verifies that the selected dependency graph remains
+available to the checks.
+
+Linux isolation requires Bubblewrap (`bwrap`) with working user namespaces. macOS uses a signed App Sandbox launcher.
+On Windows, AppContainer honors existing access grants to app packages, so a file outside the declared scope can still
+be readable. Windows uses whole-project verification with the runner's network access.
 
 The execution report's `cache` field shows which checks ran fresh or reused results, the input scope, and any fallback.
 Fresh security checks can read the whole project. A source change during those scans prevents reuse from satisfying the

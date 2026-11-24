@@ -122,6 +122,7 @@ __pycache__/
 !/app/src/core/toolchains/pnpm-lock.mjs
 !/scripts/pnpm-metadata.mjs
 !/scripts/prepare-development.mjs
+!/scripts/prepare-image-tools.mjs
 !/scripts/prepare-guix-profiles.mjs
 !/scripts/prepare-host-managed-development.mjs
 !/scripts/prepare-managed-development.mjs

@@ -18,7 +18,7 @@ export function linkDependencies(source: string, destination: string, packages?:
   const names =
     packages ??
     readdirSync(dependencies).flatMap((name) =>
-      name === ".pnpm"
+      name.startsWith(".") && name !== ".bin" && name !== ".modules.yaml"
         ? []
         : name.startsWith("@")
           ? readdirSync(join(dependencies, name)).map((entry) => `${name}/${entry}`)

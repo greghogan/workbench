@@ -9,9 +9,10 @@ import {
 } from "../../diagnostics/diagnostics.mjs";
 import { required } from "../../runtime/invariants.js";
 import { NativeToolUnavailable } from "../../toolchains/tool-probes.js";
-import { freshCheckSessions, scopedCheckGroups } from "./check-cache-plan.js";
+import { checkGroupExecution, freshCheckSessions, scopedCheckGroups } from "./check-cache-plan.js";
 import { openCheckReceipt } from "./check-cache-store.js";
-import { checkFingerprintBatch, type CheckFingerprint } from "./check-inputs.js";
+import { changedRunInputs, checkFingerprintBatch, inputDigest, type CheckFingerprint } from "./check-inputs.js";
+import { checkBackendName, type CheckIsolationBackend } from "./check-isolation.js";
 import type { CheckPlan, CheckSelection } from "./check-plan.js";
 import type { CheckCacheReport, CheckGateRunner, CheckRunResult } from "./check-report.js";
 
@@ -36,6 +37,8 @@ export async function withScopedCheckGroups(
   run: CheckGateRunner,
   signal?: AbortSignal,
   recordReport?: (report: CheckRunResult) => void,
+  isolation?: { backend: CheckIsolationBackend | undefined },
+  freshOnly = false,
 ): Promise<void> {
   const batch = checkFingerprintBatch(root, options);
   const security = plan.sessions.some((session) => session.checks.some((check) => check.role === "secret"));
@@ -52,12 +55,16 @@ export async function withScopedCheckGroups(
     return;
   }
   const observations = groups.map((group) => {
+    const { setup } = group;
+    const { scope, backend } = checkGroupExecution(root, group, isolation);
     let inputs: CheckFingerprint | undefined;
     let entry: ReturnType<typeof openCheckReceipt>;
     if (group.reusable) {
       try {
-        inputs = batch.fingerprint(group.evidence, group.scope);
-        entry = openCheckReceipt(root, options, { ...plan, sessions: [group.session] }, inputs, group.path);
+        inputs = batch.fingerprint(group.evidence, scope);
+        if (backend && inputs.scopedSource) inputs.key = inputDigest([inputs.key, backend.identity]);
+        if (!freshOnly)
+          entry = openCheckReceipt(root, options, { ...plan, sessions: [group.session] }, inputs, group.path);
       } catch (error) {
         if (error instanceof NativeToolUnavailable) throw error;
         diagnostic(
@@ -69,7 +76,7 @@ export async function withScopedCheckGroups(
         );
       }
     }
-    return { group, inputs, entry };
+    return { group, inputs, entry, scope, backend, setup };
   });
   const fresh = freshCheckSessions(
     plan,
@@ -77,13 +84,16 @@ export async function withScopedCheckGroups(
     observations.map(({ entry }) => !!entry?.hit),
   );
   const freshChecks = new Set(fresh.flatMap((session) => session.checks));
-  const scopeFor = ({ group, inputs }: (typeof observations)[number]) => ({
+  const scopeFor = ({ group, inputs, scope, backend }: (typeof observations)[number]) => ({
     path: group.path,
     environment: group.session.environment,
     checks: group.session.checks.map((check) => check.name),
+    ...(backend && inputs?.scopedSource ? { backend: checkBackendName(backend) } : {}),
     inputScope:
       inputs?.inputScope ??
-      (group.reusable ? { mode: "whole-project" as const, reason: "Group inputs could not be verified" } : group.scope),
+      (group.reusable && scope.mode === "scoped"
+        ? { mode: "whole-project" as const, reason: "Group inputs could not be verified" }
+        : scope),
   });
   let reused = 0;
   for (const observation of observations) {
@@ -125,17 +135,45 @@ export async function withScopedCheckGroups(
     ...(options.cache === false ? { reason: "Fresh run requested" } : {}),
     groups: scopes,
   };
-  const freshPlan = { ...plan, sessions: fresh, resourceSessions: plan.sessions.length };
+  const isolated = observations.flatMap(({ group, inputs, backend, setup }) => {
+    const checks = group.session.checks.filter((check) => freshChecks.has(check)).map((check) => check.name);
+    if (!checks.length || !backend || inputs?.inputScope?.mode !== "scoped" || !inputs.scopedSource) return [];
+    const coveragePath =
+      group.path === "." ? "coverage/coverage-summary.json" : group.path + "/coverage/coverage-summary.json";
+    return [
+      {
+        directory: group.session.directory,
+        group: {
+          checks,
+          paths: inputs.inputScope.paths,
+          outputs: inputs.inputScope.outputs ?? [],
+          sourceDigest: inputDigest(inputs.scopedSource),
+          backend,
+          ...(group.session.checks.some((check) => check.role === "coverage" || check.role === "test")
+            ? { coverage: { path: coveragePath, digest: inputs.coverageBaselines?.[coveragePath] ?? null } }
+            : {}),
+          setup,
+        },
+      },
+    ];
+  });
+  const freshPlan = { ...plan, sessions: fresh, resourceSessions: plan.sessions.length, isolated };
   const report = await run(freshPlan, cache);
+  if (freshOnly && !security) return;
   try {
     const current = checkFingerprintBatch(root, options);
-    if (
-      (security && current.freshSource() !== wholeSource) ||
-      observations.some(
-        ({ group, inputs }) => inputs && current.fingerprint(group.evidence, group.scope).key !== inputs.key,
-      )
-    )
-      throw new Error("check inputs changed during execution; rerun checks");
+    if (security && current.freshSource() !== wholeSource)
+      throw new Error("check inputs changed during execution; rerun checks (source changed during the security scan)");
+    for (const { group, inputs, scope, backend } of observations) {
+      if (!inputs) continue;
+      const next = current.fingerprint(group.evidence, scope);
+      const key = backend && next.scopedSource ? inputDigest([next.key, backend.identity]) : next.key;
+      if (key === inputs.key) continue;
+      const changed = changedRunInputs(inputs, next);
+      throw new Error(
+        `check inputs changed during execution; rerun checks (${changed.join(", ") || "input scope"} in ${group.path})`,
+      );
+    }
   } catch (error) {
     if (reused) throw error;
     diagnostic(

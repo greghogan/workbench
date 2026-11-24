@@ -121,6 +121,7 @@ export const bootstrapSources: ReadonlySet<string> = new Set([
   "app/src/core/toolchains/pnpm-lock.mts",
   "scripts/pnpm-metadata.mts",
   "scripts/prepare-development.mts",
+  "scripts/prepare-image-tools.mts",
   "scripts/prepare-guix-profiles.mts",
   "scripts/prepare-host-managed-development.mts",
   "scripts/prepare-managed-development.mts",

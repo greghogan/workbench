@@ -15,6 +15,7 @@ const layouts: Readonly<Record<string, Groups>> = {
       "Checks and review:",
       [
         "check",
+        "prepare",
         "pre-commit",
         "pre-push",
         "ci",

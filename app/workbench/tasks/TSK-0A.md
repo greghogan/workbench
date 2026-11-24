@@ -37,7 +37,7 @@ reviews, policy compatibility, and fresh security checks still run independently
 - [ ] Enforce declared source visibility on Linux and macOS and qualify the whole-project runner on Windows.
 - [ ] Integrate scoped acquisition, builds, and checks across Workbench and its examples, including independent starter
       verification and test-owned application fixtures.
-- [ ] Apply shared preparation and Linux offline defaults to the CLI, hooks, CI, and development artifacts.
+- [x] Apply shared preparation and Linux offline defaults to the CLI, hooks, CI, and development artifacts.
 
 ## Implementing-agent detail
 
@@ -158,3 +158,26 @@ remain reusable alongside fresh whole-project checks and that a fresh dependent 
 The check tests cover transitive groups, suite overrides, literal paths, file mode changes, ignored inputs, and
 whole-project fallback. The Git hook test uses staged declarations and files while their working copies differ. A
 synthetic Go gate reused the launcher test after an independent edit and ran the credential scan.
+
+Linux checks restrict child processes to the captured source and private writable outputs. Coverage uses the committed
+baseline. Inputs that cannot be captured safely use whole-project verification. The macOS App Sandbox probe exercised
+the file rules, pinned runtime, child processes, and loopback. Windows AppContainer honored an app-package read grant
+outside the captured scope, so Windows uses whole-project verification and the regular network environment.
+
+Application tests use their own Go implementation fixture. The Go gate also verifies that initialization copies the
+shipped starter. Editing the shipped implementation changes the Go and starter inputs while preserving the application
+coverage key.
+
+The application and reference suites declare their source and setup inputs. Scoped checks use prepared dependencies in a
+private workspace, with shared package contents protected from writes. Check setup and reporting use writable locations
+outside the captured source. Checks requiring the ordinary project registry or persistent build output use whole-project
+verification. The C and C++ documentation checks build the debug binary they execute, so they also work with an empty
+build directory. Checks keep matching application dependencies in place and retain staged outputs through the last
+worker.
+
+Workbench refreshes its generated helpers before capturing check inputs. The setup step verifies the prepared dependency
+graph without regenerating files while other checks use them.
+
+Native CI acquires verified package-manager bootstraps and locked dependencies before offline execution. Development
+images carry those inputs alongside the toolchain. A fresh Linux x64 image built and ran the smoke checks with only the
+image's prepared inputs. Local online advisories run independently of the pre-push image availability check.

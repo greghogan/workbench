@@ -43,7 +43,11 @@ for (const [index, root] of roots.entries()) {
   try {
     if (["native", "native-install", "native-check"].includes(mode)) {
       // Miri is an explicitly selected manual check, not part of the ordinary CI stage.
-      if (mode !== "native-check") cli("tools", "install", "--path", root, "--exclude-tool", "miri", ...toolchain);
+      if (mode !== "native-check") {
+        cli("tools", "install", "--path", root, "--exclude-tool", "miri", ...toolchain);
+        if (process.env.WORKBENCH_PREPARED !== "1" && process.env.WORKBENCH_OFFLINE !== "1")
+          cli("prepare", "--path", root, "--environment", "native", ...toolchain);
+      }
       if (mode !== "native-install")
         cli("ci-checks", root, "--network", process.env.WORKBENCH_CI_CHECK_NETWORK ?? "all", ...toolchain);
     } else if (mode === "integration") {

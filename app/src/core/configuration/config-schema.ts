@@ -364,7 +364,11 @@ const configTable = table({
     mapping(value, location);
     for (const [name, definition] of Object.entries(value as Record<string, unknown>)) {
       inputGroupName(name, location);
-      table({ paths: array(inputGroupPath), depends_on: array(inputGroupName) })(definition, `${location}.${name}`);
+      table({
+        paths: array(inputGroupPath),
+        outputs: array(inputGroupPath),
+        depends_on: array(inputGroupName),
+      })(definition, `${location}.${name}`);
     }
   },
   check_order: array(table({ root: text, after: text, phase: choice("setup", "complete") })),

@@ -15,13 +15,16 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { expect, test } from "vitest";
-import { splitPreparedInputs } from "../../../../scripts/split-prepared-inputs.mjs";
+import { copyPreparedTools, splitPreparedInputs } from "../../../../scripts/split-prepared-inputs.mjs";
 
 test("native layer partition preserves the complete layout and isolates tool bytes from download changes", () => {
   const root = mkdtempSync(join(tmpdir(), "workbench-prepared-layers-"));
   try {
     const files = {
       "cache/toolchains/node/bin/node": "node binary",
+      "cache/toolchains/vcpkg/checkout/vcpkg": "prepared vcpkg",
+      "cache/toolchains/xdebug/version/xdebug.so": "prepared Xdebug",
+      "cache/package-managers/pnpm/version/.workbench-bootstrap": "verified package manager",
       "cache/ci/rustup/toolchains/rust/bin/rustc": "rust binary",
       "cache/ci/cargo/bin/cargo": "cargo proxy",
       "cache/ci/cargo/registry/cache/crate": "crate archive",
@@ -55,7 +58,21 @@ test("native layer partition preserves the complete layout and isolates tool byt
         expect(existsSync(join(source, directory, "disposable"))).toBe(true);
         expect(existsSync(join(dependencies, directory))).toBe(false);
       }
-      expect(existsSync(join(dependencies, "cache/toolchains"))).toBe(false);
+      expect(existsSync(join(dependencies, "cache/toolchains/node"))).toBe(false);
+      const toolchain = join(root, `toolchain-${String(iteration)}`);
+      copyPreparedTools(source, toolchain);
+      expect(statSync(join(toolchain, "cache/ci/cargo/bin/cargo"), { bigint: true }).ino).toBe(
+        statSync(join(toolchain, "cache/ci/cargo/bin/rustc"), { bigint: true }).ino,
+      );
+      for (const path of [
+        "cache/package-managers/pnpm/version/.workbench-bootstrap",
+        "cache/toolchains/vcpkg/checkout/vcpkg",
+        "cache/toolchains/xdebug/version/xdebug.so",
+      ] as const) {
+        expect(existsSync(join(tools, path))).toBe(false);
+        expect(existsSync(join(toolchain, path))).toBe(false);
+        expect(readFileSync(join(dependencies, path), "utf8")).toBe(files[path]);
+      }
       expect(existsSync(join(tools, "cache/downloads"))).toBe(false);
       expect(statSync(join(tools, "cache/ci/cargo/bin/cargo"), { bigint: true }).ino).toBe(
         statSync(join(tools, "cache/ci/cargo/bin/rustc"), { bigint: true }).ino,

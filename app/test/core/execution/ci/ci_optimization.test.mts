@@ -138,9 +138,8 @@ test("grouped execution continues checking other roots after one fails", () => {
     .trim()
     .split("\n")
     .map((text) => JSON.parse(text) as string[]);
-  expect(nativeEvents).toHaveLength(3);
-  expect(nativeEvents[2]).toContain("good");
-  expect(nativeEvents[2]).toContain("ci-checks");
+  expect(nativeEvents.map(([command]) => command)).toEqual(["tools", "tools", "prepare", "ci-checks"]);
+  expect(nativeEvents.slice(1).every((args) => args.includes("good"))).toBe(true);
   mkdirSync(join(root, "good/dist"), { recursive: true });
   writeFileSync(join(root, "good/dist/package.txt"), "verified fixture");
   mkdirSync(join(root, "rejected/dist"), { recursive: true });

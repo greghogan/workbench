@@ -27,6 +27,7 @@ export function checkPlan(root: string, checks: ConfiguredCheck[]): ReturnType<t
     cleanup: false,
     ordering: [],
     automatic: false,
+    offline: false,
     excluded: [],
     sessions: [{ directory: root, environment: "native", checks }],
   };

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { release, tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, posix, relative } from "node:path";
 import { policyCompatibility } from "../collections/policy-compatibility.js";
@@ -34,6 +34,7 @@ import { writeAtomic } from "../runtime/file-publication.mjs";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { readText } from "../runtime/files.js";
 import { required } from "../runtime/invariants.js";
+import { removeOwnedTree } from "../runtime/owned-scratch.mjs";
 import { processCancellation, runOwnedChild } from "../runtime/owned-child.mjs";
 import { processFailure } from "../runtime/process-outcome.mjs";
 import { gitBytes } from "../git/git-snapshot.js";
@@ -1588,7 +1589,12 @@ export async function withPreparedProfile(
     await snapshotCIProject(root, acquisition);
     // Mount only dependency caches. The toolchain layer and all fresh build outputs are kept separate.
     const nativeDependencyMounts = [
+      "authentication",
       "downloads",
+      "package-managers",
+      "toolchains/vcpkg",
+      "toolchains/xdebug",
+      "vcpkg",
       "uv",
       "go-mod",
       "npm",
@@ -1624,32 +1630,11 @@ export async function withPreparedProfile(
     await settleCleanup(
       [
         () => {
-          removeNativeDependencyCache(inputs);
+          removeOwnedTree(inputs);
         },
       ],
       failure,
     );
-  }
-}
-
-function removeNativeDependencyCache(directory: string): void {
-  const remove = () => {
-    rmSync(directory, { recursive: true, force: true });
-  };
-  try {
-    remove();
-  } catch (error) {
-    if (!["EACCES", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
-    // Package managers such as Go intentionally leave read-only module directories.
-    const allowRemoval = (path: string) => {
-      const info = lstatSync(path);
-      if (!info.isDirectory()) return;
-      if ((info.mode & 0o700) !== 0o700) chmodSync(path, info.mode | 0o700);
-      for (const entry of readdirSync(path, { withFileTypes: true }))
-        if (entry.isDirectory()) allowRemoval(join(path, entry.name));
-    };
-    allowRemoval(directory);
-    remove();
   }
 }
 

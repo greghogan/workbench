@@ -52,8 +52,17 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
   const { values } = parseArgs({
     args,
     strict: true,
-    options: { dependencies: { type: "string" }, "build-only": { type: "boolean" } },
+    options: {
+      dependencies: { type: "string" },
+      "build-only": { type: "boolean" },
+      "reuse-prepared": { type: "boolean" },
+      "verify-prepared": { type: "boolean" },
+    },
   });
+  if (values["verify-prepared"] || process.env.WORKBENCH_CHECK_SCOPED === "1") {
+    if (!preparedDependenciesMatch(root)) throw new Error("Prepare the locked dependencies before running checks");
+    return;
+  }
   const lifecycle = process.env.npm_lifecycle_event === "prepare";
   const pin = readFileSync(join(root, ".node-version"), "utf8").trim();
   if (!process.features.typescript)
@@ -100,9 +109,9 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         );
       const from = metadata(provider),
         to = metadata(root);
-      if (
-        !readFileSync(join(provider, "pnpm-lock.yaml")).equals(readFileSync(join(root, "pnpm-lock.yaml"))) ||
-        ![
+      const matching =
+        readFileSync(join(provider, "pnpm-lock.yaml")).equals(readFileSync(join(root, "pnpm-lock.yaml"))) &&
+        [
           "dependencies",
           "devDependencies",
           "optionalDependencies",
@@ -111,16 +120,42 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
           "resolutions",
           "pnpm",
           "packageManager",
-        ].every((key) => isDeepStrictEqual(from[key], to[key])) ||
-        !readFileSync(join(provider, "pnpm-workspace.yaml")).equals(readFileSync(join(root, "pnpm-workspace.yaml")))
-      )
-        throw new Error(
-          "The staged dependency pins differ from the prepared checkout; prepare their locked dependencies before checking this snapshot",
-        );
-      if (!preparedDependenciesMatch(provider))
-        throw new Error("The dependency provider does not match its source pins; run source setup in that checkout");
-      const { linkDependencies } = await import("./link-dependencies.mts");
-      linkDependencies(join(provider, "node_modules"), join(root, "node_modules"));
+        ].every((key) => isDeepStrictEqual(from[key], to[key])) &&
+        readFileSync(join(provider, "pnpm-workspace.yaml")).equals(readFileSync(join(root, "pnpm-workspace.yaml")));
+      if (matching) {
+        if (!preparedDependenciesMatch(provider))
+          throw new Error("The dependency provider does not match its source pins; run source setup in that checkout");
+        const { linkDependencies } = await import("./link-dependencies.mts");
+        linkDependencies(join(provider, "node_modules"), join(root, "node_modules"));
+      } else {
+        try {
+          await run(
+            process.execPath,
+            [
+              join(provider, "bin/workbench.mjs"),
+              "package-manager-exec",
+              "--",
+              "install",
+              "--offline",
+              "--frozen-lockfile",
+              "--ignore-scripts",
+            ],
+            root,
+            {
+              ...environment,
+              WORKBENCH_DISTRIBUTION_ROOT: provider,
+              WORKBENCH_LOCAL_CONFIG_ROOT: provider,
+              WORKBENCH_OFFLINE: "1",
+              WORKBENCH_STORAGE_PROJECT: undefined,
+              PNPM_CONFIG_STORE_DIR: undefined,
+              PNPM_CONFIG_VIRTUAL_STORE_DIR: undefined,
+            },
+          );
+        } catch (cause) {
+          cancellation.signal.throwIfAborted();
+          throw new Error("The staged dependency inputs are unavailable. Run 'workbench prepare --staged'.", { cause });
+        }
+      }
     }
     const prepared = preparedDependenciesMatch(root);
     if (
@@ -132,7 +167,12 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
       throw new Error(
         "The linked dependency provider no longer matches its source pins; repair the provider before running source setup",
       );
-    if (!lifecycle && !values["build-only"] && existsSync(join(root, "bundle/main.cjs"))) {
+    if (
+      !lifecycle &&
+      !values["build-only"] &&
+      !(values["reuse-prepared"] && prepared) &&
+      existsSync(join(root, "bundle/main.cjs"))
+    ) {
       await run(process.execPath, [
         join(root, "bin/workbench.mjs"),
         "package-manager-exec",

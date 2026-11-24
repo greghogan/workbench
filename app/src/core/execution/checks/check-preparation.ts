@@ -10,7 +10,13 @@ import { compilerEnvironment, type CompilerSelection } from "../../toolchains/co
 import { nativeCheckEnvironment } from "./check-environment.js";
 import { managedProfilePath, prepareManagedProfile } from "../../artifacts/managed-profiles.js";
 import { inSelectedShell, type CheckEnvironment } from "../environments/environments.js";
-import { buildPaths, buildEnvironment, prepareBuild, prepareBuildDependencies } from "../../artifacts/builds.js";
+import {
+  buildPaths,
+  buildEnvironment,
+  buildStorageRoots,
+  prepareBuild,
+  prepareBuildDependencies,
+} from "../../artifacts/builds.js";
 import { checkInvocation } from "./check-invocation.js";
 import { commandInvocation } from "../../toolchains/tool-execution.js";
 import { required } from "../../runtime/invariants.js";
@@ -64,14 +70,26 @@ export function prepareCheckCommand({
     builds && !(selected === "devcontainer" && currentExecutionEnvironment().WORKBENCH_DEVCONTAINER !== "1")
       ? builds
       : undefined;
-  const profile =
+  const execution = currentExecutionEnvironment();
+  let profileBuilds =
     localBuilds &&
     (selected === "nix" || selected === "guix") &&
-    !currentExecutionEnvironment().WORKBENCH_ENVIRONMENTS &&
-    currentExecutionEnvironment().WORKBENCH_PREPARED !== "1" &&
-    currentExecutionEnvironment().WORKBENCH_OFFLINE !== "1"
-      ? managedProfilePath(localBuilds)
+    !execution.WORKBENCH_ENVIRONMENTS &&
+    execution.WORKBENCH_PREPARED !== "1"
+      ? localBuilds
       : undefined;
+  // Keep prepared profiles addressable from different snapshots without sharing mutable build outputs.
+  if (profileBuilds && execution.WORKBENCH_LOCAL_CONFIG_ROOT) {
+    const identity = { ...profileBuilds.identity, checkout: execution.WORKBENCH_LOCAL_CONFIG_ROOT };
+    const { dependencyRoots } = buildStorageRoots(profileBuilds.storageRoot, identity);
+    profileBuilds = {
+      ...profileBuilds,
+      identity,
+      dependencyRoots,
+      dependencies: join(dependencyRoots, `${selected}-${identity.fingerprint}`),
+    };
+  }
+  const profile = profileBuilds && managedProfilePath(profileBuilds);
   const outputPaths =
     localBuilds && selected === "nix-docker"
       ? {
@@ -96,6 +114,20 @@ export function prepareCheckCommand({
           localBuilds,
         )
       : undefined;
+  const offlineTools =
+    currentExecutionEnvironment().WORKBENCH_OFFLINE === "1"
+      ? {
+          WORKBENCH_OFFLINE: "1",
+          UV_OFFLINE: "1",
+          npm_config_offline: "true",
+          PNPM_CONFIG_OFFLINE: "true",
+          CARGO_NET_OFFLINE: "true",
+          GOPROXY: "off",
+          GOSUMDB: "off",
+          COMPOSER_DISABLE_NETWORK: "1",
+          MAVEN_ARGS: `${(native ?? currentExecutionEnvironment()).MAVEN_ARGS ?? ""} --offline`.trim(),
+        }
+      : {};
   const managedCommand =
     repositoryRoot &&
     inspectTools &&
@@ -106,6 +138,7 @@ export function prepareCheckCommand({
       : checked;
   const commandEnvironment = {
     ...budget,
+    ...offlineTools,
     ...(repositoryRoot && !outsideContainer ? { WORKBENCH_DISTRIBUTION_ROOT: distributionRoot(repositoryRoot) } : {}),
     ...(outputPaths ? buildEnvironment(outputPaths) : {}),
     ...compilerEnv,
@@ -132,11 +165,13 @@ export function prepareCheckCommand({
           budget.WORKBENCH_CPU_BUDGET,
           profile,
         );
-  const env: NodeJS.ProcessEnv = native ?? {
-    ...currentExecutionEnvironment(),
-    ...(repositoryRoot ? { WORKBENCH_PROJECT_ROOT: repositoryRoot } : {}),
-    ...(selected === "native" ? commandEnvironment : budget),
-  };
+  const env: NodeJS.ProcessEnv = native
+    ? { ...native, ...offlineTools }
+    : {
+        ...currentExecutionEnvironment(),
+        ...(repositoryRoot ? { WORKBENCH_PROJECT_ROOT: repositoryRoot } : {}),
+        ...(selected === "native" ? commandEnvironment : budget),
+      };
   const invocation = commandInvocation(
     required(wrappedCommand[0], "A check command needs an executable"),
     wrappedCommand.slice(1),
@@ -147,10 +182,10 @@ export function prepareCheckCommand({
   const prepare = () => {
     if (localBuilds) {
       prepareBuild(localBuilds);
-      if (profile && !localBuilds.external) prepareBuildDependencies(localBuilds);
-      if (profile) {
-        prepareManagedProfile(localBuilds, profile);
-        if (selected === "guix") prepareManagedProfile(localBuilds, `${profile}-pending`, "pending");
+      if (profile && profileBuilds && execution.WORKBENCH_OFFLINE !== "1") {
+        if (!localBuilds.external || profileBuilds !== localBuilds) prepareBuildDependencies(profileBuilds);
+        prepareManagedProfile(profileBuilds, profile);
+        if (selected === "guix") prepareManagedProfile(profileBuilds, `${profile}-pending`, "pending");
       }
       if (selected === "native" && localBuilds.external && repositoryRoot) {
         const tools = selectedToolRequirements(
@@ -175,5 +210,14 @@ export function prepareCheckCommand({
       }
     }
   };
-  return { builds, prepare, invocation, env, name, directory, lockBuild, profile };
+  return {
+    builds,
+    prepare,
+    invocation,
+    env,
+    name,
+    directory,
+    lockBuild,
+    profileDependencies: profileBuilds?.dependencies,
+  };
 }

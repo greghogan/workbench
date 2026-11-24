@@ -1,25 +1,58 @@
 import { isMainScript } from "./script-entry.mjs";
-import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-const toolLocations = [
-  "cache/toolchains",
-  "cache/uv-python",
-  "cache/package-managers",
-  "cache/container-tools",
-  "cache/ci/rustup",
-  "cache/ci/cargo/bin",
-];
+const toolLocations = ["cache/uv-python", "cache/container-tools", "cache/ci/rustup", "cache/ci/cargo/bin"];
+
+function toolEntries(source: string): string[] {
+  const path = "cache/toolchains";
+  // These are installed while acquiring a C/C++ or PHP project's locked dependencies.
+  const preparedProjectTools = new Set(["vcpkg", "xdebug"]);
+  return [
+    ...toolLocations,
+    ...(existsSync(join(source, path))
+      ? readdirSync(join(source, path))
+          .filter((name) => !preparedProjectTools.has(name))
+          .map((name) => `${path}/${name}`)
+      : []),
+  ];
+}
 
 export function copyPreparedTools(source: string, output: string) {
   if (existsSync(output)) throw new Error("Prepared tool output already exists");
   mkdirSync(output, { recursive: true });
-  for (const location of toolLocations) {
-    const path = join(source, location);
-    if (!existsSync(path)) continue;
-    const destination = join(output, location);
+  copyPreparedPaths(
+    toolEntries(source)
+      .filter((location) => existsSync(join(source, location)))
+      .map((location) => [join(source, location), join(output, location)]),
+  );
+}
+
+function copyPreparedPaths(paths: [string, string][], omitted: ReadonlySet<string> = new Set()) {
+  const links = new Map<string, string>();
+  const duplicates: [string, string][] = [];
+  for (const [source, destination] of paths) {
     mkdirSync(dirname(destination), { recursive: true });
-    cpSync(path, destination, { recursive: true, verbatimSymlinks: true });
+    cpSync(source, destination, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: (path, target) => {
+        if (omitted.has(path)) return false;
+        const stat = lstatSync(path, { bigint: true });
+        if (stat.isFile() && stat.nlink > 1n && stat.ino > 0n) {
+          const key = `${String(stat.dev)}:${String(stat.ino)}`;
+          const first = links.get(key);
+          if (first) duplicates.push([first, target]);
+          else links.set(key, target);
+        }
+        return true;
+      },
+    });
+  }
+  // Compiler installation receipts depend on hard links surviving the layer copy.
+  for (const [first, duplicate] of duplicates) {
+    rmSync(duplicate);
+    linkSync(first, duplicate);
   }
 }
 
@@ -45,30 +78,9 @@ export function splitPreparedInputs(source: string, tools: string, dependencies:
   if (existsSync(tools) || existsSync(dependencies)) throw new Error("Prepared layer output already exists");
   if (!lstatSync(source).isDirectory()) throw new Error("Prepared inputs must be a directory, not a file or link");
   const omitted = new Set([join(source, "cache/builds"), join(source, "cache/dependencies")]);
-  const links = new Map<string, string>();
-  const duplicates: [string, string][] = [];
-  cpSync(source, dependencies, {
-    recursive: true,
-    verbatimSymlinks: true,
-    filter: (path, destination) => {
-      if (omitted.has(path)) return false;
-      const stat = lstatSync(path, { bigint: true });
-      if (stat.isFile() && stat.nlink > 1n && stat.ino > 0n) {
-        const identity = `${String(stat.dev)}:${String(stat.ino)}`;
-        const first = links.get(identity);
-        if (first) duplicates.push([first, destination]);
-        else links.set(identity, destination);
-      }
-      return true;
-    },
-  });
-  // fs.cp copies each hard link independently; restore sharing before partitioning the layer trees.
-  for (const [first, duplicate] of duplicates) {
-    rmSync(duplicate);
-    linkSync(first, duplicate);
-  }
+  copyPreparedPaths([[source, dependencies]], omitted);
   mkdirSync(tools, { recursive: true });
-  for (const name of toolLocations) {
+  for (const name of toolEntries(dependencies)) {
     const path = join(dependencies, name);
     if (!existsSync(path)) continue;
     const destination = join(tools, name);

@@ -17,6 +17,14 @@ from independent check groups when their inputs match. Incomplete scopes use who
 receive their required setup and outputs. Input declarations and selected source come from the same snapshot, and fresh
 security checks retain their project-wide stability checks.
 
+Scoped evidence requires execution in a qualified native environment that limits the check and its child processes to
+the captured source, verified tools, and private writable outputs. Coverage comparisons use the committed baseline.
+Unavailable isolation falls back to whole-project verification.
+
+Acquire dependencies separately from builds and checks using the selected source snapshot. Linux builds and ordinary
+checks use prepared inputs and isolate the network while retaining private loopback. Run live checks separately. macOS
+permits networking for tests that use loopback. Windows uses whole-project inputs and the regular network environment.
+
 Concurrent gates for the same checkout wait for the active gate, then revalidate their selected inputs before reusing
 results or executing. Independent checkouts can progress separately. Cancellation stops starting additional checks,
 terminates the run's owned processes, and completes cleanup before releasing shared resources.

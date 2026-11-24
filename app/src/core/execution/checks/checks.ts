@@ -14,7 +14,7 @@ import { startLogRun, finishLogRun, logRetention, requireActiveLogRun } from "..
 import type { CheckRunResult } from "./check-report.js";
 import { createHash, randomUUID } from "node:crypto";
 import { checkOutput, checkOutputPrelude } from "./check-output.js";
-import { prepareCheckLogs, checkLogDirectory, buildPaths, withBuildLock, cleanBuilds } from "../../artifacts/builds.js";
+import { prepareCheckLogs, checkLogDirectory, buildPaths, withBuildLock } from "../../artifacts/builds.js";
 import { withCacheLock } from "../../storage/cache-lock.js";
 import { runCheckGroups } from "./check-runner.js";
 import { CheckCancellation } from "./check-cancellation.js";
@@ -46,6 +46,7 @@ import { distributionRoot } from "../../projects/project-context.js";
 import { readConfig } from "../../projects/project-configuration.js";
 import { quote, resolveCheckCommand } from "../../toolchains/toolchains.js";
 import { checkExecution } from "./check-resources.js";
+import { currentExecutionEnvironment } from "../environments/execution-context.js";
 import { validateCheckControl } from "./check-control.js";
 import {
   checkEnvironment,
@@ -59,12 +60,26 @@ import { terminalTable } from "../../diagnostics/terminal-table.js";
 import { readChecks, type ConfiguredCheck } from "./check-configuration.js";
 import { prepareCheckCommand } from "./check-preparation.js";
 import { checkGateInputScope } from "./check-input-scope.js";
-import { scopedCheckGroups } from "./check-cache-plan.js";
+import { checkGroupExecution, scopedCheckGroups } from "./check-cache-plan.js";
+import {
+  checkBackendName,
+  linuxOfflineCommand,
+  nativeCheckBackend,
+  prepareIsolatedChecks,
+  usesPreparedCheckModules,
+} from "./check-isolation.js";
 import { safeOutput } from "../../diagnostics/terminal-output.js";
+import { checkBaseEnvironment } from "./check-environment.js";
 
 export interface CheckInspectionOptions extends CheckSelection {
   json?: boolean;
   all?: boolean;
+}
+
+function shouldPrepareSource(options: CheckSelection): boolean {
+  return (
+    options.network !== CheckNetwork.Online && !options.role?.some((role) => role === "setup" || role === "acquire")
+  );
 }
 
 /** Inspection and execution resolve the same stage, setup, environment, and coverage choices. */
@@ -83,12 +98,20 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
   const environment = executionPreference(root, options.environment, options.profile);
   const plan = planChecks(root, configured, { ...options, ...(environment ? { environment } : {}) });
   const execution = checkExecution(root, plan);
-  const scopes = scopedCheckGroups(root, plan)?.map(({ path, session, scope }) => ({
-    path,
-    environment: session.environment,
-    checks: session.checks.map((check) => check.name),
-    inputScope: scope,
-  }));
+  const groups = scopedCheckGroups(root, plan, true);
+  const isolation = {
+    backend: groups?.some(({ scope }) => scope.mode === "scoped") ? nativeCheckBackend(root) : undefined,
+  };
+  const scopes = groups?.map((group) => {
+    const { scope, backend } = checkGroupExecution(root, group, isolation);
+    return {
+      path: group.path,
+      environment: group.session.environment,
+      checks: group.session.checks.map((check) => check.name),
+      inputScope: scope,
+      ...(backend ? { backend: checkBackendName(backend) } : {}),
+    };
+  });
   const describe = (check: ConfiguredCheck, environment: string) => ({
     name: check.name,
     role: check.role,
@@ -191,6 +214,7 @@ export function listChecks(root: string, options: CheckInspectionOptions = {}, h
       for (const group of plan.cacheGroups) {
         console.log(`  ${group.path} (${group.environment})`);
         for (const check of group.checks) console.log(`    ${safeOutput(check)}`);
+        if (group.backend) console.log(`    ${group.backend}`);
         showScope(group.inputScope, "    ");
       }
     } else showScope(scope, "  ");
@@ -230,7 +254,28 @@ export async function runChecks(
           options.profile,
           async () => {
             const plan = configuredCheckPlan(root, options);
-            const run = () => {
+            const run = async () => {
+              const setup = plan.sessions.find(
+                ({ directory, environment, checks }) =>
+                  directory === root &&
+                  environment === "native" &&
+                  usesPreparedCheckModules(
+                    root,
+                    checks.filter(({ role }) => role === "setup"),
+                  ),
+              );
+              if (setup && shouldPrepareSource(options)) {
+                const env = { ...checkBaseEnvironment(root, root), WORKBENCH_OFFLINE: "1" };
+                const command = [process.execPath, join(root, "scripts/setup-development.mjs"), "--reuse-prepared"];
+                // Generated helpers are inputs to other groups. Finish publishing them before any fingerprint or view.
+                await cancellation.execute(
+                  options.offline ? linuxOfflineCommand(command, env) : command,
+                  root,
+                  env,
+                  false,
+                  owner,
+                );
+              }
               execution.started = true;
               return withCachedChecks(
                 root,
@@ -239,6 +284,11 @@ export async function runChecks(
                 (selected, cache) => runCheckGroups(root, options, selected, cancellation, owner, recordReport, cache),
                 cancellation.signal,
                 recordReport,
+                {
+                  backend: plan.sessions.some((session) => session.checks.some((check) => check.inputs))
+                    ? nativeCheckBackend(root)
+                    : undefined,
+                },
               );
             };
             if (!plan.cleanup && plan.sessions.some((session) => session.environment === "native"))
@@ -388,30 +438,32 @@ async function runConfiguredChecks(
   let completed = 0;
   const verbose = options.verbose ?? process.env.WORKBENCH_VERBOSE === "1";
   // Setup and all dependent commands share one session, including disposable environments.
-  try {
-    for (const { directory, environment, checks: group } of plan.sessions) {
-      const logID = randomUUID();
-      const launcher = resolveCheckCommand(
-        directory,
-        ["node", "{workbench}/bin/workbench.mjs"],
-        distributionRoot(root),
+  for (const { directory, environment, checks: group } of plan.sessions) {
+    const logID = randomUUID();
+    const reusePreparedModules =
+      environment === "native" &&
+      usesPreparedCheckModules(
+        root,
+        group.filter(({ role }) => role === "setup").map(({ command }) => ({ directory, command })),
       );
-      const projectKey = options.machineJobserver
-        ? createHash("sha256").update(registrationRoot(root)).digest("hex")
-        : undefined;
-      const admitted = (launcher: string[], command: string[], workers?: WorkerTool) =>
-        options.machineJobserver && projectKey
-          ? [
-              ...launcher,
-              "admitted-check",
-              options.machineJobserver,
-              projectKey,
-              ...(workers ? ["--workers", workers] : []),
-              "--",
-              ...command,
-            ]
-          : command;
-      const script = [
+    const launcher = resolveCheckCommand(directory, ["node", "{workbench}/bin/workbench.mjs"], distributionRoot(root));
+    const projectKey = options.machineJobserver
+      ? createHash("sha256").update(registrationRoot(root)).digest("hex")
+      : undefined;
+    const admitted = (launcher: string[], command: string[], workers?: WorkerTool) =>
+      options.machineJobserver && projectKey
+        ? [
+            ...launcher,
+            "admitted-check",
+            options.machineJobserver,
+            projectKey,
+            ...(workers ? ["--workers", workers] : []),
+            "--",
+            ...command,
+          ]
+        : command;
+    const script = (wrap: (name: string, command: string[]) => string[] = (_name, command) => command) =>
+      [
         ...checkOutputPrelude(total, verbose, logID, control),
         ...(plan.cleanup
           ? [
@@ -428,26 +480,36 @@ async function runConfiguredChecks(
         group
           .flatMap((entry) => {
             const command = resolveCheckCommand(directory, entry.command, distributionRoot(root));
+            const sourceSetup = entry.role === "setup" && usesPreparedCheckModules(root, [entry]);
             const setup =
-              entry.role === "setup" &&
-              (existsSync(join(directory, "package.json")) || existsSync(join(directory, "pyproject.toml")))
-                ? [...launcher, "dependency-setup", "--", ...command]
-                : command;
+              sourceSetup && directory === root && environment === "native" && shouldPrepareSource(options)
+                ? [...command, "--verify-prepared"]
+                : entry.role === "setup" &&
+                    !sourceSetup &&
+                    (existsSync(join(directory, "package.json")) || existsSync(join(directory, "pyproject.toml")))
+                  ? [...launcher, "dependency-setup", "--", ...command]
+                  : command;
+            const invocation = wrap(entry.name, setup);
             const observed =
               entry.warnSeconds === undefined
-                ? setup
-                : [...launcher, "observe", String(entry.warnSeconds), "--", ...setup];
+                ? invocation
+                : [...launcher, "observe", String(entry.warnSeconds), "--", ...invocation];
             const execution = (environment === "native" ? admitted(launcher, observed, workerTool(entry)) : observed)
               .map(quote)
               .join(" ");
             const presentCoverage = entry.role === "coverage";
-            const collector = resolveCheckCommand(
-              directory,
-              ["node", "{workbench}/scripts/check-coverage-summary.mjs"],
-              distributionRoot(root),
-            )
-              .map(quote)
-              .join(" ");
+            const collector = presentCoverage
+              ? wrap(
+                  entry.name,
+                  resolveCheckCommand(
+                    directory,
+                    ["node", "{workbench}/scripts/check-coverage-summary.mjs"],
+                    distributionRoot(root),
+                  ),
+                )
+                  .map(quote)
+                  .join(" ")
+              : "";
             const step = ++completed;
             const releaseInput =
               environment === "native" && entry.role === "release-verify"
@@ -469,178 +531,183 @@ async function runConfiguredChecks(
           })
           .join("\n"),
       ].join("\n");
-      const hasCoverage = group.some((entry) => entry.role === "coverage");
-      const summaryPath = hasCoverage
-        ? ownedPath(directory, "coverage/coverage-summary.json")
-        : join(directory, "coverage/coverage-summary.json");
-      const previousSummary = hasCoverage && existsSync(summaryPath) ? readFileSync(summaryPath) : undefined;
-      let complete = false;
-      let scriptDirectory: string | undefined;
-      let sessionFailure: unknown;
-      try {
-        // MSYS and native Windows processes use different command-line quoting.
-        // A script file preserves literal backslashes and quotes in configured commands.
-        let invocation = ["sh", "-eu", "-c", script];
-        if (process.platform === "win32") {
-          scriptDirectory = mkdtempSync(join(tmpdir(), "workbench-check-session-"));
-          const path = join(scriptDirectory, "checks.sh");
-          writeFileSync(path, script);
-          invocation = ["sh", "-eu", path.replaceAll("\\", "/")];
-        }
-        const execute = async () => {
+    const privateChecks = new Set(options.isolationGroups?.flatMap(({ checks }) => checks));
+    const hasCoverage = group.some((entry) => entry.role === "coverage" && !privateChecks.has(entry.name));
+    const summaryPath = hasCoverage
+      ? ownedPath(directory, "coverage/coverage-summary.json")
+      : join(directory, "coverage/coverage-summary.json");
+    const previousSummary = hasCoverage && existsSync(summaryPath) ? readFileSync(summaryPath) : undefined;
+    let complete = false;
+    let scriptDirectory: string | undefined;
+    let isolated: ReturnType<typeof prepareIsolatedChecks> | undefined;
+    let sessionFailure: unknown;
+    try {
+      // MSYS and native Windows processes use different command-line quoting.
+      // A script file preserves literal backslashes and quotes in configured commands.
+      const scoped = options.isolationGroups;
+      let scriptPath: string | undefined;
+      let invocation: string[];
+      if (process.platform === "win32" || scoped?.length) {
+        scriptDirectory = mkdtempSync(join(tmpdir(), "workbench-check-session-"));
+        scriptPath = join(scriptDirectory, "checks.sh");
+        invocation = ["sh", "-eu", scriptPath.replaceAll("\\", "/")];
+      } else invocation = ["sh", "-eu", "-c", script()];
+      const execute = async () => {
+        cancellation.checkpoint();
+        const prepared = prepareCheckCommand({
+          directory: directory,
+          name: `checks in '${required(group[0], "expected group[0]").location}' (${environment})`,
+          command: invocation,
+          selected: environment,
+          repositoryRoot: root,
+          dockerImage: required(group[0], "expected group[0]").dockerImage,
+          inspectTools: !plan.cleanup,
+          lockBuild: !plan.cleanup,
+          compilerSelection: options,
+        });
+        // An implicit pnpm install would invalidate the dependency paths captured for scoped checks.
+        if (reusePreparedModules) prepared.env.PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN = "false";
+        const run = async (owner?: ProcessLock) => {
           cancellation.checkpoint();
-          const prepared = prepareCheckCommand({
-            directory: directory,
-            name: `checks in '${required(group[0], "expected group[0]").location}' (${environment})`,
-            command: invocation,
-            selected: environment,
-            repositoryRoot: root,
-            dockerImage: required(group[0], "expected group[0]").dockerImage,
-            inspectTools: !plan.cleanup,
-            lockBuild: !plan.cleanup,
-            compilerSelection: options,
-          });
-          const run = async (owner?: ProcessLock) => {
-            cancellation.checkpoint();
-            const use = async () => {
-              prepared.prepare();
-              const command =
-                environment === "native"
-                  ? prepared.invocation
-                  : admitted(
-                      [process.execPath, join(distributionRoot(root), "bin/workbench.mjs")],
-                      prepared.invocation,
-                    );
-              await cancellation.execute(command, directory, prepared.env, false, owner);
-              if (
-                prepared.builds?.external &&
-                environment === "native" &&
-                completeSelection &&
-                (plan.stage === "commit" || plan.stage === "ci") &&
-                !options.role?.length &&
-                !options.excludeRole?.length
-              )
-                try {
-                  verifyBuildResults([prepared.builds.directory, prepared.builds.dependencies]);
-                } catch (error) {
-                  diagnostic(
-                    LogLevel.Warn,
-                    DiagnosticOperation.CheckCache,
-                    DiagnosticOutcome.Unavailable,
-                    {},
-                    error,
-                    "checks passed; build retention evidence could not be saved",
-                  );
-                }
-            };
-            if (prepared.builds && prepared.profile && !inSelectedShell(directory, environment))
-              await withCacheLock(prepared.builds.dependencies, use, 0);
-            else await use();
-          };
-          if (prepared.builds && !plan.cleanup) await withBuildLock(prepared.builds, run);
-          else await run();
-        };
-        if (environment === "native" && !plan.cleanup)
-          await withToolCacheUseAsync(
-            execute,
-            selectedToolRequirements(root, relative(root, directory).replaceAll("\\", "/") || ".", options),
-          );
-        else await execute();
-        complete = true;
-      } catch (error) {
-        sessionFailure = error;
-        throw error;
-      } finally {
-        await settleCleanup(
-          [
-            () => {
-              if (scriptDirectory) rmSync(scriptDirectory, { recursive: true, force: true });
-            },
-            async () => {
+          const use = async () => {
+            prepared.prepare();
+            if (scriptPath) {
+              if (scoped?.length) isolated = prepareIsolatedChecks(root, directory, scoped, prepared.env);
+              writeFileSync(scriptPath, script(isolated?.wrap));
+            }
+            const command =
+              environment === "native"
+                ? prepared.invocation
+                : admitted([process.execPath, join(distributionRoot(root), "bin/workbench.mjs")], prepared.invocation);
+            const execution = options.offline ? linuxOfflineCommand(command, currentExecutionEnvironment()) : command;
+            await cancellation.execute(execution, directory, prepared.env, false, owner);
+            if (
+              prepared.builds?.external &&
+              environment === "native" &&
+              completeSelection &&
+              (plan.stage === "commit" || plan.stage === "ci") &&
+              !options.role?.length &&
+              !options.excludeRole?.length
+            )
               try {
-                if (!verbose && !plan.cleanup) {
-                  const paths = buildPaths(root, directory, environment, options);
-                  const logs = join(paths.directory, "check-logs", logID);
-                  if (existsSync(logs)) {
-                    const owner = process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? paths.identity.checkout;
-                    const archive =
-                      retainedDirectory ?? checkLogDirectory(paths.storageRoot, owner, paths.identity.root, logID);
-                    if (retainedDirectory) {
-                      const parent = dirname(retainedDirectory);
-                      if (
-                        !/^session-\d+$/.test(basename(retainedDirectory)) ||
-                        resolve(parent) !== resolve(checkLogDirectory(paths.storageRoot, owner, ".", basename(parent)))
-                      )
-                        throw new Error("invalid parent log directory");
-                      requireActiveLogRun(parent);
-                    }
-                    await withCacheLock(archive, async () => {
-                      if (retainedDirectory) mkdirSync(archive, { recursive: true, mode: 0o700 });
-                      else {
-                        prepareCheckLogs(paths.storageRoot, owner, paths.identity.root, logID);
-                        startLogRun(archive);
-                      }
-                      cpSync(logs, archive, { recursive: true });
-                      rmSync(logs, { recursive: true, force: true });
-                      const retained = retainedDirectory
-                        ? { files: readdirSync(archive).map((name) => ({ name })), errors: [] }
-                        : await finishLogRun(archive, logRetention(root));
-                      const message: CheckWorkerMessage = {
-                        type: CheckMessage.Logs,
-                        directory: archive,
-                        files: retained.files.map((file) => file.name),
-                        errors: retained.errors,
-                      };
-                      if (process.send && process.connected)
-                        process.send(message, (error) => {
-                          if (error)
-                            diagnostic(
-                              LogLevel.Warn,
-                              DiagnosticOperation.CheckLogs,
-                              DiagnosticOutcome.Unavailable,
-                              {},
-                              error,
-                              "coordinator evidence channel unavailable",
-                            );
-                        });
-                    });
-                    writeDiagnosticText(`Full check logs: ${archive}`);
-                  }
-                }
+                verifyBuildResults([prepared.builds.directory, prepared.builds.dependencies]);
               } catch (error) {
                 diagnostic(
                   LogLevel.Warn,
-                  DiagnosticOperation.CheckLogRetention,
+                  DiagnosticOperation.CheckCache,
                   DiagnosticOutcome.Unavailable,
                   {},
                   error,
-                  "evidence may be unavailable",
+                  "checks passed; build retention evidence could not be saved",
                 );
-                if (process.send && process.connected)
-                  process.send({ type: CheckMessage.LogError, error: diagnosticError(error) }, () => {
-                    /* The coordinator may already be gone. */
-                  });
               }
-            },
-            () => {
-              if (hasCoverage && !complete) {
-                ownedPath(directory, "coverage/coverage-summary.json");
-                if (previousSummary) {
-                  mkdirSync(join(directory, "coverage"), { recursive: true });
-                  writeFileSync(summaryPath, previousSummary);
-                } else rmSync(summaryPath, { force: true });
-              }
-            },
-          ],
-          sessionFailure,
+          };
+          if (prepared.profileDependencies && !inSelectedShell(directory, environment))
+            await withCacheLock(prepared.profileDependencies, use, 0);
+          else await use();
+        };
+        if (prepared.builds && !plan.cleanup) await withBuildLock(prepared.builds, run);
+        else await run();
+      };
+      if (environment === "native" && !plan.cleanup)
+        await withToolCacheUseAsync(
+          execute,
+          selectedToolRequirements(root, relative(root, directory).replaceAll("\\", "/") || ".", options),
         );
-      }
-    }
-    console.log(`Passed ${String(total)}/${String(total)} checks.`);
-  } finally {
-    if (process.env.WORKBENCH_EPHEMERAL_CHECKOUT === "1") {
-      for (const directory of new Set(plan.sessions.map((session) => session.directory)))
-        cleanBuilds(buildPaths(root, directory, "native", {}, false), true);
+      else await execute();
+      complete = true;
+    } catch (error) {
+      sessionFailure = error;
+      throw error;
+    } finally {
+      await settleCleanup(
+        [
+          () => {
+            try {
+              isolated?.release();
+            } finally {
+              if (scriptDirectory) rmSync(scriptDirectory, { recursive: true, force: true });
+            }
+          },
+          async () => {
+            try {
+              if (!verbose && !plan.cleanup) {
+                const paths = buildPaths(root, directory, environment, options);
+                const logs = join(paths.directory, "check-logs", logID);
+                if (existsSync(logs)) {
+                  const owner = process.env.WORKBENCH_LOCAL_CONFIG_ROOT ?? paths.identity.checkout;
+                  const archive =
+                    retainedDirectory ?? checkLogDirectory(paths.storageRoot, owner, paths.identity.root, logID);
+                  if (retainedDirectory) {
+                    const parent = dirname(retainedDirectory);
+                    if (
+                      !/^session-\d+$/.test(basename(retainedDirectory)) ||
+                      resolve(parent) !== resolve(checkLogDirectory(paths.storageRoot, owner, ".", basename(parent)))
+                    )
+                      throw new Error("invalid parent log directory");
+                    requireActiveLogRun(parent);
+                  }
+                  await withCacheLock(archive, async () => {
+                    if (retainedDirectory) mkdirSync(archive, { recursive: true, mode: 0o700 });
+                    else {
+                      prepareCheckLogs(paths.storageRoot, owner, paths.identity.root, logID);
+                      startLogRun(archive);
+                    }
+                    cpSync(logs, archive, { recursive: true });
+                    rmSync(logs, { recursive: true, force: true });
+                    const retained = retainedDirectory
+                      ? { files: readdirSync(archive).map((name) => ({ name })), errors: [] }
+                      : await finishLogRun(archive, logRetention(root));
+                    const message: CheckWorkerMessage = {
+                      type: CheckMessage.Logs,
+                      directory: archive,
+                      files: retained.files.map((file) => file.name),
+                      errors: retained.errors,
+                    };
+                    if (process.send && process.connected)
+                      process.send(message, (error) => {
+                        if (error)
+                          diagnostic(
+                            LogLevel.Warn,
+                            DiagnosticOperation.CheckLogs,
+                            DiagnosticOutcome.Unavailable,
+                            {},
+                            error,
+                            "coordinator evidence channel unavailable",
+                          );
+                      });
+                  });
+                  writeDiagnosticText(`Full check logs: ${archive}`);
+                }
+              }
+            } catch (error) {
+              diagnostic(
+                LogLevel.Warn,
+                DiagnosticOperation.CheckLogRetention,
+                DiagnosticOutcome.Unavailable,
+                {},
+                error,
+                "evidence may be unavailable",
+              );
+              if (process.send && process.connected)
+                process.send({ type: CheckMessage.LogError, error: diagnosticError(error) }, () => {
+                  /* The coordinator may already be gone. */
+                });
+            }
+          },
+          () => {
+            if (hasCoverage && !complete) {
+              ownedPath(directory, "coverage/coverage-summary.json");
+              if (previousSummary) {
+                mkdirSync(join(directory, "coverage"), { recursive: true });
+                writeFileSync(summaryPath, previousSummary);
+              } else rmSync(summaryPath, { force: true });
+            }
+          },
+        ],
+        sessionFailure,
+      );
     }
   }
+  console.log(`Passed ${String(total)}/${String(total)} checks.`);
 }

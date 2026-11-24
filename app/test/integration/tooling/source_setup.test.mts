@@ -90,7 +90,10 @@ test("a relocated source snapshot resolves relative store metadata at its physic
   rmSync(join(target, "node_modules"), { recursive: true });
   symlinkSync(join(provider, "node_modules"), join(target, "node_modules"), "junction");
   expect(preparedDependenciesMatch(target)).toBe(true);
+  await setupDevelopment(target, ["--reuse-prepared", "--verify-prepared"]);
+  expect(existsSync(join(target, "bundle"))).toBe(false);
   write("external-store/lock.yaml", "{}");
+  await expect(setupDevelopment(target, ["--verify-prepared"])).rejects.toThrow(/Prepare the locked dependencies/);
   await expect(setupDevelopment(target, ["--build-only"])).rejects.toThrow(/linked dependency provider/);
   expect(readFileSync(join(provider, "external-store/lock.yaml"), "utf8")).toBe("{}");
 });

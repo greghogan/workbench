@@ -22,6 +22,7 @@ import { NativeToolUnavailable } from "../../toolchains/tool-probes.js";
 import { checkGateInputScope } from "./check-input-scope.js";
 import { readConfig } from "../../projects/project-configuration.js";
 import { freshSecurityChecks, scopedCheckGroups } from "./check-cache-plan.js";
+import type { CheckIsolationBackend } from "./check-isolation.js";
 import { withScopedCheckGroups } from "./check-cache-groups.js";
 
 /** Reuse evidence, not build outputs. Human approval and structural validation remain independent. */
@@ -32,33 +33,37 @@ export async function withCachedChecks(
   run: CheckGateRunner,
   signal?: AbortSignal,
   recordReport?: (report: CheckRunResult) => void,
+  isolation?: { backend: CheckIsolationBackend | undefined },
 ): Promise<void> {
   signal?.throwIfAborted();
   const declaredScope = checkGateInputScope(plan.sessions, readConfig(root).checks?.inputs);
   const runFresh = (reason: string, selected = plan, inputScope = declaredScope) =>
     run(selected, { outcome: "fresh", inputScope, reason });
-  if (
-    options.role?.length ||
-    options.excludeRole?.length ||
-    options.checkNames ||
+  const ci =
     options.stage === "ci" ||
-    plan.cleanup ||
+    [process.env.CI, process.env.GITHUB_ACTIONS, process.env.GITLAB_CI].some(
+      (value) => value && value !== "false" && value !== "0",
+    );
+  const freshOnly =
+    (options.role?.length ?? 0) > 0 ||
+    (options.excludeRole?.length ?? 0) > 0 ||
+    options.checkNames !== undefined ||
+    ci ||
     // Extended checks may probe host services and disposable environments outside the source fingerprint.
     plan.sessions.some((session) =>
       session.checks.some((check) => check.online || check.role === "advisory" || (options.extended && check.extended)),
-    ) ||
-    !plan.sessions.length ||
-    [process.env.CI, process.env.GITHUB_ACTIONS, process.env.GITLAB_CI].some(
-      (value) => value && value !== "false" && value !== "0",
-    )
-  ) {
-    await runFresh("Reuse is disabled for this selection");
+    );
+  const groups = scopedCheckGroups(root, plan, !!isolation);
+  if (groups && (!freshOnly || isolation))
+    return withScopedCheckGroups(root, options, plan, groups, run, signal, recordReport, isolation, freshOnly);
+  if (freshOnly || plan.cleanup || !plan.sessions.length) {
+    const scope =
+      declaredScope.mode === "scoped" && isolation
+        ? { mode: "whole-project" as const, reason: "This selection has no verified isolation backend" }
+        : declaredScope;
+    await runFresh("Reuse is disabled for this selection", plan, scope);
     return;
   }
-  const groups = plan.sessions.every((session) => session.environment === "native")
-    ? scopedCheckGroups(root, plan)
-    : undefined;
-  if (groups) return withScopedCheckGroups(root, options, plan, groups, run, signal, recordReport);
   const verbose = options.verbose ?? process.env.WORKBENCH_VERBOSE === "1";
   const started = performance.now();
   let inputs: CheckFingerprint;

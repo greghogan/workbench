@@ -40,6 +40,17 @@ function fixture(builder: string) {
   return { root, profile };
 }
 
+test("native toolchain images depend on tool acquisition independently of project dependency preparation", () => {
+  const { root, profile } = fixture("native-toolchain");
+  const before = offlineInputs(root, profile);
+  const preparation = join(root, "scripts/prepare-development.mjs");
+  writeFileSync(preparation, "changed development dependency acquisition\n");
+  expect(offlineInputs(root, profile)).toBe(before);
+  const tools = join(root, "scripts/prepare-image-tools.mjs");
+  writeFileSync(tools, "changed native tool acquisition\n");
+  expect(offlineInputs(root, profile)).not.toBe(before);
+});
+
 test.each(["native", "nix", "guix"])(
   "%s image selection survives package command edits, including regenerated managed metadata",
   (builder) => {

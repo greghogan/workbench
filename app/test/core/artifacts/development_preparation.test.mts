@@ -99,8 +99,8 @@ if (args[0] === 'check' && args[1] === 'matrix') {
     { ...host, os: host.os === 'windows' ? 'linux' : 'windows', path: 'foreign-os', toolchain: 'foreign-os-profile' },
     { ...host, architecture: host.architecture === 'x64' ? 'arm64' : 'x64', path: 'foreign-architecture', toolchain: 'foreign-architecture-profile' },
   ] }, environments: { include: ['nix', 'guix'].flatMap(environment => ['.', 'app', 'managed-only'].map(path => ({ path, environment }))) } }));
-} else if (args.includes('--role')) {
-  const roles = args.flatMap((value,index) => value === '--role' ? [args[index+1]] : []);
+} else if (args[0] === 'prepare' || args.includes('--role')) {
+  const roles = args[0] === 'prepare' ? ['acquire'] : args.flatMap((value,index) => value === '--role' ? [args[index+1]] : []);
   const workspace=mkdtempSync(join(root,'check-session-'));
   try {
   for (const role of roles) {
@@ -173,7 +173,9 @@ test("registered roots are prepared without CI coverage and selections apply to 
   expect(readdirSync(join(f.root, "inputs")).sort()).toEqual(["app-build", "app-tools"]);
   const verified = f.run("native", true, {}, ["app"]);
   expect(verified.status, verified.stdout + verified.stderr).toBe(0);
-  const checks = f.events().flatMap(({ args }) => (args?.includes("--role") ? [args] : []));
+  const checks = f
+    .events()
+    .flatMap(({ args }) => (args && (args[0] === "prepare" || args.includes("--role")) ? [args] : []));
   expect(checks.every((args) => args[args.indexOf("--path") + 1] === "app")).toBe(true);
   for (const paths of [["missing"], ["app", "app"]]) {
     const rejected = f.run("native", true, {}, paths);
@@ -212,8 +214,12 @@ test("native acquisition is separate from fresh offline builds and executable ex
     ).toEqual(["build", "smoke"]);
     expect(selected.every(({ args }) => args.includes("--no-cache"))).toBe(true);
   }
-  const online = f.events().filter(({ args, offline }) => !offline && args?.includes("--role"));
-  expect(online.map(({ args }) => args?.[args.indexOf("--role") + 1])).toEqual([
+  const online = f
+    .events()
+    .flatMap(({ args, offline }) =>
+      !offline && args && (args[0] === "prepare" || args.includes("--role")) ? [args] : [],
+    );
+  expect(online.map((args) => (args[0] === "prepare" ? "acquire" : args[args.indexOf("--role") + 1]))).toEqual([
     "acquire",
     "build",
     "acquire",

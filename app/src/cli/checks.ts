@@ -4,6 +4,7 @@ import { RegistryProvider } from "../core/artifacts/registry-management-contract
 import { runGate, type GateOptions } from "../core/execution/checks/check-gates.js";
 import type { CheckSelection } from "../core/execution/checks/check-plan.js";
 import { runCheckSession } from "../core/execution/checks/checks.js";
+import { acquireCheckInputs, type AcquisitionSelection } from "../core/execution/checks/check-acquisition.js";
 import { withUnixJobLease } from "../core/execution/checks/unix-jobserver-client.js";
 import { nativeWorkerLimit, workerEnvironment, type WorkerTool } from "../core/execution/checks/native-worker-tools.js";
 import { distributionRoot } from "../core/projects/project-context.js";
@@ -28,17 +29,8 @@ import { listLocalCI, runLocalCI, type LocalCIOptions } from "../core/execution/
 import { compilerFamilies } from "../core/toolchains/compiler-catalog.mjs";
 import { collect, registerCommand } from "./commands.js";
 export function registerCheckCommands(program: Command, root: string): void {
-  function gateCommand(name: "check" | "pre-commit" | "pre-push"): Command {
-    const command = registerCommand(program, name)
-      .description(
-        name === "check"
-          ? "Run the commit gate, then online checks when connectivity is available"
-          : name === "pre-commit"
-            ? "Run the complete offline commit gate"
-            : "Run required online checks fresh before pushing",
-      )
-      .option("--list", "List selected checks without executing them")
-      .addOption(new Option("--json", "Print the check plan as JSON (implies --list)").implies({ list: true }))
+  const selectWorkspace = (command: Command) =>
+    command
       .option("--verbose", "Stream full command output (also WORKBENCH_VERBOSE=1)")
       .option("--project <id>", "Select a project and descendant check roots")
       .option("--path <path>", "Select one registered language root")
@@ -48,15 +40,34 @@ export function registerCheckCommands(program: Command, root: string): void {
         new Option("--workspace <workspace>", "Override the profile's workspace").choices(["host", "devcontainer"]),
       )
       .argument("[root]", "Project tree (default: current project root)");
+  const selectTools = (command: Command) =>
+    command
+      .addOption(new Option("--compiler <family>", "Select a supported C/C++ compiler").choices(compilerFamilies))
+      .option("--compiler-version <version>", "Select an exact C/C++ compiler version")
+      .option("--toolchain <name>", "Use a named compiler/runtime profile");
+  selectTools(selectWorkspace(registerCommand(program, "prepare")))
+    .description("Acquire the locked dependencies required by the selected checks")
+    .option("--staged", "Acquire inputs for the Git index instead of the working tree")
+    .action(async (requested: string | undefined, options: AcquisitionSelection) => {
+      await acquireCheckInputs(requested ? resolve(requested) : root, options);
+    });
+  function gateCommand(name: "check" | "pre-commit" | "pre-push"): Command {
+    const command = selectWorkspace(registerCommand(program, name))
+      .description(
+        name === "check"
+          ? "Run the commit gate, then online checks when connectivity is available"
+          : name === "pre-commit"
+            ? "Run the complete commit-stage gate"
+            : "Run required online checks fresh before pushing",
+      )
+      .option("--list", "List selected checks without executing them")
+      .addOption(new Option("--json", "Print the check plan as JSON (implies --list)").implies({ list: true }));
     if (name === "pre-push")
       command.option("--remote <name>", "Check prepared images for this configured push destination");
     if (name !== "pre-push")
-      command
+      selectTools(command)
         .option("--no-cache", "Run checks fresh instead of reusing a matching successful gate")
-        .addOption(new Option("--all", "Include excluded checks in the plan (implies --list)").implies({ list: true }))
-        .addOption(new Option("--compiler <family>", "Select a supported C/C++ compiler").choices(compilerFamilies))
-        .option("--compiler-version <version>", "Select an exact C/C++ compiler version")
-        .option("--toolchain <name>", "Use a named compiler/runtime profile");
+        .addOption(new Option("--all", "Include excluded checks in the plan (implies --list)").implies({ list: true }));
     if (name === "check")
       command
         .option("--stage <stage>", "Run only the commit or ci stage")

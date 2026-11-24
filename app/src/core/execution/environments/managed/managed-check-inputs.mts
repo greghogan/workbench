@@ -118,13 +118,23 @@ export function mavenCheckInputs(root: string) {
     });
 }
 
-export function rubyCheckInputs(root: string) {
+export function rubyLockChecksums(root: string) {
   const lock = text(root, "Gemfile.lock");
   const section = /(?:^|\n)CHECKSUMS\n([\s\S]*?)(?=\n[A-Z]|$)/.exec(lock)?.[1];
-  if (!section) throw new Error("Managed gems require the lock's CHECKSUMS section");
-  return [...section.matchAll(/^ {2}([A-Za-z0-9._-]+) \(([^)]+)\) sha256=([a-f0-9]{64})$/gm)].flatMap((match) => {
-    const version = required(match[2], "Missing gem version"),
-      platform = version.replace(/^[0-9]+(?:\.[0-9]+)*(?:\.pre\.[0-9]+)?/, "");
+  if (!section) throw new Error("Prepared gems require the lock's CHECKSUMS section");
+  return [...section.matchAll(/^ {2}([A-Za-z0-9._-]+) \(([A-Za-z0-9._-]+)\) sha256=([a-f0-9]{64})$/gm)].map((match) => {
+    const version = required(match[2], "Missing gem version");
+    return {
+      archive: `${String(match[1])}-${version}.gem`,
+      version,
+      checksum: required(match[3], "Missing gem checksum"),
+    };
+  });
+}
+
+export function rubyCheckInputs(root: string) {
+  return rubyLockChecksums(root).flatMap(({ archive, version, checksum }) => {
+    const platform = version.replace(/^[0-9]+(?:\.[0-9]+)*(?:\.pre\.[0-9]+)?/, "");
     const selected = !platform
       ? ["linux-x64", "linux-arm64"]
       : platform === "-x86_64-linux-gnu"
@@ -133,15 +143,7 @@ export function rubyCheckInputs(root: string) {
           ? ["linux-arm64"]
           : [];
     if (!selected.length) return [];
-    const name = `${String(match[1])}-${version}.gem`;
-    return [
-      artifact(
-        `https://rubygems.org/downloads/${name}`,
-        sri(required(match[3], "Missing gem checksum")),
-        `gems/${name}`,
-        selected,
-      ),
-    ];
+    return [artifact(`https://rubygems.org/downloads/${archive}`, sri(checksum), `gems/${archive}`, selected)];
   });
 }
 

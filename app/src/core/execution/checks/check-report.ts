@@ -12,7 +12,7 @@ export interface CheckCacheReport {
   outcome: "fresh" | "reused";
   inputScope: CheckInputScope;
   reason?: string;
-  groups?: { path: string; environment: string; checks: string[]; inputScope: CheckInputScope }[];
+  groups?: { path: string; environment: string; checks: string[]; inputScope: CheckInputScope; backend?: string }[];
 }
 
 export type CheckGateRunner = (

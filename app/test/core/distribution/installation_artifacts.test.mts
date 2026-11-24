@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -18,9 +19,11 @@ import {
   sealDistribution,
 } from "../../../src/core/distribution/distribution-manifest.ts";
 import { materializeDistribution } from "../../../src/core/distribution/runtime-distribution.ts";
+import { copySourceCheckout } from "../../../src/core/execution/snapshots/source-checkout.mjs";
 import { prepareWorkbenchPackage } from "../../../src/core/artifacts/package.ts";
 import { distribution } from "../../fixtures/adoption.mjs";
 import { installationFixtures, pin } from "../../fixtures/installations.mjs";
+import { goCountFixture } from "../../fixtures/go-starter.mjs";
 
 const { fixture } = installationFixtures();
 
@@ -99,11 +102,14 @@ test("runtime snapshots and executable packages include hooks and exclude person
 
 test("the executable package verifies independent adoption and includes references without development dependencies", async () => {
   const root = fixture(),
+    source = join(root, "source"),
     output = join(root, "artifacts");
+  copySourceCheckout(distribution, source);
+  copyFileSync(goCountFixture, join(source, "examples/languages/go/count.go"));
   const generated = readdirSync(join(distribution, "bundle"))
     .filter((name) => !name.startsWith("."))
     .map((name) => ({ path: `bundle/${name}`, contents: readFileSync(join(distribution, "bundle", name)) }));
-  await prepareWorkbenchPackage(distribution, { output, generated });
+  await prepareWorkbenchPackage(source, { output, generated });
   const packaged = join(output, "workbench");
   const manifest = JSON.parse(readFileSync(join(packaged, "package.json"), "utf8")) as Record<string, unknown>;
   expect(
@@ -134,7 +140,7 @@ test("the executable package verifies independent adoption and includes referenc
   // Verification must execute the archive even when the staging directory no longer exists.
   rmSync(packaged, { recursive: true });
   const verify = () =>
-    spawnSync(process.execPath, [join(distribution, "scripts/check-release.mjs"), output, distribution], {
+    spawnSync(process.execPath, [join(distribution, "scripts/check-release.mjs"), output, source], {
       cwd: distribution,
       env: { ...process.env, WORKBENCH_PROJECT_ROOT: distribution },
       encoding: "utf8",

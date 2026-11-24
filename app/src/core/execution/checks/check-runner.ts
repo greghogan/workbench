@@ -26,7 +26,14 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { relative, join } from "node:path";
 import { checkFailureExcerpt, checkDetailLines } from "./check-output.js";
 import { distributionRoot } from "../../projects/project-context.js";
-import { buildCheckout, buildStorageSettings, prepareCheckLogs, checkLogDirectory } from "../../artifacts/builds.js";
+import {
+  buildCheckout,
+  buildPaths,
+  buildStorageSettings,
+  cleanBuilds,
+  prepareCheckLogs,
+  checkLogDirectory,
+} from "../../artifacts/builds.js";
 import { withCacheLock } from "../../storage/cache-lock.js";
 import { checkExecution } from "./check-resources.js";
 import { CheckControl, checkControlPrefix } from "./check-control.js";
@@ -37,15 +44,13 @@ import type { CheckCancellation } from "./check-cancellation.js";
 import type { ProcessLock } from "../../storage/process-lock.js";
 import { CheckLines, CheckProgress, checkEventPrefix } from "./check-progress.js";
 import { safeOutput } from "../../diagnostics/terminal-output.js";
-import type { CheckSelection, planChecks } from "./check-plan.js";
-
-type Plan = ReturnType<typeof planChecks>;
+import type { CheckSelection, CheckPlan } from "./check-plan.js";
 
 /** Drain every admitted group before returning, so staged checkouts and shared outputs outlive active work. */
 export async function runCheckGroups(
   root: string,
   options: CheckSelection,
-  plan: Plan,
+  plan: CheckPlan,
   cancellation: CheckCancellation,
   owner: ProcessLock,
   recordReport?: (report: CheckRunResult) => void,
@@ -161,7 +166,7 @@ export async function runCheckGroups(
     let error: Error | undefined;
     let child: ReturnType<typeof spawn> | undefined;
     let workerFailure: Error | undefined;
-    let failedCheck: Plan["sessions"][number]["checks"][number] | undefined;
+    let failedCheck: CheckPlan["sessions"][number]["checks"][number] | undefined;
     const token = randomBytes(16).toString("hex");
     const control = new CheckControl(token, session.checks.length);
     const setupStep = session.checks.reduce((last, check, index) => (check.role === "setup" ? index + 1 : last), 0);
@@ -219,6 +224,10 @@ export async function runCheckGroups(
       cancellation.checkpoint();
       const selection: CheckSelection = { ...options };
       selection.checkNames = session.checks.map((check) => check.name);
+      if (plan.isolated)
+        selection.isolationGroups = plan.isolated
+          .filter(({ directory }) => directory === session.directory)
+          .map(({ group }) => group);
       if (machineJobserver) selection.machineJobserver = machineJobserver;
       delete selection.path;
       delete selection.project;
@@ -244,6 +253,7 @@ export async function runCheckGroups(
             windowsHide: true,
             env: {
               ...currentExecutionEnvironment(),
+              ...(options.offline && { WORKBENCH_OFFLINE: "1" }),
               ...(cpus === null ? {} : cpuEnvironment(cpus)),
               WORKBENCH_PROJECT_ROOT: root,
               WORKBENCH_CHECK_EVENTS: "1",
@@ -468,6 +478,11 @@ export async function runCheckGroups(
           progress.close(!failures.length && !cancellation.cancelled && !pending.size);
         },
         () => (reportState.finished ? undefined : finishReport(false, runFailure)),
+        () => {
+          if (currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1")
+            for (const directory of new Set(plan.sessions.map((session) => session.directory)))
+              cleanBuilds(buildPaths(root, directory, "native", {}, false), true);
+        },
         restoreDiagnostics,
       ],
       runFailure,

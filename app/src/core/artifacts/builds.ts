@@ -3,7 +3,17 @@ import { currentExecutionEnvironment } from "../execution/environments/execution
 import { microsoftToolset, resolveMicrosoftSDK, type ResolvedMicrosoftSDK } from "../toolchains/mvsc.js";
 import { guixChannelFile } from "../execution/environments/managed/managed-contract.mjs";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { distributionRoot } from "../projects/project-context.js";
@@ -706,4 +716,9 @@ export function assertBuildOutput(directory: string): void {
   if (!existsSync(receipt) && resolve(output) !== join(realpathSync(process.cwd()), "build"))
     throw new Error(`${output}: missing build ownership receipt`);
   ownedPath(output, within.split(sep).join("/"));
+}
+
+export function copyBuildOutputReceipt(output: string, privateOutput: string): void {
+  const receipt = ownedPath(output, marker);
+  if (existsSync(receipt)) copyFileSync(receipt, ownedPath(privateOutput, marker));
 }

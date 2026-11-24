@@ -78,6 +78,7 @@ test("a bounded probe timeout permits a skip; certificate and unexpected errors 
 
 test("combined checks run commit first and fresh online second, propagating online failure", async () => {
   const events: string[] = [];
+  vi.mocked(verifyCIImages).mockRejectedValue(new Error("Required prepared image is missing"));
   vi.mocked(validate).mockImplementation(() => {
     return promised(() => {
       events.push("validate");
@@ -95,6 +96,7 @@ test("combined checks run commit first and fresh online second, propagating onli
   });
   await expect(runGate("/project", "check", {})).rejects.toThrow("advisory finding");
   expect(events).toEqual(["validate", "commit", "validate", "online"]);
+  expect(verifyCIImages).not.toHaveBeenCalled();
   expect(runChecks).toHaveBeenLastCalledWith(
     "/project",
     expect.objectContaining({ network: CheckNetwork.Online, stage: "ci", cache: false }),
@@ -108,7 +110,12 @@ test("the combined gate skips unavailable online checks; the push gate still req
   vi.mocked(fetch).mockRejectedValue(new TypeError("fetch failed", { cause: { code: "ENETUNREACH" } }));
   await runGate("/project", "check", {});
   expect(runChecks).toHaveBeenCalledTimes(1);
-  expect(runChecks).toHaveBeenCalledWith("/project", {}, expect.any(Function), undefined);
+  expect(runChecks).toHaveBeenCalledWith(
+    "/project",
+    process.platform === "linux" ? { offline: true, network: CheckNetwork.Offline } : {},
+    expect.any(Function),
+    undefined,
+  );
   vi.mocked(runChecks).mockRejectedValue(new Error("network unavailable"));
   await expect(runGate("/project", "pre-push", {})).rejects.toThrow("network unavailable");
   expect(fetch).toHaveBeenCalledTimes(1);

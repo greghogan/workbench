@@ -48,6 +48,7 @@ export interface CheckDefinition {
 }
 export interface CheckInputGroup {
   paths?: string[];
+  outputs?: string[];
   depends_on?: string[];
 }
 export interface CheckOrderDefinition {

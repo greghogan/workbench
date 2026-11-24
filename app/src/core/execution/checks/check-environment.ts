@@ -116,6 +116,7 @@ const languageBudgets: Record<string, string[]> = {
 // Nested integration workflows must find the same manager stores as their owning project.
 // Keep storage locations across roots without forwarding other languages' compiler or test options.
 const managerLocations: Record<string, string[]> = {
+  go: ["GOMODCACHE", "GOPATH"],
   rust: ["CARGO_HOME", "RUSTUP_HOME"],
   python: ["UV_PYTHON_INSTALL_DIR", "UV_PYTHON_CACHE_DIR"],
 };

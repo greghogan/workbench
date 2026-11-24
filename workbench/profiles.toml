@@ -820,7 +820,7 @@ inputs = [
   "scripts/keys",
   "scripts/llvm-assets.json",
   "scripts/native-assets.json",
-  "scripts/prepare-development.mjs",
+  "scripts/prepare-image-tools.mjs",
   "scripts/split-prepared-inputs.mjs",
 ]
 [[development.profiles]]

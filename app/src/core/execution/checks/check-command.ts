@@ -46,8 +46,8 @@ export function runCommand(
         });
       };
       const use = () => {
-        if (prepared.builds && prepared.profile && !inSelectedShell(directory, selected))
-          withCacheLockSync(prepared.builds.dependencies, run, 0);
+        if (prepared.profileDependencies && !inSelectedShell(directory, selected))
+          withCacheLockSync(prepared.profileDependencies, run, 0);
         else run();
       };
       if (prepared.builds && lockBuild) withBuildLock(prepared.builds, use);
@@ -99,8 +99,8 @@ export async function runCommandAsync(
           cancellation.checkpoint();
         });
       const use = (owner?: ProcessLock) =>
-        prepared.builds && prepared.profile && !inSelectedShell(directory, selected)
-          ? withCacheLock(prepared.builds.dependencies, () => run(owner), 0)
+        prepared.profileDependencies && !inSelectedShell(directory, selected)
+          ? withCacheLock(prepared.profileDependencies, () => run(owner), 0)
           : run(owner);
       if (prepared.builds) await withBuildUse(prepared.builds, use);
       else await use();

@@ -15,6 +15,7 @@ import {
   checkConfigurationFiles,
 } from "../../../../src/core/execution/checks/check-environment.ts";
 import { runCommand } from "../../../../src/core/execution/checks/check-command.ts";
+import { checkInvocation } from "../../../../src/core/execution/checks/check-invocation.ts";
 import { checkFingerprint, changedConfigurationFiles } from "../../../../src/core/execution/checks/check-inputs.ts";
 import { withDevelopmentSelection } from "../../../../src/core/execution/environments/environments.ts";
 import { configFromData } from "../../../../src/core/projects/project-configuration.ts";
@@ -74,6 +75,26 @@ function fixture(languages: string[] = [], pass: string[] = []) {
   registerProject(root, "fixture");
   return { base, root };
 }
+
+test.runIf(process.platform === "linux").each(["nix", "guix"] as const)(
+  "offline %s checks use an existing prepared profile and explain how to prepare a missing one",
+  (manager) => {
+    const { root } = fixture();
+    for (const file of ["flake.nix", "flake.lock", "channels.scm", "manifest.scm"]) writeFileSync(join(root, file), "");
+    const profile = join(root, "prepared-profile");
+    vi.stubEnv("WORKBENCH_OFFLINE", "1");
+    vi.stubEnv("WORKBENCH_PREPARED", undefined);
+    vi.stubEnv("WORKBENCH_ENVIRONMENTS", undefined);
+    vi.stubEnv("WORKBENCH_DEVCONTAINER", undefined);
+    const command = () =>
+      checkInvocation(root, manager, ["node", "--version"], root, undefined, undefined, undefined, profile);
+    expect(command).toThrow(`workbench prepare --environment ${manager}`);
+    writeFileSync(profile, "prepared");
+    const invocation = command();
+    expect(invocation).toContain(manager === "guix" ? `--profile=${profile}` : profile);
+    expect(invocation.slice(-3)).toEqual([manager === "guix" ? "--" : "--command", "node", "--version"]);
+  },
+);
 
 test("native tools receive the declared environment rather than the caller environment", () => {
   const { root } = fixture([], ["APPLICATION_MODE"]);

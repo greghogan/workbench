@@ -14,6 +14,7 @@ import { safeOutput } from "../../diagnostics/terminal-output.js";
 import { CheckNetwork } from "./check-network.mjs";
 import { provisionalCommitRequested } from "../../git/commit-history.js";
 import { checkPushSignatures } from "../../git/push-signatures.js";
+import { currentExecutionEnvironment } from "../environments/execution-context.js";
 
 export interface GateOptions extends CheckInspectionOptions {
   list?: boolean;
@@ -28,6 +29,18 @@ const gateHeadings = {
 };
 
 const connectivityUrl = "https://api.osv.dev/";
+const connectedOperations = new Set([
+  "setup",
+  "acquire",
+  "advisory",
+  "clean",
+  "distclean",
+  "release",
+  "release-verify",
+  "compatibility-setup",
+  "compatibility-test",
+  "integration",
+]);
 const unavailableCodes = new Set([
   "ENETDOWN",
   "ENETUNREACH",
@@ -76,8 +89,34 @@ async function executeGate(
       "role selection applies only to check; commit and push gates require their complete configured checks",
     );
   const focused = (options.role?.length ?? 0) > 0 || (options.excludeRole?.length ?? 0) > 0;
-  const combined = mode === "check" && !focused && options.stage === undefined;
-  const online = { ...options, network: CheckNetwork.Online, stage: "ci", cache: false, afterCommit: combined };
+  const prepared = options.offline ?? currentExecutionEnvironment().WORKBENCH_OFFLINE === "1";
+  const combined = mode === "check" && !focused && !prepared && options.stage === undefined;
+  const linuxOffline =
+    process.platform === "linux" &&
+    mode !== "pre-push" &&
+    options.network !== CheckNetwork.Online &&
+    !options.extended &&
+    !options.role?.some((role) => connectedOperations.has(role));
+  const offline = prepared || linuxOffline;
+  if (offline) {
+    if (mode === "pre-push" || options.network === CheckNetwork.Online)
+      throw new Error("Required online checks need a connected environment");
+    if (process.platform === "win32") throw new Error("Offline check execution is unavailable on Windows");
+    if (
+      mode === "pre-commit" &&
+      inspectChecks(root, { ...options, network: CheckNetwork.All }).selected.some((check) => check.online)
+    )
+      throw new Error("The configured commit gate requires online checks. Run it in a connected environment");
+    options = { ...options, offline: true, network: CheckNetwork.Offline };
+  }
+  const online = {
+    ...options,
+    offline: false,
+    network: CheckNetwork.Online,
+    stage: "ci",
+    cache: false,
+    afterCommit: combined,
+  };
   if (options.connectivityUrl !== undefined) {
     if (!combined) throw new Error("--connectivity-url applies only to the combined check gate");
     probeUrl(options.connectivityUrl);
@@ -127,7 +166,7 @@ async function executeGate(
   const validateGate = focused ? undefined : () => validate(root);
   if (mode !== "pre-push") await runChecks(root, selected, validateGate, recordReport);
   if (mode !== "pre-push" && !combined) return;
-  const validateOnline = async () => {
+  const validatePush = async () => {
     await validateGate?.();
     await verifyCIImages(
       root,
@@ -136,14 +175,14 @@ async function executeGate(
     );
   };
   if (!inspectChecks(root, online).selected.length) {
-    if (mode === "pre-push") await validateOnline();
+    if (mode === "pre-push") await validatePush();
     console.log(
       combined && options.extended ? "No additional online checks." : "No online pre-push checks are configured.",
     );
     return;
   }
   if (combined && !(await onlineReachable(options.connectivityUrl))) return;
-  await runChecks(root, online, validateOnline, recordReport);
+  await runChecks(root, online, mode === "pre-push" ? validatePush : validateGate, recordReport);
 }
 
 export async function runGate(

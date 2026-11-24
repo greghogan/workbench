@@ -292,6 +292,19 @@ function withPrivateIndex<T>(
     return action(run);
   });
 }
+
+/** Materialize one immutable tree without changing the repository's index or checkout. */
+export function materializeGitTree(root: string, tree: string, destination: string): void {
+  withPrivateIndex(root, tree, (run) => {
+    run([
+      "-c",
+      "core.symlinks=true",
+      "checkout-index",
+      "--all",
+      "--prefix=" + resolve(destination).replaceAll("\\", "/") + "/",
+    ]);
+  });
+}
 /** Persist retained baseline bytes through one Git process, independent of the current worktree. */
 export function writeReviewBlobs(root: string, contents: readonly Buffer[]): string[] {
   if (!contents.length) return [];

@@ -226,7 +226,7 @@ export async function exerciseConsumerProfile(
             "MAVEN_ARGS",
           ];
           writeFileSync(configPath, editToml(configText, config));
-          await check(`${language}-offline`, project, ["--role", "test"], false, offline);
+          await check(`${language}-offline`, project, ["--role", "test"], process.platform === "win32", offline);
         });
         if (language === "java") {
           await scenarios.run(

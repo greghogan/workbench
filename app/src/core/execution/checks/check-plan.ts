@@ -8,6 +8,7 @@ import type { ConfiguredCheck } from "./check-configuration.js";
 import { toolProfile } from "../../toolchains/tool-profiles.js";
 import { readCheckOrder } from "./check-order.js";
 import { CheckNetwork, readCheckNetwork } from "./check-network.mjs";
+import type { CheckIsolationGroup } from "./check-isolation.js";
 
 export const checkStages = ["commit", "ci"] as const;
 export const manualCheckRoles = [
@@ -30,6 +31,7 @@ export interface CheckSelection {
   report?: string;
   stage?: string;
   extended?: boolean;
+  offline?: boolean;
   network?: CheckNetwork;
   /** The online half of a combined gate follows the pre-commit selection. */
   afterCommit?: boolean;
@@ -42,10 +44,14 @@ export interface CheckSelection {
   architecture?: string;
   /** Internal worker selection from the coordinator's already validated plan. */
   checkNames?: string[];
+  isolationGroups?: CheckIsolationGroup[];
   machineJobserver?: string;
 }
 
-export type CheckPlan = ReturnType<typeof planChecks> & { resourceSessions?: number };
+export type CheckPlan = ReturnType<typeof planChecks> & {
+  resourceSessions?: number;
+  isolated?: { directory: string; group: CheckIsolationGroup }[];
+};
 
 export function commandArguments(value: unknown, label: string): asserts value is string[] {
   if (!Array.isArray(value) || !value.length || value.some((part: unknown) => typeof part !== "string" || !part))
@@ -289,5 +295,13 @@ export function planChecks(
   const excluded = checks
     .filter((check) => !selected.has(check.name))
     .map((check) => ({ check, reason: exclusionReason(check) }));
-  return { stage, sessions: [...sessions.values()], cleanup, excluded, ordering, automatic: !focused };
+  return {
+    stage,
+    sessions: [...sessions.values()],
+    cleanup,
+    excluded,
+    ordering,
+    automatic: !focused,
+    offline: !!options.offline,
+  };
 }

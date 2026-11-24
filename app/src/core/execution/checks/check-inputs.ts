@@ -15,6 +15,7 @@ import { delimiter, dirname, isAbsolute, join, posix, relative, resolve, sep } f
 import { spawnSync } from "node:child_process";
 import { cpus, hostname, release } from "node:os";
 import { distributionRoot } from "../../projects/project-context.js";
+import { canonicalProject } from "../../projects/project-registry.js";
 import { nativeCheckEnvironment, checkConfigurationFiles, checkBaseEnvironment } from "./check-environment.js";
 import { nativeTools } from "../../toolchains/native/native-assets.js";
 import { NativeToolUnavailable, toolProbes } from "../../toolchains/tool-probes.js";
@@ -28,12 +29,14 @@ import { ownedPath } from "../../runtime/paths.js";
 import { withConfigurationSnapshot } from "../../configuration/configuration-snapshot.js";
 import { checkGateInputScope, inputScopeMatcher, type CheckInputScope } from "./check-input-scope.js";
 import { distributionPathIncluded } from "../../distribution/distribution-layout.js";
+import { generatedOutput } from "../../runtime/generated-file.js";
+import { untrackedToolingOutput } from "../../distribution/tooling-artifacts.mjs";
 
 export const inputDigest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const slash = (path: string) => path.split(sep).join("/");
 
 /** Read contents rather than trusting stat freshness on network filesystems. */
-function fileDigest(path: string): string {
+export function fileDigest(path: string): string {
   const hash = createHash("sha256");
   const buffer = Buffer.allocUnsafe(65536);
   const file = openSync(path, "r");
@@ -74,6 +77,19 @@ function git(root: string, args: string[], env: NodeJS.ProcessEnv): string {
   return result.stdout;
 }
 
+export function committedCheckCoverage(owner: string, path: string, env: NodeJS.ProcessEnv): string | undefined {
+  const revision = env.WORKBENCH_COVERAGE_BASE ?? "HEAD";
+  if (!revision || revision.startsWith("-") || /[\r\n:]/.test(revision))
+    throw new Error("invalid coverage baseline revision");
+  const result = spawnSync("git", ["-C", owner, "cat-file", "blob", `${revision}:${path}`], {
+    env: gitEnvironment(env),
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.error) throw new Error("Git coverage baseline is unavailable", { cause: result.error });
+  return result.status === 0 ? result.stdout : undefined;
+}
+
 /** Index snapshots and working directories use the same path/content/mode representation. */
 export function sourceFingerprint(
   root: string,
@@ -82,8 +98,13 @@ export function sourceFingerprint(
   inputs?: readonly string[],
   whole = false,
 ): string {
-  return sourceInventory(root, owner, staged, whole ? undefined : inputs)(inputs, whole);
+  return inputDigest(sourceInventory(root, owner, staged, whole ? undefined : inputs)(inputs, whole));
 }
+
+export type CheckSourceEntry =
+  | [path: string, kind: "directory"]
+  | [path: string, kind: "file" | "executable" | "gitlink", digest: string]
+  | [path: string, kind: "link", target: string, digest: string];
 
 function sourceInventory(root: string, owner: string, staged: boolean, discover?: readonly string[]) {
   const env = checkBaseEnvironment(root, root);
@@ -137,7 +158,13 @@ function sourceInventory(root: string, owner: string, staged: boolean, discover?
     const namedExclusions = inputs && inputScopeMatcher(inputs.filter((name) => !policy.includes(name)));
     const includes = (name: string) =>
       (!matches || matches(name)) && (policy.includes(name) || namedExclusions?.(name) === true);
-    const entries: unknown[] = [];
+    const entries: CheckSourceEntry[] = [];
+    if (matches && existsSync(join(root, "languages/index.toml")) && distributionRoot(root) === root)
+      for (const name of names) {
+        if (!matches(name)) continue;
+        const generated = generatedOutput(name);
+        if (generated && matches(generated) && untrackedToolingOutput(generated)) selected.add(generated);
+      }
     if (inputs)
       for (const name of inputs) {
         // Explicit files can be ignored by Git. Directories use the normal Git inventory.
@@ -164,18 +191,21 @@ function sourceInventory(root: string, owner: string, staged: boolean, discover?
         const target = realpathSync(path);
         if (!target.startsWith(`${root}${sep}`) || !statSync(target).isFile())
           throw new Error("source links outside the tree or to directories require fresh checks");
-        if (
-          matches &&
-          (!includes(slash(relative(root, target))) || !includes(slash(relative(root, resolve(dirname(path), link)))))
-        )
-          throw new Error("source link target is outside the declared inputs");
+        if (matches) {
+          const captured = [target, resolve(dirname(path), link)].map((entry) => slash(relative(root, entry)));
+          if (
+            (process.platform === "darwin" && isAbsolute(link)) ||
+            captured.some((name) => !selected.has(name) || !includes(name))
+          )
+            throw new Error("source link target is unavailable in the declared inputs");
+        }
         entries.push([name, "link", link, digest(target)]);
       } else if (metadata.isFile()) {
         const executable = process.platform === "win32" ? indexed?.mode === "100755" : !!(metadata.mode & 0o111);
         entries.push([name, executable ? "executable" : "file", digest(path)]);
       } else throw new Error("non-file source entries require fresh checks");
     }
-    return inputDigest(entries);
+    return entries;
   };
 }
 
@@ -272,6 +302,8 @@ export interface CheckFingerprint {
   configurationFiles?: Record<string, string> | undefined;
   inputScope?: CheckInputScope;
   freshSource?: string;
+  scopedSource?: readonly CheckSourceEntry[];
+  coverageBaselines?: Record<string, string | null>;
 }
 
 /** Optional, bounded diagnostics; neither values nor arbitrary receipt text may reach the terminal. */
@@ -339,21 +371,32 @@ export function checkFingerprint(root: string, options: CheckSelection, plan: Ch
 }
 
 function checkSourceContext(root: string) {
-  const owner = realpathSync(currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root));
+  // A container can retain the original checkout name for cache ownership without mounting it.
+  const owner = canonicalProject(currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root));
   const staged = currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1";
   return { owner, staged, sourceOwner: staged ? owner : root };
 }
 
-type ReadSource = (paths?: readonly string[], whole?: boolean) => string;
+interface SourceObservation {
+  digest: string;
+  entries: CheckSourceEntry[];
+}
+type ReadSource = (paths?: readonly string[], whole?: boolean) => SourceObservation;
 
 function sourceReader(root: string, owner: string, staged: boolean): ReadSource {
   let inventory: ReturnType<typeof sourceInventory> | undefined;
   const read = memoize((key) => {
     inventory ??= sourceInventory(root, owner, staged);
     const [paths, whole] = JSON.parse(key) as [string[] | null, boolean];
-    return inventory(paths ?? undefined, whole);
+    const entries = inventory(paths ?? undefined, whole);
+    return { digest: inputDigest(entries), entries };
   });
   return (paths, whole = false) => read(JSON.stringify([paths ?? null, whole]));
+}
+
+export function captureCheckSource(root: string, paths: readonly string[]): SourceObservation {
+  const { sourceOwner, staged } = checkSourceContext(root);
+  return sourceReader(root, sourceOwner, staged)(paths);
 }
 
 /** Share Git inventory, bytes, and probes across group receipts for one observation. */
@@ -369,7 +412,7 @@ export function checkFingerprintBatch(root: string, options: CheckSelection) {
   return {
     fingerprint: (plan: CheckPlan, scope: CheckInputScope) =>
       withConfigurationSnapshot(() => configuredFingerprint(root, options, plan, { scope, ...shared })),
-    freshSource: () => shared.source(),
+    freshSource: () => shared.source().digest,
   };
 }
 
@@ -403,11 +446,15 @@ function configuredFingerprint(
     return value.replaceAll(root, "<checkout>").replaceAll(owner, "<checkout>");
   };
   const readSource: ReadSource =
-    batch?.source ?? ((inputs, whole) => sourceFingerprint(root, sourceOwner, staged, inputs, whole));
+    batch?.source ??
+    ((inputs, whole) => {
+      const entries = sourceInventory(root, sourceOwner, staged, whole ? undefined : inputs)(inputs, whole);
+      return { digest: inputDigest(entries), entries };
+    });
   const confirmSource = batch?.confirm ?? readSource;
   const digest = batch?.digest ?? fileDigest;
   let inputScope = batch?.scope ?? checkGateInputScope(plan.sessions, checkSourcePolicy(root).inputs);
-  let source: string | undefined;
+  let source: SourceObservation | undefined;
   if (inputScope.mode === "scoped") {
     try {
       source = readSource(inputScope.paths);
@@ -425,7 +472,7 @@ function configuredFingerprint(
     !batch &&
     inputScope.mode === "scoped" &&
     plan.sessions.some((session) => session.checks.some((check) => check.role === "secret"))
-      ? readSource()
+      ? readSource().digest
       : undefined;
   const distribution = distributionRoot(root);
   const toolFiles = new Map<string, string>();
@@ -533,24 +580,17 @@ function configuredFingerprint(
   ]
     .filter((path) => existsSync(path))
     .map((path) => [path, digest(path)]);
-  if (source !== confirmSource(inputScope.paths, whole))
+  if (source.digest !== confirmSource(inputScope.paths, whole).digest)
     throw new Error("source files changed while identifying inputs");
-  const revision = base.WORKBENCH_COVERAGE_BASE ?? "HEAD";
-  if (!revision || revision.startsWith("-") || /[\r\n:]/.test(revision))
-    throw new Error("invalid coverage baseline revision");
   const baselines = [...new Set(plan.sessions.map((session) => session.directory))].map((directory) => {
     const path = slash(relative(root, join(directory, "coverage/coverage-summary.json")));
-    const result = spawnSync("git", ["-C", owner, "cat-file", "blob", `${revision}:${path}`], {
-      env: gitEnvironment(base),
-      encoding: "utf8",
-      maxBuffer: 8 * 1024 * 1024,
-    });
-    if (result.error) throw new Error("Git coverage baseline is unavailable", { cause: result.error });
-    return [path, result.status === 0 ? inputDigest(result.stdout) : null];
+    const contents = committedCheckCoverage(owner, path, base);
+    return [path, contents === undefined ? null : inputDigest(contents)] as const;
   });
   const material = {
     version: 1,
-    source,
+    ...(options.offline && { offline: true }),
+    source: source.digest,
     ...(inputScope.mode === "scoped" ? { inputScope } : {}),
     sessions,
     environment: environments,
@@ -558,7 +598,7 @@ function configuredFingerprint(
     baselines,
     distribution:
       distribution === root && inputScope.mode === "whole-project"
-        ? source
+        ? source.digest
         : (batch?.distribution(distribution) ?? distributionFingerprint(distribution, distribution === root)),
     tools: [...toolFiles].sort(([a], [b]) => a.localeCompare(b)),
     platform: [process.platform, process.arch, release(), hostname(), cpus()[0]?.model, process.versions],
@@ -569,6 +609,9 @@ function configuredFingerprint(
     key: inputDigest(material),
     inputScope,
     ...(freshSource === undefined ? {} : { freshSource }),
+    ...(inputScope.mode === "scoped"
+      ? { scopedSource: source.entries, coverageBaselines: Object.fromEntries(baselines) }
+      : {}),
     environmentVariables: safeEnvironmentDigests(
       Object.fromEntries([...variableInputs].map(([name, values]) => [name, inputDigest(values)])),
     ),

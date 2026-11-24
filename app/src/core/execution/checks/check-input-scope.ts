@@ -2,10 +2,12 @@ import type { CheckInputGroup } from "../../projects/project-model.js";
 import { projectPaths } from "../../projects/project-paths.js";
 import { InvalidInput } from "../../runtime/input-errors.js";
 import type { ConfiguredCheck } from "./check-configuration.js";
+import { hostOperatingSystem } from "./check-plan.js";
 
 export interface DeclaredCheckInputs {
   groups: string[];
   paths: string[];
+  outputs?: string[];
 }
 
 export type CheckInputScope =
@@ -17,6 +19,15 @@ export function checkInputGroups(definitions: Record<string, CheckInputGroup> = 
   const resolved = new Map<string, DeclaredCheckInputs>();
   const resolving = new Set<string>();
 
+  function merge(inputs: DeclaredCheckInputs[]): DeclaredCheckInputs {
+    const outputs = uniqueSorted(inputs.flatMap((input) => input.outputs ?? []));
+    return {
+      groups: uniqueSorted(inputs.flatMap((input) => input.groups)),
+      paths: uniqueSorted(inputs.flatMap((input) => input.paths)),
+      ...(outputs.length > 0 && { outputs }),
+    };
+  }
+
   function group(name: string, context: string): DeclaredCheckInputs {
     const cached = resolved.get(name);
     if (cached) return cached;
@@ -25,9 +36,15 @@ export function checkInputGroups(definitions: Record<string, CheckInputGroup> = 
     resolving.add(name);
     const definition = definitions[name];
     const dependencies = (definition?.depends_on ?? []).map((dependency) => group(dependency, `input group '${name}'`));
-    const paths = uniqueSorted([...(definition?.paths ?? []), ...dependencies.flatMap((entry) => entry.paths)]);
-    if (!paths.length) throw new InvalidInput(`input group '${name}' must resolve to at least one path`);
-    const inputs = { groups: uniqueSorted([name, ...dependencies.flatMap((entry) => entry.groups)]), paths };
+    const inputs = merge([
+      {
+        groups: [name],
+        paths: definition?.paths ?? [],
+        ...(definition?.outputs && { outputs: definition.outputs }),
+      },
+      ...dependencies,
+    ]);
+    if (!inputs.paths.length) throw new InvalidInput(`input group '${name}' must resolve to at least one path`);
     resolving.delete(name);
     resolved.set(name, inputs);
     return inputs;
@@ -36,11 +53,7 @@ export function checkInputGroups(definitions: Record<string, CheckInputGroup> = 
   for (const name of Object.keys(definitions)) group(name, "input_groups");
   return (names: readonly string[] | undefined, context: string): DeclaredCheckInputs | undefined => {
     if (!names?.length) return undefined;
-    const inputs = names.map((name) => group(name, context));
-    return {
-      groups: uniqueSorted(inputs.flatMap((entry) => entry.groups)),
-      paths: uniqueSorted(inputs.flatMap((entry) => entry.paths)),
-    };
+    return merge(names.map((name) => group(name, context)));
   };
 }
 
@@ -65,19 +78,33 @@ export function checkScopes(
   checks: readonly ConfiguredCheck[],
   additionalInputs: readonly string[] = [],
 ): CheckInputScope {
-  const undeclared = checks.find((check) => !check.inputs);
-  if (undeclared) return { mode: "whole-project", reason: `No input groups for ${undeclared.name}` };
+  const wholeProject = checks.find((check) => !check.inputs);
+  const paths = uniqueSorted(checks.flatMap((check) => check.inputs?.paths ?? []));
+  if (hostOperatingSystem() === "windows")
+    return {
+      mode: "whole-project",
+      reason: "Scoped input isolation is unavailable on Windows",
+      ...(paths.length && { paths }),
+    };
+  if (wholeProject)
+    return {
+      mode: "whole-project",
+      reason: `No input groups for ${wholeProject.name}`,
+      ...(paths.length ? { paths } : {}),
+    };
   if (!checks.length) return { mode: "whole-project", reason: "No reusable checks selected" };
+  const outputs = uniqueSorted(checks.flatMap((check) => check.inputs?.outputs ?? []));
   return {
     mode: "scoped",
     groups: uniqueSorted(checks.flatMap((check) => check.inputs?.groups ?? [])),
+    ...(outputs.length > 0 && { outputs }),
     paths: uniqueSorted([
       projectPaths.config,
       projectPaths.projects,
       projectPaths.automation,
       projectPaths.profiles,
       ...additionalInputs,
-      ...checks.flatMap((check) => check.inputs?.paths ?? []),
+      ...paths,
     ]),
   };
 }

@@ -30,6 +30,7 @@ import {
 import { restoreNativeArchive, runNativeArchivePreparation, writeNativeArchive } from "./native-archive.js";
 import { readManagedProfileArchive } from "../execution/environments/managed/profile-transfer.mjs";
 import { buildPaths } from "./builds.js";
+import { linuxOfflineCommand } from "../execution/checks/check-isolation.js";
 import { distributionRoot, rootOf } from "../projects/project-context.js";
 import { readConfig, readLanguageRoots, selectProject } from "../projects/project-configuration.js";
 import { hashFile, readBoundedFile } from "../runtime/file-reads.js";
@@ -963,19 +964,20 @@ export async function useDevelopmentArchive(
         };
         const args = ["--path", path, ...(profile.toolchain ? ["--toolchain", profile.toolchain] : [])];
         const invocation = { cwd: root, env, signal: cancellation.signal, inheritOutput: true, inheritInput: true };
-        const install = await runOwnedChild(
-          process.execPath,
-          [launcher, "tools", "install", ...args, "--exclude-tool", "miri"],
-          invocation,
+        const execute = ([program, ...arguments_]: string[]) =>
+          runOwnedChild(required(program, "Offline archive command is empty"), arguments_, invocation);
+        const install = await execute(
+          linuxOfflineCommand([process.execPath, launcher, "tools", "install", ...args, "--exclude-tool", "miri"], env),
         );
         const failure = processFailure("Install tools from the archive", install);
         if (failure) throw failure;
         if (artifact.manifest.inputs !== inputKey(root, row, toolchain))
           throw new StateConflict("The project profile changed during archive activation");
-        const session = await runOwnedChild(
-          process.execPath,
-          [launcher, "shell", "--environment", "native", ...args, "--", ...command],
-          invocation,
+        const session = await execute(
+          linuxOfflineCommand(
+            [process.execPath, launcher, "shell", "--environment", "native", ...args, "--", ...command],
+            env,
+          ),
         );
         if (session.error || session.signal !== null || session.status === null)
           throw processFailure("Run archive shell", session) ?? new Error("Archive shell returned no exit status");

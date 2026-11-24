@@ -78,6 +78,28 @@ async function packageManagerInstallation(directory: string, distribution: strin
     distribution,
   );
   const receipt = join(destination, ".workbench-bootstrap");
+  const installed = () => {
+    if (!existsSync(receipt) || readText(receipt) !== identity)
+      throw new Error(`${destination}: incomplete package-manager installation; run workbench prepare`);
+    const executable = ownedPath(destination, `node_modules/${name}/${binary}`);
+    if (
+      ![executable, join(destination, "bin", name), join(destination, "bin", `${name}.cmd`)].every((path) =>
+        existsSync(path),
+      )
+    )
+      throw new Error(`${destination}: missing package-manager executable or launcher`);
+    // The prepared installation is mounted read-only by scoped checks.
+    const nativePath = `${join(destination, "bin")}${delimiter}${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`;
+    return {
+      executable,
+      environment: {
+        COREPACK_ENABLE_NETWORK: "0",
+        ...(process.env.WORKBENCH_OFFLINE === "1" && !managed ? { PNPM_CONFIG_OFFLINE: "true" } : {}),
+        PATH: nativePath,
+      },
+    };
+  };
+  if (process.env.WORKBENCH_CHECK_SCOPED === "1") return installed();
   const declaredSources =
     managed && !existsSync(destination) ? await verifiedBootstrapSources(managed, distribution) : undefined;
   return withCacheLockSync(destination, () => {
@@ -130,25 +152,7 @@ async function packageManagerInstallation(directory: string, distribution: strin
         rmSync(staging, { recursive: true, force: true });
       }
     }
-    if (!existsSync(receipt) || readText(receipt) !== identity)
-      throw new Error(`${destination}: incomplete package-manager installation; remove it explicitly and retry`);
-    const executable = ownedPath(destination, `node_modules/${name}/${binary}`);
-    if (
-      ![executable, join(destination, "bin", name), join(destination, "bin", `${name}.cmd`)].every((path) =>
-        existsSync(path),
-      )
-    )
-      throw new Error(`${destination}: missing package-manager executable or launcher`);
-    // Never let pnpm's wrapper fetch an unpinned replacement when npm could not install its optional binary.
-    const nativePath = `${join(destination, "bin")}${delimiter}${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`;
-    return {
-      executable,
-      environment: {
-        COREPACK_ENABLE_NETWORK: "0",
-        ...(process.env.WORKBENCH_OFFLINE === "1" && !managed ? { PNPM_CONFIG_OFFLINE: "true" } : {}),
-        PATH: nativePath,
-      },
-    };
+    return installed();
   });
 }
 

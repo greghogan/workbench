@@ -144,6 +144,8 @@ const commands: Record<string, Admission> = {
 
   "pre-push": { project: true, registration: true, policy: true, explicitRoot: true },
 
+  prepare: { project: true, registration: true, policy: true, explicitRoot: true },
+
   project: { explicitRoot: true },
 
   rebase: { project: true, registration: true, policy: true },

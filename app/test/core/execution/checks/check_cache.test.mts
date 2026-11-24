@@ -11,6 +11,7 @@ import { inspectBuildCache, pruneBuildCache } from "../../../../src/core/storage
 import { buildPaths } from "../../../../src/core/artifacts/builds.ts";
 import { checkCacheFixtures } from "../../../fixtures/check-cache.mjs";
 import { checkExecution } from "../../../../src/core/execution/checks/check-resources.ts";
+import { checkFingerprintBatch } from "../../../../src/core/execution/checks/check-inputs.ts";
 
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof import("node:os")>()),
@@ -30,6 +31,15 @@ vi.mock("node:child_process", async (original) => {
 });
 
 const fixture = checkCacheFixtures();
+
+test("a container inventories its mounted checkout using a host path only as a cache name", () => {
+  const f = fixture();
+  const before = checkFingerprintBatch(f.root, {}).freshSource();
+  vi.stubEnv("WORKBENCH_CONTAINER_CHECKOUT", join(f.base, "unmounted-host-checkout"));
+  expect(checkFingerprintBatch(f.root, {}).freshSource()).toBe(before);
+  writeFileSync(join(f.root, "source.txt"), "changed in the container");
+  expect(checkFingerprintBatch(f.root, {}).freshSource()).not.toBe(before);
+});
 
 test("whole-project groups refresh independently and cannot validate a changed reused input", async () => {
   const f = fixture();
@@ -344,29 +354,35 @@ test.skipIf(process.platform === "win32")(
   },
 );
 
-test.skipIf(process.platform === "win32")("an undeclared symlink target uses whole-project evidence", async () => {
-  const f = fixture();
-  const group = required(f.plan.sessions[0], "fixture session");
-  const test = required(group.checks[0], "fixture check");
-  mkdirSync(join(f.root, "suite"));
-  symlinkSync("../source.txt", join(f.root, "suite/input"));
-  writeFileSync(join(f.root, "ignored-output"), "explicit input outside the Git inventory");
-  test.inputs = { groups: ["suite"], paths: ["suite", "ignored-output"] };
-  const reports: CheckRunResult[] = [];
-  const run = () => f.run({}, undefined, (report) => reports.push(report));
-  await run();
-  await run();
-  writeFileSync(join(f.root, "source.txt"), "new link target contents");
-  await run();
-  writeFileSync(join(f.root, "ignored-output"), "explicit input changed");
-  await run();
-  expect(reports.map((report) => report.cache)).toMatchObject(
-    ["fresh", "reused", "fresh", "fresh"].map((outcome) => ({
-      outcome,
-      inputScope: { mode: "whole-project", reason: "Declared inputs could not be inventoried safely" },
-    })),
-  );
-});
+test.skipIf(process.platform === "win32").each(["../source.txt", "ignored-target"])(
+  "a symlink to uncaptured %s uses whole-project evidence",
+  async (target) => {
+    const f = fixture();
+    const group = required(f.plan.sessions[0], "fixture session");
+    const test = required(group.checks[0], "fixture check");
+    const suite = join(f.root, "suite");
+    mkdirSync(suite);
+    writeFileSync(join(suite, ".gitignore"), "/ignored-target\n");
+    writeFileSync(join(suite, target), "link target contents");
+    symlinkSync(target, join(suite, "input"));
+    writeFileSync(join(f.root, "ignored-output"), "explicit input outside the Git inventory");
+    test.inputs = { groups: ["suite"], paths: ["suite", "ignored-output"] };
+    const reports: CheckRunResult[] = [];
+    const run = () => f.run({}, undefined, (report) => reports.push(report));
+    await run();
+    await run();
+    writeFileSync(join(suite, target), "new link target contents");
+    await run();
+    writeFileSync(join(f.root, "ignored-output"), "explicit input changed");
+    await run();
+    expect(reports.map((report) => report.cache)).toMatchObject(
+      ["fresh", "reused", "fresh", "fresh"].map((outcome) => ({
+        outcome,
+        inputScope: { mode: "whole-project", reason: "Declared inputs could not be inventoried safely" },
+      })),
+    );
+  },
+);
 
 test.each([false, true])("working success satisfies a staged snapshot with external storage %s", async (external) => {
   const f = fixture();

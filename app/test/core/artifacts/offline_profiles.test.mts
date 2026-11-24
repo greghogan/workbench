@@ -1423,6 +1423,7 @@ linuxTest("a CI operation restores only its selected toolchain inputs once for b
     call.filter((arg) => typeof arg === "string" && arg.includes("dst=/opt/workbench/cache/")),
   );
   expect(dependencies[0]).toContainEqual(expect.stringContaining("dst=/opt/workbench/cache/go-mod"));
+  expect(dependencies[0]).toContainEqual(expect.stringContaining("dst=/opt/workbench/cache/authentication"));
   expect(dependencies[1]).toEqual(dependencies[0]);
   expect(dependencies[2]).toEqual(dependencies[0]);
   const workspaces = containers.map((call) =>

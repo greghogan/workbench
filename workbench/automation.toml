@@ -1,5 +1,151 @@
 # Agent-maintained commands and documentation wiring.
 
+[input_groups.example-shared]
+paths = [
+  ".gitattributes",
+  ".gitignore",
+  ".node-version",
+  ".tool-versions",
+  "LICENSE",
+  "Makefile",
+  "app/src/core",
+  "bin",
+  "channels.scm",
+  "docs",
+  "flake.lock",
+  "flake.nix",
+  "languages",
+  "scripts",
+]
+
+[input_groups.workbench-setup]
+paths = [
+  ".npmrc",
+  ".pnpmfile.cjs",
+  "app/resources",
+  "app/src",
+  "app/test",
+  "examples/frameworks/react/scripts",
+  "examples/languages/c/scripts",
+  "examples/languages/cpp/scripts",
+  "examples/languages/go/scripts",
+  "examples/languages/java/scripts",
+  "examples/languages/javascript/scripts",
+  "examples/languages/php/scripts",
+  "examples/languages/python/scripts",
+  "examples/languages/ruby/scripts",
+  "examples/languages/rust/scripts",
+  "examples/languages/typescript/scripts",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "tsconfig.json",
+]
+depends_on = ["example-shared"]
+
+[input_groups.workbench-tests]
+paths = [
+  ".devcontainer",
+  ".dockerignore",
+  ".envrc",
+  ".githooks",
+  ".github",
+  ".prettierrc.json",
+  "README.md",
+  "app/workbench",
+  "browser.nix",
+  "browser.scm",
+  "check-inputs.nix",
+  "check-inputs.scm",
+  "demo",
+  "eslint.config.mjs",
+  "eslint.config.mts",
+  "examples/frameworks",
+  "examples/languages/c",
+  "examples/languages/cpp",
+  "examples/languages/go/.envrc",
+  "examples/languages/go/.gitignore",
+  "examples/languages/go/.go-version",
+  "examples/languages/go/LICENSE",
+  "examples/languages/go/Makefile",
+  "examples/languages/go/README.md",
+  "examples/languages/go/check-inputs.nix",
+  "examples/languages/go/check-inputs.scm",
+  "examples/languages/go/cmd",
+  "examples/languages/go/count_fuzz_test.go",
+  "examples/languages/go/count_test.go",
+  "examples/languages/go/flake.lock",
+  "examples/languages/go/flake.nix",
+  "examples/languages/go/go.mod",
+  "examples/languages/go/go.sum",
+  "examples/languages/go/managed-check-inputs.json",
+  "examples/languages/go/managed-extra-inputs.json",
+  "examples/languages/go/manifest.scm",
+  "examples/languages/go/package.scm",
+  "examples/languages/go/release-manifest.scm",
+  "examples/languages/go/workbench",
+  "examples/languages/java",
+  "examples/languages/javascript",
+  "examples/languages/php",
+  "examples/languages/python",
+  "examples/languages/ruby",
+  "examples/languages/rust",
+  "examples/languages/typescript",
+  "managed-bootstrap.json",
+  "managed-check-inputs.json",
+  "managed-registry.json.br",
+  "manifest.scm",
+  "skills",
+  "vitest.config.mts",
+  "workbench",
+]
+depends_on = ["workbench-setup"]
+
+[input_groups.example-typescript]
+paths = ["examples/languages/typescript"]
+depends_on = ["example-shared"]
+
+[input_groups.example-rust]
+paths = ["examples/languages/rust"]
+depends_on = ["example-shared"]
+
+[input_groups.example-react]
+paths = ["examples/frameworks/react"]
+depends_on = ["example-shared"]
+
+[input_groups.example-python]
+paths = ["examples/languages/python"]
+outputs = ["examples/languages/python/src/workbench_python_reference.egg-info"]
+depends_on = ["example-shared"]
+
+[input_groups.example-c]
+paths = ["examples/languages/c"]
+depends_on = ["example-shared"]
+
+[input_groups.example-cpp]
+paths = ["examples/languages/cpp"]
+depends_on = ["example-shared"]
+
+[input_groups.example-go]
+paths = ["examples/languages/go"]
+depends_on = ["example-shared"]
+
+[input_groups.example-javascript]
+paths = ["examples/languages/javascript"]
+depends_on = ["example-shared"]
+
+[input_groups.example-java]
+paths = ["examples/languages/java"]
+depends_on = ["example-shared"]
+
+[input_groups.example-ruby]
+paths = ["examples/languages/ruby"]
+depends_on = ["example-shared"]
+
+[input_groups.example-php]
+paths = ["examples/languages/php"]
+depends_on = ["example-shared"]
+
 [[check]]
 name = "c reference PGO qualification"
 path = "examples/languages/c"
@@ -135,8 +281,9 @@ environments = [ "native" ]
 [[check]]
 name = "Development dependencies and tooling"
 role = "setup"
+input_groups = ["workbench-setup"]
 project = "workbench"
-command = [ "node", "scripts/setup-development.mts" ]
+command = [ "node", "scripts/setup-development.mts", "--reuse-prepared" ]
 
 [[check]]
 name = "TypeScript format"
@@ -177,11 +324,12 @@ command = [ "node", "bin/workbench.mjs", "validate", "." ]
 name = "TypeScript tests"
 role = "test"
 warn_seconds = 120
+input_groups = ["workbench-tests"]
 project = "workbench"
-command = [ "{packageManager}", "run", "test" ]
+command = [ "node", "node_modules/vitest/vitest.mjs", "run", "--configLoader", "native" ]
 
 [check.coverage]
-command = [ "{packageManager}", "run", "coverage" ]
+command = [ "node", "scripts/test-coverage.mjs" ]
 stages = [ "commit", "ci" ]
 environments = [ "native" ]
 
@@ -231,6 +379,14 @@ role = "integration"
 project = "workbench"
 command = [ "node", "scripts/check-consumers.mjs" ]
 stages = []
+
+[[check]]
+name = "Go starter packaging"
+role = "starter"
+path = "examples/languages/go"
+command = [ "node", "{workbench}/scripts/check-go-starter.mts" ]
+input_groups = ["example-go"]
+requires_setup = false
 
 [[check]]
 name = "Rust cache integration"
@@ -293,30 +449,37 @@ command = [ "node", "bin/workbench.mjs", "secrets", "." ]
 [[check_suite]]
 language = "typescript"
 path = "examples/languages/typescript"
+input_groups = ["example-typescript"]
 
 [[check_suite]]
 language = "rust"
 path = "examples/languages/rust"
+input_groups = ["example-rust"]
 
 [[check_suite]]
 language = "typescript"
 path = "examples/frameworks/react"
+input_groups = ["example-react"]
 
 [[check_suite]]
 language = "python"
 path = "examples/languages/python"
+input_groups = ["example-python"]
 
 [[check_suite]]
 language = "c"
 path = "examples/languages/c"
+input_groups = ["example-c"]
 
 [[check_suite]]
 language = "cpp"
 path = "examples/languages/cpp"
+input_groups = ["example-cpp"]
 
 [[check_suite]]
 language = "go"
 path = "examples/languages/go"
+input_groups = ["example-go"]
 
 [[documentation]]
 project = "workbench"
@@ -350,18 +513,22 @@ source_paths = [
 [[check_suite]]
 language = "javascript"
 path = "examples/languages/javascript"
+input_groups = ["example-javascript"]
 
 [[check_suite]]
 language = "java"
 path = "examples/languages/java"
+input_groups = ["example-java"]
 
 [[check_suite]]
 language = "ruby"
 path = "examples/languages/ruby"
+input_groups = ["example-ruby"]
 
 [[check_suite]]
 path = "examples/languages/php"
 language = "php"
+input_groups = ["example-php"]
 
 [[check]]
 name = "Verify release: ."

@@ -1,4 +1,4 @@
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 import { readConfig } from "../../projects/project-configuration.js";
 import { required } from "../../runtime/invariants.js";
 import type { ConfiguredCheck } from "./check-configuration.js";
@@ -6,9 +6,18 @@ import type { CheckDependency } from "./check-order.js";
 import type { CheckPlan } from "./check-plan.js";
 import { checkExecution } from "./check-resources.js";
 import { checkScopes, reusableChecks } from "./check-input-scope.js";
+import { existsSync } from "node:fs";
+import { usesPreparedCheckModules, type CheckIsolationBackend } from "./check-isolation.js";
+import { buildStorageSettings } from "../../artifacts/builds.js";
 
 type Session = CheckPlan["sessions"][number];
 type Phase = CheckDependency["phase"];
+
+const regularRunnerRoles = new Set(["setup", "acquire", "build", "release", "release-verify", "format-write", "docs"]);
+
+export function requiresWholeProjectCheck(check: ConfiguredCheck): boolean {
+  return check.online || check.extended || regularRunnerRoles.has(check.role);
+}
 
 /** A prerequisite contributes only the phase that a downstream group consumes. */
 function prerequisites(dependencies: readonly CheckDependency[][], index: number): Map<number, Phase> {
@@ -32,7 +41,9 @@ function checkPartitions(session: Session): ConfiguredCheck[][] {
   const partitions = new Map<string, ConfiguredCheck[]>();
   for (const check of session.checks) {
     const key =
-      check.role === "setup" || check.role === "secret" ? check.role : JSON.stringify(check.inputs?.groups ?? null);
+      check.role === "setup" || check.role === "secret"
+        ? check.role
+        : JSON.stringify([check.inputs?.paths ?? null, check.inputs?.outputs ?? [], requiresWholeProjectCheck(check)]);
     const partition = partitions.get(key);
     if (partition) partition.push(check);
     else partitions.set(key, [check]);
@@ -40,10 +51,13 @@ function checkPartitions(session: Session): ConfiguredCheck[][] {
   return [...partitions.values()];
 }
 
-export function scopedCheckGroups(root: string, plan: CheckPlan) {
+export function scopedCheckGroups(root: string, plan: CheckPlan, requireIsolation = false) {
+  if (process.platform === "win32" || plan.cleanup || plan.sessions.some(({ environment }) => environment !== "native"))
+    return undefined;
   if (!plan.sessions.some((session) => reusableChecks(session.checks).some((check) => check.inputs))) return undefined;
   const partitions = plan.sessions.map(checkPartitions);
   if (
+    !requireIsolation &&
     partitions.length === 1 &&
     (partitions[0]?.filter((checks) => checks.some((check) => check.role !== "setup" && check.role !== "secret"))
       .length ?? 0) < 2
@@ -64,16 +78,38 @@ export function scopedCheckGroups(root: string, plan: CheckPlan) {
         if (candidate === session) return [{ ...session, checks: local }];
         return phase ? [{ ...candidate, checks: forPhase(candidate, phase) }] : [];
       });
-      const scope = checkScopes(
+      const declared = checkScopes(
         evidence.flatMap((candidate) => candidate.checks.filter((check) => check.role !== "secret")),
         additional,
       );
+      const requiredSetup = evidence.flatMap((candidate) =>
+        candidate.checks
+          .filter((check) => check.role === "setup")
+          .map(({ command }) => ({ directory: candidate.directory, command })),
+      );
+      const needsPreparedCache = requiredSetup.some(
+        (setup) =>
+          !usesPreparedCheckModules(root, [setup]) &&
+          existsSync(join(setup.directory, "pnpm-lock.yaml")) &&
+          (setup.command[0] !== "{packageManager}" ||
+            setup.command[1] !== "install" ||
+            !buildStorageSettings(root).external),
+      );
+      const scope =
+        declared.mode === "scoped" && needsPreparedCache
+          ? {
+              mode: "whole-project" as const,
+              paths: declared.paths,
+              reason: "Offline setup uses the prepared environment's dependency caches",
+            }
+          : declared;
       return {
         index,
         session: { ...session, checks },
         path: relative(root, session.directory).replaceAll("\\", "/") || ".",
         prerequisites: needed,
         scope,
+        setup: requiredSetup,
         reusable,
         evidence: { ...plan, sessions: evidence, resourceSessions: plan.sessions.length },
       };
@@ -82,6 +118,41 @@ export function scopedCheckGroups(root: string, plan: CheckPlan) {
 }
 
 type Group = NonNullable<ReturnType<typeof scopedCheckGroups>>[number];
+
+/** Planning and execution use the same prerequisites when reporting the effective scope. */
+export function checkGroupExecution(
+  root: string,
+  group: Group,
+  isolation?: { backend: CheckIsolationBackend | undefined },
+) {
+  const { scope } = group;
+  if (!isolation || scope.mode !== "scoped") return { scope, backend: undefined };
+  const missingModules =
+    isolation.backend &&
+    usesPreparedCheckModules(root, group.setup) &&
+    !existsSync(join(root, "node_modules/.modules.yaml"));
+  if (
+    isolation.backend &&
+    !missingModules &&
+    group.reusable &&
+    !group.session.checks.some(requiresWholeProjectCheck) &&
+    group.evidence.sessions.every(
+      (session) =>
+        session.directory === group.session.directory || session.checks.every((check) => check.role === "setup"),
+    )
+  )
+    return { scope, backend: isolation.backend };
+  return {
+    backend: undefined,
+    scope: {
+      mode: "whole-project" as const,
+      paths: scope.paths,
+      reason: missingModules
+        ? "The scoped check requires prepared dependencies"
+        : "Scoped execution is unavailable for these checks",
+    },
+  };
+}
 
 export function freshSecurityChecks(checks: readonly ConfiguredCheck[]): ConfiguredCheck[] {
   const needsSetup = checks.some((check) => check.role === "secret" && check.requiresSetup);

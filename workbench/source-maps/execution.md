@@ -6,6 +6,7 @@
 - `scripts/check-reproducibility.mts`: Rebuild frozen application source in independent directories, compare bundle and archive bytes, execute rebuilt CLIs, and clean owned temporary source trees.
 - `scripts/check-rust-cache.mts`: Prune recognized artifacts inside owned Rust generations under build/session locks and qualify cleanup against real Cargo output and subsequent build reuse.
 - `scripts/check-consumers.mts`: Provide the independently invocable integration check and fast regressions for its execution and CI selection.
+- `scripts/check-go-starter.mts`: Verify initialization copies the shipped Go implementation.
 - `scripts/ci-plan-contract.mts`: validate and type hosted matrix output and define intentional job skips.
 - `scripts/ci-plan.mts`: validates the complete configured hosted matrix and presents its coverage.
 - `scripts/ci-status.mts`: requires validation and every selected hosted job to succeed.
@@ -22,7 +23,8 @@
 - `scripts/ci-cache-metrics.mts`: records cache footprint and elapsed verification-window evidence.
 - `.github/workflows/publication.yml`, `.github/workflows/publish-image.yml`: schedule each prepared image independently and isolate registry write authority from image builds.
 - `scripts/ci-hosted.mts`: Runs the exact configured targets on a hosted native platform or in its prepared environment.
-- `scripts/prepare-development.mts`: Prepares toolchains, dependency archives and pnpm policy metadata, and verifies fresh offline builds.
+- `scripts/prepare-image-tools.mts`: Installs the pinned tools for native toolchain and development images.
+- `scripts/prepare-development.mts`: Prepares project dependencies and pnpm policy metadata and verifies fresh offline builds.
 - `scripts/managed-input-recipes.mts`, `scripts/refresh-managed-inputs.mts`: Derive standalone Nix/Guix source packages and refresh pinned proof metadata.
 - `scripts/prepare-managed-development.mts`, `scripts/prepare-host-managed-development.mts`, `scripts/prepare-nix-profiles.mts`: Assemble managed images in an installed manager's host store or a Docker fallback, retaining separate per-root profiles through one dependency graph per builder.
 - `scripts/guix-profile-command.mts`: Register persistent host development profiles, replace Guix environment roots transactionally, and release registrations during dependency pruning.
@@ -63,8 +65,7 @@
 - `scripts/release-contract.mts`, `app/src/core/artifacts/github-release.mts`: Validate release proof and share immutable
   GitHub publication between the CLI and hosted workflows.
 - `scripts/accessibility-criteria.mts`: Maps automated browser results to partial WCAG criterion evidence without claiming full conformance.
-- `.github/workflows/windows-node-backport.yml`, `.github/probes/windows.ps1`,
-  `scripts/node-windows-backport`: Build, qualify, and attest the temporary Windows Node runtime.
+- `docs/tooling.md` lists active toolchain workarounds and their removal tests.
 - `scripts/ci-actions.json`: Own immutable workflow component pins shared by generation, maintenance discovery, derived workflow publication and strict workflow checks.
 - `scripts/ci-acquire.mts`, `scripts/ci-errors.mts`: Apply acquisition policy and actionable annotations and summaries at hosted CI boundaries without replaying tests.
 - `scripts/java-test-reports.mts`: Replace complete Java test report sets with run outcomes and rollback, preserving previous evidence when replacement cannot complete.

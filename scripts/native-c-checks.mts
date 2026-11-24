@@ -236,7 +236,9 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
       console.log(`Verified LTO rejection: ${name}`);
     }
 
-    if (role === "format" || role === "format-write") {
+    if (role === "acquire") {
+      await configure(join(builds, "dependency-preparation"));
+    } else if (role === "format" || role === "format-write") {
       await run("clang-format", [...(role === "format" ? ["--dry-run", "--Werror"] : ["-i"]), ...sources]);
     } else if (role === "lint") {
       await run("clang-tidy", ["--verify-config"]);
@@ -311,7 +313,7 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
       await verifyRelease(directory);
       const { inspectHardening } = await import("./executable-hardening.mjs");
       console.log(JSON.stringify(inspectHardening(readFileSync(join(directory, `count${suffix}`)))));
-    } else if (role === "build" || role === "release") {
+    } else if (role === "build" || role === "docs" || role === "release") {
       const directory = role === "release" ? join(builds, "release") : debug;
       await configure(
         directory,
@@ -325,7 +327,11 @@ export async function runNativeChecks(language: "c" | "cpp", distribution: strin
         mkdirSync(output, { recursive: true });
         copyFileSync(join(directory, `count${suffix}`), join(output, `count${suffix}`));
         copyFileSync("LICENSE", join(output, "LICENSE"));
-      } else await run("cmake", ["--build", directory, "--parallel", parallelism]);
+      } else {
+        await run("cmake", ["--build", directory, "--parallel", parallelism]);
+        if (role === "docs")
+          await run(process.execPath, [join(distribution, "bin/workbench.mjs"), "docs", "README.md"]);
+      }
     } else if (role === "lto") {
       for (const mode of selectedCompiler === "clang" ? ["off", "thin", "full"] : ["off", "full"]) {
         const directory = join(builds, `lto-${mode}`);

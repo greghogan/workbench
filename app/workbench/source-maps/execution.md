@@ -114,13 +114,17 @@
   Container environments.
 - `src/core/execution/checks/check-gates.ts`: Coordinates commit, online, and combined local gates, including the
   optional connectivity probe.
+- `src/core/execution/checks/check-acquisition.ts`: Runs dependency preparation from the selected working or staged
+  snapshot with the check planner.
 - `src/core/execution/checks/check-plan.ts`: selects stages, scoped roots, setup sessions, and coverage variants.
 - `src/core/execution/checks/check-cache.ts`, `src/core/execution/checks/check-inputs.ts`,
   `src/core/execution/checks/check-input-scope.ts`, `src/core/execution/checks/check-source-policy.ts`: Resolve declared
   input groups and fingerprint source, tool, and environment evidence.
 - `src/core/execution/checks/check-cache-plan.ts`, `src/core/execution/checks/check-cache-groups.ts`,
-  `src/core/execution/checks/check-cache-store.ts`: Reuse independent check results, run required prerequisites and fresh
-  security checks, and retain successful evidence for each group.
+  `src/core/execution/checks/check-isolation.ts`, `src/core/execution/checks/check-macos-isolation.ts`,
+  `src/core/execution/checks/check-source-view.ts`,
+  `src/core/execution/checks/check-cache-store.ts`: Reuse independent check results, enforce source and offline network
+  boundaries, run required prerequisites and fresh security checks, and retain successful evidence for each group.
 - `src/core/execution/checks/check-environment.ts`: Constructs native tool environments from declared inputs, selected
   SDKs and root-specific budgets, and identifies external configuration inputs.
 - `src/core/execution/checks/check-runner.ts`, `src/core/execution/checks/check-progress.ts`: schedules independent
