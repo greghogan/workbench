@@ -26,6 +26,12 @@ with an explicit language for an application whose manifests are not recognized.
 more checks. These commands run through the platform's POSIX shell (Git Bash on Windows); they are not executed during
 initialization. Existing automation remains project-owned. Inspect the result with `workbench check --list`.
 
+Application initialization copies the Workbench Makefile when the project has none. This includes language starters and
+adoption of existing applications. Records-only initialization leaves Makefiles alone.
+
+Use the project's native build instructions for a checkout without Workbench. The generated Makefile's build and check
+targets use Workbench. Run `make help` for the target list, or select a launcher with `make WORKBENCH=/path/to/workbench`.
+
 First initialization adopts the Workbench ADR collection at the executable's immutable source revision. It creates
 editable copies under `workbench/collections/workbench/` and retains the upstream identity. Adoption accepts that exact
 initial collection when confirmed. Interactive initialization offers one yes/no confirmation for all imported ADRs;
@@ -85,6 +91,9 @@ The marked Workbench block obtains that root's storage exports and watches confi
 is independent: it loads its own `.envrc.local` after generated exports and does not source a parent `.envrc`. Direnv
 restores the previous environment when switching roots. Only languages registered at the selected root receive
 language-specific exports. Paths come from the user's settings rather than being copied into shell files.
+
+If the launcher is absent from `PATH`, direnv skips the Workbench block and still loads personal settings. When the
+launcher is available, errors from `workbench paths` stop environment loading.
 
 This checkout's hooks add its launcher directory to `PATH` directly; consuming projects normally use the installed
 Workbench command. Existing explicit sharing of shell settings is preserved, but setup does not add parent loading or

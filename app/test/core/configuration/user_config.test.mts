@@ -100,6 +100,18 @@ test("global updates retain comments without creating empty option groups", () =
   expect(parse(readFileSync(config, "utf8"))).toEqual({ storage: { external: true } });
 });
 
+test("managed image stores are independently enabled in personal settings", () => {
+  const { config, run, ok } = fixture();
+  expect(ok("config", "get", "preparation.nix_store")).toBe("disabled");
+  expect(ok("config", "get", "preparation.guix_store")).toBe("disabled");
+  ok("config", "set", "--scope", "global", "preparation.nix_store", "managed");
+  ok("config", "set", "--scope", "global", "preparation.guix_store", "system");
+  expect(parse(readFileSync(config, "utf8"))).toEqual({ preparation: { nix_store: "managed", guix_store: "system" } });
+  expect(run("config", "set", "preparation.nix_store", "auto").status).not.toBe(0);
+  expect(run("config", "set", "--scope", "local", "preparation.nix_store", "managed").status).not.toBe(0);
+  expect(ok("complete", "--", "config", "set", "preparation.nix_store", "")).toBe("disabled\nmanaged\nsystem");
+});
+
 test("plain preference round-trips globally and flags and environment override presentation without writing preferences", () => {
   const { config, env, run, ok } = fixture();
   delete env.WORKBENCH_PLAIN;
@@ -164,6 +176,27 @@ test("configuration overview reports one effective value and its overriding scop
   unset("execution.cpus_per_job", "local");
   expect(get()).toMatch(/execution\.cpus_per_job\s*\|\s*8\s*\|\s*global/);
 });
+
+test("configuration reports built-in defaults and describes omitted contextual options", () => {
+  const { env, ok, get, set, unset } = fixture();
+  ok("setup-project", env.WORKBENCH_PROJECT_ROOT);
+  expect(ok("config", "get", "review.signed_commits")).toBe("false");
+  expect(get("checks.allow_empty")).toBe("false");
+  expect(get("checks.inputs")).toBe("[]");
+  expect(get("records.archive_group_size")).toBe("1296");
+  expect(get("commit.body_width")).toBe("72");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*false\s*\|\s*default/);
+  expect(get()).toContain("Archival disabled");
+  expect(get()).not.toContain("<unset>");
+
+  set("diagnostics.level", "warn");
+  expect(get("diagnostics.server_level")).toBe("warn");
+  set("review.signed_commits", "true");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*true\s*\|\s*project/);
+  unset("review.signed_commits");
+  expect(get("review.signed_commits")).toBe("false");
+});
+
 test("configuration shows complete nested values and uses the terminal width before wrapping", () => {
   const { env, ok, set, get } = fixture();
   ok("setup-project", env.WORKBENCH_PROJECT_ROOT);

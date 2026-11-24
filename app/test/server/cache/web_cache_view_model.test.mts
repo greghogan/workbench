@@ -82,7 +82,7 @@ test("indexed ownership and version families agree with independent catalog scan
       tools: { entries, issues: [], references: { results: [], issues: [] } },
       builders: {
         entries: [
-          { key: "owned", checkout: first, builder: "nix", volumes: [], bytes: 1 },
+          { key: "owned", checkout: first, builder: "buildkit", volumes: [], bytes: 1 },
           { key: "unknown", builder: "nix", volumes: [], bytes: 2 },
         ],
         issues: [],

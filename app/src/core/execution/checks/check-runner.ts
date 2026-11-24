@@ -18,7 +18,7 @@ import {
 } from "../../diagnostics/diagnostics.mjs";
 import { startLogRun, finishLogRun, logRetention } from "../../storage/logs/log-storage.js";
 import { processFailure } from "../../runtime/process-outcome.mjs";
-import { CheckReport, writeCheckReport, type CheckRunResult } from "./check-report.js";
+import { CheckReport, writeCheckReport, type CheckCacheReport, type CheckRunResult } from "./check-report.js";
 import { checkDetailPrefix } from "./check-detail-data.mjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -26,32 +26,48 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { relative, join } from "node:path";
 import { checkFailureExcerpt, checkDetailLines } from "./check-output.js";
 import { distributionRoot } from "../../projects/project-context.js";
-import { buildCheckout, buildStorageSettings, prepareCheckLogs, checkLogDirectory } from "../../artifacts/builds.js";
+import {
+  buildCheckout,
+  buildPaths,
+  buildStorageSettings,
+  cleanBuilds,
+  prepareCheckLogs,
+  checkLogDirectory,
+} from "../../artifacts/builds.js";
 import { withCacheLock } from "../../storage/cache-lock.js";
 import { checkExecution } from "./check-resources.js";
 import { CheckControl, checkControlPrefix } from "./check-control.js";
 import { required } from "../../runtime/invariants.js";
 import { cpuEnvironment } from "./cpu-budget.mjs";
+import { findUnixJobserver } from "./unix-jobserver-client.js";
 import type { CheckCancellation } from "./check-cancellation.js";
 import type { ProcessLock } from "../../storage/process-lock.js";
 import { CheckLines, CheckProgress, checkEventPrefix } from "./check-progress.js";
 import { safeOutput } from "../../diagnostics/terminal-output.js";
-import type { CheckSelection, planChecks } from "./check-plan.js";
-
-type Plan = ReturnType<typeof planChecks>;
+import type { CheckSelection, CheckPlan } from "./check-plan.js";
 
 /** Drain every admitted group before returning, so staged checkouts and shared outputs outlive active work. */
 export async function runCheckGroups(
   root: string,
   options: CheckSelection,
-  plan: Plan,
+  plan: CheckPlan,
   cancellation: CheckCancellation,
   owner: ProcessLock,
   recordReport?: (report: CheckRunResult) => void,
+  cache?: CheckCacheReport,
+  buildProducts?: Map<string, string>,
 ): Promise<CheckRunResult> {
   const total = plan.sessions.reduce((sum, session) => sum + session.checks.length, 0);
   const progress = new CheckProgress(total);
   const allocation = checkExecution(root, plan);
+  const machineJobserver = plan.cleanup
+    ? undefined
+    : process.platform === "win32"
+      ? await (
+          await import("./windows-jobserver-client.js")
+        ).findWindowsJobserver(distributionRoot(root), cancellation.signal)
+      : await findUnixJobserver(cancellation.signal);
+  if (!plan.cleanup && !machineJobserver) writeDiagnosticText("Using standalone check scheduling.");
   const { dependencies, maxJobs: concurrency } = allocation;
   const pending = new Set(plan.sessions.map((_, index) => index));
   const complete = new Set<number>();
@@ -67,6 +83,7 @@ export async function runCheckGroups(
   const checkout = currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root);
   const run = randomUUID();
   const report = new CheckReport(run, plan);
+  if (cache) report.result.cache = cache;
   const reportState = { finished: false };
   const logs = checkLogDirectory(storageRoot, checkout, ".", run);
   const finishReport = async (owned: boolean, failure?: unknown) => {
@@ -150,7 +167,7 @@ export async function runCheckGroups(
     let error: Error | undefined;
     let child: ReturnType<typeof spawn> | undefined;
     let workerFailure: Error | undefined;
-    let failedCheck: Plan["sessions"][number]["checks"][number] | undefined;
+    let failedCheck: CheckPlan["sessions"][number]["checks"][number] | undefined;
     const token = randomBytes(16).toString("hex");
     const control = new CheckControl(token, session.checks.length);
     const setupStep = session.checks.reduce((last, check, index) => (check.role === "setup" ? index + 1 : last), 0);
@@ -208,6 +225,12 @@ export async function runCheckGroups(
       cancellation.checkpoint();
       const selection: CheckSelection = { ...options };
       selection.checkNames = session.checks.map((check) => check.name);
+      if (plan.isolated)
+        selection.isolationGroups = plan.isolated
+          .filter(({ directory }) => directory === session.directory)
+          .map(({ group }) => group);
+      const productKeys = new Set(selection.isolationGroups?.flatMap(({ build }) => (build ? [build.key] : [])));
+      if (machineJobserver) selection.machineJobserver = machineJobserver;
       delete selection.path;
       delete selection.project;
       delete selection.profile;
@@ -232,6 +255,7 @@ export async function runCheckGroups(
             windowsHide: true,
             env: {
               ...currentExecutionEnvironment(),
+              ...(options.offline && { WORKBENCH_OFFLINE: "1" }),
               ...(cpus === null ? {} : cpuEnvironment(cpus)),
               WORKBENCH_PROJECT_ROOT: root,
               WORKBENCH_CHECK_EVENTS: "1",
@@ -242,6 +266,10 @@ export async function runCheckGroups(
         workers.add(child);
         child.on("message", (value: unknown) => {
           const message = readCheckMessage(value);
+          if (message?.type === CheckMessage.BuildProducts) {
+            for (const [key, digest] of message.products) if (productKeys.has(key)) buildProducts?.set(key, digest);
+            return;
+          }
           if (message && typeof message === "object" && "type" in message && message.type === CheckMessage.Failure) {
             workerFailure = restoreDiagnosticError("error" in message ? message.error : undefined);
             return;
@@ -456,6 +484,11 @@ export async function runCheckGroups(
           progress.close(!failures.length && !cancellation.cancelled && !pending.size);
         },
         () => (reportState.finished ? undefined : finishReport(false, runFailure)),
+        () => {
+          if (currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1")
+            for (const directory of new Set(plan.sessions.map((session) => session.directory)))
+              cleanBuilds(buildPaths(root, directory, "native", {}, false), true);
+        },
         restoreDiagnostics,
       ],
       runFailure,

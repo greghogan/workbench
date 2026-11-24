@@ -29,6 +29,7 @@ interface State {
   target_commitish: string;
   body: string;
   draft: boolean;
+  published_at?: string;
   assets: { name: string }[];
 }
 let state: State | undefined = existsSync(stateFile)
@@ -73,9 +74,16 @@ if (args[0] === "api") {
       copy(source, join(root, "assets", name));
       state.assets.push({ name });
     } else if (args[1] === "download") {
-      for (const asset of state.assets) copy(join(root, "assets", asset.name), join(option("--dir"), asset.name));
-    } else if (args[1] === "edit") state.draft = false;
-    else throw new Error("Unexpected release command");
+      const names = args.flatMap((value, index) =>
+        value === "--pattern" ? [required(args[index + 1], "Missing asset pattern")] : [],
+      );
+      const selected = state.assets.filter(({ name }) => names.includes(name));
+      if (!selected.length) throw new Error("No asset matched the requested names");
+      for (const asset of selected) copy(join(root, "assets", asset.name), join(option("--dir"), asset.name));
+    } else if (args[1] === "edit") {
+      state.draft = false;
+      state.published_at = "2026-10-01T03:02:01Z";
+    } else throw new Error("Unexpected release command");
   }
   writeFileSync(stateFile, JSON.stringify(state));
 } else throw new Error("Unexpected command");

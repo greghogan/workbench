@@ -86,7 +86,7 @@ switch (role) {
     runTests();
     break;
   case "coverage":
-    rmSync("coverage", { recursive: true, force: true });
+    if (process.env.WORKBENCH_CHECK_SCOPED !== "1") rmSync("coverage", { recursive: true, force: true });
     environment.WORKBENCH_COVERAGE = "true";
     environment.SIMPLECOV_RUN_ID = randomUUID();
     runTests();

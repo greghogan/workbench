@@ -9,7 +9,13 @@ import { renderToString } from "preact-render-to-string";
 
 import { projectPathComparison, type RegisteredProject } from "../../core/projects/project-registry.js";
 import { cacheQuantity as quantity } from "../cache/cache-quantity.js";
-import { cacheRowKey as key, cacheMeasurement, projectCacheViews, InventoryIndex } from "../cache/cache-view-model.js";
+import {
+  cacheRowKey as key,
+  cacheMeasurement,
+  projectCacheViews,
+  InventoryIndex,
+  ownershipAccountingUnknown,
+} from "../cache/cache-view-model.js";
 import { badge, submitButton, workbenchBrand } from "./components.js";
 import type { InventoryPatch, InventorySection } from "../cache/inventory-protocol.js";
 import { mutationForm } from "./action-forms.js";
@@ -19,11 +25,12 @@ import type { InventoryView } from "../cache/inventory-service.js";
 import { pageDocument } from "./page-document.js";
 import type { ProjectReviewCount } from "../projects/project-reviews.js";
 import { cacheOperations } from "../../core/storage/cache-operation-contract.js";
+import { systemSignOutPath } from "../http/browser-auth.js";
 
 export const hubLayout = (
   title: string,
   body: ComponentChildren,
-  options: { active?: "projects" | "caches"; interactive?: boolean } = {},
+  options: { active?: "projects" | "caches"; interactive?: boolean; systemSignOut?: boolean } = {},
 ): string =>
   pageDocument({
     title,
@@ -43,6 +50,11 @@ export const hubLayout = (
             <a href="/caches" aria-current={options.active === "caches" ? "page" : undefined}>
               Caches
             </a>
+            {options.systemSignOut && (
+              <form action={systemSignOutPath} method="post">
+                <button type="submit">Sign out</button>
+              </form>
+            )}
           </nav>
         </header>
         <main id="main" tabIndex={-1}>
@@ -85,7 +97,7 @@ export function inventoryPresentation(
   const sizes = new Map(data.sizes.map((entry) => [entry.directory, entry]));
   const index = new InventoryIndex(data);
   const entries = data.inventory.entries.filter((entry) => !owner || entry.identity.checkout === owner);
-  const accountingUnknown = data.issues.some((issue) => ["builds", "builders", "registry"].includes(issue.component));
+  const accountingUnknown = ownershipAccountingUnknown(data);
   const rows: InventoryPresentation["rows"] = {};
   const models = projectCacheViews(index, projects, page, owner, metadata);
   const measured = new Set<string>();
@@ -254,7 +266,11 @@ export function inventoryPresentation(
         return (
           <tr data-cache-row={id}>
             <td data-cache-cell={id + "-name"}>{entry.key}</td>
-            <td data-cache-cell={id + "-size"}>{formatBytes(entry.bytes)}</td>
+            {entry.measurement ? (
+              cell(id + "-size", quantity(data.complete, sizes, measure(entry.measurement.directory)))
+            ) : (
+              <td data-cache-cell={id + "-size"}>{formatBytes(entry.bytes)}</td>
+            )}
             <td data-cache-cell={id + "-status"}>{entry.blockedBy ?? "Eligible"}</td>
           </tr>
         );
@@ -457,6 +473,7 @@ export function projectDashboard(
   csrf: string,
   reviews: ReadonlyMap<string, ProjectReviewCount> = new Map(),
   metadata?: ProjectDirectoryView,
+  systemSignOut = false,
 ): string {
   return hubLayout(
     "Projects",
@@ -492,7 +509,7 @@ export function projectDashboard(
         })}
       </section>
     </>,
-    { active: "projects" },
+    { active: "projects", systemSignOut },
   );
 }
 export function cleanupPage(

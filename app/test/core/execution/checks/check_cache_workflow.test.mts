@@ -1,19 +1,225 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { parse, stringify } from "smol-toml";
 import { addRecord } from "../../../../src/core/records/records.ts";
 import { synchronize } from "../../../../src/core/records/sync.ts";
+import { nativeCheckBackend } from "../../../../src/core/execution/checks/check-isolation.ts";
 import type { CheckRunResult } from "../../../../src/core/execution/checks/check-report.ts";
 import { required } from "../../../../src/core/runtime/invariants.ts";
+import { buildPaths } from "../../../../src/core/artifacts/builds.ts";
 import { consumer, distribution, git } from "../../../fixtures/adoption.mjs";
 
 const temporary: string[] = [];
+const scopedExecution = !!nativeCheckBackend();
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
 });
+
+test("a full gate reuses independent checks and rebuilds setup needed by a fresh group", async () => {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+  const root = await consumer();
+  temporary.push(root);
+  const write = (name: string, contents: string) => {
+    writeFileSync(join(root, name), contents);
+  };
+  for (const path of ["left", "right"]) {
+    mkdirSync(join(root, path));
+    write(`${path}/input.txt`, "first\n");
+  }
+  write(".gitignore", "build/\n/.reports/\n");
+  write("shared.txt", "prepared\n");
+  write("root.txt", "root checks\n");
+  const configPath = join(root, "workbench/config.toml");
+  const config = parse(readFileSync(configPath, "utf8"));
+  delete config.check;
+  write("workbench/config.toml", stringify(config));
+  const command = (code: string) => [process.execPath, "-e", code];
+  write(
+    "workbench/automation.toml",
+    stringify({
+      input_groups: {
+        setup: { paths: ["shared.txt"] },
+        root: { paths: ["root.txt"] },
+        left: { paths: ["left"] },
+        right: { paths: ["right"] },
+      },
+      check_order: ["left", "right"].map((path) => ({ root: path, after: ".", phase: "setup" })),
+      check: [
+        {
+          name: "Prepare shared input",
+          role: "setup",
+          input_groups: ["setup"],
+          command: command(
+            "require('node:fs').copyFileSync('shared.txt', require('node:path').join(process.env.WORKBENCH_BUILD_DIR, 'generated.txt'))",
+          ),
+        },
+        {
+          name: "Root tests",
+          role: "test",
+          input_groups: ["root"],
+          command: command("require('node:assert').ok(require('node:fs').readFileSync('root.txt').length)"),
+        },
+        {
+          name: "Whole-project check",
+          role: "docs",
+          command: command("require('node:assert').ok(require('node:fs').readFileSync('left/input.txt').length)"),
+        },
+        ...["left", "right"].map((path) => ({
+          name: `${path} tests`,
+          path,
+          role: "test",
+          input_groups: [path],
+          command: command(
+            scopedExecution
+              ? "const fs=require('node:fs'), a=require('node:assert/strict'); a.ok(fs.readFileSync('input.txt').length); a.equal(fs.readFileSync(require('node:path').join(process.env.WORKBENCH_BUILD_DIR, 'generated.txt'),'utf8'),'prepared\\n')"
+              : "require('node:assert/strict').ok(require('node:fs').readFileSync('input.txt').length)",
+          ),
+        })),
+      ],
+    }),
+  );
+  synchronize(root);
+  git(root, "add", ".");
+  git(root, "commit", "-m", "Synthetic check groups");
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: [dirname(process.execPath), join(distribution, "bin"), process.env.PATH].join(delimiter),
+    CI: undefined,
+    GITHUB_ACTIONS: undefined,
+    GITLAB_CI: undefined,
+  };
+  const output = new Map<string, string>();
+  const run = (name: string) => {
+    const report = join(root, ".reports", `${name}.json`);
+    const result = spawnSync(
+      process.execPath,
+      [join(distribution, "bin/workbench.mjs"), "check", "--stage", "commit", "--report", report],
+      { cwd: root, encoding: "utf8", env },
+    );
+    output.set(name, result.stdout + result.stderr);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    return (JSON.parse(readFileSync(report, "utf8")) as { runs: CheckRunResult[] }).runs;
+  };
+  expect(run("initial").flatMap((entry) => entry.checks.map((check) => check.name))).toHaveLength(5);
+  write("left/input.txt", "second\n");
+  const mixed = run("left");
+  expect(
+    mixed.filter((entry) => entry.reused).flatMap((entry) => entry.checks.map((check) => check.name)),
+    [...output.values()].join("\n"),
+  ).toEqual(scopedExecution ? ["Root tests", "right tests"] : []);
+  expect(mixed.filter((entry) => !entry.reused).flatMap((entry) => entry.checks.map((check) => check.name))).toEqual([
+    "Prepare shared input",
+    ...(scopedExecution ? [] : ["Root tests"]),
+    "Whole-project check",
+    "left tests",
+    ...(scopedExecution ? [] : ["right tests"]),
+  ]);
+
+  write("left/input.txt", "third\n");
+  git(root, "add", "left/input.txt");
+  write("left/input.txt", "");
+  const hook = spawnSync("bash", [join(distribution, ".githooks/pre-commit")], { cwd: root, encoding: "utf8", env });
+  expect(hook.status, hook.stdout + hook.stderr).toBe(0);
+  if (scopedExecution) expect(hook.stderr).toContain("Reusing 2 successful checks; 3 run fresh");
+});
+
+test.runIf(scopedExecution)(
+  "a fresh test receives verified read-only build products and rebuilds damaged products",
+  async () => {
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    vi.stubEnv("WORKBENCH_STORAGE_EXTERNAL", "true");
+    const root = await consumer();
+    temporary.push(root);
+    const write = (name: string, value: string) => {
+      writeFileSync(join(root, name), value);
+    };
+    const config = parse(readFileSync(join(root, "workbench/config.toml"), "utf8"));
+    delete config.check;
+    write("workbench/config.toml", stringify(config));
+    write(".gitignore", "product/\n");
+    write(
+      "build.cjs",
+      `const fs = require("node:fs");
+fs.copyFileSync("source.txt", "product/program");
+console.log("BUILT PROGRAM");
+`,
+    );
+    write(
+      "test.cjs",
+      `const fs = require("node:fs");
+const assert = require("node:assert/strict");
+assert.equal(fs.readFileSync("product/program", "utf8"), fs.readFileSync("expected.txt", "utf8"));
+assert.throws(() => fs.writeFileSync("product/program", "mutated"));
+assert.throws(() => fs.readFileSync("source.txt"));
+`,
+    );
+    write("source.txt", "first\n");
+    write("expected.txt", "first\n");
+    write(
+      "workbench/automation.toml",
+      stringify({
+        input_groups: {
+          compilation: { paths: ["build.cjs", "source.txt"], outputs: ["product"] },
+          verification: { paths: ["test.cjs", "expected.txt"] },
+        },
+        check: [
+          {
+            name: "Verify product",
+            role: "test",
+            requires_build: ["Build product"],
+            input_groups: ["verification"],
+            command: [process.execPath, "test.cjs"],
+          },
+          {
+            name: "Build product",
+            role: "build",
+            stages: [],
+            input_groups: ["compilation"],
+            command: [process.execPath, "build.cjs"],
+          },
+        ],
+      }),
+    );
+    synchronize(root);
+    git(root, "add", ".");
+    git(root, "commit", "-m", "Synthetic build products");
+    const env = {
+      ...process.env,
+      PATH: [dirname(process.execPath), join(distribution, "bin"), process.env.PATH].join(delimiter),
+      CI: undefined,
+      GITHUB_ACTIONS: undefined,
+      GITLAB_CI: undefined,
+    };
+    function gate() {
+      const result = spawnSync(
+        process.execPath,
+        [join(distribution, "bin/workbench.mjs"), "check", "--stage", "commit", "--verbose"],
+        {
+          cwd: root,
+          encoding: "utf8",
+          timeout: 20000,
+          env,
+        },
+      );
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      return result.stdout + result.stderr;
+    }
+    expect(gate()).toContain("BUILT PROGRAM");
+    write("test.cjs", readFileSync(join(root, "test.cjs"), "utf8") + "// Fresh verification.\n");
+    expect(gate()).toContain("Reused verified outputs from Build product.");
+    const directory = join(buildPaths(root, root, "native").directory, ".workbench-check-products");
+    const [entry] = readdirSync(directory);
+    writeFileSync(join(directory, required(entry, "retained build"), "0/program"), "damaged\n");
+    write("test.cjs", readFileSync(join(root, "test.cjs"), "utf8") + "// Verify repaired output.\n");
+    expect(gate()).toContain("BUILT PROGRAM");
+    write("source.txt", "second\n");
+    write("expected.txt", "second\n");
+    expect(gate()).toContain("BUILT PROGRAM");
+  },
+);
 
 test("cached CLI checks validate changed records and scan sidecars without rerunning behavioral tests", async () => {
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
@@ -110,3 +316,128 @@ test("cached CLI checks validate changed records and scan sidecars without rerun
   expect(report("secret").success).toBe(false);
   expect(report("secret").runs.map(({ status }) => status)).toEqual(["passed", "failed"]);
 });
+
+test.skipIf(process.platform === "win32")(
+  "the CLI and Git hook resolve scoped inputs from their own checkouts",
+  async () => {
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    const root = await consumer();
+    temporary.push(root);
+    const write = (name: string, contents: string) => {
+      writeFileSync(join(root, name), contents);
+    };
+    mkdirSync(join(root, "launcher/[fixtures]"), { recursive: true });
+    mkdirSync(join(root, "other"));
+    write(".gitignore", "/local-input\n/.reports/\n");
+    write(
+      "launcher/check.cjs",
+      `
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+assert.equal(fs.readFileSync('../LICENSE', 'utf8'), 'allowed');
+for (const name of fs.readdirSync('[fixtures]')) {
+  assert.equal(fs.readFileSync('[fixtures]/' + name, 'utf8'), 'valid');
+}
+`,
+    );
+    write("local-input", "ignored input");
+    write("launcher/[fixtures]/baseline.txt", "valid");
+    write("LICENSE", "allowed");
+    write("other/service.txt", "unrelated");
+    const config = parse(readFileSync(join(root, "workbench/config.toml"), "utf8"));
+    delete config.check;
+    config.checks = { inputs: ["local-input"] };
+    write("workbench/config.toml", stringify(config));
+    const automation = {
+      input_groups: {
+        shared: { paths: ["LICENSE"] },
+        launcher: { paths: ["launcher/[fixtures]", "launcher/check.cjs"], depends_on: ["shared"] },
+        other: { paths: ["other"] },
+      },
+      check: [
+        {
+          name: "Launcher",
+          role: "test",
+          path: "launcher",
+          input_groups: ["launcher"],
+          command: [process.execPath, "check.cjs"],
+        },
+      ],
+    };
+    const save = () => {
+      write("workbench/automation.toml", stringify(automation));
+    };
+    save();
+    synchronize(root);
+    git(root, "add", ".");
+    git(root, "commit", "-m", "Synthetic launcher baseline");
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: [dirname(process.execPath), join(distribution, "bin"), process.env.PATH].join(delimiter),
+      CI: undefined,
+      GITHUB_ACTIONS: undefined,
+      GITLAB_CI: undefined,
+    };
+    const invoke = (...args: string[]) =>
+      spawnSync(process.execPath, [join(distribution, "bin/workbench.mjs"), "check", "--stage", "commit", ...args], {
+        cwd: root,
+        encoding: "utf8",
+        env,
+      });
+    const plan = invoke("--json");
+    expect(plan.status, plan.stdout + plan.stderr).toBe(0);
+    expect(JSON.parse(plan.stdout)).toMatchObject({
+      inputScope: {
+        mode: "scoped",
+        groups: ["launcher", "shared"],
+        paths: expect.arrayContaining(["LICENSE", "launcher/[fixtures]", "local-input"]) as unknown,
+      },
+    });
+    const run = (name: string, success = true) => {
+      const path = join(root, ".reports", `${name}.json`);
+      const result = invoke("--report", path);
+      expect(result.status === 0, result.stdout + result.stderr).toBe(success);
+      return (JSON.parse(readFileSync(path, "utf8")) as { runs: CheckRunResult[] }).runs[0]?.cache;
+    };
+    expect(run("initial")).toMatchObject({
+      outcome: "fresh",
+      inputScope: { mode: scopedExecution ? "scoped" : "whole-project" },
+    });
+    write("other/service.txt", "unrelated edit");
+    write("launcher/not-declared.txt", "sibling edit");
+    expect(run("unrelated")).toMatchObject({ outcome: scopedExecution ? "reused" : "fresh" });
+    write("launcher/[fixtures]/added.txt", "valid");
+    expect(run("added")).toMatchObject({ outcome: "fresh" });
+    write("launcher/[fixtures]/renamed.txt", "valid");
+    rmSync(join(root, "launcher/[fixtures]/added.txt"));
+    expect(run("renamed")).toMatchObject({ outcome: "fresh" });
+    rmSync(join(root, "launcher/[fixtures]/renamed.txt"));
+    expect(run("restored")).toMatchObject({ outcome: "reused" });
+    write("LICENSE", "rejected");
+    expect(run("shared-change", false)).toMatchObject({ outcome: "fresh" });
+    expect(run("shared-change-again", false)).toMatchObject({ outcome: "fresh" });
+    write("local-input", "ignored file edited");
+    write("LICENSE", "allowed");
+    expect(run("additive")).toMatchObject({ outcome: "fresh" });
+
+    // The staged tree still has its original declaration and files.
+    write("local-input", "ignored input");
+    git(root, "add", "-f", "local-input");
+    write("local-input", "ignored file edited");
+    const launcher = required(automation.check[0], "launcher");
+    launcher.input_groups = [];
+    save();
+    write("LICENSE", "rejected");
+    expect(run("incomplete", false)).toMatchObject({
+      outcome: "fresh",
+      inputScope: { mode: "whole-project", reason: "No input groups for Launcher" },
+    });
+    const hook = spawnSync("bash", [join(distribution, ".githooks/pre-commit")], {
+      cwd: root,
+      encoding: "utf8",
+      env,
+    });
+    expect(hook.status, hook.stdout + hook.stderr).toBe(0);
+    if (scopedExecution) expect(hook.stderr).toContain("Reusing 1 successful checks; 0 run fresh");
+  },
+);

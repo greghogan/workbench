@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
 interface Admission {
   internal?: boolean;
   project?: boolean;
@@ -10,6 +11,13 @@ interface Admission {
 /** Command registration, bootstrap, help, and execution share these admission contracts. */
 const commands: Record<string, Admission> = {
   advisories: { project: true, registration: true },
+
+  artifact: {
+    project: true,
+    registration: true,
+    policy: true,
+    children: { list: { registration: false, policy: false }, inspect: { registration: false, policy: false } },
+  },
 
   "build-clean": { internal: true },
 
@@ -27,6 +35,7 @@ const commands: Record<string, Admission> = {
   },
 
   "checks-session": { internal: true, policy: true },
+  "admitted-check": { internal: true },
 
   ci: { project: true, registration: true, policy: true, children: { validate: { policy: false } } },
 
@@ -36,7 +45,7 @@ const commands: Record<string, Admission> = {
 
   "ci-image-acquire": { internal: true, policy: true },
 
-  "ci-image-exec": { internal: true, policy: true },
+  "ci-image-job": { internal: true, policy: true },
 
   citation: { project: true, registration: true },
 
@@ -82,6 +91,8 @@ const commands: Record<string, Admission> = {
 
   feedback: { registration: true },
 
+  "finalization-run": { internal: true, explicitRoot: true },
+
   format: { project: true, registration: true },
 
   help: { explicitRoot: true },
@@ -96,13 +107,14 @@ const commands: Record<string, Admission> = {
 
   logs: { explicitRoot: true },
 
-  "managed-builder-record": { internal: true, policy: true },
+  "managed-builder-store": { internal: true, policy: true },
 
   "managed-exec": { internal: true, policy: true },
 
   "managed-image-prepare": { internal: true, policy: true },
 
   "image-roots": { internal: true, policy: true },
+  "image-tool-probe": { internal: true, policy: true },
 
   "managed-inputs-exec": { internal: true, policy: true },
 
@@ -132,6 +144,8 @@ const commands: Record<string, Admission> = {
 
   "pre-push": { project: true, registration: true, policy: true, explicitRoot: true },
 
+  prepare: { project: true, registration: true, policy: true, explicitRoot: true },
+
   project: { explicitRoot: true },
 
   rebase: { project: true, registration: true, policy: true },
@@ -143,7 +157,11 @@ const commands: Record<string, Admission> = {
   experiment: { project: true, registration: true, policy: true, children: { show: { policy: false } } },
   queue: { project: true, registration: true },
 
-  release: { project: true, registration: true, children: { profiles: { policy: false }, prepare: { policy: true } } },
+  release: {
+    project: true,
+    registration: true,
+    children: { profiles: { policy: false }, prepare: { policy: true }, publish: { policy: true } },
+  },
 
   review: {
     project: true,
@@ -164,6 +182,8 @@ const commands: Record<string, Admission> = {
 
   "shell-session": { internal: true, policy: true },
 
+  sign: { project: true, registration: true, policy: true },
+
   skills: {},
 
   subproject: { project: true, registration: true },
@@ -180,6 +200,8 @@ const commands: Record<string, Admission> = {
 
   update: { project: true, registration: true, policy: true, explicitRoot: true },
 
+  uninstall: { explicitRoot: true },
+
   "update-prepare": { internal: true, policy: true, explicitRoot: true },
 
   "registration-check": { internal: true, explicitRoot: true },
@@ -188,9 +210,15 @@ const commands: Record<string, Admission> = {
 
   "vcpkg-prepare": { internal: true, policy: true },
 
+  "web-account": { internal: true, explicitRoot: true },
+
   "web-collection": { internal: true },
 
   "web-demo": { internal: true },
+
+  "web-windows-account": { internal: true, explicitRoot: true },
+
+  "web-windows-system": { internal: true, explicitRoot: true },
 };
 export function commandAdmission(path: string) {
   const [top = "", ...rest] = path.split(" ");
@@ -198,11 +226,12 @@ export function commandAdmission(path: string) {
   let selected = { ...base };
   for (let depth = 1; depth <= rest.length; depth++)
     selected = { ...selected, ...base.children?.[rest.slice(0, depth).join(" ")] };
+  const installedUpdate = top === "update" && Boolean(process.env[archiveInstallationEnvironment]);
   return {
     internal: selected.internal === true,
-    project: selected.project === true,
-    registration: selected.registration === true,
-    policy: selected.policy === true,
+    project: !installedUpdate && selected.project === true,
+    registration: !installedUpdate && selected.registration === true,
+    policy: !installedUpdate && selected.policy === true,
     explicitRoot: selected.explicitRoot === true,
   };
 }

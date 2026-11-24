@@ -22,6 +22,11 @@ export async function runCIChecks(
       (target.kind === "environment" || (target.kind === "native" && target.toolchain === toolchain)),
   );
   if (!declared) throw new Error("CI checks must select a configured native platform, environment, and tool profile");
+  if (process.platform === "linux" && network === CheckNetwork.All) {
+    await runCIChecks(root, path, environment, CheckNetwork.Offline, toolchain);
+    await runCIChecks(root, path, environment, CheckNetwork.Online, toolchain);
+    return;
+  }
   const options = {
     stage: "ci",
     path,

@@ -21,7 +21,11 @@ export function checkInvocation(
 ): string[] {
   const builderArguments = (builder: string) => (cpus === undefined ? [] : builderCPUArguments(builder, cpus));
   if (selected === "native") return command;
-  if (selected === "devcontainer") return devcontainerCommand(repositoryRoot ?? directory, directory, command);
+  if (selected === "devcontainer") {
+    if (process.env.WORKBENCH_OFFLINE === "1" && process.env.WORKBENCH_DEVCONTAINER !== "1")
+      throw new Error("Open the prepared offline Dev Container before running offline checks");
+    return devcontainerCommand(repositoryRoot ?? directory, directory, command);
+  }
   if (process.platform === "win32")
     throw new Error("managed check environments require a POSIX host; use Linux CI from Windows");
   const sharedDistribution = repositoryRoot ? distributionRoot(repositoryRoot) : undefined;
@@ -72,15 +76,37 @@ export function checkInvocation(
     for (const file of [channels, join(directory, "manifest.scm")]) {
       if (!existsSync(file)) throw new Error(`${file}: Guix check environment needs this input`);
     }
+    const shellOptions = [
+      ...builderArguments("guix"),
+      "--container",
+      "--emulate-fhs",
+      "--network",
+      "--preserve=^WORKBENCH_PROJECT_ROOT$",
+      ...(sharedDistribution
+        ? [
+            ...(externalRuntime ? [`--expose=${sharedDistribution}`] : []),
+            "--preserve=^WORKBENCH_DISTRIBUTION_MATERIALIZED$",
+          ]
+        : []),
+      ...(builds
+        ? [`--share=${builds.directory}`, `--share=${builds.dependencyRoots}`, `--share=${builds.pnpmStore}`]
+        : []),
+      ...(repositoryRoot && resolve(repositoryRoot) !== resolve(directory)
+        ? [`--share=${resolve(repositoryRoot)}`]
+        : []),
+    ];
     if (process.env.WORKBENCH_OFFLINE === "1" || process.env.WORKBENCH_PREPARED === "1") {
-      if (process.env.WORKBENCH_DEVCONTAINER !== "1")
-        throw new Error("Offline Guix execution requires the prepared container");
-      const profile = required(
+      if (process.env.WORKBENCH_DEVCONTAINER !== "1") {
+        if (!profile || !existsSync(profile))
+          throw new Error("The Guix profile is missing. Run 'workbench prepare --environment guix' for this checkout.");
+        return ["guix", "shell", `--profile=${profile}`, ...shellOptions, "--", ...command];
+      }
+      const timeMachine = required(
         process.env.WORKBENCH_GUIX_TIME_MACHINE_PROFILE,
         "Offline Guix image must declare its retained time-machine profile",
       );
       return [
-        profile + "/bin/guix",
+        timeMachine + "/bin/guix",
         "shell",
         "--rebuild-cache",
         ...builderArguments("guix"),
@@ -109,23 +135,7 @@ export function checkInvocation(
       // Guix's manifest cache does not observe changes to imported package definitions.
       "--rebuild-cache",
       ...(profile ? [`--root=${profile}-pending`] : []),
-      ...builderArguments("guix"),
-      "--container",
-      "--emulate-fhs",
-      "--network",
-      "--preserve=^WORKBENCH_PROJECT_ROOT$",
-      ...(sharedDistribution
-        ? [
-            ...(externalRuntime ? [`--expose=${sharedDistribution}`] : []),
-            "--preserve=^WORKBENCH_DISTRIBUTION_MATERIALIZED$",
-          ]
-        : []),
-      ...(builds
-        ? [`--share=${builds.directory}`, `--share=${builds.dependencyRoots}`, `--share=${builds.pnpmStore}`]
-        : []),
-      ...(repositoryRoot && resolve(repositoryRoot) !== resolve(directory)
-        ? [`--share=${resolve(repositoryRoot)}`]
-        : []),
+      ...shellOptions,
       "-m",
       "manifest.scm",
       "--",
@@ -152,6 +162,7 @@ export function checkInvocation(
       process.env.WORKBENCH_CI_DOCKER ?? "docker",
       "run",
       "--rm",
+      ...(process.env.WORKBENCH_OFFLINE === "1" ? ["--network=none", "--pull=never"] : []),
       "--mount",
       `type=bind,src=${source},dst=/source,readonly`,
       ...(sharedDistribution
@@ -222,16 +233,19 @@ export function checkInvocation(
       ...command,
     ];
   }
+  const offline = process.env.WORKBENCH_OFFLINE === "1";
+  if (offline && profile && !existsSync(profile))
+    throw new Error("The Nix profile is missing. Run 'workbench prepare --environment nix' for this checkout.");
   return [
     "nix",
     ...builderArguments("nix"),
     "--extra-experimental-features",
     "nix-command flakes",
-    ...(process.env.WORKBENCH_OFFLINE === "1" ? ["--offline"] : []),
+    ...(offline ? ["--offline"] : []),
     "develop",
-    `path:${directory}`,
+    offline && profile ? profile : `path:${directory}`,
     "--no-update-lock-file",
-    ...(profile ? ["--profile", profile] : []),
+    ...(profile && !offline ? ["--profile", profile] : []),
     ...(process.env.WORKBENCH_OFFLINE === "1" || process.env.WORKBENCH_PREPARED === "1"
       ? []
       : ["--ignore-environment", "--keep", "HOME", "--keep", "WORKBENCH_PROJECT_ROOT"]),

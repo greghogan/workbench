@@ -7,7 +7,7 @@ import { readConfig, readLanguageRoots } from "../projects/project-configuration
 export function validateManagedImageInputs(root: string): void {
   const roots = readLanguageRoots(root);
   for (const profile of readConfig(root).development?.profiles ?? []) {
-    if (!profile.offline || profile.builder === "native") continue;
+    if (!profile.offline || profile.offline.kind === "toolchain" || profile.builder === "native") continue;
     for (const entry of roots) {
       if (profile.offline.paths && !profile.offline.paths.includes(entry.path)) continue;
       const file = posix.join(entry.path, "managed-check-inputs.json");

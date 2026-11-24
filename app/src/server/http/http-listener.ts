@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { Server as NetServer } from "node:net";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../../core/diagnostics/diagnostics.mjs";
 import type { WebMetrics } from "./observability.js";
 
@@ -61,13 +62,46 @@ export function createLocalServer(
 }
 
 export function listenLocal(server: Server, host: string, port: number): Promise<void> {
+  return listen(server, (ready) => server.listen(port, host, ready));
+}
+
+export function listenInherited(server: NetServer, fd: number): Promise<void> {
+  return listen(server, (ready) => server.listen({ fd }, ready));
+}
+
+export function listenUnix(server: NetServer, path: string): Promise<void> {
+  return listen(server, (ready) => server.listen(path, ready));
+}
+
+function listen(server: NetServer, bind: (ready: () => void) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, () => {
-      server.removeListener("error", reject);
+    const failed = (error: Error) => {
+      server.removeListener("listening", listening);
+      reject(error);
+    };
+    const listening = () => {
+      server.removeListener("error", failed);
       resolve();
-    });
+    };
+    server.once("error", failed);
+    bind(listening);
   });
+}
+
+export async function listenPrivate(server: Server, host: string, port: number): Promise<void> {
+  if (port === 0) return listenLocal(server, host, port);
+  const last = Math.min(65535, port + 31);
+  for (let candidate = port; candidate <= last; candidate++) {
+    try {
+      await listenLocal(server, host, candidate);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+    }
+  }
+  throw new Error(
+    `No free Workbench listener from port ${String(port)} through ${String(last)}. Choose another starting port with --port.`,
+  );
 }
 
 /** Service owners drain their actions and event clients before closing the transport. */

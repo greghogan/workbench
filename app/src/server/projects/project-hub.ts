@@ -1,11 +1,18 @@
 import { routeURL } from "../routes/locations.js";
 import { projectMount, demonstrationBase } from "./project-mounts.js";
-import { localEndpoint, createLocalServer, listenLocal, closeLocalServer } from "../http/http-listener.js";
+import {
+  localEndpoint,
+  createLocalServer,
+  listenPrivate,
+  listenUnix,
+  closeLocalServer,
+} from "../http/http-listener.js";
 import { WorkerGeneration } from "../workspace/worker-generation.js";
 import { knownRoute, routeContracts, decodeRoute, routeOperation, Route } from "../routes/routes.js";
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { type ServerResponse } from "node:http";
+import type { Server as HttpServer, ServerResponse } from "node:http";
+import type { Server as NetServer } from "node:net";
 import {
   diagnostic,
   DiagnosticOperation,
@@ -25,7 +32,7 @@ import { readForm, requestOrigin, secureResponse, send } from "../http/http.js";
 import { HubLifecycle, ProjectViews } from "./hub-lifecycle.js";
 import { ProjectReviews } from "./project-reviews.js";
 import { ProjectDirectory, availableProjects, type ProjectDirectoryView } from "./project-directory.js";
-import { cacheMeasurement } from "../cache/cache-view-model.js";
+import { cacheMeasurement, ProjectCacheSizes } from "../cache/cache-view-model.js";
 import {
   cleanupPage,
   hubErrorPage,
@@ -37,6 +44,7 @@ import {
 } from "../views/hub-pages.js";
 import { InventoryService, type InventoryView } from "../cache/inventory-service.js";
 import { WebMetrics } from "../http/observability.js";
+import { authorizationCheck, createPrivateBrowserAuthentication } from "../http/browser-auth.js";
 
 interface Pending {
   expires: number;
@@ -74,9 +82,20 @@ export function projectHubEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Pr
 }
 export async function startProjectHub(
   distribution: string,
-  options: { host?: "127.0.0.1" | "::1"; port?: number; demo?: boolean } = {},
+  options: {
+    host?: "127.0.0.1" | "::1";
+    port?: number;
+    demo?: boolean;
+    worker?: { socket: string; token: string; transport?: (server: HttpServer) => NetServer };
+  } = {},
 ) {
-  const { host, port } = localEndpoint(options);
+  const preferences = userConfigValues();
+  const { host, port } = localEndpoint({
+    ...options,
+    port: options.port ?? Number(preferences["daemon.private_port"]),
+  });
+  const authentication = createPrivateBrowserAuthentication();
+  const authorized = options.worker ? authorizationCheck(`Bearer ${options.worker.token}`) : authentication.accepts;
   const csrf = randomBytes(32).toString("hex");
   const metrics = new WebMetrics();
   const generation = new WorkerGeneration(distribution);
@@ -87,7 +106,7 @@ export async function startProjectHub(
       (project, index) => {
         reviews.observe(project, index);
       },
-      Number(userConfigValues()["server.project_idle_seconds"]) * 1000,
+      Number(preferences["server.project_idle_seconds"]) * 1000,
     ),
     lifecycle = new HubLifecycle();
   const demoCancellation = new AbortController();
@@ -142,12 +161,18 @@ export async function startProjectHub(
       }
     }
   };
+  let projectSizes: ProjectCacheSizes | undefined;
   const broadcast = (event?: CacheProgress) => {
-    emit(
-      event?.kind === "size"
-        ? `event: size\ndata: ${JSON.stringify(cacheMeasurement(event.size))}\n\n`
-        : `event: inventory\ndata: ${String(revision)}\n\n`,
-    );
+    if (event?.kind !== "size") {
+      projectSizes = undefined;
+      emit(`event: inventory\ndata: ${String(revision)}\n\n`);
+      return;
+    }
+    if (!clients.size) return;
+    emit(`event: size\ndata: ${JSON.stringify(cacheMeasurement(event.size))}\n\n`);
+    projectSizes ??= new ProjectCacheSizes(inventories.view());
+    for (const update of projectSizes.update(event.size))
+      emit(`event: project-size\ndata: ${JSON.stringify({ ...update, revision: revision + 1 })}\n\n`);
   };
   const unsubscribe = inventories.onChange(broadcast);
   const reviews = new ProjectReviews(
@@ -228,6 +253,13 @@ export async function startProjectHub(
       const origin = requestOrigin(request);
       const url = new URL(request.url ?? "/", origin);
       if (url.origin !== origin) throw new WebError(400, "Request URL is outside this service");
+      if (!authorized(request.headers.authorization)) {
+        if (options.worker) throw new WebError(403, "Worker connection is unauthorized");
+        response.setHeader("www-authenticate", 'Basic realm="Workbench", charset="UTF-8"');
+        send(response, 401, "text/plain", "Enter the sign-in credential printed by workbench serve.\n");
+        return;
+      }
+      Reflect.deleteProperty(request.headers, "authorization");
       if (url.pathname === demonstrationBase && request.method === "GET") {
         redirect(response, demonstrationBase + "/");
         return;
@@ -313,12 +345,13 @@ export async function startProjectHub(
       if (request.method === "GET" && decoded?.route === Route.Inventory) {
         const query = decoded.query;
         const data = await inventory();
+        const observedRevision = revision;
         const metadata = await currentProjects(data),
           projects = metadata.projects;
         const view = query.view === "caches" ? "caches" : "projects";
         const owner = projects.find((entry) => entry.id === query.project)?.path ?? query.owner;
-        const body = JSON.stringify(
-          inventoryPatch(
+        const body = JSON.stringify({
+          ...inventoryPatch(
             inventoryPresentation(
               data,
               projects,
@@ -333,7 +366,8 @@ export async function startProjectHub(
               },
             ),
           ),
-        );
+          revision: observedRevision,
+        });
         if (Buffer.byteLength(body) > 16 * 1024 * 1024)
           throw new WebError(413, "Inventory response is too large; use the cache CLI");
         send(response, 200, "application/json", body);
@@ -460,8 +494,10 @@ export async function startProjectHub(
             await tasks.run(proposal.task);
           } finally {
             releaseView?.();
+            invalidate();
+            const priority = proposal.task.kind === "apply" ? proposal.task.plan.project : undefined;
+            void inventories.read(true, false, priority).catch(() => undefined);
           }
-          invalidate();
           redirect(response, "/projects");
           return;
         }
@@ -494,12 +530,12 @@ export async function startProjectHub(
       const data = await inventories.read(query.refresh !== undefined, query["refresh-sizes"] !== undefined, priority);
       const metadata = await currentProjects(data),
         projects = metadata.projects;
-      if (url.pathname === Route.Overview || url.pathname === Route.Projects) {
+      if (url.pathname === Route.Charters || url.pathname === Route.Projects) {
         send(
           response,
           200,
           "text/html",
-          projectDashboard(data, projects, csrf, reviews.read(availableProjects(metadata)), metadata),
+          projectDashboard(data, projects, csrf, reviews.read(availableProjects(metadata)), metadata, !!options.worker),
         );
         return;
       }
@@ -599,8 +635,10 @@ export async function startProjectHub(
     throw error;
   }
   const server = createLocalServer(handler, metrics);
+  const transport = options.worker?.transport?.(server) ?? server;
   try {
-    await listenLocal(server, host, port);
+    if (options.worker) await listenUnix(transport, options.worker.socket);
+    else await listenPrivate(server, host, port);
   } catch (error) {
     lifecycle.stop();
     clearInterval(heartbeat);
@@ -621,8 +659,8 @@ export async function startProjectHub(
     );
     throw error;
   }
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Listener did not publish its address");
+  const address = transport.address();
+  if (!address) throw new Error("Listener did not publish its address");
   let closed: Promise<void> | undefined;
   const close = () => {
     closed ??= (async () => {
@@ -631,32 +669,69 @@ export async function startProjectHub(
       clearInterval(heartbeat);
       unsubscribe();
       inventories.close();
-      await settleCleanup([
-        () => {
-          tasks.cancelPending();
-        },
-        () => reviews.close(),
-        () => directory.close(),
-        () => views.close(),
-        () => demo?.close(),
-        () => {
-          for (const response of clients) response.end();
-          clients.clear();
-        },
-        () => lifecycle.drain(),
-        () => tasks.close(),
-        () => closeLocalServer(server),
-        () => {
-          generation.close();
-        },
-      ]);
+      const phases = [
+        [
+          "cache admission",
+          () => {
+            tasks.cancelPending();
+          },
+        ],
+        ["review summaries", () => reviews.close()],
+        ["project directory", () => directory.close()],
+        ["project views", () => views.close()],
+        ["demonstration", () => demo?.close()],
+        [
+          "event streams",
+          () => {
+            for (const response of clients) response.end();
+            clients.clear();
+          },
+        ],
+        ["admitted requests", () => lifecycle.drain()],
+        ["cache workers", () => tasks.close()],
+        [
+          "browser transport",
+          async () => {
+            if (transport === server) await closeLocalServer(server);
+            else {
+              server.closeAllConnections();
+              await new Promise<void>((resolve, reject) => {
+                transport.close((error) => {
+                  if (error) reject(error);
+                  else resolve();
+                });
+              });
+            }
+          },
+        ],
+        [
+          "worker generation",
+          () => {
+            generation.close();
+          },
+        ],
+      ] as const;
+      await settleCleanup(
+        phases.map(([component, close]) => async () => {
+          await close();
+          if (options.worker)
+            diagnostic(LogLevel.Info, DiagnosticOperation.WebService, DiagnosticOutcome.Stopped, { component });
+        }),
+      );
     })();
     return closed;
   };
   return {
-    server,
+    server: transport,
     close,
+    signIn: { username: authentication.username, password: authentication.password },
     demonstration: () => (demo ? { root: demo.root, source: demo.source } : undefined),
-    url: `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}${options.demo ? demonstrationBase : ""}`,
+    url:
+      typeof address === "string"
+        ? address
+        : new URL(
+            options.demo ? demonstrationBase : "/",
+            `http://${host === "::1" ? "[::1]" : host}:${String(address.port)}`,
+          ).href.replace(/\/$/, ""),
   };
 }

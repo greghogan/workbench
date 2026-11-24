@@ -40,6 +40,7 @@ export function workGraph(tasks: TaskRecord[], plans: PlanningRecord[]): TaskGra
       ...(plan.parent ? { parent: mapped(plan.parent) } : {}),
       dependencies: plan.dependencies.map(mapped),
       digest: plan.digest,
+      ...(plan.approval ? { previouslyApproved: true } : {}),
       planDigest: plan.problem ? taskDigest(plan.contents) : taskPlanDigest(plan.contents),
       planning: {
         name: plan.name,

@@ -27,7 +27,7 @@ export async function accessibilityEvidence(
     for (const [state, location] of [
       ["projects", new URL("/projects", base).href],
       ["cache", new URL("/caches", base).href],
-      ["overview", base],
+      ["charters", base],
       ["records", base + "/records"],
       ["current-tasks", base + "/records?type=TSK"],
       ["plans", base + "/plans"],

@@ -16,9 +16,20 @@ advisories, authentication errors, unavailable services, or a connection lost du
 Use `workbench pre-commit` or `make pre-commit` for the commit-stage gate alone. Use `workbench pre-push` or
 `make pre-push` for required online checks without repeating offline tests. Pre-push never skips for lack of
 connectivity. Both gates validate project records. Online results always run fresh and include required setup.
+Pre-push also verifies published CI images.
 
-`workbench check --list` displays both plans without probing the network. Its `--json` output contains `preCommit` and
-`prePush` plans. `pre-commit --list` and `pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
+Run `workbench prepare` to acquire locked dependencies. Use `--staged` to select the Git index when the next commit has
+different inputs from the working tree. Preparation runs on a private checkout of the selected Git snapshot.
+Use the same project, path, environment, and toolchain selectors for preparation and checks.
+
+Linux runs ordinary checks and builds with external networking blocked. A private network namespace preserves
+loopback for tests that start their own servers. Linux containers that already have only loopback use that network.
+The combined gate runs live checks separately. macOS permits networking because App Sandbox's TCP permissions also
+cover loopback. Windows runs with its regular network access and whole-project inputs.
+
+`workbench check --list` displays separate **Pre-commit checks** and **Online pre-push checks** sections without
+probing the network. Its `--json` output contains `preCommit` and `prePush` plans. `pre-commit --list` and
+`pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
 `check --role ROLE` runs only that selection. Repeat `--role` to select a union of roles, and repeat `--exclude-role` to
 omit roles. For example, `workbench check --role lint --role type` runs those roles in configured order with required
 setup once per session. Exclusions alone retain the commit-stage defaults; use `--stage ci` for CI selection. Unknown
@@ -26,6 +37,30 @@ roles, overlapping includes/excludes, and exclusion of required setup fail befor
 `distclean` alone. These flags apply to `check`; commit and push gates retain their complete configured requirements.
 Use `--path` or `--project` to focus any gate, and `--verbose` to stream full logs. The matching Make targets support
 the same root and project selectors.
+
+Add `--extended` to run the extended checks configured for the selected roots and platform. Combine it with
+`--list` to preview the selection. Declare an extended check with `extended = true` in project automation or in
+a language suite. It stays outside the ordinary gates unless you also assign regular `stages`. The check's
+`[check.ci]` or `[command.ci]` table restricts the platforms and environments where it can run in the extended
+suite. Online extended checks follow the combined gate's connectivity probe. Extended runs that select these checks
+execute fresh, since an installed service or external guest image can change independently of project source.
+
+Workbench's extended suite includes Miri, mutation and generated-input checks, reproducibility, managed-store
+preparation, and [installed service checks](installations.md#extended-service-checks).
+
+The installed system service coordinates check launches across projects and accounts on Linux, macOS, and Windows.
+It admits native checks individually and treats an isolated environment as one session. Each command runs as the calling
+OS account. The service rotates among projects and delays new launches when available slots, CPU contention, or memory
+require it. Without a running system service, checks report standalone scheduling and use the local allocation.
+
+The service administrator can set `[daemon]` preferences `job_limit`, `worker_slots`, and `memory_reserve_bytes`.
+The first two default to the available logical CPU count. The memory reserve defaults to 5% of host RAM, capped at
+1 GiB. Project and invocation settings can still limit local concurrency. Starting the service is explicit.
+
+On Linux and macOS, compatible GNU Make, Ninja, CMake with Ninja, and Cargo commands share worker slots through the
+GNU jobserver FIFO protocol. Each command receives its implicit slot and can borrow available slots up to its local
+worker limit. Explicit parallel arguments and an inherited jobserver keep their own scheduling. Isolated build
+environments and other commands use command-level admission.
 
 Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
 push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
@@ -353,8 +388,8 @@ inputs. Matching successful evidence can then be reused; changed inputs require 
 supply no new success evidence. `--no-cache` also waits for ownership and then runs fresh. Different checkouts have
 independent queues. A wait that exceeds 30 minutes fails with the lock location for inspection.
 
-The source fingerprint conservatively covers the whole project; it does not infer which files affect each check. The
-source inventory includes tracked files and non-ignored untracked files, with contents and executable modes. Project
+The source fingerprint covers the whole project by default. The source inventory includes tracked files and
+non-ignored untracked files, with contents and executable modes. Project
 records and sidecars, adopted collections, charters, record/source maps, generated `AGENTS.md`, and each registered
 root's `coverage/coverage-summary.json` are excluded by default. Test-owned fixtures remain inputs, as do executable
 files such as `workbench/config.toml`, `projects.toml`, `automation.toml`, and `quality.json`. Record/map validation,
@@ -371,6 +406,60 @@ inputs = [ "workbench/experiments/EXP-00/driver.py" ]
 Entries are literal project-relative file or directory paths; directories include their descendants. Explicit inputs
 also include otherwise ignored files. Missing inputs become part of the inventory when created. Symlinks are not
 permitted in explicit input paths. Staged snapshots use their own files, never unstaged contents in the owning checkout.
+
+Projects can opt in to a narrower cache key by declaring the complete inputs of their reusable checks and required
+setup in `workbench/automation.toml`. A launcher suite can declare its directory and the shared license it reads.
+
+```toml
+[input_groups.shared]
+paths = ["LICENSE"]
+
+[input_groups.launcher]
+paths = ["services/launcher"]
+depends_on = ["shared"]
+
+[[check_suite]]
+language = "go"
+path = "services/launcher"
+input_groups = ["launcher"]
+```
+
+Paths are literal repository-relative names. A directory includes tracked and non-ignored untracked descendants,
+including additions, removals, and renames. A named file or an entry in `checks.inputs` can include ignored material.
+Use `input_groups` on an individual `[[check]]`, or set an override in `check_inputs` on a suite, keyed by the
+check's name in its language automation. Groups may depend on other groups. Workbench includes project configuration
+and `checks.inputs` in every scoped gate. Include any shared fixtures, scripts, and other files the commands read.
+Use `outputs` for generated checkout-relative directories a check must write. Workbench gives each scoped run empty,
+private copies of those directories and rejects overlap with captured files.
+
+A check that needs another command's generated files can list its build checks by name with
+`requires_build = ["Build application"]`. Declare each producer as a `build` check, with its source inputs and
+output directories in `input_groups`. The named builds run ahead of their consumers in the same root and
+environment. An isolated check receives a read-only view of the declared products. A matching retained build
+supplies verified output when available. Missing or damaged output triggers a rebuild.
+
+`workbench check --list` and `--json` show the effective scopes. Native gates with declared inputs can reuse successful
+results independently for checks with different input scopes in the same root and environment. Commands still run in
+their configured order. Put outputs needed by other checks in declared setup so fresh checks can recreate them when
+their neighbors are reused. A fresh scoped check and its subprocesses see the declared source read-only. They have
+private build and temporary directories, and coverage commands can write a separate report. When native isolation or
+the declared inputs cannot be verified, Workbench uses whole-project inputs or runs fresh.
+
+Scoped setup uses the prepared package stores for its selected toolchain. Tools receive private writable installation
+directories. Package stores that require writable metadata get a private copy-on-write view or copy. Run
+`workbench prepare` for the affected root when locked packages are missing.
+
+When checking Workbench itself, its generated helpers and launcher are refreshed before the gate captures its inputs.
+The gate rebuilds those files using prepared dependencies and then verifies that the selected dependency graph remains
+available to the checks.
+
+Linux isolation requires Bubblewrap (`bwrap`) with working user namespaces. macOS uses a signed App Sandbox launcher.
+On Windows, AppContainer honors existing access grants to app packages, so a file outside the declared scope can still
+be readable. Windows uses whole-project verification with the runner's network access.
+
+The execution report's `cache` field shows which checks ran fresh or reused results, the input scope, and any fallback.
+Fresh security checks can read the whole project. A source change during those scans prevents reuse from satisfying the
+current gate.
 
 The key also covers committed coverage baseline contents, Workbench distribution, resolved command and tool executable
 contents, tool version probes, host identity, effective tool environments and selected configuration files, storage
@@ -439,8 +528,8 @@ with `make build ROOT=examples/languages/rust`. Adding projects or roots require
 sequentially. The direct Workbench CLI remains available without Make; the reference-directory Makefiles are static
 wrappers selecting their own root.
 
-Inspect the same resolved plan with `workbench check --list`: the table lists the selected root, role, environment,
-check, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
+Inspect the same resolved plans with `workbench check --list`. The tables show each check's root, role, environment,
+name, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
 imply `--list` and never execute checks. Selection flags match execution, including `--stage ci` and `--role test`. A
 focused role includes its setup but skips structural validation. `make pre-commit` and `workbench pre-commit` run
 complete commit gates. `make check` and `workbench check` additionally attempt online checks.
@@ -601,8 +690,8 @@ stages = []
 ```
 
 The Workbench examples explicitly select their sample artifact verifier. That verifier is specific to the sample APIs;
-consumers supply their own command. Named release profiles independently declare their `prepare` and `verify` commands
-in project configuration. See the [profile guide](profiles.md).
+consumers supply their own command. Artifact recipes independently declare their `build` and `verify` commands in the
+shared profile catalog. See the [profile guide](profiles.md).
 
 Failed checks print a copyable `workbench logs read PATH` command. The reader accepts the reported logical path even
 after retention compresses it with Zstandard. The terminal shows the failed step once; full group logs and structured

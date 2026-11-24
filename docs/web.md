@@ -10,10 +10,29 @@ workbench serve --port 8081
 workbench serve --demo
 ```
 
-Open the printed URL in your browser. The listener defaults to `127.0.0.1:8080`; `--host ::1` selects IPv6 loopback, and
-`--port 0` selects an available port. Workbench does not launch a browser or configure SSH. Use your own browser and
-forwarding arrangement when working on a remote host. Stop the service with Ctrl-C. Shutdown stops accepting work and
-waits for admitted collection changes and cache deletions to finish. Read-only cache scans are cancelled on shutdown.
+Open the printed URL and enter the username and generated password in the browser's sign-in prompt. The credential
+expires when the server stops. Links and forms continue to work with JavaScript disabled.
+
+On Linux and macOS, running `workbench serve` again prints the active service's sign-in instructions and exits. This
+also works with `--demo` to open the demonstration on the active listener. Stop the active service before changing its
+listener address or Workbench release.
+
+With `workbench serve --daemon`, the private server continues after the CLI exits. Stop it with `kill PID`, using the
+printed server PID. A supervisor can run `workbench serve --service` in the foreground. Use a separate `workbench serve`
+invocation to get sign-in instructions for that listener. A supervised server waits for an existing private listener
+to stop before taking over.
+
+On an installed Linux system service, `workbench serve` prints sign-in for the shared listener. Each signed-in account
+sees its own projects and settings. System sign-in remains valid for 30 days by default, including across a server
+restart at the same address. Each account retains its 32 most recent active sign-ins. Use **Sign out** on Projects to
+revoke the browser's credential. The administrator can configure `daemon.system_port`, `daemon.worker_idle_seconds`,
+and `daemon.session_seconds`. Forwarding must preserve the loopback address and port printed by the CLI.
+
+The private listener starts at `127.0.0.1:8080` by default and uses the first available port in the next 32 ports,
+including the starting port. Set `daemon.private_port` in your global configuration or pass `--port` to change the
+start. Use `--host ::1` for IPv6 loopback or `--port 0` to let the OS choose the port. If you are working on a remote
+host, configure forwarding and open the forwarded URL in your browser. Ctrl-C stops admission, cancels read-only cache
+scans, and waits for admitted collection changes and cache deletions to finish.
 
 The dashboard lists registered consuming projects, including Workbench itself when registered. Open a project to browse
 its records; **Projects** returns to the dashboard. Project records and adopted collections remain separate sources
@@ -58,6 +77,7 @@ sharing one Cargo workspace. **Clear root** clears that shared build root togeth
 preserved; image layers may remain after their owned tags are removed. Filesystem and builder sizes are estimates.
 Owned, eligible, and retained filesystem totals are shown separately from logical image footprints; shared image-layer
 reclamation remains unknown. A failed inventory component reports its cause while other components remain available.
+Docker volume accounting only delays totals for projects with a recorded BuildKit builder.
 
 Saved cache measurements survive server restarts and are reused while their directories are unchanged. Automatic
 inventory refreshes are spaced fifteen minutes apart; explicit refreshes and cache maintenance can refresh sooner.
@@ -108,47 +128,45 @@ and time zone, while pages without JavaScript use English and UTC. Stored timest
 retain their exact ISO values.
 
 **Tasks** under **Records** counts and shows numeric task records in all states as a hierarchy, with nested subtasks.
-The generated task map is an index, not an execution queue. All four shared states (Planned, Approved, Accepted, and
-Canceled) have separate history views with automatic loading and a **Load more** fallback. Global search includes every
-state and named future plans; Workflow keeps those plans separate from task record counts. Invalid or missing metadata
-remains visible under **Tasks needing attention**.
+Use the state filter to find tasks at a particular stage. Matching subtasks stay under their ancestors. Record lists and
+document arrows follow newest IDs first within each scope and record type. Global search includes every task state and
+named future plans. Invalid or missing metadata remains visible under **Tasks needing attention**.
 
 Task and plan comparisons show the complete documents in unified or side-by-side form, without a separate Read tab.
-Outcome comparisons include checklist completion and implementation-account updates against the retained approved plan.
+Reviews compare against the most recent approval or acceptance, including checklist progress, implementation-account
+updates, and supporting files. Reopening a task preserves that comparison.
 
 Task pages list their associated commits alongside outcome acceptance. Open a commit to inspect its changed files in
 unified or side-by-side views, then return through the task breadcrumb. Inspection preserves the selected scope and does
 not grant document review or task acceptance. All changed files appear in one continuous list. Small diffs appear when
 the commit opens or load automatically in batches. Large diffs use **Load diff**. The searchable file tree stays open
-and links directly to each file’s comparison.
-Task pages separate approval and acceptance from secondary actions. Cancel and delete each open a confirmation page;
-cancellation optionally retains a reason, while deletion has no reason field. Accepted work must be reopened or
-explicitly reverted; active queued work must be released or blocked before cancellation. Related protected-document
-reviews remain visible from a task even when they belong to another project scope.
+and links directly to each file’s comparison. **Show plan actions** and **Show task actions** reveal the choices
+available for the current state. Canceling an inactive task with commits offers removal or reversion with an inspectable
+preview. Cancellation can retain an optional reason. Removing published commits requires explicit confirmation and
+changes the local branch. Related protected-document reviews remain visible from a task even when they belong to another
+project scope.
 
 **Workflow** has three pages, each with a count for the selected project or subproject and its descendants:
 
-- **Plans** puts started tasks needing revised approval first, followed by initial approvals, oldest first in each group.
-- **Work** shows queued and available tasks, execution progress, prerequisites, and active experiments. A started
-  task that needs plan approval stays visible with a link to the revised plan. Move
-  up/down controls order queued work; they also work with the keyboard. Agents claim work and record progress through
-  the CLI, as directed in chat.
-- **Reviews** gives each completed task one entry. Its delivered commits and associated record reviews are available
-  from that entry. Standalone protected records and policy findings remain directly accessible. Experiments receive
-  record review after completion.
+- **Plans** lists plans awaiting first approval, oldest first by Added date.
+- **Work** shows the local execution queue, progress, and prerequisites. Move tasks up or down with the row controls.
+  Agents claim work and record progress through the CLI, as directed in chat.
+- **Reviews** shows **Awaiting approval** first and **Awaiting acceptance** second. A revised task retains its queue
+  position while awaiting approval. Each task outcome group lists pending documents before the outcome. Standalone
+  protected records and policy findings have direct links. Experiments receive record review after completion.
 
-Approval, document review, and task acceptance remain separate decisions. Revised plans return to Plans before their
-outcomes can be accepted; changed plans need renewed implementation evidence. Completed tasks remain discoverable in
-Records. Queue changes refresh connected browsers and survive server restarts and cache cleanup. Workflow pages update
-when the visible rows or counts change. Workbench requests notification permission on the first interaction with the
-page if the browser has no saved choice. When allowed, an open background tab can alert you to plans needing approval
-and completed work awaiting acceptance. Notification permission is managed in the browser. Review actions leave Git
-staging and commits to the user.
+Approval, document review, and task acceptance remain separate decisions. Material plan revisions need renewed approval
+and implementation evidence before acceptance. Completed tasks remain discoverable in Records. Queue changes refresh
+connected browsers and survive server restarts and cache cleanup. Workflow pages update when the visible rows or counts
+change. Workbench requests notification permission on the first interaction with the page if the browser has no saved
+choice. When allowed, an open background tab can alert you to new decisions in Reviews. Notification permission is
+managed in the browser. Review decisions apply to the displayed versions.
 
 The project control in the header opens the **Projects** dashboard. **Switch project** appears beside the current
 project name. The sidebar lists the project, its registered subprojects as an expandable hierarchy, and installed
 collections. Selecting a name opens that source directly. The **Collections** link opens acquisition and update
-controls. The Workbench wordmark is an identity label; **Overview** provides navigation back to the selected source.
+controls. **Charters** is the landing page for a project or collection. It offers charter creation for project scopes
+that need one. The Workbench wordmark is an identity label.
 
 Only declared subprojects appear in the tree; language check roots are independent. Nested scopes attach to their
 nearest registered parent. Labels use each scope's optional `name`, falling back to its ID. Breadcrumbs use those same
@@ -170,7 +188,8 @@ page; source filtering does not waive project-wide review or publication require
 
 A pending review count beside a subproject opens its Reviews page, including descendant work. Reviews opened from a task
 group keep the selected queue scope, including for documents owned elsewhere. The breadcrumbs link back to that queue and
-the task outcome. The arrows follow task groups in queue order, with each task's pending documents before its outcome.
+the task outcome. The arrows follow the Reviews page order across tasks and standalone records, with each task's pending
+documents before its outcome.
 Within a retained commit, root-project documents come before subproject documents. Confirming the last document in a
 task opens its pending outcome. Accepting the outcome returns to the Reviews queue for the selected scope.
 
@@ -296,7 +315,7 @@ while they have unreviewed files. Later changes return a record to the queue.
 
 The queue separates each project's records into a named section. Main-project records come first, followed by
 subprojects in hierarchy order; headings use registered name breadcrumbs. Adopted collections have separate sections
-after project scopes. Previous/next navigation and confirmation follow the same order.
+after project scopes. Previous and next follow that order within the selected Reviews page.
 
 For an existing ADR, experiment, environment record, or charter, review offers **Unified** and **Side-by-side**
 comparisons against the latest review since the last non-provisional commit, falling back to that commit when there has

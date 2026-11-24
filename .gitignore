@@ -105,6 +105,7 @@ __pycache__/
 !/scripts/managed-input-recipes.mjs
 !/scripts/managed-inputs.mjs
 !/scripts/managed-process.mjs
+!/app/src/core/execution/environments/managed/profile-transfer.mjs
 !/app/src/core/execution/environments/managed/managed-source-contract.mjs
 !/app/src/core/execution/environments/managed/managed-system.mjs
 !/scripts/native-c-checks.mjs
@@ -121,6 +122,7 @@ __pycache__/
 !/app/src/core/toolchains/pnpm-lock.mjs
 !/scripts/pnpm-metadata.mjs
 !/scripts/prepare-development.mjs
+!/scripts/prepare-image-tools.mjs
 !/scripts/prepare-guix-profiles.mjs
 !/scripts/prepare-host-managed-development.mjs
 !/scripts/prepare-managed-development.mjs
@@ -128,11 +130,12 @@ __pycache__/
 !/app/src/core/runtime/process-outcome.mjs
 !/scripts/python-checks.mjs
 !/scripts/release-rust.mjs
+!/scripts/restore-store-archive.mjs
 !/scripts/ruby-coverage.mjs
 !/app/src/core/configuration/runtime-parsers.mjs
 !/scripts/split-prepared-inputs.mjs
+!/scripts/workbench-release-archive.mjs
 !/app/src/core/runtime/values.mjs
-!/scripts/verify-managed-preparation.mjs
 !/scripts/verify-managed.mjs
 !/app/src/core/runtime/windows-arguments.mjs
 !/app/src/core/runtime/windows-utf8-console.mjs
@@ -153,6 +156,7 @@ __pycache__/
 /app/src/core/toolchains/acquisition/network-retry.mjs
 /app/src/core/toolchains/acquisition/network-command.mjs
 /app/src/core/distribution/bundle-layout.mjs
+/app/src/core/artifacts/github-release.mjs
 /app/src/core/toolchains/acquisition/metadata-http.mjs
 /app/src/core/verification/document-fixtures.mjs
 /app/src/core/execution/checks/check-network.mjs
@@ -165,3 +169,16 @@ __pycache__/
 # Local citation documents; bibliographic records remain tracked.
 /app/library/citations/
 /bundle/
+
+# Local citation documents; bibliographic records remain tracked.
+/examples/languages/c/library/citations/
+/examples/languages/cpp/library/citations/
+/examples/languages/go/library/citations/
+/examples/languages/java/library/citations/
+/examples/languages/javascript/library/citations/
+/examples/languages/php/library/citations/
+/examples/languages/python/library/citations/
+/examples/frameworks/react/library/citations/
+/examples/languages/ruby/library/citations/
+/examples/languages/rust/library/citations/
+/examples/languages/typescript/library/citations/

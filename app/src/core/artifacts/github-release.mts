@@ -1,17 +1,37 @@
-import { acquireCommand, acquisitionAttempt } from "../app/src/core/toolchains/acquisition/network-command.mts";
+import { acquireCommand, acquisitionAttempt } from "../toolchains/acquisition/network-command.mts";
 import {
   AcquisitionReason,
   acquisitionReason,
   retryNetwork,
   settleNetworkCleanup,
   AcquisitionRejected,
-} from "../app/src/core/toolchains/acquisition/network-retry.mts";
-import { captureOwnedChild } from "../app/src/core/runtime/owned-child.mjs";
-import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { record, required } from "../app/src/core/runtime/values.mjs";
-import { readPublishedRelease } from "./release-contract.mts";
+} from "../toolchains/acquisition/network-retry.mts";
+import { captureOwnedChild } from "../runtime/owned-child.mjs";
+import { processFailure } from "../runtime/process-outcome.mjs";
+import { createReadStream, existsSync, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { basename, dirname, join } from "node:path";
+import { record, required, string } from "../runtime/values.mjs";
+export interface PublishedRelease {
+  target_commitish: string;
+  body: string;
+  draft: boolean;
+  published_at?: string;
+  assets: { name: string }[];
+}
+function readPublishedRelease(value: unknown): PublishedRelease {
+  const data = record(value, "Invalid release");
+  if (typeof data.draft !== "boolean" || !Array.isArray(data.assets)) throw new Error("Invalid release state");
+  return {
+    target_commitish: string(data.target_commitish, "Missing release source"),
+    body: string(data.body, "Missing release identity"),
+    draft: data.draft,
+    ...(typeof data.published_at === "string" ? { published_at: data.published_at } : {}),
+    assets: data.assets.map((asset: unknown) => ({
+      name: string(record(asset, "Invalid release asset").name, "Missing release asset name"),
+    })),
+  };
+}
 
 /** All authenticated GitHub effects stay behind one narrowly scoped transport. */
 export class GitHubRelease {
@@ -125,10 +145,19 @@ export class GitHubRelease {
     if (!Number.isSafeInteger(id) || Number(id) < 1) throw new Error("Invalid release database identity");
     return readPublishedRelease(await this.api(`/releases/${String(id)}`));
   }
-  async verifyTag(tag: string, revision: string): Promise<void> {
+  async verifyTag(tag: string, revision: string, requireExisting = false): Promise<void> {
     const value = await this.optional(`/git/ref/tags/${encodeURIComponent(tag)}`);
-    if (value === undefined) return;
-    const target = record(record(value, "Invalid tag").object, "Invalid tag target");
+    if (value === undefined) {
+      if (requireExisting) throw new Error("Push the reviewed release tag before publishing its assets");
+      return;
+    }
+    let target = record(record(value, "Invalid tag").object, "Invalid tag target");
+    for (let depth = 0; target.type === "tag" && depth < 8; depth++) {
+      const oid = string(target.sha, "Invalid annotated tag");
+      if (!/^[a-f0-9]{40}$/.test(oid)) throw new Error("Invalid remote annotated tag identity");
+      const annotated = record(await this.api(`/git/tags/${oid}`), "Invalid annotated tag");
+      target = record(annotated.object, "Invalid annotated tag target");
+    }
     if (target.type !== "commit" || target.sha !== revision)
       throw new Error("Release tag already identifies different source");
   }
@@ -154,20 +183,72 @@ export class GitHubRelease {
   async upload(tag: string, path: string): Promise<void> {
     await this.command("release", "upload", tag, path, "--repo", this.repository);
   }
-  async download(tag: string, directory: string): Promise<void> {
+  async download(tag: string, directory: string, names: readonly string[]): Promise<void> {
     await this.downloadFiles(directory, [
       "release",
       "download",
       tag,
       "--repo",
       this.repository,
-      "--pattern",
-      "workbench.tar.gz",
-      "--pattern",
-      "SHA256SUMS",
+      ...names.flatMap((name) => ["--pattern", name]),
     ]);
   }
   async publish(tag: string): Promise<void> {
     await this.command("release", "edit", tag, "--repo", this.repository, "--draft=false");
   }
+  assetURL(tag: string, name: string): string {
+    return `https://github.com/${this.repository}/releases/download/${encodeURIComponent(tag)}/${name}`;
+  }
+}
+
+/** A retry reconciles a matching draft and validates every remote file before making it public. */
+export async function publishGitHubFiles(
+  github: Pick<GitHubRelease, "release" | "verifyTag" | "create" | "upload" | "download" | "publish">,
+  tag: string,
+  revision: string,
+  marker: string,
+  files: readonly string[],
+  scratch: string,
+  requireTag = false,
+): Promise<void> {
+  const names = files.map((path) => basename(path));
+  if (!names.length || names.some((name) => !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name)))
+    throw new Error("Select release files with portable asset names");
+  const unique = new Set(names);
+  if (unique.size !== names.length) throw new Error("Release asset names must be unique");
+  const sha256 = async (path: string) => {
+    if (!lstatSync(path).isFile()) throw new Error(`${path}: expected a regular release asset`);
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+    return hash.digest("hex");
+  };
+  const expected = await Promise.all(
+    files.map(async (path) => ({ path, name: basename(path), sha256: await sha256(path) })),
+  );
+  const existing = await github.release(tag);
+  await github.verifyTag(tag, revision, requireTag);
+  if (
+    existing &&
+    ((!requireTag && existing.target_commitish !== revision) ||
+      existing.body !== marker ||
+      existing.assets.some(({ name }) => !unique.has(name)))
+  )
+    throw new Error("Existing release differs from the selected immutable publication");
+  if (!existing) await github.create(tag, revision, marker);
+  for (const entry of expected) {
+    if (existing?.assets.some((asset) => asset.name === entry.name)) continue;
+    if (existing && !existing.draft) throw new Error("Published release is missing required assets; refusing mutation");
+    await github.upload(tag, entry.path);
+  }
+  const verify = async (destination: string) => {
+    await github.download(tag, destination, names);
+    for (const entry of expected)
+      if ((await sha256(join(destination, entry.name))) !== entry.sha256)
+        throw new Error(`Published ${entry.name} differs from the tested artifact; preserving release for inspection`);
+  };
+  if (!existing || existing.draft) {
+    await verify(join(scratch, "draft-verification"));
+    await github.publish(tag);
+  }
+  await verify(join(scratch, "published-verification"));
 }

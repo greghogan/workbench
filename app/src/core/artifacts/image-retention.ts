@@ -6,35 +6,17 @@ import { userDirectory } from "../storage/storage.js";
 import { imageHash, imageDigest, type LocalImageReport } from "./image-contract.js";
 import { inspectPreparedImages, prunePreparedImages } from "./prepared-images.js";
 import { projectRegistrySnapshot, keptCacheAssets } from "../projects/project-registry.js";
-import { inspectBuilderCache, pruneBuilderCache } from "../storage/builder-cache.js";
+import { pruneBuilderCache } from "../storage/builder-cache.js";
+import { inspectBuildkitCache } from "./buildkit.js";
+import { inspectManagedStorePins } from "../storage/managed-store-pins.js";
 import { userConfigValues } from "../configuration/user-config.js";
 import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "../diagnostics/diagnostics.mjs";
-
-/** A private store may release older roots only when all configured profiles have accepted requirements. */
-export function retainedBuilderInputs(root: string, profiles: readonly string[]): string[] | undefined {
-  try {
-    const report = inspectPreparedImages(root);
-    if (report.issues.length) return undefined;
-    const accepted = acceptedProfiles(report, new Set([root]), new Set(profiles));
-    if (profiles.some((profile) => !accepted.profiles.has(profile))) return undefined;
-    const kept = keptCacheAssets();
-    return [
-      ...new Set([
-        ...accepted.inputs.values(),
-        ...report.entries.flatMap((entry) => (kept.has(entry.catalog) && entry.inputs ? [entry.inputs] : [])),
-      ]),
-    ];
-  } catch {
-    return undefined;
-  }
-}
 
 /** Current accepted profile receipts retain their images until a verified replacement is activated. */
 function acceptedProfiles(report: LocalImageReport, owners: Set<string>, selectedProfiles?: ReadonlySet<string>) {
   const required = new Set<string>();
   const builders = new Set<string>();
   const inputs = new Map<string, string>();
-  const profileNames = new Set<string>();
   let complete = true,
     found = false;
   const profiles = new Map(
@@ -72,28 +54,24 @@ function acceptedProfiles(report: LocalImageReport, owners: Set<string>, selecte
       throw new Error(`${path}: current prepared image requirements are unavailable`);
     required.add(value.image);
     inputs.set(`${entry.profile}/${value.platform}`, value.inputs);
-    profileNames.add(entry.profile);
     found = true;
-    if (value.builderCaches === undefined) complete = false;
-    else {
-      if (
-        !Array.isArray(value.builderCaches) ||
-        !value.builderCaches.every(
-          (key: unknown) => typeof key === "string" && /^(?:workbench-buildkit|guix|nix)-[a-f0-9]{24}$/.test(key),
-        )
+    if (
+      Array.isArray(value.builderCaches) &&
+      value.builderCaches.every(
+        (key: unknown) => typeof key === "string" && /^workbench-buildkit-[a-f0-9]{24}$/.test(key),
       )
-        throw new Error(`${path}: invalid builder cache requirements`);
+    ) {
       for (const key of value.builderCaches as string[]) builders.add(key);
-    }
+    } else complete = false;
   }
-  return { images: required, inputs, profiles: profileNames, builders: complete && found ? builders : undefined };
+  return { images: required, inputs, builders: complete && found ? builders : undefined };
 }
 
 // Assembly alone cannot prove that another platform's builder store has a working replacement.
 const pendingImages = (report: LocalImageReport, root: string) =>
   report.entries.some((entry) => entry.checkout === root && !entry.verified);
 
-async function retireBuilderGenerations(
+async function retireBuildkitGenerations(
   root: string,
   report: LocalImageReport,
   definitions: (architecture?: string) => ReadonlyMap<string, string>,
@@ -127,7 +105,7 @@ async function retireBuilderGenerations(
     )
   )
     return;
-  const cache = await inspectBuilderCache(root, undefined, false);
+  const cache = await inspectBuildkitCache(root, undefined, false);
   if (cache.issues.length) throw new Error(`Builder ownership is unavailable: ${cache.issues.join("; ")}`);
   const kept = keptCacheAssets();
   const entries = cache.entries.filter(
@@ -248,7 +226,15 @@ export async function autoPrunePreparedImages(
         images: entries.length,
       });
     if (definitions && userConfigValues()["cache.auto_prune"] !== false)
-      await retireBuilderGenerations(root, report, definitions);
+      await retireBuildkitGenerations(root, report, definitions);
+    if (userConfigValues()["cache.auto_prune"] !== false) {
+      const pins = await inspectManagedStorePins(root);
+      const ready = pins.entries.filter((entry) => !entry.blockedBy);
+      if (pins.issues.length) throw new Error(`Managed store inspection failed: ${pins.issues.join("; ")}`);
+      await pruneBuilderCache({ ...pins, entries: ready }, undefined, () => {
+        if (userConfigValues()["cache.auto_prune"] === false) throw new Error("Automatic store cleanup was disabled");
+      });
+    }
   } catch (error) {
     try {
       diagnostic(

@@ -3,7 +3,18 @@ set -euo pipefail
 repository_root=$(git rev-parse --show-toplevel)
 if ! git -C "$repository_root" cat-file -e HEAD:bin/workbench.mjs 2>/dev/null; then
     export WORKBENCH_PROJECT_ROOT="$repository_root" WORKBENCH_LOCAL_CONFIG_ROOT="$repository_root"
+    if ! command -v workbench >/dev/null 2>&1; then
+        printf '%s\n' 'workbench: commit saved. Install Workbench to finish review bookkeeping.' \
+            "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" \
+            '  Then run workbench review finish-commit.' >&2
+        exit 1
+    fi
     exec workbench review finish-commit
+fi
+if ! command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'workbench: commit saved. Node.js is required to finish review bookkeeping.' \
+        "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+    exit 1
 fi
 snapshot=$(mktemp -d)
 trap 'rm -rf -- "$snapshot"' EXIT

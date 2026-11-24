@@ -1,6 +1,6 @@
 import { relative } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { BoundedState } from "../storage/bounded-state.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
@@ -14,12 +14,57 @@ import { repositoryStatePath, withRepositoryOperation } from "../git/repository-
 import { publishGitTree, sameGitEntry, type TreeUpdate } from "../git/tree-publication.js";
 import { projectedRecordMaps } from "../records/record-projection.js";
 import { readTaskGraph } from "./task-model.js";
-import { readTaskQueue, withTaskLock, writeTaskQueue, decodeQueue, type TaskQueueEntry } from "./task-queue.js";
+import {
+  readTaskQueue,
+  withTaskLock,
+  writeTaskQueue,
+  decodeQueue,
+  TaskReadiness,
+  type TaskQueueEntry,
+} from "./task-queue.js";
 import { appendTaskAccount } from "./task-plan.js";
 import { replaceRecordStatus } from "../records/record-document.js";
+import { canceledContents } from "./planning/plan-disposition.js";
+import { taskTransitionProblem } from "./task-service.js";
+import { taskRemovalPublication } from "./task-publication.js";
+import { provisionalTrailer } from "../git/commit-history.js";
+import { taskHadApproval } from "./task-workflow.js";
+import { taskPlanFiles } from "./task-approvals.js";
+import { syncRecordOutputs } from "../records/record-outputs.js";
 
-export type TaskDispositionKind = "delete" | "revert";
+export const taskDispositionKinds = ["delete", "revert", "cancel-remove", "cancel-revert"] as const;
+export type TaskDispositionKind = (typeof taskDispositionKinds)[number];
 const text = (root: string, args: string[], input?: string) => gitBytes(root, args, input).toString().trim();
+
+export function deleteUnstartedTaskPlan(root: string, reference: string, expected: string): void {
+  withRepositoryOperation(
+    root,
+    () => {
+      withTaskLock(root, () => {
+        const graph = readTaskGraph(root);
+        const task = graph.require(reference);
+        if ((task.reviewDigest ?? task.digest) !== expected)
+          throw new StateConflict("The plan changed; inspect it before deleting");
+        const entry = readTaskQueue(root).entries.find((item) => item.reference === reference);
+        if (task.archived || entry || taskHadApproval(task, entry) || taskPlanFiles(root, task).length)
+          throw new StateConflict("Delete a plan only when it has no started work or supporting files");
+        if (graph.tasks.some((item) => item.parent === reference || item.dependencies.includes(reference)))
+          throw new StateConflict("Preserve incoming task relationships before deleting the plan");
+        const path = relative(root, task.path).replaceAll("\\", "/");
+        if (text(root, ["ls-files", "--", path]) || text(root, ["log", "--all", "-1", "--format=%H", "--", path]))
+          throw new StateConflict("The plan is staged or retained in Git history");
+        const object = writeReviewBlobs(root, [Buffer.from(task.contents)])[0];
+        if (!object) throw new StateConflict("The original plan could not be retained for recovery");
+        gitBytes(root, ["update-ref", `refs/workbench/recovery/plan-deletion/${randomUUID()}`, object]);
+        if (readFileSync(task.path, "utf8") !== task.contents)
+          throw new StateConflict("The plan changed; inspect it before deleting");
+        unlinkSync(task.path);
+        syncRecordOutputs(root, [path]);
+      });
+    },
+    "disposition",
+  );
+}
 function updatesBetween(root: string, before: string, after: string): TreeUpdate[] {
   const a = readGitTree(root, before),
     b = readGitTree(root, after);
@@ -28,7 +73,12 @@ function updatesBetween(root: string, before: string, after: string): TreeUpdate
     .map((path) => ({ path, before: a.get(path), after: b.get(path) }));
 }
 export function taskDisposition(root: string, reference: string, kind: TaskDispositionKind, reason = "") {
-  const task = readTaskGraph(root).require(reference),
+  const graph = readTaskGraph(root),
+    task = graph.require(reference),
+    queue = readTaskQueue(root),
+    entry = queue.entries.find((item) => item.reference === reference),
+    canceling = kind === "cancel-remove" || kind === "cancel-revert",
+    removing = kind === "delete" || kind === "cancel-remove",
     head = text(root, ["rev-parse", "HEAD"]),
     branch = text(root, ["symbolic-ref", "--short", "HEAD"]),
     commits = text(root, [
@@ -44,6 +94,11 @@ export function taskDisposition(root: string, reference: string, kind: TaskDispo
       .filter(Boolean),
     problems: string[] = [];
   if (task.archived) problems.push("Restore the archived task before changing its work");
+  if (canceling) {
+    const problem = taskTransitionProblem(task, new TaskReadiness(graph, queue), "Canceled");
+    if (problem) problems.push(problem);
+    if (task.metadata.status === "Canceled") problems.push("Task is already canceled");
+  } else if (entry?.state === "Active") problems.push("Release active work before changing task history");
   if (!commits.length) problems.push("No committed task work was found; remove the uncommitted files with your editor");
   if (commits.length > 1000) problems.push("Separate a smaller task history before changing it");
   const path = relative(root, task.path).replaceAll("\\", "/"),
@@ -80,22 +135,22 @@ export function taskDisposition(root: string, reference: string, kind: TaskDispo
   const incoming = readTaskGraph(root).tasks.filter(
     (item) => item.parent === reference || item.dependencies.includes(reference),
   );
-  if (kind === "delete" && incoming.length)
+  if (removing && incoming.length)
     problems.push(`Preserve incoming relationships first: ${incoming.map((item) => item.reference).join(", ")}`);
-  if (kind === "delete" && base) {
+  if (removing && base) {
     const suffix = text(root, ["rev-list", "--first-parent", head, "--not", base]).split("\n").filter(Boolean);
     if (suffix.length !== commits.length || suffix.some((revision, index) => revision !== commits[index]))
       problems.push("Deletion requires an unmixed task suffix; arrange the unpublished commits first");
-    const remotes = text(root, ["for-each-ref", "--format=%(refname)", "refs/remotes"]).split("\n").filter(Boolean);
-    if (commits.some((revision) => remotes.some((ref) => gitAncestor(root, revision, ref))))
-      problems.push("Published task history must be preserved; use revert instead");
+    if (kind === "delete") {
+      const remotes = text(root, ["for-each-ref", "--format=%(refname)", "refs/remotes"]).split("\n").filter(Boolean);
+      if (commits.some((revision) => remotes.some((ref) => gitAncestor(root, revision, ref))))
+        problems.push("Published task history must be preserved; use revert instead");
+    }
   }
   let tree =
-    kind === "delete" && base
-      ? text(root, ["rev-parse", `${base}^{tree}`])
-      : text(root, ["rev-parse", `${head}^{tree}`]);
-  if (kind === "revert" && !problems.length) {
-    if (!reason.trim()) problems.push("Supply the reason for reverting this task");
+    removing && base ? text(root, ["rev-parse", `${base}^{tree}`]) : text(root, ["rev-parse", `${head}^{tree}`]);
+  if (!removing && !problems.length) {
+    if (kind === "revert" && !reason.trim()) problems.push("Supply the reason for reverting this task");
     else {
       let selected = head;
       for (const unit of units) {
@@ -117,31 +172,31 @@ export function taskDisposition(root: string, reference: string, kind: TaskDispo
         tree = result.stdout.split("\n")[0] ?? "";
         selected = text(root, ["commit-tree", tree, "-p", head, "-m", "Prepared task inverse"]);
       }
-      if (!problems.length) {
-        const entries = readGitTree(root, head),
-          path = treeTasks(root, head).get(reference)?.path;
-        if (!path) throw new StateConflict("Task disappeared from the selected history");
-        const body = writeReviewBlobs(root, [
-          Buffer.from(
-            replaceRecordStatus(appendTaskAccount(task.contents, `### Reversion\n\n${reason.trim()}`), "Approved"),
-          ),
-        ])[0];
-        if (!body) throw new StateConflict("Cannot prepare the task outcome");
-        tree = updatedReviewTree(root, tree, [
-          { path, entry: { mode: "100644", oid: body } },
-          ...[...entries]
-            .filter(([file]) => file.startsWith(path.slice(0, -3) + "/"))
-            .map(([file, entry]) => ({ path: file, entry })),
-        ]);
-        const maps = projectedRecordMaps(root, tree),
-          ids = writeReviewBlobs(root, [...maps.values()]);
-        tree = updatedReviewTree(
-          root,
-          tree,
-          [...maps.keys()].map((path, index) => ({ path, entry: { mode: "100644", oid: ids[index] ?? "" } })),
-        );
-      }
     }
+  }
+  if (kind !== "delete" && !problems.length) {
+    const entries = readGitTree(root, head),
+      path = treeTasks(root, head).get(reference)?.path;
+    if (!path) throw new StateConflict("Task disappeared from the selected history");
+    const account = kind === "cancel-remove" ? "Removed task commits from the local branch." : "Reverted task commits.";
+    const contents = canceling
+      ? canceledContents(task.contents, [account, reason.trim()].filter(Boolean).join("\n\n"))
+      : replaceRecordStatus(appendTaskAccount(task.contents, `### Reversion\n\n${reason.trim()}`), "Approved");
+    const body = writeReviewBlobs(root, [Buffer.from(contents)])[0];
+    if (!body) throw new StateConflict("Cannot prepare the task outcome");
+    tree = updatedReviewTree(root, tree, [
+      { path, entry: { mode: "100644", oid: body } },
+      ...[...entries]
+        .filter(([file]) => file.startsWith(path.slice(0, -3) + "/"))
+        .map(([file, entry]) => ({ path: file, entry })),
+    ]);
+    const maps = projectedRecordMaps(root, tree),
+      ids = writeReviewBlobs(root, [...maps.values()]);
+    tree = updatedReviewTree(
+      root,
+      tree,
+      [...maps.keys()].map((path, index) => ({ path, entry: { mode: "100644", oid: ids[index] ?? "" } })),
+    );
   }
   const updates = updatesBetween(root, head, tree);
   if (
@@ -150,10 +205,9 @@ export function taskDisposition(root: string, reference: string, kind: TaskDispo
     )
   )
     problems.push("This change includes symbolic links or submodules; separate it with Git before continuing");
-  const entry = readTaskQueue(root).entries.find((entry) => entry.reference === reference),
-    digest = createHash("sha256")
-      .update(JSON.stringify([reference, kind, reason, branch, head, base, tree, commits, entry, problems]))
-      .digest("hex");
+  const digest = createHash("sha256")
+    .update(JSON.stringify([reference, kind, reason, branch, head, base, tree, commits, entry, problems]))
+    .digest("hex");
   return {
     planDigest: task.planDigest,
     reference,
@@ -168,6 +222,27 @@ export function taskDisposition(root: string, reference: string, kind: TaskDispo
     problems: [...new Set(problems)],
     digest,
     entry,
+  };
+}
+
+interface RemovalObservation {
+  prepared: string;
+  published: Awaited<ReturnType<typeof taskRemovalPublication>>;
+}
+const observedDigest = (observation: RemovalObservation) =>
+  createHash("sha256").update(JSON.stringify(observation)).digest("hex");
+
+export async function previewTaskDisposition(root: string, reference: string, kind: TaskDispositionKind, reason = "") {
+  const plan = taskDisposition(root, reference, kind, reason);
+  const observation =
+    kind === "cancel-remove" && plan.base && !plan.problems.length
+      ? { prepared: plan.digest, published: await taskRemovalPublication(root, plan.branch, plan.base, plan.commits) }
+      : undefined;
+  return {
+    ...plan,
+    observation,
+    publication: observation?.published,
+    digest: observation ? observedDigest(observation) : plan.digest,
   };
 }
 interface Disposition {
@@ -194,7 +269,7 @@ function store(root: string) {
       if (
         data.version !== 1 ||
         typeof data.completed !== "boolean" ||
-        !["delete", "revert"].includes(String(data.kind))
+        !taskDispositionKinds.some((kind) => kind === data.kind)
       )
         throw new InvalidInput("Invalid task disposition");
       const oid = (input: unknown) => {
@@ -237,7 +312,15 @@ function store(root: string) {
 }
 export function applyTaskDisposition(
   root: string,
-  options: { reference?: string; kind?: TaskDispositionKind; reason?: string; expected?: string; recover?: boolean },
+  options: {
+    reference?: string;
+    kind?: TaskDispositionKind;
+    reason?: string;
+    expected?: string;
+    recover?: boolean;
+    confirmPublished?: boolean;
+    observation?: RemovalObservation;
+  },
 ): string {
   if (!options.recover && options.kind === "delete") {
     for (const remote of text(root, ["remote"]).split("\n").filter(Boolean))
@@ -259,13 +342,32 @@ export function applyTaskDisposition(
           if (gitBytes(root, ["status", "--porcelain=v1", "--untracked-files=all"]).length)
             throw new StateConflict("Require a clean checkout before changing task work");
           const plan = taskDisposition(root, options.reference, options.kind, options.reason);
-          if (plan.digest !== options.expected) throw new StateConflict("Task disposition changed; inspect it again");
+          const observation = options.observation;
+          if (plan.kind === "cancel-remove" && observation?.prepared !== plan.digest)
+            throw new StateConflict("Task disposition changed; inspect it again");
+          const digest = observation ? observedDigest(observation) : plan.digest;
+          if (digest !== options.expected) throw new StateConflict("Task disposition changed; inspect it again");
           if (plan.problems.length) throw new StateConflict(plan.problems.join("\n"));
+          if (
+            (observation?.published.affected.length || observation?.published.unknown.length) &&
+            !options.confirmPublished
+          )
+            throw new StateConflict("Confirm that the selected commits will be removed from the local branch");
           const recovery = `refs/workbench/recovery/task-disposition/${randomUUID()}`,
             after =
               plan.kind === "delete"
                 ? plan.base
-                : text(root, ["commit-tree", plan.tree, "-p", plan.head, "-m", "Prepared task inverse"]);
+                : text(root, [
+                    "commit-tree",
+                    plan.tree,
+                    "-p",
+                    plan.kind === "cancel-remove" ? (plan.base ?? plan.head) : plan.head,
+                    "--no-gpg-sign",
+                    "-m",
+                    plan.kind === "revert"
+                      ? "Prepared task inverse"
+                      : `revert: cancel ${plan.reference}\n\n${provisionalTrailer}: true`,
+                  ]);
           if (!after) throw new StateConflict("Missing task disposition baseline");
           gitBytes(
             root,
@@ -288,9 +390,10 @@ export function applyTaskDisposition(
               ? {
                   afterEntry: {
                     reference: plan.reference,
-                    state: "Blocked",
+                    state: "Queued",
                     updated: new Date().toISOString(),
-                    reason: "Inverse changes staged; review and verify the revised outcome",
+                    started: true,
+                    startedFrom: plan.head,
                     planDigest: plan.planDigest,
                   },
                 }
@@ -318,7 +421,8 @@ export function applyTaskDisposition(
           queue.revision++;
           writeTaskQueue(root, queue);
         }
-        if (operation.kind === "delete") discardAgentTasks(root, new Set([operation.reference]));
+        if (operation.kind === "delete" || operation.kind === "cancel-remove")
+          discardAgentTasks(root, new Set([operation.reference]));
         operation.completed = true;
         store(root).write(operation);
         return operation.recovery;

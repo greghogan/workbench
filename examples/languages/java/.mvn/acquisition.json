@@ -66,6 +66,12 @@
       "signers": ["2DB4F1EF0FA761ECC4EA935C86FDC7E2A11262CB"]
     },
     {
+      "prefix": "org/apache/commons/commons-lang3/3.22.0/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["F4DD59C90148BDC52BEB90A4530AA5F25C25011F"]
+    },
+    {
       "prefix": "org/apache/commons/commons-parent/",
       "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
       "keys": ".mvn/keys/resolver-publishers.asc",
@@ -77,6 +83,12 @@
         "D196A5E3E70732EEB2E5007F1861C322C56014B2",
         "D6F1BC78607808EC8E9F69437A8860944FAD5F62"
       ]
+    },
+    {
+      "prefix": "org/apache/commons/commons-parent/107/",
+      "identity": "Upstream release publisher; independently established full fingerprints and sources in .mvn/keys/README.md",
+      "keys": ".mvn/keys/resolver-publishers.asc",
+      "signers": ["F4DD59C90148BDC52BEB90A4530AA5F25C25011F"]
     },
     {
       "prefix": "org/apache/commons/commons-text/",

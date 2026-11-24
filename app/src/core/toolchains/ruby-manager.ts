@@ -1,6 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { readText } from "../runtime/files.js";
 import { assetFor } from "./native/native-assets.js";
 import { withCacheLock } from "../storage/cache-lock.js";
@@ -9,10 +19,64 @@ import { download } from "./tool-downloads.js";
 import { execute } from "./tool-execution.js";
 import { required } from "../runtime/invariants.js";
 import { acquisitionIdentity } from "./acquisition/artifact-policy.js";
+import { rubyLockChecksums } from "../execution/environments/managed/managed-check-inputs.mjs";
+import { hashFile } from "../runtime/file-reads.js";
+import { createOwnedScratch } from "../runtime/owned-scratch.mjs";
 
 export function bundlerVersion(directory: string): string {
   const version = /\nBUNDLED WITH\n +([0-9]+\.[0-9]+\.[0-9]+)\s*$/.exec(readText(join(directory, "Gemfile.lock")))?.[1];
   return required(version, "Gemfile.lock must pin BUNDLED WITH to an exact version");
+}
+
+export function bundlerInstallation(directory: string, distribution: string, env: NodeJS.ProcessEnv = process.env) {
+  const authority = env.BUNDLE_GEMFILE ? dirname(resolve(env.BUNDLE_GEMFILE)) : directory;
+  if (env.BUNDLE_FROZEN !== "false" && !/^CHECKSUMS\n/m.test(readText(join(authority, "Gemfile.lock"))))
+    throw new Error("Frozen Bundler installs require a CHECKSUMS section; refresh the lock explicitly");
+  const version = bundlerVersion(authority);
+  const asset = required(
+    assetFor(distribution, { name: "bundler", version, source: "Gemfile.lock" }),
+    "missing verified Bundler bootstrap",
+  );
+  const ruby = execute(
+    "ruby",
+    ["-e", `print [RUBY_ENGINE, RUBY_VERSION, RUBY_PLATFORM, RbConfig::CONFIG.fetch("prefix")].join(':')`],
+    { capture: true, env },
+  ).trim();
+  const identity = createHash("sha256").update(ruby).update(acquisitionIdentity(asset)).digest("hex");
+  // Keep generated extension paths within Windows tool limits; receipts retain the complete digest.
+  const key = identity.slice(0, 24);
+  const cache = userDirectory("cache");
+  return {
+    authority,
+    version,
+    asset,
+    identity,
+    key,
+    destination: join(cache, "package-managers", "bundler", version, key),
+    downloads: join(cache, "downloads", "bundler", key),
+  };
+}
+
+/** Bundler's local install reads a flat cache; only archives matching the frozen lock may be supplied. */
+export function stageBundlerArchives(directory: string, downloads: string, destination: string): void {
+  const checksums = new Map(rubyLockChecksums(directory).map(({ archive, checksum }) => [archive, checksum]));
+  const registries = join(downloads, "gems");
+  mkdirSync(destination);
+  if (!existsSync(registries)) return;
+  for (const registry of readdirSync(registries, { withFileTypes: true })) {
+    if (!registry.isDirectory()) continue;
+    const source = join(registries, registry.name);
+    for (const gem of readdirSync(source, { withFileTypes: true })) {
+      const expected = checksums.get(gem.name);
+      if (!gem.isFile() || !expected) continue;
+      const path = join(source, gem.name);
+      if (hashFile(path) !== expected) continue;
+      const target = join(destination, gem.name);
+      copyFileSync(path, target, constants.COPYFILE_FICLONE);
+      if (hashFile(target) !== expected) throw new Error(`Prepared gem changed during staging: ${gem.name}`);
+      checksums.delete(gem.name);
+    }
+  }
 }
 
 /** RubyGems installs the verified local bootstrap gem; Bundler owns application resolution and extraction. */
@@ -27,53 +91,44 @@ export async function executeBundler(directory: string, distribution: string, ar
     );
     return;
   }
-  const authority = process.env.BUNDLE_GEMFILE ? dirname(resolve(process.env.BUNDLE_GEMFILE)) : directory;
-  const version = bundlerVersion(authority);
-  if (process.env.BUNDLE_FROZEN !== "false" && !/^CHECKSUMS\n/m.test(readText(join(authority, "Gemfile.lock"))))
-    throw new Error("Frozen Bundler installs require a CHECKSUMS section; refresh the lock explicitly");
-  const asset = required(
-    assetFor(distribution, { name: "bundler", version, source: "Gemfile.lock" }),
-    "missing verified Bundler bootstrap",
+  const { authority, version, asset, identity, key, destination, downloads } = bundlerInstallation(
+    directory,
+    distribution,
   );
-  const ruby = execute(
-    "ruby",
-    ["-e", `print [RUBY_ENGINE, RUBY_VERSION, RUBY_PLATFORM, RbConfig::CONFIG.fetch("prefix")].join(':')`],
-    {
-      capture: true,
-    },
-  ).trim();
-  const identity = createHash("sha256").update(ruby).update(acquisitionIdentity(asset)).digest("hex");
-  // Keep generated extension paths within Windows tool limits; receipts retain the complete digest.
-  const key = identity.slice(0, 24);
-  const destination = join(userDirectory("cache"), "package-managers", "bundler", version, key);
   const receipt = join(destination, ".workbench-bootstrap");
-  await withCacheLock(destination, async () => {
-    if (!existsSync(destination)) {
-      const archive = await download(asset);
-      mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
-      const stage = `${destination}.${randomUUID()}.partial`;
-      mkdirSync(stage, { mode: 0o700 });
-      try {
-        execute("ruby", [
-          "-S",
-          "gem",
-          "install",
-          "--local",
-          archive,
-          "--install-dir",
-          stage,
-          "--ignore-dependencies",
-          "--no-document",
-        ]);
-        writeFileSync(join(stage, ".workbench-bootstrap"), identity);
-        renameSync(stage, destination);
-      } finally {
-        rmSync(stage, { recursive: true, force: true });
+  const verify = () => {
+    if (!existsSync(receipt) || readText(receipt) !== identity)
+      throw new Error("incomplete Bundler bootstrap; run workbench prepare");
+  };
+  if (process.env.WORKBENCH_CHECK_SCOPED === "1") verify();
+  else
+    await withCacheLock(destination, async () => {
+      if (!existsSync(destination)) {
+        const archive = await download(asset);
+        mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+        const stage = `${destination}.${randomUUID()}.partial`;
+        mkdirSync(stage, { mode: 0o700 });
+        try {
+          execute("ruby", [
+            "-S",
+            "gem",
+            "install",
+            "--local",
+            archive,
+            "--install-dir",
+            stage,
+            "--ignore-dependencies",
+            "--no-document",
+          ]);
+          writeFileSync(join(stage, ".workbench-bootstrap"), identity);
+          renameSync(stage, destination);
+        } finally {
+          rmSync(stage, { recursive: true, force: true });
+        }
       }
-    }
-    if (!existsSync(receipt) || readText(receipt) !== identity) throw new Error("incomplete Bundler bootstrap");
-  });
-  const env = {
+      verify();
+    });
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     // Ruby encodes filenames and load paths from the locale, independently of -E.
     ...(process.platform === "win32"
@@ -101,25 +156,38 @@ export async function executeBundler(directory: string, distribution: string, ar
     BUNDLE_LOCKFILE_CHECKSUMS: "true",
     BUNDLE_DISABLE_CHECKSUM_VALIDATION: "false",
     BUNDLE_GLOBAL_GEM_CACHE: "true",
-    BUNDLE_USER_CACHE: join(userDirectory("cache"), "downloads", "bundler", key),
+    BUNDLE_USER_CACHE:
+      process.env.WORKBENCH_CHECK_SCOPED === "1" ? (process.env.BUNDLE_USER_CACHE ?? downloads) : downloads,
   };
   const executable = join(destination, "gems", `bundler-${version}`, "exe", "bundle");
   const actual = execute("ruby", [executable, "--version"], { env, capture: true }).trim();
   if (actual !== version && actual !== `Bundler version ${version}`)
     throw new Error(`expected Bundler ${version}, received ${actual}`);
-  execute(
-    "ruby",
-    args[0] === "exec" && args[1] === "ruby"
-      ? [
-          // Bundler's native exec starts another Ruby process, which can lose a private Windows console's
-          // locale. Preloading its standard setup keeps dependency activation and the selected interpreter
-          // in this process, including Unicode working directories and load paths.
-          "-I",
-          join(destination, "gems", `bundler-${version}`, "lib"),
-          "-rbundler/setup",
-          ...args.slice(2),
-        ]
-      : [executable, ...args, ...(process.env.WORKBENCH_CHECK_INPUTS && args[0] === "install" ? ["--local"] : [])],
-    { cwd: directory, env },
-  );
+  const offlineInstall =
+    args[0] === "install" &&
+    (process.env.WORKBENCH_CHECK_INPUTS !== undefined || process.env.WORKBENCH_OFFLINE === "1");
+  const staged = offlineInstall && !env.BUNDLE_CACHE_PATH ? createOwnedScratch(tmpdir(), "workbench-gems") : undefined;
+  try {
+    if (staged) {
+      env.BUNDLE_CACHE_PATH = join(staged.directory, "gems");
+      stageBundlerArchives(authority, downloads, env.BUNDLE_CACHE_PATH);
+    }
+    execute(
+      "ruby",
+      args[0] === "exec" && args[1] === "ruby"
+        ? [
+            // Bundler's native exec starts another Ruby process, which can lose a private Windows console's
+            // locale. Preloading its standard setup keeps dependency activation and the selected interpreter
+            // in this process, including Unicode working directories and load paths.
+            "-I",
+            join(destination, "gems", `bundler-${version}`, "lib"),
+            "-rbundler/setup",
+            ...args.slice(2),
+          ]
+        : [executable, ...args, ...(offlineInstall ? ["--local"] : [])],
+      { cwd: directory, env },
+    );
+  } finally {
+    staged?.release();
+  }
 }

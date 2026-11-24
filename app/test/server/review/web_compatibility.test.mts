@@ -247,7 +247,7 @@ test("fresh assessments preserve the most recent human resolution after later cl
   expect(policyCompatibility(root).last_resolution).toEqual(resolution);
 });
 
-test("the unified queue advances from a document to compatibility and staged acknowledgments honor findings", async () => {
+test("the review arrows follow approval before acceptance and staged acknowledgments honor findings", async () => {
   const root = localProject(),
     status = report(root),
     web = await fixtures.start(root);
@@ -261,8 +261,11 @@ test("the unified queue advances from a document to compatibility and staged ack
   ).rejects.toThrow(/human review/);
   const page = await readWebPage(web, "/records/demo:ADR-0/review");
   const navigation = parseDOM(page.html).window.document.querySelector(".record-pane");
-  expect(navigation?.querySelector('button:disabled[aria-label="Previous review"]') ?? null).not.toBeNull();
-  expect(navigation?.querySelector('a[rel="next"]')?.getAttribute("href")).toContain("compatibility=1");
+  const previous = navigation?.querySelector('a[rel="prev"]')?.getAttribute("href");
+  expect(previous).toContain("compatibility=1");
+  expect(navigation?.querySelector('button:disabled[aria-label="Next review"]') ?? null).not.toBeNull();
+  const approval = parseDOM((await readWebPage(web, previous ?? "")).html).window.document;
+  expect(approval.querySelector('a[rel="next"]')?.getAttribute("href")).toContain("demo:ADR-0");
   const response = await postWebForm(web, "/actions/approve", {
     csrf: hiddenValue(page.html, "csrf"),
     path,

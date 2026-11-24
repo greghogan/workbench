@@ -18,14 +18,17 @@
           pathsToLink = [ "/bin" "/etc" ];
         };
       });
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          nativeBuildInputs = [ (import ./check-inputs.nix { inherit pkgs; }) ];
+      devShells = forAllSystems (pkgs: let
+        shell = withDependencies: pkgs.mkShell {
+          nativeBuildInputs = pkgs.lib.optionals withDependencies [ (import ./check-inputs.nix { inherit pkgs; }) ];
           packages = (with pkgs; [ git gnupg python3 nodejs_latest actionlint shellcheck shfmt gdb openssh rsync which less vim ])
             ++ [ (import ./browser.nix { inherit pkgs; }) ];
           # Native binaries in the language lockfile use the selected runtime libraries.
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
         };
+      in {
+        default = shell true;
+        toolchain = shell false;
       });
     };
 }

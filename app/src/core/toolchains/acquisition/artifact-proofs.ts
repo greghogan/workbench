@@ -6,6 +6,10 @@ import { withArtifactResponse, artifactSourceUrls } from "./artifact-streams.js"
 import { userDirectory } from "../../storage/storage.js";
 import { ownedPath } from "../../runtime/paths.js";
 
+export function artifactProofPath(url: string): string {
+  return ownedPath(userDirectory("cache"), `authentication/${createHash("sha256").update(url).digest("hex")}`);
+}
+
 /** Retain authenticated proof bytes for offline reuse; callers reverify them against their current trust policy. */
 export async function artifactProof(
   url: string,
@@ -15,8 +19,10 @@ export async function artifactProof(
   backupUrls?: string[],
 ) {
   artifactSourceUrls(url, backupUrls);
-  const path = ownedPath(userDirectory("cache"), `authentication/${createHash("sha256").update(url).digest("hex")}`);
-  const offline = process.env.WORKBENCH_OFFLINE === "1" && !process.env.WORKBENCH_CHECK_INPUTS;
+  const path = artifactProofPath(url);
+  const offline =
+    (process.env.WORKBENCH_OFFLINE === "1" || process.env.WORKBENCH_CHECK_SCOPED === "1") &&
+    !process.env.WORKBENCH_CHECK_INPUTS;
   let bytes: Buffer;
   if (offline) {
     if (!existsSync(path)) throw new Error(`${label} is unavailable offline: ${url}`);

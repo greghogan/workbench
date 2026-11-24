@@ -1,6 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { JSDOM } from "jsdom";
+import { renderToString } from "preact-render-to-string";
 import { startBrowser } from "../../../src/server/browser/client.ts";
+import { DiagramMessage } from "../../../src/server/browser/diagram-protocol.ts";
+import { diagramView } from "../../../src/server/views/diagram-view.js";
 
 const resources: { close: () => void }[] = [];
 afterEach(() => {
@@ -123,6 +126,54 @@ test("routine freshness events never change the reading view or announce timesta
   expect(web.document.body.textContent).not.toContain("checked at");
 });
 
+test("a navigation count update keeps a rendered diagram and its focused control in place", async () => {
+  const diagram = (source: string) => renderToString(diagramView(source));
+  const original = diagram("flowchart LR\nA --> B");
+  const web = fixture(original);
+  const renderer = web.document.querySelector("iframe")?.contentWindow;
+  if (!renderer) throw new Error("Diagram renderer missing");
+  Object.assign(web.window.URL, { createObjectURL: () => "blob:diagram", revokeObjectURL: vi.fn() });
+  const messages = vi.spyOn(renderer, "postMessage");
+  const receive = (data: unknown) =>
+    web.window.dispatchEvent(new web.window.MessageEvent("message", { source: renderer, data }));
+  receive({ type: DiagramMessage.Ready });
+  const request = messages.mock.calls[0]?.[0] as { id: string };
+  receive({
+    type: DiagramMessage.Complete,
+    id: request.id,
+    svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    width: 120,
+    height: 60,
+  });
+  const image = web.document.querySelector('[src="blob:diagram"]'),
+    control = web.document.querySelector<HTMLButtonElement>('[data-diagram-action="diagram"]');
+  if (!image || !control) throw new Error("Rendered diagram missing");
+  control.focus();
+
+  web.fetch.mockResolvedValueOnce(
+    new Response(
+      '<body data-revision="two"><nav aria-label="Main navigation"><a href="/work">Work <span>2</span></a></nav>' +
+        `<main>${original}</main></body>`,
+    ),
+  );
+  web.change();
+  await vi.waitFor(() => {
+    expect(web.document.querySelector('nav[aria-label="Main navigation"]')?.textContent).toBe("Work 2");
+  });
+  expect(web.document.querySelector('[src="blob:diagram"]')).toBe(image);
+  expect(web.document.activeElement).toBe(control);
+  expect(messages).toHaveBeenCalledTimes(1);
+
+  web.fetch.mockResolvedValueOnce(
+    new Response(`<body data-revision="three"><main>${diagram("flowchart LR\nA --> C")}</main></body>`),
+  );
+  web.events[0]?.dispatchEvent(new web.window.MessageEvent("revision", { data: "three" }));
+  await vi.waitFor(() => {
+    expect(messages).toHaveBeenCalledTimes(2);
+    expect(messages.mock.calls[1]?.[0]).toMatchObject({ source: "flowchart LR\nA --> C" });
+  });
+});
+
 test("desktop notifications use browser permission after an interaction and deduplicate workflow decisions", () => {
   const web = fixture('<button type="button">Continue</button><output id="workflow-notice"></output>');
   const shown: TestNotification[] = [];
@@ -146,6 +197,7 @@ test("desktop notifications use browser permission after an interaction and dedu
   const activation = { isActive: false };
   Object.defineProperty(web.window.navigator, "userActivation", { value: activation });
   const open = vi.spyOn(web.window, "open").mockImplementation(() => null);
+  const hasFocus = vi.spyOn(web.document, "hasFocus").mockReturnValue(true);
   const control = web.document.querySelector<HTMLButtonElement>("button");
   if (!control) throw new Error("Missing ordinary interaction control");
   control.click();
@@ -170,8 +222,11 @@ test("desktop notifications use browser permission after an interaction and dedu
       }),
     );
   announce();
-  announce();
   expect(web.document.getElementById("workflow-notice")?.textContent).toContain("needs approval");
+  expect(shown).toHaveLength(0);
+  hasFocus.mockReturnValue(false);
+  announce();
+  announce();
   expect(shown).toHaveLength(1);
   expect(shown[0]?.options.body).toBe("Preview scope");
   shown[0]?.onclick?.();
@@ -551,6 +606,67 @@ test("inventory events update measured cells without disturbing a focused action
     expect(browser.document.querySelector<HTMLInputElement>("#draft")).toBe(draft);
     expect(draft?.value).toBe("unfinished");
     expect(browser.document.querySelector("details")?.open).toBe(true);
+  } finally {
+    close();
+    dom.window.close();
+    vi.useRealTimers();
+  }
+});
+
+test("project totals update independently and survive an older inventory response", async () => {
+  vi.useFakeTimers();
+  const first = "project-" + "a".repeat(24),
+    second = "project-" + "b".repeat(24);
+  const rows = (text: string) =>
+    [first, second]
+      .map(
+        (id) =>
+          `<tr data-cache-row="${id}"><td><span data-cache-cell="${id}-owned">${text}</span><span data-cache-cell="${id}-preview-owned">${text}</span></td></tr>`,
+      )
+      .join("");
+  const dom = new JSDOM(
+    `<body data-project-hub data-events-url="/updates"><section data-cache-content data-inventory-url="/inventory"><table><tbody data-cache-rows="projects">${rows("Calculating…")}</tbody></table></section></body>`,
+    { url: "http://localhost:8080/projects", pretendToBeVisual: true },
+  );
+  const browser = dom.window as unknown as Window & typeof globalThis;
+  const events = new dom.window.EventTarget();
+  Object.defineProperty(browser, "EventSource", {
+    value: function () {
+      return Object.assign(events, { close: () => undefined });
+    },
+  });
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+    Response.json({
+      revision: 1,
+      sections: { projects: rows("900 B") },
+      problems: [],
+      sizes: [],
+      refreshing: true,
+    }),
+  );
+  Object.defineProperty(browser, "fetch", { value: fetch });
+  const close = startBrowser(browser);
+  const size = (id: string, suffix = "owned") =>
+    browser.document.querySelector(`[data-cache-cell="${id}-${suffix}"]`)?.textContent;
+  try {
+    events.dispatchEvent(
+      new dom.window.MessageEvent("project-size", {
+        data: JSON.stringify({
+          cell: `${first}-owned`,
+          text: "0 B",
+          title: "Measured filesystem estimate",
+          revision: 2,
+        }),
+      }),
+    );
+    expect(size(first)).toBe("0 B");
+    expect(size(first, "preview-owned")).toBe("0 B");
+    expect(size(second)).toBe("Calculating…");
+    expect(fetch).not.toHaveBeenCalled();
+    events.dispatchEvent(new dom.window.Event("inventory"));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(size(first)).toBe("0 B");
+    expect(size(second)).toBe("900 B");
   } finally {
     close();
     dom.window.close();

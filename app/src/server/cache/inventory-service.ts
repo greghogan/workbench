@@ -7,7 +7,10 @@ import { InputWatch } from "../workspace/input-watch.js";
 import { cacheGenerationMarker, cacheSizeMarker } from "../../core/storage/cache-generation.mjs";
 import { dirname, join } from "node:path";
 import { userDirectory } from "../../core/storage/storage.js";
+import type { CacheSize } from "../../core/storage/cache-size.js";
 const automaticRefreshMilliseconds = 15 * 60 * 1000;
+const ownershipUnavailable = (value: CacheInventory) =>
+  value.issues.some((issue) => issue.phase === "discovery" && ["registry", "builds"].includes(issue.component));
 export interface InventoryView extends CacheInventory {
   complete: boolean;
   refreshing: boolean;
@@ -121,22 +124,16 @@ export class InventoryService {
         (event) => {
           if (epoch !== this.epoch || this.closed) return;
           if (event.kind === "metadata") {
-            if (this.complete && !this.value.pendingComponents?.length && event.value.pendingComponents?.length) return;
             metadataAt = performance.now();
             this.metrics.phase("cacheDiscovery", metadataAt - started);
-            if (
-              this.complete &&
-              !this.value.pendingComponents?.length &&
-              event.value.issues.some((issue) => issue.phase === "discovery")
-            )
-              return;
+            if (!event.value.pendingComponents?.length) discovered();
+            if (this.complete && ownershipUnavailable(event.value)) return;
             // The new discovery carries persisted measurements, including stale values.
             this.value = event.value;
             this.complete = true;
             this.watchSizes();
-            if (!event.value.pendingComponents?.length) discovered();
-          } else applyInventorySize(this.value, event.size);
-          this.notify(event);
+            this.notify(event);
+          } else this.publishSize(event.size);
         },
         cancellation.signal,
       );
@@ -148,7 +145,7 @@ export class InventoryService {
           discovered();
           if (epoch === this.epoch && !this.closed) {
             const failed = value.issues.filter((issue) => issue.phase === "discovery");
-            if (this.complete && failed.length) {
+            if (this.complete && ownershipUnavailable(value)) {
               const reported = new Set(this.value.issues.map((issue) => issue.message));
               this.problem = failed
                 .filter((issue) => !reported.has(issue.message))
@@ -216,7 +213,7 @@ export class InventoryService {
     ]);
     const directories = new Set(this.value.sizes.map((size) => size.directory));
     this.knownSizes = directories;
-    for (const size of this.value.sizes) if (size.state === "ready") this.measurements.delete(size.directory);
+    // A queued change can be newer than a ready measurement from the inventory worker.
     for (const directory of this.sizeGenerations.keys())
       if (!directories.has(directory)) this.sizeGenerations.delete(directory);
     for (const directory of this.measurements) if (!directories.has(directory)) this.measurements.delete(directory);
@@ -234,8 +231,7 @@ export class InventoryService {
       .run({ kind: "measure", directory }, undefined, cancellation.signal)
       .then(({ size }) => {
         if (this.closed || epoch !== this.epoch || generation !== (this.sizeGenerations.get(directory) ?? 0)) return;
-        applyInventorySize(this.value, size);
-        this.notify({ kind: "size", size });
+        this.publishSize(size);
       })
       .catch((error: unknown) => {
         if (!this.closed && !cancellation.signal.aborted) {
@@ -255,6 +251,10 @@ export class InventoryService {
         this.measureChanged();
         if (!this.closed && !this.refreshing) this.notify();
       });
+  }
+  private publishSize(size: CacheSize): void {
+    const measurement = applyInventorySize(this.value, size);
+    if (measurement) this.notify({ kind: "size", size: measurement });
   }
   close(): void {
     this.closed = true;

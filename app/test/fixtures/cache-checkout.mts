@@ -40,6 +40,7 @@ export function cacheCheckout(repository: string, destination: string) {
     "browser.nix",
     "browser.scm",
     "workbench/config.toml",
+    "workbench/profiles.toml",
     "workbench/projects.toml",
     "workbench/automation.toml",
   ]) {

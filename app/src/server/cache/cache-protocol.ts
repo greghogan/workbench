@@ -150,6 +150,7 @@ function report(value: unknown): void {
         else {
           check(text(entry.builder));
           strings(entry.volumes);
+          if (entry.measurement !== undefined) size(entry.measurement);
         }
       });
     }
@@ -167,6 +168,10 @@ function inventory(value: unknown): CacheInventory {
   if (data.pendingComponents !== undefined)
     list(data.pendingComponents, (value) => {
       check(member(value, ["registry", "requirements", "references", "builds", "tools", "builders", "images", "size"]));
+    });
+  if (data.pendingBuildkitOwners !== undefined)
+    list(data.pendingBuildkitOwners, (value) => {
+      check(path(value));
     });
   report(data.inventory);
   decodeProjectRegistry({ version: 1, projects: data.projects, kept: data.kept });

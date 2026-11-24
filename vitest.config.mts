@@ -22,10 +22,7 @@ export default defineConfig((): ViteUserConfig => ({
       },
     },
   ],
-  cacheDir:
-    process.env.WORKBENCH_STORAGE_EXTERNAL !== "false" && process.env.WORKBENCH_BUILD_DIR
-      ? `${process.env.WORKBENCH_BUILD_DIR}/vite`
-      : "node_modules/.vite",
+  cacheDir: process.env.WORKBENCH_BUILD_DIR ? `${process.env.WORKBENCH_BUILD_DIR}/vite` : "node_modules/.vite",
   test: {
     ...(process.env.WORKBENCH_BUILD_DIR
       ? { fsModuleCachePath: `${process.env.WORKBENCH_BUILD_DIR}/vitest-modules` }

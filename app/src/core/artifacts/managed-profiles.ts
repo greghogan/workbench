@@ -7,14 +7,15 @@ import { writeAtomic } from "../runtime/file-publication.mjs";
 import { ownedPath } from "../runtime/paths.js";
 import type { BuildPaths } from "./builds.js";
 
-type ProfileRole = "environment" | "pending" | "runtime" | "manager" | "image";
-const roles: ProfileRole[] = ["environment", "pending", "runtime", "manager", "image"];
+type ProfileRole = "environment" | "toolchain" | "pending" | "runtime" | "manager" | "image";
+const roles: ProfileRole[] = ["environment", "toolchain", "pending", "runtime", "manager", "image"];
 const receipt = (role: ProfileRole) => `.workbench-guix-${role === "environment" ? "" : `${role}-`}root.json`;
 const suffix = (role: ProfileRole) => (role === "environment" ? "" : `-${role}`);
 const rootName = (directory: string) => `workbench-${createHash("sha256").update(directory).digest("hex")}`;
 
 export function managedProfilePath(paths: BuildPaths, role: ProfileRole = "environment"): string {
-  if (paths.identity.environment !== "guix") return join(paths.dependencies, "profile");
+  if (paths.identity.environment !== "guix")
+    return join(paths.dependencies, role === "toolchain" ? "toolchain-profile" : "profile");
   const state = process.env.GUIX_STATE_DIRECTORY ?? "/var/guix";
   if (!isAbsolute(state)) throw new Error("GUIX_STATE_DIRECTORY must be absolute");
   // An unprivileged daemon cannot traverse private XDG cache directories. Keep only the public store link here.

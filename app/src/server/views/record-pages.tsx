@@ -7,7 +7,7 @@ import { badge, panel, submitButton } from "./components.js";
 import { WebError } from "../http/errors.js";
 import { recordSearch, viewLocation } from "../routes/navigation-state.js";
 import { projectPath } from "../routes/project-paths.js";
-import { recordBatch, RecordOrder } from "../routes/record-listing.js";
+import { recordBatch } from "../routes/record-listing.js";
 import { diffLayout, linkButton, tabs as viewTabs } from "./render-links.js";
 import { comparisonView, sourceDiffView, fileModeChange } from "./diff-view.js";
 import { mutationForm } from "./action-forms.js";
@@ -22,24 +22,24 @@ import { sourceQuery, sourceURL } from "../routes/sources.js";
 import { experimentControls } from "./experiment-pages.js";
 import { taskControls, taskChildren, taskNavigation, tasksPage } from "./task-pages.js";
 import { recordPane, recordNeighbors } from "./record-pane.js";
-import { recordWorkflowNavigation, workflowRecordURL } from "./workflow-navigation.js";
+import { recordWorkflowNavigation } from "./workflow-navigation.js";
+import { workflowRecordURL } from "../review/review-navigation.js";
 import { taskHistoryPanel } from "./task-history.js";
+import { isSvg } from "../documents/document-image.js";
+import { previewLimit } from "../../core/records/record-service.js";
 
 export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof Route.Records>): string {
   const { type, scope, query } = recordSearch(parameters);
   const status = parameters.status;
   if (parameters.attention && type !== "TSK") throw new WebError(400, "Task attention requires the TSK record type");
   if (status && type !== "TSK") throw new WebError(400, "Task status requires the TSK record type");
-  const found = context
-    .searchRecords({ type, scope, query })
-    .filter(
-      (record) =>
-        (!status || record.status === status) &&
-        (parameters.attention !== "1" || context.index.snapshot.tasks.errors.has(record.id)),
-    );
-  if (type === "TSK" && !query && !status && parameters.attention !== "1") {
-    return tasksPage(context, found, parameters);
-  }
+  const matching = context.searchRecords({ type, scope, query });
+  if (type === "TSK" && !query && parameters.attention !== "1") return tasksPage(context, matching, parameters);
+  const found = matching.filter(
+    (record) =>
+      (!status || context.taskState(record.id) === status) &&
+      (parameters.attention !== "1" || context.index.snapshot.tasks.errors.has(record.id)),
+  );
   if (parameters.after !== undefined && parameters.cursor_revision && parameters.cursor_revision !== context.revision)
     throw new WebError(409, "record list changed; refresh the list before loading more records");
   const { visible, more, previous, startAfter } = recordBatch(
@@ -47,7 +47,6 @@ export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof 
     parameters.after ?? null,
     parameters.through ?? null,
     parameters.before ?? null,
-    status ? RecordOrder.TaskDescending : RecordOrder.Identity,
   );
   const queryParameters = new URLSearchParams(Object.entries(parameters));
   queryParameters.delete("through");
@@ -65,13 +64,6 @@ export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof 
   const previousLink = previous
     ? linkButton("Load previous records", "/records?" + previousParameters.toString(), true)
     : null;
-  const loader = more ? (
-    <a class="button secondary" data-load-more="" href={projectPath("/records") + "?" + queryParameters.toString()}>
-      Load more
-    </a>
-  ) : (
-    <p class="muted">All matching records loaded.</p>
-  );
   return shell(
     context,
     status
@@ -84,12 +76,21 @@ export function recordsPage(context: ViewContext, parameters: RouteQuery<typeof 
     type || "records",
     <>
       {status && taskNavigation(context, status)}
-      <p class="muted">{String(found.length)} matching record(s).</p>
       <div id="record-previous">{previousLink}</div>
       <div id="record-list" data-list-revision={context.revision} data-window-after={startAfter}>
         {recordList(visible, context)}
       </div>
-      <div id="record-loader">{loader}</div>
+      <div id="record-loader">
+        {more && (
+          <a
+            class="button secondary"
+            data-load-more=""
+            href={projectPath("/records") + "?" + queryParameters.toString()}
+          >
+            Load more
+          </a>
+        )}
+      </div>
       <output id="record-loading-status" class="sr-only"></output>
       {type === "ADR" && adaptationsPanel(context)}
     </>,
@@ -248,9 +249,14 @@ export function recordPage(
   const model = recordPageModel(context, parameters);
   if (model.kind === "removed") return removedDecisionPage(context, parameters, model);
   const { record: owner, document, compared, views, related, split, state } = model;
+  if (parameters.status && owner.type !== "TSK") throw new WebError(400, "Task status requires a task record");
+  const filter = parameters.status ? { status: parameters.status } : {};
   const workflow = recordWorkflowNavigation(context, owner, parameters.layout);
   const record = {
     ...owner,
+    images: new Map(
+      document.files.filter(({ path, size }) => isSvg(path) && size <= previewLimit).map(({ path }) => [path, "1"]),
+    ),
     fileSource: {
       ...sourceQuery(context),
       ...(workflow?.phase ? { workflow: "1" as const } : {}),
@@ -292,7 +298,10 @@ export function recordPage(
     });
   } else if (state.view === "changes") {
     const { baseline, baselines } = state;
-    const base = sourceURL(context, recordURL(record.id, { view: "changes", ...(workflow ? { workflow: "1" } : {}) }));
+    const base = sourceURL(
+      context,
+      recordURL(record.id, { ...filter, view: "changes", ...(workflow ? { workflow: "1" } : {}) }),
+    );
     tools = diffLayout(withView(base, { baseline }), split);
     const controls =
       baselines.length > 1 || record.type !== "TSK" ? (
@@ -338,7 +347,19 @@ export function recordPage(
           )}
           {comparisonView(
             model.reviewed,
-            { record, records: context.index.references, pageTitle: record.title },
+            {
+              record: document.taskImages ? { ...record, images: document.taskImages.current } : record,
+              ...(document.taskImages
+                ? {
+                    previousRecord: {
+                      ...record,
+                      images: new Map([...document.taskImages.previous].map(([path, { digest }]) => [path, digest])),
+                    },
+                  }
+                : {}),
+              records: context.index.references,
+              pageTitle: record.title,
+            },
             split,
           )}
         </>
@@ -378,7 +399,7 @@ export function recordPage(
                 : "Added to collection",
             "pending",
           )}
-        {recordStatus(record)}
+        {recordStatus(record, context)}
         {record.archive && badge("Archived · read only")}
         {record.local && badge("Local collection · read only")}
       </p>
@@ -387,6 +408,9 @@ export function recordPage(
           This collection charter describes its published purpose and boundaries. The consuming project’s charter
           governs adapted decisions.
         </p>
+      )}
+      {record.type === "TSK" && view === "read" && document.reviewed.state === "unavailable" && (
+        <p class="notice">{document.reviewed.problem}</p>
       )}
       {parameters.saved === "1" && (
         <output class="notice">
@@ -412,7 +436,7 @@ export function recordPage(
                 )
               : null,
         }),
-        workflow?.phase ? workflow : recordNeighbors(context, record),
+        workflow?.phase ? workflow : recordNeighbors(context, record, parameters.status),
       )}
       {record.type === "CIT" && citationDocumentsPanel(context, record.id)}
       {taskHistoryPanel(context, record)}
@@ -439,13 +463,19 @@ export function recordPage(
       )}
     </>,
     {
+      ...(parameters.status ? { taskStatus: parameters.status } : {}),
       parents: [
         ...(workflow?.phase
           ? workflow.parents
           : [
               {
                 label: recordPresentations[record.type].label,
-                href: sourceURL(context, "/records?type=" + record.type),
+                href: sourceURL(
+                  context,
+                  record.type === "CHARTER"
+                    ? Route.Charters
+                    : routeURL(Route.Records, { type: record.type, ...filter }),
+                ),
               },
             ]),
       ],

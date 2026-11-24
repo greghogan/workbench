@@ -7,6 +7,7 @@ import { diagnosticOptions } from "../core/diagnostics/diagnostic-contract.mjs";
 import { clipped, formatDiagnosticMessage } from "../core/diagnostics/diagnostic-text.mjs";
 import { writeDiagnosticText } from "../core/diagnostics/diagnostics.mjs";
 import { npmWorkbench } from "../core/distribution/launcher-acquisition.js";
+import { archiveInstallationEnvironment, launchdSocketsActivated } from "../core/distribution/distribution-identity.js";
 import { executingToolPin, readToolPin, toolProjectRoot } from "../core/distribution/launcher-identity.js";
 import { ownsStartupRuntime } from "../core/distribution/launcher-runtime.js";
 import { projectRegistration, Registration } from "../core/projects/project-registry.js";
@@ -59,13 +60,17 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
     status: args.includes("--status"),
   });
   const admission = commandAdmission([command, child].filter(Boolean).join(" "));
-  const canSelectProject = !recovery && root;
+  const canSelectProject = !process.env[archiveInstallationEnvironment] && !recovery && root;
   const pin =
-    command === "install" || command === "project" || command === "update"
+    command === "install" || command === "uninstall" || command === "project" || command === "update"
       ? defaultPin
       : ((canSelectProject ? readToolPin(root) : undefined) ?? defaultPin);
   const [major = 0, minor = 0, patch = 0] = minimumCliNode.split(".").map(Number);
   if (distribution && !atLeast(major, minor, patch)) {
+    if (process.env[launchdSocketsActivated] === "1")
+      throw new Error(
+        `The installed Workbench LaunchDaemon requires administrator-owned Node.js ${minimumCliNode} or newer`,
+      );
     if (ownsStartupRuntime()) {
       const { default: bootstrap } = (await import(pathToFileURL(join(distribution, "bundle/bootstrap.cjs")).href)) as {
         default: { restartWithStartupRuntime: (distribution: string) => Promise<boolean> };
@@ -86,7 +91,8 @@ export async function launch(args: string[], defaultPin?: ToolPin, distribution?
   // The selected application owns registration state; an outer launcher must not write another release's schema.
   if (!recovery && root && existsSync(join(root, projectPaths.projects))) {
     const inspection = args.some((argument) => ["--help", "-h", "--help-all"].includes(argument));
-    if (command && admission.registration && !inspection && !(command === "serve" && args.includes("--demo")))
+    const independentService = command === "serve" && (args.includes("--demo") || args.includes("--service"));
+    if (command && admission.registration && !inspection && !independentService)
       await approveProjectRegistration(original ?? root);
     else if (
       projectRegistration(original ?? root) === Registration.Declined &&

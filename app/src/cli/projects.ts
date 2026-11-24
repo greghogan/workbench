@@ -13,6 +13,7 @@ import { registerCommand } from "./commands.js";
 import { resolve } from "node:path";
 import { distributionRoot } from "../core/projects/project-context.js";
 import { npmWorkbench } from "../core/distribution/launcher-acquisition.js";
+import { archiveInstallationEnvironment } from "../core/distribution/distribution-identity.js";
 import { executingToolPin, readToolPin } from "../core/distribution/launcher-identity.js";
 import { sameToolPin, toolSpecification } from "../core/toolchains/tool-pin.js";
 
@@ -34,7 +35,7 @@ export function registerProjectCommands(program: Command): void {
       try {
         await registerConsumingProject(path, cancellation.signal);
         const directory = resolve(path),
-          selected = readToolPin(directory),
+          selected = process.env[archiveInstallationEnvironment] ? undefined : readToolPin(directory),
           distribution = distributionRoot(directory),
           executing = executingToolPin(distribution);
         if (selected && (!executing || !sameToolPin(selected, executing))) {

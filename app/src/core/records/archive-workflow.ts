@@ -25,6 +25,7 @@ import { readConfig, projectsFromData } from "../projects/project-configuration.
 import { projectPaths } from "../projects/project-paths.js";
 import { withProjectStateLock } from "../projects/project-state.js";
 import { editToml } from "../configuration/toml-edit.js";
+import { projectOptionDefaults } from "../configuration/config-schema.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { ownedPath } from "../runtime/paths.js";
@@ -203,7 +204,10 @@ export function enableArchive(
           "Restore archive configuration using a branch that contains the pinned archive revision",
         );
     }
-    const size = options.groupSize ?? configured.records?.archive_group_size ?? 1296;
+    const size =
+      options.groupSize ??
+      configured.records?.archive_group_size ??
+      projectOptionDefaults["records.archive_group_size"].value;
     if (!Number.isSafeInteger(size) || size <= 0)
       throw new InvalidInput("Archive group size must be a positive integer");
     const path = join(root, projectPaths.config),
@@ -283,7 +287,7 @@ export function previewArchive(root: string): ArchiveGroup[] {
       if (!body) throw new InvalidInput(`Missing committed record: ${item.path}`);
       return { ...item, contents: body.toString(), reviewed: reviewed.has(item.path) };
     }),
-    readConfig(root).records?.archive_group_size ?? 1296,
+    readConfig(root).records?.archive_group_size ?? projectOptionDefaults["records.archive_group_size"].value,
   );
 }
 const sameEntry = (a: GitEntry | undefined, b: GitEntry | undefined) => a?.oid === b?.oid && a?.mode === b?.mode;

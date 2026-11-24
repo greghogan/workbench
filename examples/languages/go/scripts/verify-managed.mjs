@@ -21,8 +21,6 @@ function run(command, args, capture = false) {
     );
   return result.stdout?.trim();
 }
-const base = /^FROM (\S+@sha256:[0-9a-f]{64})$/m.exec(readFileSync(containerDockerfile, "utf8"))?.[1];
-if (!base) throw new Error("verification needs a digest-pinned Linux base");
 const mount = `type=bind,src=${resolve(artifact)},dst=/artifacts,readonly`;
 if (format === "docker") {
   const image = `workbench-count-${builder}:${builder === "guix" ? "latest" : "local"}`;
@@ -59,7 +57,7 @@ if (format === "docker") {
     ),
     "3",
   );
-} else if (["squashfs", "apptainer"].includes(format)) {
+} else if (format === "squashfs") {
   if (builder !== "guix") throw new Error("the reference Apptainer workflow uses a Guix Squashfs pack");
   const args = [
     "exec",
@@ -74,6 +72,8 @@ if (format === "docker") {
   ];
   assert.equal(runApptainer(artifact, resolve(source), nixImage, args, true), "3");
 } else {
+  const base = /^FROM (\S+@sha256:[0-9a-f]{64}) AS base$/m.exec(readFileSync(containerDockerfile, "utf8"))?.[1];
+  if (!base) throw new Error("Verification needs the digest-pinned Linux base stage");
   const script =
     "mkdir /tmp/package; tar -xzf /artifacts/count.tar.gz -C /tmp/package; /tmp/package/bin/count a banana";
   assert.equal(

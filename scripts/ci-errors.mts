@@ -26,7 +26,7 @@ export function reportCIFailure(operation: string, error: unknown): void {
   }
 }
 
-export async function runCIEntry(operation: string, action: () => Promise<void>): Promise<void> {
+export async function runCIEntry(operation: string, action: () => void | Promise<void>): Promise<void> {
   try {
     await action();
   } catch (error) {

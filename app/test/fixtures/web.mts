@@ -1,13 +1,23 @@
 import { afterEach, vi } from "vitest";
+import * as finalization from "../../src/core/git/finalization-requests.ts";
 import { startWebServer } from "../../src/server/http/server.ts";
 import { distribution, git } from "./adoption.mjs";
 import { rmSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export function webFixture(): string {
+export function webFixture(
+  initialize = (root: string) => {
+    git(root, "init", "-q");
+  },
+): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-web-")));
-  git(root, "init", "-q");
+  try {
+    initialize(root);
+  } catch (error) {
+    rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
   mkdirSync(join(root, "workbench/decisions"), { recursive: true });
   writeFileSync(
     join(root, "workbench/config.toml"),
@@ -38,6 +48,7 @@ export function hiddenValue(html: string, name: string): string {
 export function webServers() {
   const roots: string[] = [],
     servers: Awaited<ReturnType<typeof startWebServer>>[] = [];
+  let restoreFinalization: (() => void) | undefined;
   afterEach(async () => {
     try {
       const outcomes = await Promise.allSettled(servers.splice(0).map((server) => server.close()));
@@ -46,17 +57,36 @@ export function webServers() {
       );
       if (failures.length) throw new AggregateError(failures, "web fixture cleanup failed");
     } finally {
+      restoreFinalization?.();
+      restoreFinalization = undefined;
       for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
       vi.unstubAllEnvs();
     }
   });
   return {
-    project: () => {
-      const root = webFixture();
+    project: (initialize?: (root: string) => void) => {
+      const root = webFixture(initialize);
       roots.push(root);
       return root;
     },
-    start: async (root: string, options: Parameters<typeof startWebServer>[1] = {}) => {
+    start: async (
+      root: string,
+      {
+        backgroundFinalization = false,
+        ...options
+      }: NonNullable<Parameters<typeof startWebServer>[1]> & {
+        backgroundFinalization?: boolean;
+      } = {},
+    ) => {
+      // A detached worker can rewrite the exact commits an HTTP review test is inspecting or outlive its fixture.
+      if (!backgroundFinalization && !restoreFinalization) {
+        const request = vi.spyOn(finalization, "requestAutomaticFinalization").mockImplementation(() => undefined),
+          wake = vi.spyOn(finalization, "wakeFinalization").mockResolvedValue(undefined);
+        restoreFinalization = () => {
+          request.mockRestore();
+          wake.mockRestore();
+        };
+      }
       vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
       const server = await startWebServer(root, { port: 0, ...options });
       servers.push(server);

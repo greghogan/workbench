@@ -91,8 +91,8 @@ switch (role) {
     runTests();
     break;
   case "coverage":
-    // A previous suite must never fill gaps in the current run.
-    rmSync("coverage", { recursive: true, force: true });
+    // A scoped check already has a fresh private report directory.
+    if (process.env.WORKBENCH_CHECK_SCOPED !== "1") rmSync("coverage", { recursive: true, force: true });
     environment.WORKBENCH_COVERAGE = "true";
     environment.SIMPLECOV_RUN_ID = randomUUID();
     runTests();

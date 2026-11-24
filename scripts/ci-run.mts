@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
+import { processCancellation } from "../app/src/core/runtime/owned-child.mjs";
 import { compilerCompatibilityRoles } from "../app/src/core/execution/ci/support/ci-contract.mjs";
 import { collectReports, reportState } from "../app/src/core/execution/ci/support/ci-reports.mjs";
 
@@ -41,7 +43,11 @@ for (const [index, root] of roots.entries()) {
   try {
     if (["native", "native-install", "native-check"].includes(mode)) {
       // Miri is an explicitly selected manual check, not part of the ordinary CI stage.
-      if (mode !== "native-check") cli("tools", "install", "--path", root, "--exclude-tool", "miri", ...toolchain);
+      if (mode !== "native-check") {
+        cli("tools", "install", "--path", root, "--exclude-tool", "miri", ...toolchain);
+        if (process.env.WORKBENCH_PREPARED !== "1" && process.env.WORKBENCH_OFFLINE !== "1")
+          cli("prepare", "--path", root, "--environment", "native", ...toolchain);
+      }
       if (mode !== "native-install")
         cli("ci-checks", root, "--network", process.env.WORKBENCH_CI_CHECK_NETWORK ?? "all", ...toolchain);
     } else if (mode === "integration") {
@@ -72,32 +78,70 @@ for (const [index, root] of roots.entries()) {
       if (failure !== undefined) throw failure;
     } else if (mode === "release") {
       // The root portable package was built once by the candidate producer. Example releases remain distinct.
-      if (!(root === "." && process.env.WORKBENCH_CI_CANDIDATE))
-        cli("check", "--role", "release", "--path", root, "--environment", "native", ...toolchain);
-      cli("check", "--role", "release-verify", "--path", root, "--environment", "native", ...toolchain);
+      const candidate = root === "." ? process.env.WORKBENCH_CI_CANDIDATE : undefined;
+      if (!candidate) cli("check", "--role", "release", "--path", root, "--environment", "native", ...toolchain);
       const artifacts = join(required(process.env.RUNNER_TEMP, "RUNNER_TEMP is required"), "release-artifacts");
       mkdirSync(artifacts, { recursive: true });
-      const tar =
-        process.platform === "win32"
-          ? join(required(process.env.SystemRoot, "SystemRoot is required"), "System32", "tar.exe")
-          : "tar";
-      const paths = record(
-        JSON.parse(
-          run(
-            process.execPath,
-            [join(distribution, "bin/workbench.mjs"), "paths", "--path", root, "--environment", "native", ...toolchain],
-            workspace,
-            process.env,
-            true,
-          ),
-        ),
-        "Invalid project paths",
-      );
-      const directory =
-        root === "." && process.env.WORKBENCH_CI_CANDIDATE
-          ? join(process.env.WORKBENCH_CI_CANDIDATE, "workbench-artifacts")
-          : string(record(paths.variables, "Missing path variables").WORKBENCH_DIST_DIR, "Missing release directory");
-      run(tar, ["-czf", join(artifacts, `${String(index)}.tar.gz`), "-C", directory, "."]);
+      const pathVariables = () =>
+        record(
+          record(
+            JSON.parse(
+              run(
+                process.execPath,
+                [
+                  join(distribution, "bin/workbench.mjs"),
+                  "paths",
+                  "--path",
+                  root,
+                  "--environment",
+                  "native",
+                  ...toolchain,
+                ],
+                workspace,
+                process.env,
+                true,
+              ),
+            ),
+            "Invalid project paths",
+          ).variables,
+          "Missing path variables",
+        );
+      const directory = candidate
+        ? join(candidate, "workbench-artifacts")
+        : string(pathVariables().WORKBENCH_DIST_DIR, "Missing release directory");
+      const format = process.platform === "linux" ? "tar.gz" : "zip";
+      const { verifyPackedRelease } = createRequire(import.meta.url)(
+        "../bundle/package.cjs",
+      ) as typeof import("../app/src/core/artifacts/package.js");
+      const cancellation = processCancellation();
+      try {
+        await verifyPackedRelease(
+          directory,
+          join(artifacts, `${String(index)}.${format}`),
+          format,
+          cancellation.signal,
+          (extracted) => {
+            run(
+              process.execPath,
+              [
+                join(distribution, "bin/workbench.mjs"),
+                "check",
+                "--role",
+                "release-verify",
+                "--path",
+                root,
+                "--environment",
+                "native",
+                ...toolchain,
+              ],
+              workspace,
+              { ...process.env, WORKBENCH_CI_CANDIDATE: undefined, WORKBENCH_RELEASE_ARTIFACT: extracted },
+            );
+          },
+        );
+      } finally {
+        cancellation.close();
+      }
       writeFileSync(join(artifacts, `${String(index)}.txt`), `${root}\n`);
     } else if (mode === "environment") {
       cli(

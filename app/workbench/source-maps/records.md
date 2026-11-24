@@ -107,12 +107,20 @@
   application checkout.
 - `src/core/git/branch-integration.ts`, `src/cli/branch-integration.ts`: Capture rebase/merge targets, retain recovery
   references, and reconcile pinned inventories through explicit continuation or abortion.
-- `src/core/git/tree-publication.ts`, `src/core/git/index-transaction.ts`, `src/core/git/refs.ts`: Apply verified
-  Git-tree transitions using Git checkout conversions and index locking while preserving unrelated edits and centralize
-  branch-name validation.
+- `src/core/git/tree-publication.ts`, `src/core/git/index-transaction.ts`: Apply verified Git-tree transitions using Git
+  checkout conversions and index locking while preserving unrelated edits.
+- `src/core/git/refs.ts`: Validate branch names and discover Git ref storage inputs for live planning and review.
 
-- `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`, `src/core/git/finalization.ts`: Capture
-  parent-bound commit reviews and activate reviewed replacement history through recoverable reference updates.
+- `src/core/review/review-units.ts`, `src/core/review/review-retention.ts`: Capture and retain reviews bound to the result
+  and its ordered parent trees.
+- `src/core/git/finalization.ts`, `src/core/git/finalization-selection.ts`, `src/core/git/finalization-refs.ts`: Select
+  complete reviewed ancestry and share recoverable Git ref activation with signing.
+- `src/core/git/finalization-requests.ts`: Retains pending finalization for the reviewed branch and rechecks it on
+  subsequent review and Git handoffs.
+- `src/core/git/signatures.ts`: Verify signing keys and recreate signed tag annotations without changing live refs.
+- `src/core/git/sign-history.ts`, `src/core/git/signing-publication.ts`: Sign unpublished history using Git, protecting
+  published branches and tags while preserving file trees, authors and review context.
+- `src/core/git/push-signatures.ts`: Apply the optional signature requirement to commits Git is sending to the receiver.
 - `src/core/git/identity-reconciliation.ts`: Prove mechanical task renumbering before preserving real plan and document
   approvals, and update related personal plan references without granting new consent.
 
@@ -124,8 +132,8 @@
   histories and exempt only the configured manual publication destination.
 - `src/core/tasks/planning/planning-retention.ts`, `src/core/tasks/planning/plan-disposition.ts`: Protect drafts,
   relationships, execution queues, and unpushed history during explicit deletion and empty-branch retention.
-- `src/core/tasks/task-disposition.ts`, `src/server/views/task-operation-page.tsx`: Preview recoverable removal of
-  unpublished task commits or staged inverse work while preserving unrelated and published history.
+- `src/core/tasks/task-disposition.ts`, `src/core/tasks/task-publication.ts`, `src/server/views/task-operation-page.tsx`:
+  Preview cancellation and inverse changes, observe publication, and retain recoverable local history.
 - `src/core/git/history.ts`, `src/server/review/historical-records.ts`: Read immutable branch histories and route record
   and supporting-file links within their captured revision.
 

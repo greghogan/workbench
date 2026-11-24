@@ -19,7 +19,7 @@ export const BrowserScenario = {
 } as const;
 import { accessibilityEvidence } from "./web-accessibility.mjs";
 import axe from "axe-core";
-import type { Browser, Locator, Page } from "playwright-core";
+import type { BrowserContext, BrowserContextOptions, Locator, Page } from "playwright-core";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { brotliCompressSync } from "node:zlib";
@@ -30,7 +30,8 @@ import assert from "node:assert/strict";
 interface BrowserScenarioContext {
   distribution: string;
   page: Page;
-  browser: Browser;
+  browserVersion: string;
+  newContext: (options?: BrowserContextOptions) => Promise<BrowserContext>;
   root: string;
   provider: string;
   commit: string;
@@ -42,7 +43,21 @@ interface BrowserScenarioContext {
   workbench: (...args: string[]) => string;
 }
 export function webBrowserScenarios(context: BrowserScenarioContext): { name: string; run: () => Promise<void> }[] {
-  const { page, browser, root, provider, commit, adr, staged, directory, base, git, workbench, distribution } = context;
+  const {
+    page,
+    browserVersion,
+    newContext,
+    root,
+    provider,
+    commit,
+    adr,
+    staged,
+    directory,
+    base,
+    git,
+    workbench,
+    distribution,
+  } = context;
   const documentNavigation = async () => {
     const content = await page.locator(".record-pane-content > .panel").first().boundingBox();
     assert(content, "The document pane is visible");
@@ -140,7 +155,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
             "Wide diagrams scroll within the document",
           );
-          const plain = await browser.newContext({ javaScriptEnabled: false });
+          const plain = await newContext({ javaScriptEnabled: false });
           try {
             const fallback = await plain.newPage();
             await fallback.goto(base + "/records/demo:ADR-Z");
@@ -194,6 +209,9 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
     {
       name: BrowserScenario.Performance,
       run: async () => {
+        // Playwright disables Chromium's cache while intercepting authentication challenges.
+        // The browser has signed in and can now use its native credentials and cache.
+        await page.context().setHTTPCredentials(null);
         const samples: { name: string; durationMs: number; ttfbMs: number; timing: string | undefined }[] = [];
         const navigate = async (name: string, path: string) => {
           const response = await page.goto(base + path, { waitUntil: "load" });
@@ -269,7 +287,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
                 platform: process.platform,
                 arch: process.arch,
                 node: process.version,
-                browser: browser.version(),
+                browser: browserVersion,
                 userAgent: await page.evaluate(() => navigator.userAgent),
               },
               workload: {
@@ -427,7 +445,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
       name: BrowserScenario.Search,
       run: async () => {
         await page.goto(base);
-        await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "Charters", exact: true }).waitFor();
         assert.equal(await page.locator(".metric,.metrics").count(), 0);
         assert.equal(await page.locator('.sidebar a[href="/projects"]').count(), 0);
         assert.equal(await page.locator("[data-preview-error]").count(), 0);
@@ -436,7 +454,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.getByRole("link", { name: /Switch project/ }).click();
         await page.getByRole("heading", { name: "Projects", exact: true }).waitFor();
         await page.goto(base);
-        await page.screenshot({ path: join(directory, "overview-desktop.png"), fullPage: true });
+        await page.screenshot({ path: join(directory, "charters-desktop.png"), fullPage: true });
         assert.equal(await page.getByLabel("Record type", { exact: true }).inputValue(), "");
         await page.getByLabel("Search project records").fill("distinctive search phrase");
         await page.getByLabel("Record type", { exact: true }).selectOption("TSK");
@@ -667,7 +685,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         const receiptPath = join(root, ".git/workbench/review.json");
         const receiptBefore = existsSync(receiptPath) ? readFileSync(receiptPath, "utf8") : null;
         writeFileSync(adr, unformatted);
-        const coldContext = await browser.newContext({ javaScriptEnabled: false });
+        const coldContext = await newContext({ javaScriptEnabled: false });
         try {
           const cold = await coldContext.newPage();
           const response = await cold.goto(base + "/records/demo:ADR-0/review?layout=unified");
@@ -812,11 +830,18 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.equal(readFileSync(join(root, ".git/workbench/review.json"), "utf8"), beforeRefresh);
         assert.equal(await page.locator('form[data-review] input[type="checkbox"]').count(), 0);
         const action = page.getByRole("button", { name: "Confirm changes", exact: true });
-        const bounds = await action.boundingBox(),
-          formBounds = await page.locator("form[data-review]").boundingBox();
-        assert(bounds && formBounds);
-        assert(bounds.width < formBounds.width / 2);
-        assert(Math.abs(bounds.x + bounds.width / 2 - (formBounds.x + formBounds.width / 2)) < 2);
+        for (const width of [1920, 390]) {
+          await page.setViewportSize({ width, height: 1000 });
+          const bounds = await action.boundingBox(),
+            documentBounds = await page.locator("[data-review-file] .panel").boundingBox();
+          assert(bounds && documentBounds);
+          assert(bounds.width < documentBounds.width);
+          assert(
+            Math.abs(bounds.x + bounds.width / 2 - (documentBounds.x + documentBounds.width / 2)) < 2,
+            "The confirmation button is centered under the document panel",
+          );
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
         await page.goto(base + "/records/demo:TSK-0");
         assert.equal(await page.getByRole("link", { name: "Edit", exact: true }).count(), 0);
         const added = "workbench/decisions/ADR-01.md";
@@ -831,6 +856,33 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.equal(await page.locator("[data-file-mode]").count(), 0);
         assert.equal(await page.getByRole("button", { name: "Confirm new file", exact: true }).isEnabled(), true);
         await page.screenshot({ path: join(directory, "new-file-review.png"), fullPage: true });
+        const projects = join(root, "workbench/projects.toml");
+        const entries = readFileSync(projects, "utf8");
+        const charter = "example/workbench/CHARTER.md";
+        mkdirSync(join(root, "example/workbench"), { recursive: true });
+        writeFileSync(join(root, charter), "# Charter\n\nExample application.\n");
+        writeFileSync(projects, entries + '\n[[project]]\nid = "example"\npath = "example"\n');
+        const leftInset = async (path: string) => {
+          await page.goto(base + "/review?path=" + encodeURIComponent(path));
+          const panel = page.locator("[data-review-file] .panel");
+          const outer = await panel.boundingBox();
+          const prose = await panel.locator(".document p").first().boundingBox();
+          assert(outer && prose);
+          return prose.x - outer.x;
+        };
+        try {
+          for (const width of [1920, 390]) {
+            await page.setViewportSize({ width, height: 1000 });
+            const charterInset = await leftInset(charter);
+            assert(charterInset < 40, "The charter starts at the panel's standard left padding");
+            assert.equal(charterInset, await leftInset(added));
+            assert.equal(charterInset, await leftInset("workbench/decisions/ADR-00.md"));
+          }
+        } finally {
+          writeFileSync(projects, entries);
+          rmSync(join(root, "example"), { recursive: true, force: true });
+          await page.setViewportSize({ width: 1440, height: 1000 });
+        }
         const task = "workbench/tasks/TSK-00.md";
         writeFileSync(join(root, task), "---\nstatus: Canceled\n---\n\n# TSK-0: Inspect the interface\n");
         git(root, "add", "workbench/decisions/ADR-00.md", added, task);
@@ -1168,19 +1220,15 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
       run: async () => {
         const alignedControls = async (row: Locator, pane: Locator) => {
           const buttons = row.getByRole("group").getByRole("button");
-          assert.equal(await buttons.count(), 3);
+          assert.equal(await buttons.count(), 2);
           const boxes = await Promise.all((await buttons.all()).map((button) => button.boundingBox())),
-            [up, remove, down] = boxes,
+            [up, down] = boxes,
             bounds = await pane.boundingBox();
-          assert(up && remove && down && bounds);
+          assert(up && down && bounds);
           assert(Math.abs(up.y - bounds.y) <= 1, "Move up aligns with the pane's top");
           assert(
             Math.abs(down.y + down.height - bounds.y - bounds.height) <= 1,
             "Move down aligns with the pane's bottom",
-          );
-          assert(
-            Math.abs(remove.y + remove.height / 2 - bounds.y - bounds.height / 2) <= 1,
-            "Remove is centered beside the pane",
           );
           assert(
             boxes.every((box) => box && Math.abs(box.width - up.width) <= 1),
@@ -1197,7 +1245,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             .trim() +
           "\n\n## Details\n\n- [x] Check the browser workflow.\n";
         writeFileSync(path, taskSource);
-        const plain = await browser.newContext({ javaScriptEnabled: false });
+        const plain = await newContext({ javaScriptEnabled: false });
         try {
           const review = await plain.newPage();
           await review.goto(base + "/records/demo:TSK-ZZ");
@@ -1227,9 +1275,22 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         );
         assert.equal(await page.getByRole("checkbox", { name: "Approve plan", exact: true }).count(), 0);
         assert.equal(await page.locator('main textarea[name="reason"]').count(), 0);
-        await page.getByText("More task actions", { exact: true }).click();
+        const primary = page.getByRole("button", { name: "Approve plan", exact: true });
+        const placement = () =>
+          primary.evaluate((button) => {
+            const surface = button.closest(".task-decision-actions")?.getBoundingClientRect();
+            const bounds = button.getBoundingClientRect();
+            if (!surface) throw new Error("Missing task decision surface");
+            return { x: bounds.x - surface.x, y: bounds.y - surface.y };
+          });
+        const collapsedPosition = await placement();
+        const toggle = page.locator(".task-decision-actions summary");
+        await toggle.focus();
+        await toggle.press("Space");
+        await page.getByText("Hide plan actions", { exact: true }).waitFor();
+        assert.deepEqual(await placement(), collapsedPosition, "Opening secondary actions keeps approval in place");
         assert.equal(await page.getByRole("link", { name: "Revert work", exact: true }).count(), 0);
-        await page.getByRole("link", { name: "Cancel task", exact: true }).click();
+        await page.getByRole("link", { name: "Cancel plan", exact: true }).click();
         assert.equal(await page.getByRole("button", { name: "Approve plan", exact: true }).count(), 0);
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: 1000 });
@@ -1254,7 +1315,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         const work = page.getByRole("main");
         assert.equal(await page.getByRole("button", { name: "Start task", exact: true }).count(), 0);
         workbench("queue", "start", "demo:TSK-ZZ");
-        await work.getByText("Active", { exact: true }).waitFor();
+        await work.getByText("Implementing", { exact: true }).waitFor();
         writeFileSync(join(root, "task-delivery.ts"), 'export const outcome = "Initial browser result";\n');
         const contextSource = Array.from(
           { length: 100 },
@@ -1430,7 +1491,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           () =>
             (document.querySelector('[data-commit-file="task-delivery.ts"] .file-diff-scroll')?.scrollLeft ?? 0) > 0,
         );
-        const plainContext = await browser.newContext({ javaScriptEnabled: false }),
+        const plainContext = await newContext({ javaScriptEnabled: false }),
           plainPage = await plainContext.newPage();
         try {
           const url = new URL(inlineURL);
@@ -1473,6 +1534,16 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           .getByRole("navigation", { name: "Breadcrumb" })
           .getByRole("link", { name: /Deliver the task workflow/ })
           .click();
+        const taskActions = page.locator(".task-decision-actions summary");
+        const acceptOutcome = page.getByRole("button", { name: "Accept outcome", exact: true });
+        for (const width of [1440, 390]) {
+          await page.setViewportSize({ width, height: 1000 });
+          const actions = await taskActions.boundingBox();
+          const accept = await acceptOutcome.boundingBox();
+          assert(actions && accept, "Both task decisions are visible");
+          assert.equal(actions.y, accept.y, "Task decisions share the same top edge");
+          assert.equal(actions.height, accept.height, "Task decisions share the same height");
+        }
         await page.setViewportSize({ width: 1440, height: 1000 });
         await Promise.all([
           page.waitForResponse(
@@ -1503,8 +1574,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.goto(base + "/plans");
         await page.getByRole("link", { name: "Disposable browser plan", exact: true }).click();
         await page.getByRole("heading", { name: "Disposable browser plan", exact: true }).waitFor();
-        assert.deepEqual(await page.locator("main .task-actions").locator("a, button").allTextContents(), [
-          "Approve plan",
+        assert.deepEqual(await page.locator("main .task-secondary-actions").locator("a, button").allTextContents(), [
           "Delete plan",
           "Cancel plan",
         ]);
@@ -1537,6 +1607,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await page.getByRole("button", { name: "Save draft", exact: true }).click();
             await page.waitForURL((url) => url.searchParams.get("view") !== "edit");
             await page.getByText("A shared service keeps project activity available", { exact: false }).waitFor();
+            await page.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
           }
           await page.goto(base + "/plans");
           const row = page.locator('[data-task-node="demo:plan/discarded"]');
@@ -1551,11 +1622,13 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             await row.screenshot({ path: join(directory, `plan-list-${profile}-${String(width)}.png`) });
           }
           await page.goto(planAddress);
+          await page.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
         }
-        await page.getByText("Plan actions", { exact: true }).click();
+        await page.getByText("Show plan actions", { exact: true }).click();
         await page.getByRole("link", { name: "Cancel plan", exact: true }).click();
         await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
-        await page.getByText("Plan actions", { exact: true }).click();
+        await page.waitForURL((url) => url.searchParams.get("view") !== "cancel");
+        await page.getByText("Show plan actions", { exact: true }).click();
         await page.getByRole("link", { name: "Delete plan", exact: true }).click();
         assert.equal(await page.getByLabel("Reason (optional)").count(), 0);
         assert.equal(await page.getByRole("button", { name: "Approve plan", exact: true }).count(), 0);
@@ -1572,19 +1645,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             join(root, `workbench/tasks/TSK-0${id}.md`),
             `---\nstatus: Approved\n---\n\n# TSK-${id}: ${title}\n\n## Overview\n\nA browser fixture task.\n`,
           );
+        workbench("queue", "add", "demo:TSK-V", "demo:TSK-W", "demo:TSK-X");
         await page.goto(base + "/work");
-        for (const [id, title] of [
-          ["V", "Prepare data"],
-          ["W", "Build the report"],
-          ["X", "Publish the report"],
-        ] as const) {
-          await work
-            .locator("article")
-            .filter({ has: page.getByRole("link", { name: new RegExp(`${title}$`) }) })
-            .getByRole("button", { name: "Add to local queue", exact: true })
-            .click();
-          await page.locator(`.task-queue > [data-task-node="demo:TSK-${id}"]`).waitFor();
-        }
         const queued = page.locator(".task-queue > [data-task-node]");
         await queued.nth(2).waitFor();
         for (const width of [1440, 390, 320]) {
@@ -1593,13 +1655,11 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             const controls = row.getByRole("group"),
               buttons = controls.getByRole("button");
             await alignedControls(row, row.locator(".task-queue-content"));
-            assert.equal(await buttons.count(), 3);
+            assert.equal(await buttons.count(), 2);
             assert.equal(await buttons.nth(0).isDisabled(), index === 0);
-            assert.equal(await buttons.nth(1).isDisabled(), false);
-            assert.equal(await buttons.nth(2).isDisabled(), index === 2);
+            assert.equal(await buttons.nth(1).isDisabled(), index === 2);
             assert.match((await buttons.nth(0).getAttribute("aria-label")) ?? "", /^Move up:/);
-            assert.match((await buttons.nth(1).getAttribute("aria-label")) ?? "", /^Remove from queue:/);
-            assert.match((await buttons.nth(2).getAttribute("aria-label")) ?? "", /^Move down:/);
+            assert.match((await buttons.nth(1).getAttribute("aria-label")) ?? "", /^Move down:/);
           }
           assert(
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -1615,7 +1675,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           await queued.evaluateAll((items) => items.map((item) => item.getAttribute("data-task-node"))),
           ["demo:TSK-W", "demo:TSK-V", "demo:TSK-X"],
         );
-        await page.getByRole("button", { name: "Remove from queue: Prepare data", exact: true }).click();
+        workbench("queue", "remove", "demo:TSK-V");
         await page.waitForFunction(() => document.querySelectorAll(".task-queue > li").length === 2);
         assert.deepEqual(
           await queued.evaluateAll((items) => items.map((item) => item.getAttribute("data-task-node"))),
@@ -1635,14 +1695,15 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             `---\nstatus: Planned\n---\n\n# TSK-${number.toString(36).toUpperCase()}: Task ${String(number)}\n`,
           );
         await page.goto(base + "/records?type=TSK&status=Planned");
-        await page.getByText("120 matching record(s).", { exact: true }).waitFor();
-        assert.equal(await page.locator("#record-list [data-record-id]").count(), 100);
+        await page.getByRole("heading", { name: "TSK-3B: Task 119", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-task-window="roots"] [data-record-id]').count(), 100);
         await page.evaluate(() => {
           globalThis.scrollTo(0, globalThis.document.documentElement.scrollHeight);
         });
         await page.getByRole("heading", { name: "TSK-0: Inspect the interface", exact: true }).waitFor();
-        assert.equal(await page.locator("#record-list [data-record-id]").count(), 120);
-        const manual = await browser.newPage();
+        assert.equal(await page.locator('[data-task-window="roots"] [data-record-id]').count(), 120);
+        const manualContext = await newContext();
+        const manual = await manualContext.newPage();
         await manual.addInitScript(() => {
           Object.defineProperty(globalThis, "IntersectionObserver", { value: undefined, configurable: true });
         });
@@ -1655,23 +1716,23 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           readFileSync(taskZero, "utf8").replace("TSK-0: Inspect the interface", "TSK-0: Refreshed expanded result"),
         );
         await manual.getByRole("heading", { name: "TSK-0: Refreshed expanded result", exact: true }).waitFor();
-        assert.equal(await manual.locator("#record-list [data-record-id]").count(), 120);
-        await manual.close();
+        assert.equal(await manual.locator('[data-task-window="roots"] [data-record-id]').count(), 120);
+        await manualContext.close();
         await page.goto(base + "/records?type=TSK");
         assert.equal(await page.locator("[data-task-node]").count(), 100);
         await page.evaluate(() => {
           globalThis.scrollTo(0, globalThis.document.documentElement.scrollHeight);
         });
-        await page.getByRole("heading", { name: "TSK-3B: Task 119", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "TSK-0: Refreshed expanded result", exact: true }).waitFor();
         assert.equal(await page.locator("[data-task-node]").count(), 120);
-        assert.equal(new URL(page.url()).searchParams.get("through"), "demo:TSK-3B");
+        assert.equal(new URL(page.url()).searchParams.get("through"), "demo:TSK-0");
         for (let number = 120; number < 500; number++)
           writeFileSync(
             join(root, `workbench/tasks/TSK-${number.toString(36).toUpperCase().padStart(2, "0")}.md`),
             `---\nstatus: Planned\n---\n\n# TSK-${number.toString(36).toUpperCase()}: Task ${String(number)}\n`,
           );
-        await page.goto(base + "/records?type=TSK&status=Planned");
-        await page.getByText("500 matching record(s).", { exact: true }).waitFor();
+        await page.goto(base + "/records?type=TSK&status=Planned&q=TSK-");
+        await page.getByRole("heading", { name: "TSK-DV: Task 499", exact: true }).waitFor();
         for (const end of [300, 200, 100]) {
           await page.evaluate(() => {
             globalThis.scrollTo(0, globalThis.document.documentElement.scrollHeight);
@@ -1683,7 +1744,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         assert.equal(await page.locator("#record-list [data-record-id]").count(), 300);
         // Automatic loading may already have advanced another batch. Reopen an exact retained window before
         // exercising keyboard-focus protection, rather than racing the observer from the automation process.
-        await page.goto(base + "/records?type=TSK&status=Planned&after=demo:TSK-B4&through=demo:TSK-2S");
+        await page.goto(base + "/records?type=TSK&status=Planned&q=TSK-&after=demo:TSK-B4&through=demo:TSK-2S");
         await page.getByRole("heading", { name: "TSK-B3: Task 399", exact: true }).waitFor();
         const first = page.locator("#record-list [data-record-id]").first();
         await first.focus();
@@ -1739,11 +1800,21 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           page.waitForResponse((response) => new URL(response.url()).searchParams.get("workflow") === "plans"),
           page.goto(base + "/plans"),
         ]);
-        writeFileSync(
-          join(root, "workbench/tasks/TSK-0Z.md"),
-          "---\nstatus: Planned\n---\n\n# TSK-Z: Explain notebook tags\n",
-        );
-        await page.getByRole("link", { name: "TSK-Z: Explain notebook tags", exact: true }).waitFor();
+        const plan = join(root, "workbench/tasks/TSK-0Z.md"),
+          title = "TSK-Z: Explain notebook tags";
+        writeFileSync(plan, `---\nstatus: Planned\n---\n\n# ${title}\n`);
+        const draft = page.getByRole("link", { name: title, exact: true });
+        await draft.waitFor();
+        assert.equal(await page.locator("#workflow-notice").textContent(), "");
+        await draft.click();
+        await page.getByRole("button", { name: "Approve plan", exact: true }).click();
+        await page.getByRole("heading", { name: "Work", exact: true }).waitFor();
+        await Promise.all([
+          page.waitForResponse((response) => new URL(response.url()).searchParams.get("workflow") === "reviews"),
+          page.goto(base + "/reviews"),
+        ]);
+        writeFileSync(plan, readFileSync(plan, "utf8") + "\nInclude examples for offline notebooks.\n");
+        await page.getByRole("region", { name: "Awaiting approval" }).getByRole("link", { name: title }).waitFor();
         await page.waitForFunction(
           () => document.getElementById("workflow-notice")?.textContent === "A plan needs approval",
         );
@@ -1754,7 +1825,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
       run: async () => {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(base);
-        await page.screenshot({ path: join(directory, "overview-mobile.png"), fullPage: true });
+        await page.screenshot({ path: join(directory, "charters-mobile.png"), fullPage: true });
         assert(
           await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth),
           "Mobile viewport overflows",
@@ -1792,7 +1863,8 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
           "Review layout overflows",
         );
         await page.setViewportSize({ width: 320, height: 844 });
-        const columns = Array.from({ length: 20 }, (_, index) => "Column " + String(index));
+        const columns = ["Manager", ...Array.from({ length: 19 }, (_, index) => "Column " + String(index))];
+        const values = ["Development", ...columns.slice(1)];
         writeFileSync(
           join(root, "workbench/decisions/ADR-01.md"),
           "---\nsummary: A wide table.\n---\n\n# ADR-1: Wide table\n\n| " +
@@ -1800,11 +1872,26 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
             " |\n| " +
             columns.map(() => "---").join(" | ") +
             " |\n| " +
-            columns.join(" | ") +
+            values.join(" | ") +
             " |\n",
         );
         await page.goto(base + "/records/demo:ADR-1");
         const table = page.getByRole("region", { name: "Document table", exact: true });
+        for (const [role, name] of [
+          ["columnheader", "Manager"],
+          ["cell", "Development"],
+        ] as const) {
+          const cell = table.getByRole(role, { name, exact: true });
+          assert.equal(
+            await cell.evaluate((element) => {
+              const text = element.ownerDocument.createRange();
+              text.selectNodeContents(element);
+              return text.getClientRects().length;
+            }),
+            1,
+            `Keep the table word "${name}" on one line`,
+          );
+        }
         await table.focus();
         assert(
           await table.evaluate((element) => element.scrollWidth > element.clientWidth),
@@ -1921,7 +2008,7 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.screenshot({ path: join(directory, "source-hierarchy-desktop.png"), fullPage: true });
         assert(!(await page.getByRole("navigation", { name: "Record sources" }).innerText()).includes("packages"));
         await breadcrumbs.getByRole("link", { name: "GraphAI", exact: true }).click();
-        await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+        await page.getByRole("heading", { name: "Charters", exact: true }).waitFor();
         assert.equal(new URL(page.url()).searchParams.get("scope"), "demo");
 
         await page.goto(base + "/records/solver:TSK-0");
@@ -2064,18 +2151,20 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.getByRole("heading", { name: "Questions and confirmed constraints", exact: true }).waitFor();
         await page.getByRole("button", { name: "Approve plan", exact: true }).waitFor();
         await page.goto(demonstration + "/plans");
-        assert.equal(await page.locator("main [data-task-node]").first().getAttribute("data-task-node"), "demo:TSK-2");
+        assert.equal(await page.locator('main [data-task-node="demo:TSK-2"]').count(), 0);
         await page.getByRole("link", { name: "Bookmark notes for later reading", exact: true }).waitFor();
         await page.locator('main [data-task-node="demo:TSK-9"] > .task-tree > [data-task-node="demo:TSK-A"]').waitFor();
         await page.goto(demonstration + "/work");
-        for (const state of ["Active", "Blocked", "Queued"])
+        for (const state of ["Implementing", "Blocked", "Awaiting implementation"])
           await page.getByText(state, { exact: true }).first().waitFor();
         await page.getByText("Waiting for demo:TSK-5 (Approved)", { exact: true }).waitFor();
-        const revisedTask = page.getByRole("region", { name: "Queued work" }).locator('[data-task-node="demo:TSK-2"]');
-        await revisedTask.getByText("demo:TSK-2", { exact: true }).waitFor();
-        await revisedTask.getByRole("link", { name: "Review revised plan", exact: true }).waitFor();
+        assert.equal(await page.locator('main [data-task-node="demo:TSK-2"]').count(), 0);
         await page.screenshot({ path: join(directory, "demonstration-task-queue.png"), fullPage: true });
         await page.goto(demonstration + "/reviews");
+        const revisedTask = page
+          .getByRole("region", { name: "Awaiting approval" })
+          .locator('[data-task-node="demo:TSK-2"]');
+        await revisedTask.getByText("demo:TSK-2", { exact: true }).waitFor();
         const outcome = page.locator('[data-task-group="task:demo:TSK-7"]');
         const rows = outcome.locator("[data-task-group-items] > [data-task-node]");
         const first = await rows.nth(0).boundingBox(),
@@ -2090,17 +2179,14 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await page.screenshot({ path: join(directory, "demonstration-review-groups.png"), fullPage: true });
         await outcome.getByRole("link", { name: "ADR-1: Offline search and previews", exact: true }).click();
         await page.getByRole("button", { name: "Confirm changes", exact: true }).click();
-        await page.waitForURL((url) => url.pathname === "/demonstration/reviews");
-        await outcome.locator('[data-record-id="demo:TSK-7"] a[data-card-link]').click();
-        await Promise.all([
+        await page.waitForURL((url) => url.origin === origin && url.pathname === "/demonstration/records/demo:TSK-7");
+        const [acceptance] = await Promise.all([
           page.waitForResponse(
-            (response) =>
-              response.request().method() === "POST" &&
-              response.url().endsWith("/actions/task-state") &&
-              response.status() === 200,
+            (response) => response.request().method() === "POST" && response.url().endsWith("/actions/task-state"),
           ),
           page.getByRole("button", { name: "Accept outcome", exact: true }).click(),
         ]);
+        assert.equal(acceptance.status(), 200, "Task outcome acceptance succeeds");
         await page.waitForURL(
           (url) =>
             url.origin === origin &&
@@ -2127,7 +2213,9 @@ export function webBrowserScenarios(context: BrowserScenarioContext): { name: st
         await card.click({ position: { x: 8, y: 8 } });
         await page.locator("h1").filter({ hasText: "ADR-0" }).waitFor();
         await page.goto(demonstration + "/reviews");
-        const queueLinks = page.locator("main article.record-row a[data-card-link]");
+        const queueLinks = page
+          .getByRole("region", { name: "Awaiting acceptance" })
+          .locator("article.record-row a[data-card-link]");
         const paths = await queueLinks.evaluateAll((links) =>
           links.map((link) => link.closest("[data-record-id]")?.getAttribute("data-record-id")),
         );

@@ -1,13 +1,18 @@
 import { createHash } from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { buffer } from "node:stream/consumers";
+import { gzipSync } from "node:zlib";
+import tar from "tar-stream";
 import { expect, test } from "vitest";
 import { activateCandidate, readCandidate } from "../../../../../scripts/ci-candidate.mts";
 import { bundleCacheFile, bundleInputDigest, saveBundleCache } from "../../../../../scripts/bundle-cache.mts";
 import { bundleEntries, bundles } from "../../../../src/core/distribution/bundle-layout.mts";
 import { successfulReleaseRun } from "../../../../../scripts/release-contract.mts";
 import { checkedCIImage } from "../../../../src/core/execution/ci/ci-images.ts";
+import { copyScriptClosure } from "../../../fixtures/script-closure.mjs";
 
 const revision = "a".repeat(40),
   repository = "owner/project";
@@ -127,6 +132,80 @@ test("portable runtime activation binds intact bundle bytes to the receiving sou
     for (const file of outputs) expect(readFileSync(join(root, file.path))).toEqual(file.contents);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("catalog packaging reuses the same-run candidate from a clean checkout without build dependencies", async () => {
+  const temporary = mkdtempSync(join(tmpdir(), "workbench-candidate-package-"));
+  try {
+    const checkout = join(temporary, "checkout");
+    const runtime = join(temporary, "runtime");
+    const candidate = join(temporary, "candidate");
+    const entry = "scripts/package-workbench.mts";
+    mkdirSync(checkout);
+    await copyScriptClosure(resolve(import.meta.dirname, "../../../../.."), runtime, entry);
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: checkout, encoding: "utf8" }).trim();
+    git("init", "--quiet");
+    git(
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "--allow-empty",
+      "--no-gpg-sign",
+      "-qm",
+      "fixture",
+    );
+    const packed = tar.pack();
+    const contents = buffer(packed);
+    packed.entry({ name: "package/workbench-source-manifest.json" }, "{}");
+    packed.entry(
+      { name: "package/bin/workbench.mjs", mode: 0o755 },
+      "import { realpathSync } from 'node:fs'; import { fileURLToPath } from 'node:url'; " +
+        "console.log(JSON.stringify({ directory: realpathSync(fileURLToPath(new URL('../', import.meta.url))) }));",
+    );
+    packed.finalize();
+    const bytes = gzipSync(await contents);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    mkdirSync(join(candidate, "workbench-artifacts"), { recursive: true });
+    writeFileSync(join(candidate, "workbench-artifacts", "workbench.tar.gz"), bytes);
+    writeFileSync(join(candidate, "workbench-artifacts", "SHA256SUMS"), `${sha256}  workbench.tar.gz\n`);
+    writeFileSync(
+      join(candidate, "candidate.json"),
+      JSON.stringify({
+        version: 1,
+        repository,
+        revision: git("rev-parse", "HEAD"),
+        release: "1.2.3",
+        sha256,
+      }),
+    );
+    const packageRelease = (output: string) =>
+      spawnSync(process.execPath, [join(runtime, entry), "--archive", output], {
+        cwd: checkout,
+        env: { ...process.env, WORKBENCH_CI_CANDIDATE: candidate, WORKBENCH_CI_REPOSITORY: repository },
+        encoding: "utf8",
+      });
+    const archive = join(temporary, "release.tar.gz");
+    const accepted = packageRelease(archive);
+    expect(accepted.status, accepted.stderr).toBe(0);
+    expect(readFileSync(archive)).toEqual(bytes);
+    if (process.platform !== "linux" || spawnSync("bsdtar", ["--version"], { stdio: "ignore" }).status === 0) {
+      const zip = join(temporary, "release.zip");
+      const archived = packageRelease(zip);
+      expect(archived.status, archived.stderr).toBe(0);
+      const verifier = join(runtime, "scripts/workbench-release-archive.mjs");
+      const checked = spawnSync(process.execPath, [verifier, zip], { cwd: checkout, encoding: "utf8" });
+      expect(checked.status, checked.stderr).toBe(0);
+      expect(readFileSync(join(candidate, "workbench-artifacts/workbench.tar.gz"))).toEqual(bytes);
+    }
+    writeFileSync(join(checkout, "uncommitted.md"), "different source");
+    const rejected = join(temporary, "invalid.tar.gz");
+    expect(packageRelease(rejected).stderr).toContain("clean selected revision");
+    expect(existsSync(rejected)).toBe(false);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
   }
 });
 

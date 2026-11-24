@@ -25,6 +25,7 @@ import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { authoredTooling } from "./authored-tooling.mts";
 import { buildDiagramAssets } from "./build-diagram-assets.mts";
 import { bundleLicenses } from "./bundle-licenses.mts";
+import { guixBootstrapContract, guixBootstrapDockerfile, guixBootstrapProgram } from "./managed-files.mts";
 
 export type ToolingOperation = "build" | "verify" | "prepare-development";
 
@@ -266,11 +267,24 @@ export async function buildTooling({
       if (!output) throw new Error(`${source}: fixture compilation produced no output`);
       code = output.text;
     } else {
+      const guixBootstrap = policy.source === "scripts/prepare-managed-development.mts";
       const result = await transform(readFileSync(source, "utf8"), {
         loader: "ts",
         target: "es2022",
         format: commonjs ? "cjs" : "esm",
         sourcefile: basename(source),
+        ...(guixBootstrap
+          ? {
+              define: {
+                __workbenchGuixBootstrapContract: JSON.stringify(
+                  guixBootstrapContract(
+                    readFileSync(join(root, guixBootstrapDockerfile)),
+                    readFileSync(join(root, guixBootstrapProgram)),
+                  ),
+                ),
+              },
+            }
+          : {}),
         // Formatting reference JavaScript would invalidate the original emission map.
         sourcemap: reference ? false : "inline",
         sourcesContent: true,

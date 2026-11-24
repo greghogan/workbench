@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { readGitObjects, readGitTree, type GitEntry } from "../git/git-snapshot.js";
-import { gitRevision } from "../git/refs.js";
+import { gitAncestor, gitRevision } from "../git/refs.js";
 import { projectsFromData } from "../projects/project-configuration.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { logicalRecordEntries } from "../records/archive-store.js";
@@ -12,6 +12,9 @@ import { InvalidInput } from "../runtime/input-errors.js";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { taskPlanSnapshotLimit, type TaskPlanApproval } from "./task-approval-store.js";
 import type { TaskDecision } from "./task-decisions.js";
+import { taskVerification, taskVerificationApplies } from "./task-implementations.js";
+import type { TaskRecord } from "./task-model.js";
+import type { TaskQueueEntry } from "./task-queue-state.js";
 import { taskPlanApprovalDigest } from "./task-plan.js";
 
 export const taskDigest = (contents: string): string => createHash("sha256").update(contents).digest("hex");
@@ -43,10 +46,12 @@ function snapshotSupportingFiles(root: string, prefix: string, files: [string, G
 
 interface SnapshotTask {
   path: string;
+  contents: string;
   status: string;
   digest: string;
   workDigest: string;
   mode: string;
+  files: () => TaskPlanApproval["files"];
   planScope: () => string;
   outcome: () => string;
 }
@@ -94,16 +99,56 @@ export function treeTasks(root: string, tree: string, reference?: string): Map<s
       };
       result.set(id, {
         path,
+        contents,
         status: recordDocument("TSK", contents, path).metadata.status,
         digest: taskDigest(contents),
         workDigest,
         mode: entries.get(path)?.mode ?? "",
+        files: supportingFiles,
         planScope: () => taskPlanApprovalDigest(contents, supportingFiles()),
         outcome: () => taskOutcomeDigest(contents, supportingFiles()),
       });
     }
   }
   return result;
+}
+
+export function taskOutcomeVerificationApplies(
+  root: string,
+  task: TaskRecord,
+  proof: NonNullable<TaskQueueEntry["verification"]>,
+): boolean {
+  const implementation = task.implementation;
+  if (implementation?.tree !== proof.tree) return taskVerificationApplies(root, proof);
+  try {
+    const head = gitRevision(root, "HEAD");
+    if (!head || (head !== implementation.baseline && !gitAncestor(root, implementation.baseline, head))) return false;
+    const outcome = treeTasks(root, proof.tree, task.reference).get(task.reference)?.outcome();
+    if (!outcome || outcome !== (task.reviewDigest ?? task.digest)) return false;
+    // Later work may edit this delivery's source without changing the outcome being reviewed.
+    return (
+      head === implementation.baseline ||
+      treeTasks(root, head, task.reference).get(task.reference)?.outcome() === outcome
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function observeTaskVerifications(
+  root: string,
+  tasks: readonly TaskRecord[],
+  entries: readonly TaskQueueEntry[],
+  observe?: (path: string) => void,
+): void {
+  const queue = new Map(entries.map((entry) => [entry.reference, entry]));
+  for (const task of tasks) {
+    if (task.metadata.status !== "Approved" && !task.acceptanceNeedsReview) continue;
+    const proof = taskVerification(task, queue.get(task.reference));
+    if (!proof) continue;
+    if (observe) for (const path of proof.paths) observe(join(root, path));
+    if (!taskOutcomeVerificationApplies(root, task, proof)) task.verificationStale = true;
+  }
 }
 
 const legacyOutcomes = new WeightedCache<string>(2 * 1024 * 1024);

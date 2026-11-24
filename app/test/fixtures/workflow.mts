@@ -21,6 +21,7 @@ export interface ExecutionJob extends JobSettings {
 export interface ReusableJob extends JobSettings {
   kind: "reusable";
   uses: string;
+  with?: Record<string, string>;
   steps?: never;
 }
 export type WorkflowJob = ExecutionJob | ReusableJob;
@@ -49,7 +50,8 @@ export function parseWorkflow(value: unknown): Workflow {
           const strategy = record(job.strategy, "Invalid job strategy");
           if (typeof strategy.matrix === "object" && strategy.matrix !== null) {
             const matrix = record(strategy.matrix, "Invalid job matrix");
-            if (matrix.include !== undefined)
+            const dynamic = typeof matrix.include === "string" && /^\$\{\{[\s\S]+\}\}$/.test(matrix.include);
+            if (matrix.include !== undefined && !dynamic)
               settings.strategy = {
                 matrix: { include: records(matrix.include, "Invalid job matrix entries").map(scalars) },
               };
@@ -63,6 +65,7 @@ export function parseWorkflow(value: unknown): Workflow {
               ...settings,
               kind: "reusable",
               uses: string(job.uses, "Missing reusable workflow"),
+              ...(job.with === undefined ? {} : { with: scalars(job.with) }),
             } satisfies ReusableJob,
           ];
         }

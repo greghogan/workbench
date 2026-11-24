@@ -143,12 +143,12 @@ test("builder ownership corruption retains independently discoverable caches and
     root = f.project("available"),
     tool = f.install("4.0.1"),
     result = f.result(root, tool);
-  const directory = join(f.base, "cache/offline-builders", "a".repeat(64), "guix/volumes");
+  const directory = join(f.base, "cache/docker-builders");
   mkdirSync(directory, { recursive: true });
-  writeFileSync(join(directory, `${"b".repeat(24)}.json`), "not json");
+  writeFileSync(join(directory, `workbench-buildkit-${"b".repeat(24)}.json`), "not json");
   const value = await collectCacheInventory();
   expect(value.inventory.entries.some((entry) => entry.directory === result.directory)).toBe(true);
-  expect(value.inventory.builders).toBeUndefined();
+  expect(value.inventory.builders?.entries).toEqual([]);
   expect(value.issues).toContainEqual(expect.objectContaining({ component: "builders", phase: "discovery" }));
 });
 test("inventory cancellation is propagated rather than reported as partial success", async () => {

@@ -8,13 +8,17 @@
       packages = forAllSystems (pkgs: { default = import ./package.nix { inherit pkgs; }; });
     in {
       inherit packages;
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          inputsFrom = [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
-          nativeBuildInputs = [ (import ./check-inputs.nix { inherit pkgs; }) ];
-          packages = with pkgs; [ git nodejs_24 pkg-config libyaml openssl gnumake gcc gdb openssh rsync which less vim ];
+      devShells = forAllSystems (pkgs: let
+        shell = withDependencies: pkgs.mkShell {
+          inputsFrom = pkgs.lib.optionals withDependencies [ packages.${pkgs.stdenv.hostPlatform.system}.default ];
+          nativeBuildInputs = pkgs.lib.optionals withDependencies [ (import ./check-inputs.nix { inherit pkgs; }) ];
+          packages = (with pkgs; [ git nodejs_24 pkg-config libyaml openssl gnumake gcc gdb openssh rsync which less vim ])
+            ++ pkgs.lib.optionals (!withDependencies) (with pkgs; [ ruby_4_0 ]);
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
         };
+      in {
+        default = shell true;
+        toolchain = shell false;
       });
     };
 }

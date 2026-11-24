@@ -8,6 +8,8 @@ export function cachePruneSummary(report: CacheReport): { description: string; d
   const filesystem = [...report.entries, ...(report.tools?.entries ?? [])];
   const builders = report.builders?.entries ?? [];
   const images = report.images?.entries ?? [];
+  const profiles = builders.filter((entry) => entry.cleanup);
+  const volumes = builders.filter((entry) => !entry.cleanup);
   const count = filesystem.length + builders.length + images.length;
   if (report.images?.location === "registry")
     return {
@@ -25,8 +27,13 @@ export function cachePruneSummary(report: CacheReport): { description: string; d
     ...(filesystem.length
       ? [`${formatBytes(totalBytes(filesystem.map((entry) => entry.bytes)))} filesystem estimate`]
       : []),
-    ...(builders.length
-      ? [`${formatBytes(totalBytes(builders.map((entry) => entry.bytes)))} builder volume estimate`]
+    ...(volumes.length
+      ? [`${formatBytes(totalBytes(volumes.map((entry) => entry.bytes)))} builder volume estimate`]
+      : []),
+    ...(profiles.length
+      ? [
+          `${String(profiles.length)} managed store ${profiles.length === 1 ? "cleanup" : "cleanups"} (reclaimed space depends on shared roots)`,
+        ]
       : []),
     ...(images.length
       ? [`${String(images.length)} image ${images.length === 1 ? "tag" : "tags"} (reclaimed space unknown)`]
@@ -109,8 +116,8 @@ export function cachePruneSelection(report: CacheReport, candidates: CacheReport
         disabled: () => !candidates.builders?.entries.length,
         children: (report.builders?.entries ?? []).map((entry) => ({
           name: `builder:${entry.key}`,
-          label: entry.key,
-          reason: entry.blockedBy ?? formatBytes(entry.bytes),
+          label: entry.label ?? entry.key,
+          reason: entry.blockedBy ?? entry.status ?? formatBytes(entry.bytes),
           disabled: () => Boolean(entry.blockedBy),
         })),
       };

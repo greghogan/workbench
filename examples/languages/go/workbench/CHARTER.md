@@ -1,0 +1,3 @@
+# Charter
+
+Example Go application.

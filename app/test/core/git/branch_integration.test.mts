@@ -1,5 +1,5 @@
 import { expect, test, afterEach, beforeEach, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,8 @@ import {
   publishArchive,
 } from "../../../src/core/records/archive-workflow.ts";
 import { readArchivedFile } from "../../../src/core/records/archive-store.ts";
+import { repositoryStatePath, withRepositoryOperation } from "../../../src/core/git/repository-state.ts";
+import { withCacheLockSync } from "../../../src/core/storage/cache-lock.ts";
 
 beforeEach(() => {
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
@@ -51,6 +53,41 @@ function commit(root: string, path: string, body: string, message: string) {
   git(root, "add", path);
   git(root, "commit", "-qm", message);
 }
+
+test("repository admission reports a live history operation and recovers an exited owner without skipping a pending operation", () => {
+  const root = fixture();
+  const lock = repositoryStatePath(root, "record-operation");
+  withCacheLockSync(lock, () => {
+    expect(() => {
+      withRepositoryOperation(root, () => undefined, "planning");
+    }).toThrow(/Another Workbench history operation is running/);
+    expect(existsSync(`${lock}.lock/owner.json`)).toBe(true);
+  });
+
+  const child = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      `const { mkdirSync, writeFileSync } = require("node:fs");
+const { hostname } = require("node:os");
+const { randomUUID } = require("node:crypto");
+const path = process.argv[1];
+mkdirSync(path);
+writeFileSync(path + "/owner.json", JSON.stringify({ host: hostname(), pid: process.pid, token: randomUUID() }));`,
+      `${lock}.lock`,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(child.status, child.stderr).toBe(0);
+  const pending = repositoryStatePath(root, "finalization-operation.json");
+  const receipt = JSON.stringify({ version: 1, completed: false, checkout: root });
+  writeFileSync(pending, receipt);
+  expect(() => {
+    withRepositoryOperation(root, () => undefined, "planning");
+  }).toThrow(/finalization operation requires recovery/);
+  expect(existsSync(`${lock}.lock`)).toBe(false);
+  expect(readFileSync(pending, "utf8")).toBe(receipt);
+});
 
 test.each(["rebase", "merge"] as const)(
   "%s preserves logical records when the target archived a formerly live record",

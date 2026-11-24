@@ -6,6 +6,20 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { type CheckDetail, checkDetailPrefix, readCheckDetail } from "./check-detail-data.mjs";
 import type { planChecks } from "./check-plan.js";
+import type { CheckInputScope } from "./check-input-scope.js";
+
+export interface CheckCacheReport {
+  outcome: "fresh" | "reused";
+  inputScope: CheckInputScope;
+  reason?: string;
+  groups?: { path: string; environment: string; checks: string[]; inputScope: CheckInputScope; backend?: string }[];
+}
+
+export type CheckGateRunner = (
+  plan: import("./check-plan.js").CheckPlan,
+  cache: CheckCacheReport,
+  buildProducts?: Map<string, string>,
+) => Promise<CheckRunResult>;
 
 export interface CheckResult {
   name: string;
@@ -30,6 +44,7 @@ export interface CheckRunResult {
   finished?: string;
   status: Exclude<CheckState, typeof CheckState.Pending | typeof CheckState.Blocked>;
   reused?: { verified: string };
+  cache?: CheckCacheReport;
   logs?: string;
   logFinalizationDurationMs?: number;
   error?: string;

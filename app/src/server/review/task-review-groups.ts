@@ -2,21 +2,34 @@ import { relative } from "node:path";
 import { gitBytes } from "../../core/git/git-snapshot.js";
 import type { TaskRecord } from "../../core/tasks/task-model.js";
 
-export function reviewTaskPaths(root: string, revision: string, parent?: string): string[] {
-  return gitBytes(root, [
-    "diff-tree",
-    "--no-commit-id",
-    "--name-only",
-    "-r",
-    "-z",
-    "--no-renames",
-    ...(parent ? [parent, revision] : ["--root", revision]),
-    "--",
-    ":(glob)**/workbench/tasks/**",
-  ])
-    .toString()
-    .split("\0")
-    .filter((path) => /(?:^|\/)workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+\.md$/.test(path));
+export function reviewTaskPaths(root: string, revision: string, parents: readonly string[]): string[] {
+  const paths = (parent?: string) =>
+    new Set(
+      gitBytes(root, [
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        "-z",
+        "--no-renames",
+        ...(parent ? [parent, revision] : ["--root", revision]),
+        "--",
+        ":(glob)**/workbench/tasks/**",
+      ])
+        .toString()
+        .split("\0")
+        .flatMap((path) => {
+          const task = /^((?:.*\/)?workbench\/tasks\/(?:[0-9A-Z]{2}\/)*TSK-[0-9A-Z]+)(?:\.md$|\/)/.exec(path)?.[1];
+          return task ? [task + ".md"] : [];
+        }),
+    );
+  const [first, ...rest] = parents;
+  const candidates = paths(first);
+  for (const parent of rest) {
+    const common = paths(parent);
+    for (const candidate of candidates) if (!common.has(candidate)) candidates.delete(candidate);
+  }
+  return [...candidates];
 }
 
 export function reviewTasksByPath(root: string, tasks: readonly TaskRecord[]): Map<string, TaskRecord> {

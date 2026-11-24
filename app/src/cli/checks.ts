@@ -4,8 +4,17 @@ import { RegistryProvider } from "../core/artifacts/registry-management-contract
 import { runGate, type GateOptions } from "../core/execution/checks/check-gates.js";
 import type { CheckSelection } from "../core/execution/checks/check-plan.js";
 import { runCheckSession } from "../core/execution/checks/checks.js";
+import { acquireCheckInputs, type AcquisitionSelection } from "../core/execution/checks/check-acquisition.js";
+import { withUnixJobLease } from "../core/execution/checks/unix-jobserver-client.js";
+import { nativeWorkerLimit, workerEnvironment, type WorkerTool } from "../core/execution/checks/native-worker-tools.js";
+import { distributionRoot } from "../core/projects/project-context.js";
+import { processCancellation, runOwnedChild } from "../core/runtime/owned-child.mjs";
+import { processFailure } from "../core/runtime/process-outcome.mjs";
 import { prepareHostedCI, runHostedCIJob } from "../core/execution/ci/ci-hosted-jobs.js";
 import { runHostedCITarget } from "../core/execution/ci/ci-hosted-target.js";
+import { packageCIRelease, publishCIRelease } from "../core/execution/ci/ci-release.js";
+import { ciPackageMatrix, verifyCIPackages } from "../core/execution/ci/ci-packages.js";
+import { strings } from "../core/runtime/values.mjs";
 import { CIProvider } from "../core/execution/ci/ci-hosting.js";
 import {
   compatibilityRuntimePlan,
@@ -20,17 +29,8 @@ import { listLocalCI, runLocalCI, type LocalCIOptions } from "../core/execution/
 import { compilerFamilies } from "../core/toolchains/compiler-catalog.mjs";
 import { collect, registerCommand } from "./commands.js";
 export function registerCheckCommands(program: Command, root: string): void {
-  function gateCommand(name: "check" | "pre-commit" | "pre-push"): Command {
-    const command = registerCommand(program, name)
-      .description(
-        name === "check"
-          ? "Run the commit gate, then online checks when connectivity is available"
-          : name === "pre-commit"
-            ? "Run the complete offline commit gate"
-            : "Run required online checks fresh before pushing",
-      )
-      .option("--list", "List selected checks without executing them")
-      .addOption(new Option("--json", "Print the check plan as JSON (implies --list)").implies({ list: true }))
+  const selectWorkspace = (command: Command) =>
+    command
       .option("--verbose", "Stream full command output (also WORKBENCH_VERBOSE=1)")
       .option("--project <id>", "Select a project and descendant check roots")
       .option("--path <path>", "Select one registered language root")
@@ -40,18 +40,38 @@ export function registerCheckCommands(program: Command, root: string): void {
         new Option("--workspace <workspace>", "Override the profile's workspace").choices(["host", "devcontainer"]),
       )
       .argument("[root]", "Project tree (default: current project root)");
+  const selectTools = (command: Command) =>
+    command
+      .addOption(new Option("--compiler <family>", "Select a supported C/C++ compiler").choices(compilerFamilies))
+      .option("--compiler-version <version>", "Select an exact C/C++ compiler version")
+      .option("--toolchain <name>", "Use a named compiler/runtime profile");
+  selectTools(selectWorkspace(registerCommand(program, "prepare")))
+    .description("Acquire the locked dependencies required by the selected checks")
+    .option("--staged", "Acquire inputs for the Git index instead of the working tree")
+    .action(async (requested: string | undefined, options: AcquisitionSelection) => {
+      await acquireCheckInputs(requested ? resolve(requested) : root, options);
+    });
+  function gateCommand(name: "check" | "pre-commit" | "pre-push"): Command {
+    const command = selectWorkspace(registerCommand(program, name))
+      .description(
+        name === "check"
+          ? "Run the commit gate, then online checks when connectivity is available"
+          : name === "pre-commit"
+            ? "Run the complete commit-stage gate"
+            : "Run required online checks fresh before pushing",
+      )
+      .option("--list", "List selected checks without executing them")
+      .addOption(new Option("--json", "Print the check plan as JSON (implies --list)").implies({ list: true }));
     if (name === "pre-push")
       command.option("--remote <name>", "Check prepared images for this configured push destination");
     if (name !== "pre-push")
-      command
+      selectTools(command)
         .option("--no-cache", "Run checks fresh instead of reusing a matching successful gate")
-        .addOption(new Option("--all", "Include excluded checks in the plan (implies --list)").implies({ list: true }))
-        .addOption(new Option("--compiler <family>", "Select a supported C/C++ compiler").choices(compilerFamilies))
-        .option("--compiler-version <version>", "Select an exact C/C++ compiler version")
-        .option("--toolchain <name>", "Use a named compiler/runtime profile");
+        .addOption(new Option("--all", "Include excluded checks in the plan (implies --list)").implies({ list: true }));
     if (name === "check")
       command
         .option("--stage <stage>", "Run only the commit or ci stage")
+        .option("--extended", "Also run the configured extended checks")
         .option(
           "--role <role>",
           "Include a role (repeatable); includes setup and skips structural validation",
@@ -71,6 +91,44 @@ export function registerCheckCommands(program: Command, root: string): void {
   const checks = gateCommand("check");
   gateCommand("pre-commit");
   gateCommand("pre-push");
+  registerCommand(program, "admitted-check", { hidden: true })
+    .argument("<endpoint>")
+    .argument("<project>")
+    .argument("<command...>")
+    .addOption(new Option("--workers <tool>").choices(["make", "gmake", "ninja", "cargo", "cmake-ninja"]))
+    .action(
+      async (endpoint: string, project: string, [command, ...args]: string[], options: { workers?: WorkerTool }) => {
+        if (!command) throw new Error("An admitted check requires a command");
+        const cancellation = processCancellation();
+        try {
+          const workers = nativeWorkerLimit(options.workers, process.env);
+          const outcome =
+            process.platform === "win32"
+              ? await (
+                  await import("../core/execution/checks/windows-jobserver-client.js")
+                ).runWindowsAdmittedCheck(distributionRoot(root), endpoint, project, command, args, cancellation.signal)
+              : await withUnixJobLease(
+                  endpoint,
+                  project,
+                  cancellation.signal,
+                  (owner, signal, pipe) =>
+                    runOwnedChild(command, args, {
+                      cwd: process.cwd(),
+                      env: workerEnvironment(options.workers, pipe, process.env),
+                      signal,
+                      owner,
+                      stopDescendantsOnExit: true,
+                    }),
+                  workers,
+                );
+          if (outcome.error) throw outcome.error;
+          if (outcome.status !== null && outcome.signal === null) process.exitCode = outcome.status;
+          else throw processFailure(command, outcome) ?? new Error("The admitted check returned no exit status");
+        } finally {
+          cancellation.close();
+        }
+      },
+    );
   registerCommand(program, "checks-session", { hidden: true })
     .argument("<directory>")
     .argument("<environment>")
@@ -166,6 +224,33 @@ export function registerCheckCommands(program: Command, root: string): void {
     .action(async (options: { destination: string; live?: boolean }) => {
       console.log(JSON.stringify(await validateHostedCI(root, options.destination, options.live), null, 2));
     });
+  ci.command("package-release", { hidden: true })
+    .argument("<target>")
+    .requiredOption("--tag <tag>")
+    .requiredOption("--output <path>")
+    .option("--verified-packages <directory>", "Reuse verified packages from the completed checks")
+    .action(async (target: string, options: { tag: string; output: string; verifiedPackages?: string }) => {
+      console.log(await packageCIRelease(root, options.tag, target, options.output, options.verifiedPackages));
+    });
+  ci.command("verify-packages", { hidden: true })
+    .argument("[ids...]")
+    .option("--tag <tag>", "Select the version under verification")
+    .option("--selection <json>", "Read package IDs from the checked CI matrix")
+    .requiredOption("--output <path>")
+    .action((ids: string[], options: { output: string; selection?: string; tag?: string }) => {
+      if (options.selection !== undefined) {
+        if (ids.length) throw new Error("Select package IDs or --selection");
+        ids = strings(JSON.parse(options.selection), "CI package selection must contain package IDs");
+        if (!ids.length) throw new Error("CI package selection is empty");
+      }
+      return verifyCIPackages(root, ids, options.output, options.tag);
+    });
+  ci.command("publish-release", { hidden: true })
+    .requiredOption("--tag <tag>")
+    .requiredOption("--input <path>")
+    .action(async (options: { tag: string; input: string }) => {
+      console.log(JSON.stringify(await publishCIRelease(root, options.tag, options.input), null, 2));
+    });
   ci.command("target")
     .description("Execute one configured CI target on its native platform")
     .argument("<id>")
@@ -207,7 +292,11 @@ export function registerCheckCommands(program: Command, root: string): void {
       if (options.targets) console.log(JSON.stringify(ciTargets(root)));
       else {
         const matrix = ciMatrix(root);
-        console.log(JSON.stringify(options.grouped ? groupedCIMatrix(matrix) : matrix));
+        if (!options.grouped) console.log(JSON.stringify(matrix));
+        else {
+          const grouped = groupedCIMatrix(matrix);
+          console.log(JSON.stringify({ ...grouped, packages: ciPackageMatrix(root, grouped.native.include) }));
+        }
       }
     });
 }

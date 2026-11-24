@@ -1,5 +1,20 @@
 # C reference
 
+## Native build and run
+
+Use a C compiler, CMake, and Ninja. Bootstrap vcpkg at the revision in `.vcpkg-version` and point `VCPKG_ROOT` at
+that checkout. CMake uses the project's vcpkg manifest to resolve yyjson.
+
+```sh
+cmake -S . -B build/native -G Ninja -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build/native --target count
+./build/native/count a banana
+```
+
+The result is `3`. The executable is `count.exe` on Windows.
+
+## Workbench workflow
+
 The C and C++ references use CMake/Ninja, strict compiler warnings, broad clang-tidy groups, LLVM coverage, and separate
 sanitizer and portable-only builds. `.llvm-version` selects the native LLVM family; `.tool-versions` owns CMake and
 Ninja. `workbench/projects.toml` selects the language standard, development compiler, and supported compiler families.

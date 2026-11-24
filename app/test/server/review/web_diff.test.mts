@@ -526,6 +526,49 @@ test("table alignment and column changes keep valid complete tables in both layo
   expect(projection(unified, "after")).toBe(expected(after));
 });
 
+test("rewritten table cells keep both versions in their original column", () => {
+  const before = [
+    "| Page | Contents | Human decision |",
+    "| ---- | -------- | -------------- |",
+    "| Plans | Plans awaiting initial or revised approval | Approve the proposed work |",
+    "| Work | Approved available work and active or blocked execution | Select and order work |",
+    "| Reviews | Record and compatibility reviews; completed work awaiting acceptance | Review records or accept outcomes |",
+  ].join("\n");
+  const after = [
+    "| Page | Contents | Human action |",
+    "| ---- | -------- | ------------ |",
+    "| Plans | Open plans awaiting their first approval | Choose and approve a plan |",
+    "| Work | Implementation queue, including waiting, active, and blocked work | Order work and follow progress |",
+    "| Reviews | Revised or reopened approvals, delivered outcomes, and record reviews | Approve or accept reviewed work |",
+  ].join("\n");
+  for (const split of [false, true]) {
+    const document = parseDOM(render(before, after, split)).window.document;
+    const tables = [...document.querySelectorAll(".document .table-wrap table")];
+    expect(tables).toHaveLength(split ? 2 : 1);
+    for (const table of tables) {
+      const rows = [...table.querySelectorAll<HTMLTableRowElement>(":scope > tbody > tr")];
+      expect(
+        rows.map((row) => [row.cells[0]?.textContent, row.cells.length]),
+        split ? "split" : "unified",
+      ).toEqual([
+        ["Plans", 3],
+        ["Work", 3],
+        ["Reviews", 3],
+      ]);
+    }
+    for (const [side, source] of [
+      ["before", before],
+      ["after", after],
+    ] as const)
+      expect(projection(document, side, split)).toBe(expected(source));
+    if (!split) {
+      const plansContents = tables[0]?.querySelector("tbody tr:first-child td:nth-child(2)");
+      expect(plansContents?.querySelector("del")?.textContent).toContain("initial or revised");
+      expect(plansContents?.querySelector("ins")?.textContent).toContain("their first");
+    }
+  }
+});
+
 function semanticDocument(document: Document, side?: "before" | "after", split = false): unknown {
   const container = document.createElement("div");
   if (side) {

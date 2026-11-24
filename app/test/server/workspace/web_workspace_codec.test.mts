@@ -106,7 +106,7 @@ test("deleted canonical owners keep nested supporting changes in one indexed rev
   expect(group?.path).toBe(owner);
   expect(group?.pending).toBe(2);
   expect(group?.changes.map((change) => change.path)).toEqual(expect.arrayContaining([owner, note]));
-  for (const change of group?.changes ?? []) expect(index.reviews.byDigest.get(change.digest)).toBe(group);
+  for (const path of [owner, note]) expect(index.reviews.byOwner.get(index.reviewOwnerPath(path))).toBe(group);
   expect([...index.reviews.pendingPaths]).toEqual([owner]);
   expect(view.pendingReviews).toBe(1);
 });

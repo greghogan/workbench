@@ -104,8 +104,8 @@ semantic review or grant human approval.
 
 Workbench starts archival only from the configured integration branch. Each checkout reads the archive commit recorded
 in its state file, so later transfers leave older checkouts readable. Workbench looks up live and archived records
-together, reports conflicting copies, and preserves IDs, contents, and file permissions. The CLI and browser can search
-records and open supporting files without restoring them to disk.
+together, compares working copies using Git's checkout conversions where needed, and reports conflicting contents or
+file modes. The CLI and browser can search records and open supporting files without restoring them to disk.
 
 Workbench verifies the destination before removing source copies during archival or restoration. It keeps both commits
 recoverable until the transfer finishes and preserves unrelated edits and reviews of unchanged records. The archive

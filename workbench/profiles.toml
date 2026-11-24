@@ -1,0 +1,898 @@
+schema_version = 1
+
+[targets.linux-x64]
+platform = "linux-x64"
+
+[targets.linux-arm64]
+platform = "linux-arm64"
+
+[targets.macos-arm64]
+platform = "macos-arm64"
+
+[targets.windows-x64]
+platform = "windows-x64"
+
+[recipes.native-tools]
+owner = "workbench"
+offline_profile = "native-toolchain"
+
+[recipes.native-development]
+owner = "workbench"
+offline_profile = "native"
+
+[recipes.nix-tools]
+owner = "workbench"
+offline_profile = "nix-toolchain"
+
+[recipes.nix-development]
+owner = "workbench"
+offline_profile = "nix"
+
+[recipes.guix-tools]
+owner = "workbench"
+offline_profile = "guix-toolchain"
+
+[recipes.guix-development]
+owner = "workbench"
+offline_profile = "guix"
+
+[recipes.workbench-release]
+owner = "workbench-app"
+inputs = ["LICENSE", "README.md", "package.json", "pnpm-lock.yaml", "app/src", "app/resources", "bin", "languages", "skills", "scripts"]
+build = ["{node}", "{root}/scripts/package-workbench.mts", "--archive", "{artifact}"]
+verify = ["{node}", "{root}/scripts/workbench-release-archive.mjs", "{artifact}"]
+verify_inputs = ["scripts/workbench-release-archive.mjs", "app/src/core/distribution/release-archive.ts", "app/src/core/artifacts/release-directory.ts"]
+
+[profiles.native]
+builder = "native"
+workspace = "host"
+projects = ["workbench", "workbench-app"]
+variants = [
+  { target = "linux-x64", kind = "toolchain", recipe = "native-tools", formats = ["oci"] },
+  { target = "linux-arm64", kind = "toolchain", recipe = "native-tools", formats = ["oci"] },
+  { target = "linux-x64", kind = "development", recipe = "native-development", formats = ["oci"] },
+  { target = "linux-arm64", kind = "development", recipe = "native-development", formats = ["oci"] },
+  { target = "linux-x64", kind = "release", recipe = "workbench-release", formats = ["archive"] },
+  { target = "linux-arm64", kind = "release", recipe = "workbench-release", formats = ["archive"] },
+  { target = "macos-arm64", kind = "release", recipe = "workbench-release", formats = ["archive"] },
+  { target = "windows-x64", kind = "release", recipe = "workbench-release", formats = ["archive"] },
+]
+
+[profiles.nix]
+builder = "nix"
+workspace = "host"
+projects = ["workbench"]
+variants = [
+  { target = "linux-x64", kind = "toolchain", recipe = "nix-tools", formats = ["oci"] },
+  { target = "linux-arm64", kind = "toolchain", recipe = "nix-tools", formats = ["oci"] },
+  { target = "linux-x64", kind = "development", recipe = "nix-development", formats = ["oci"] },
+  { target = "linux-arm64", kind = "development", recipe = "nix-development", formats = ["oci"] },
+]
+
+[profiles.guix]
+builder = "guix"
+workspace = "host"
+projects = ["workbench"]
+variants = [
+  { target = "linux-x64", kind = "toolchain", recipe = "guix-tools", formats = ["oci"] },
+  { target = "linux-arm64", kind = "toolchain", recipe = "guix-tools", formats = ["oci"] },
+  { target = "linux-x64", kind = "development", recipe = "guix-development", formats = ["oci"] },
+  { target = "linux-arm64", kind = "development", recipe = "guix-development", formats = ["oci"] },
+]
+
+# Packaging recipes for the individually owned example scopes.
+
+[targets.linux-x64-musl]
+platform = "linux-x64"
+abi = "musl"
+
+[targets.linux-arm64-musl]
+platform = "linux-arm64"
+abi = "musl"
+
+[recipes.rust-linux-x64-musl]
+owner = "workbench-rust"
+inputs = ["LICENSE","examples/languages/rust","scripts/release-rust.mjs",".devcontainer/Dockerfile","workbench/profiles.toml"]
+package = {}
+build = ["{node}","{workbench}/scripts/release-rust.mjs","--target","x86_64-unknown-linux-musl","--image-profile","native"]
+verify = ["{node}","{source}/scripts/release-verify.mjs","{artifact}","{source}"]
+
+[recipes.rust-linux-arm64-musl]
+owner = "workbench-rust"
+inputs = ["LICENSE","examples/languages/rust","scripts/release-rust.mjs",".devcontainer/Dockerfile","workbench/profiles.toml"]
+package = {}
+build = ["{node}","{workbench}/scripts/release-rust.mjs","--target","aarch64-unknown-linux-musl","--image-profile","native"]
+verify = ["{node}","{source}/scripts/release-verify.mjs","{artifact}","{source}"]
+
+[recipes.go-native]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go"]
+package = {}
+build = ["{node}","scripts/check.mjs","release"]
+verify = ["{node}","{source}/scripts/release-verify.mjs","{artifact}","{source}"]
+
+[recipes.go-nix-closure]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go"]
+package = {}
+build = ["{node}","scripts/package-managed.mjs","nix-docker","closure","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","nix","closure","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-nix-portable]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go",".devcontainer/Dockerfile"]
+package = { file = "count.tar.gz" }
+build = ["{node}","scripts/package-managed.mjs","nix-docker","portable","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","nix","portable","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-nix-docker]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go"]
+package = { file = "docker.tar.gz" }
+build = ["{node}","scripts/package-managed.mjs","nix-docker","docker","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","nix","docker","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-guix-relocatable]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go","channels.scm",".devcontainer/Dockerfile"]
+package = { file = "count.tar.gz" }
+build = ["{node}","scripts/package-managed.mjs","guix","relocatable","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","guix","relocatable","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-guix-portable]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go","channels.scm",".devcontainer/Dockerfile"]
+package = { file = "count.tar.gz" }
+build = ["{node}","scripts/package-managed.mjs","guix","portable","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","guix","portable","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-guix-docker]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go","channels.scm"]
+package = { file = "docker.tar.gz" }
+build = ["{node}","scripts/package-managed.mjs","guix","docker","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","guix","docker","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.go-guix-squashfs]
+owner = "workbench-go"
+inputs = ["LICENSE","examples/languages/go","channels.scm"]
+package = { file = "count.squashfs" }
+build = ["{node}","scripts/package-managed.mjs","guix","squashfs","{nix_image}"]
+verify = ["{node}","{source}/scripts/verify-managed.mjs","{artifact}","guix","squashfs","{nix_image}","{workbench}/.devcontainer/Dockerfile","{source}"]
+
+[recipes.typescript-nix-closure]
+owner = "workbench-typescript"
+inputs = ["LICENSE","examples/languages/typescript","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.typescript-guix-portable]
+owner = "workbench-typescript"
+inputs = ["LICENSE","examples/languages/typescript","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.javascript-nix-closure]
+owner = "workbench-javascript"
+inputs = ["LICENSE","examples/languages/javascript","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.javascript-guix-portable]
+owner = "workbench-javascript"
+inputs = ["LICENSE","examples/languages/javascript","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.python-nix-closure]
+owner = "workbench-python"
+inputs = ["LICENSE","examples/languages/python","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.python-guix-portable]
+owner = "workbench-python"
+inputs = ["LICENSE","examples/languages/python","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.c-nix-closure]
+owner = "workbench-c"
+inputs = ["LICENSE","examples/languages/c","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.c-guix-portable]
+owner = "workbench-c"
+inputs = ["LICENSE","examples/languages/c","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.cpp-nix-closure]
+owner = "workbench-cpp"
+inputs = ["LICENSE","examples/languages/cpp","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.cpp-guix-portable]
+owner = "workbench-cpp"
+inputs = ["LICENSE","examples/languages/cpp","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.rust-nix-closure]
+owner = "workbench-rust"
+inputs = ["LICENSE","examples/languages/rust","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.rust-guix-portable]
+owner = "workbench-rust"
+inputs = ["LICENSE","examples/languages/rust","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.java-native]
+owner = "workbench-java"
+inputs = ["LICENSE","examples/languages/java"]
+package = {}
+build = ["{node}","scripts/check.mjs","release","{workbench}"]
+verify = ["{node}","{source}/scripts/release-verify.mjs","{artifact}","{source}","{workbench}"]
+
+[recipes.java-nix-closure]
+owner = "workbench-java"
+inputs = ["LICENSE","examples/languages/java","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.java-guix-portable]
+owner = "workbench-java"
+inputs = ["LICENSE","examples/languages/java","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.ruby-nix-closure]
+owner = "workbench-ruby"
+inputs = ["LICENSE","examples/languages/ruby","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.ruby-guix-portable]
+owner = "workbench-ruby"
+inputs = ["LICENSE","examples/languages/ruby","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.php-nix-closure]
+owner = "workbench-php"
+inputs = ["LICENSE","examples/languages/php","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.php-guix-portable]
+owner = "workbench-php"
+inputs = ["LICENSE","examples/languages/php","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[recipes.react-nix-closure]
+owner = "workbench-react"
+inputs = ["LICENSE","examples/frameworks/react","scripts/package-managed.mjs","scripts/verify-managed.mjs"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","nix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","nix"]
+
+[recipes.react-guix-portable]
+owner = "workbench-react"
+inputs = ["LICENSE","examples/frameworks/react","scripts/package-managed.mjs","scripts/verify-managed.mjs","channels.scm"]
+package = {}
+build = ["{node}","{workbench}/scripts/package-managed.mjs","guix","{nix_image}"]
+verify = ["{node}","{workbench}/scripts/verify-managed.mjs","{artifact}","{source}","{nix_image}","guix"]
+
+[profiles.rust-linux-x64-musl]
+builder = "native"
+projects = ["workbench-rust"]
+variants = [{ target = "linux-x64-musl", kind = "release", recipe = "rust-linux-x64-musl", formats = ["archive"] }]
+
+[profiles.rust-linux-arm64-musl]
+builder = "native"
+projects = ["workbench-rust"]
+variants = [{ target = "linux-arm64-musl", kind = "release", recipe = "rust-linux-arm64-musl", formats = ["archive"] }]
+
+[profiles.go-native]
+builder = "native"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-native", formats = ["archive"] }]
+
+[profiles.go-nix-closure]
+builder = "nix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-nix-closure", formats = ["archive"] }]
+
+[profiles.go-nix-portable]
+builder = "nix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-nix-portable", formats = ["archive"] }]
+
+[profiles.go-nix-docker]
+builder = "nix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-nix-docker", formats = ["archive"] }]
+
+[profiles.go-guix-relocatable]
+builder = "guix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-guix-relocatable", formats = ["archive"] }]
+
+[profiles.go-guix-portable]
+builder = "guix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-guix-portable", formats = ["archive"] }]
+
+[profiles.go-guix-docker]
+builder = "guix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-guix-docker", formats = ["archive"] }]
+
+[profiles.go-guix-squashfs]
+builder = "guix"
+projects = ["workbench-go"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "go-guix-squashfs", formats = ["squashfs"] }]
+
+[profiles.typescript-nix-closure]
+builder = "nix"
+projects = ["workbench-typescript"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "typescript-nix-closure", formats = ["archive"] }]
+
+[profiles.typescript-guix-portable]
+builder = "guix"
+projects = ["workbench-typescript"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "typescript-guix-portable", formats = ["archive"] }]
+
+[profiles.javascript-nix-closure]
+builder = "nix"
+projects = ["workbench-javascript"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "javascript-nix-closure", formats = ["archive"] }]
+
+[profiles.javascript-guix-portable]
+builder = "guix"
+projects = ["workbench-javascript"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "javascript-guix-portable", formats = ["archive"] }]
+
+[profiles.python-nix-closure]
+builder = "nix"
+projects = ["workbench-python"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "python-nix-closure", formats = ["archive"] }]
+
+[profiles.python-guix-portable]
+builder = "guix"
+projects = ["workbench-python"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "python-guix-portable", formats = ["archive"] }]
+
+[profiles.c-nix-closure]
+builder = "nix"
+projects = ["workbench-c"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "c-nix-closure", formats = ["archive"] }]
+
+[profiles.c-guix-portable]
+builder = "guix"
+projects = ["workbench-c"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "c-guix-portable", formats = ["archive"] }]
+
+[profiles.cpp-nix-closure]
+builder = "nix"
+projects = ["workbench-cpp"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "cpp-nix-closure", formats = ["archive"] }]
+
+[profiles.cpp-guix-portable]
+builder = "guix"
+projects = ["workbench-cpp"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "cpp-guix-portable", formats = ["archive"] }]
+
+[profiles.rust-nix-closure]
+builder = "nix"
+projects = ["workbench-rust"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "rust-nix-closure", formats = ["archive"] }]
+
+[profiles.rust-guix-portable]
+builder = "guix"
+projects = ["workbench-rust"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "rust-guix-portable", formats = ["archive"] }]
+
+[profiles.java-native]
+builder = "native"
+projects = ["workbench-java"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "java-native", formats = ["archive"] }]
+
+[profiles.java-nix-closure]
+builder = "nix"
+projects = ["workbench-java"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "java-nix-closure", formats = ["archive"] }]
+
+[profiles.java-guix-portable]
+builder = "guix"
+projects = ["workbench-java"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "java-guix-portable", formats = ["archive"] }]
+
+[profiles.ruby-nix-closure]
+builder = "nix"
+projects = ["workbench-ruby"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "ruby-nix-closure", formats = ["archive"] }]
+
+[profiles.ruby-guix-portable]
+builder = "guix"
+projects = ["workbench-ruby"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "ruby-guix-portable", formats = ["archive"] }]
+
+[profiles.php-nix-closure]
+builder = "nix"
+projects = ["workbench-php"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "php-nix-closure", formats = ["archive"] }]
+
+[profiles.php-guix-portable]
+builder = "guix"
+projects = ["workbench-php"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "php-guix-portable", formats = ["archive"] }]
+
+[profiles.react-nix-closure]
+builder = "nix"
+projects = ["workbench-react"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "react-nix-closure", formats = ["archive"] }]
+
+[profiles.react-guix-portable]
+builder = "guix"
+projects = ["workbench-react"]
+variants = [{ target = "linux-x64", kind = "release", recipe = "react-guix-portable", formats = ["archive"] }]
+
+[development]
+default = "native"
+
+[[development.profiles]]
+name = "native"
+builder = "native"
+workspace = "host"
+container_config = ".devcontainer/devcontainer.json"
+[development.profiles.offline]
+registry = "ghcr.io/greghogan/workbench/development-native"
+inputs = [
+  ".devcontainer/Dockerfile",
+  ".node-version",
+  ".pnpmfile.cjs",
+  ".npmrc",
+  ".tool-versions",
+  "examples/frameworks/react/.node-version",
+  "examples/frameworks/react/.pnpmfile.cjs",
+  "examples/frameworks/react/package.json",
+  "examples/frameworks/react/pnpm-lock.yaml",
+  "examples/frameworks/react/pnpm-workspace.yaml",
+  "examples/languages/c/.gcc-version",
+  "examples/languages/c/.llvm-version",
+  "examples/languages/c/.tool-versions",
+  "examples/languages/c/.vcpkg-version",
+  "examples/languages/c/vcpkg-configuration.json",
+  "examples/languages/c/vcpkg.json",
+  "examples/languages/cpp/.gcc-version",
+  "examples/languages/cpp/.llvm-version",
+  "examples/languages/cpp/.tool-versions",
+  "examples/languages/cpp/.vcpkg-version",
+  "examples/languages/cpp/vcpkg-configuration.json",
+  "examples/languages/cpp/vcpkg.json",
+  "examples/languages/go/.go-version",
+  "examples/languages/go/go.mod",
+  "examples/languages/go/go.sum",
+  "examples/languages/java/.java-version",
+  "examples/languages/java/.mvn",
+  "examples/languages/java/.tool-versions",
+  "examples/languages/java/pom.xml",
+  "examples/languages/javascript/.node-version",
+  "examples/languages/javascript/.pnpmfile.cjs",
+  "examples/languages/javascript/package.json",
+  "examples/languages/javascript/pnpm-lock.yaml",
+  "examples/languages/javascript/pnpm-workspace.yaml",
+  "examples/languages/php/.composer",
+  "examples/languages/php/.composer-version",
+  "examples/languages/php/.php-version",
+  "examples/languages/php/.xdebug-version",
+  "examples/languages/php/composer.json",
+  "examples/languages/php/composer.lock",
+  "examples/languages/php/tools",
+  "examples/languages/python/.python-version",
+  "examples/languages/python/.tool-versions",
+  "examples/languages/python/pyproject.toml",
+  "examples/languages/python/uv.lock",
+  "examples/languages/ruby/.ruby-version",
+  "examples/languages/ruby/Gemfile",
+  "examples/languages/ruby/Gemfile.lock",
+  "examples/languages/rust/.tool-versions",
+  "examples/languages/rust/Cargo.lock",
+  "examples/languages/rust/Cargo.toml",
+  "examples/languages/rust/rust-toolchain-miri.toml",
+  "examples/languages/rust/rust-toolchain.toml",
+  "examples/languages/typescript/.node-version",
+  "examples/languages/typescript/.pnpmfile.cjs",
+  "examples/languages/typescript/package.json",
+  "examples/languages/typescript/pnpm-lock.yaml",
+  "examples/languages/typescript/pnpm-workspace.yaml",
+  "languages/c/llvm-filter.json",
+  "languages/cpp/llvm-filter.json",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "scripts/bootstrap-tools.json",
+  "scripts/keys",
+  "scripts/llvm-assets.json",
+  "scripts/native-assets.json",
+  "scripts/package-manager",
+]
+verify = ["node", "{workbench}/scripts/prepare-development.mjs", "native", "--verify"]
+
+[[development.profiles]]
+name = "nix"
+builder = "nix"
+workspace = "host"
+container_config = ".devcontainer/nix/devcontainer.json"
+[development.profiles.offline]
+registry = "ghcr.io/greghogan/workbench/development-nix"
+inputs = [
+  ".devcontainer/nix/image.nix",
+  ".tool-versions",
+  "browser.nix",
+  "scripts/native-assets.json",
+  ".pnpmfile.cjs",
+  ".npmrc",
+  "check-inputs.nix",
+  "examples/frameworks/react/.pnpmfile.cjs",
+  "examples/frameworks/react/check-inputs.nix",
+  "examples/frameworks/react/flake.lock",
+  "examples/frameworks/react/flake.nix",
+  "examples/frameworks/react/managed-bootstrap.json",
+  "examples/frameworks/react/managed-check-inputs.json",
+  "examples/frameworks/react/managed-dependencies.json",
+  "examples/frameworks/react/managed-registry.json.br",
+  "examples/frameworks/react/package.json",
+  "examples/frameworks/react/package.nix",
+  "examples/frameworks/react/pnpm-lock.yaml",
+  "examples/frameworks/react/pnpm-workspace.yaml",
+  "examples/languages/c/check-inputs.nix",
+  "examples/languages/c/flake.lock",
+  "examples/languages/c/flake.nix",
+  "examples/languages/c/managed-check-inputs.json",
+  "examples/languages/c/package.nix",
+  "examples/languages/cpp/check-inputs.nix",
+  "examples/languages/cpp/flake.lock",
+  "examples/languages/cpp/flake.nix",
+  "examples/languages/cpp/managed-check-inputs.json",
+  "examples/languages/cpp/package.nix",
+  "examples/languages/go/check-inputs.nix",
+  "examples/languages/go/flake.lock",
+  "examples/languages/go/flake.nix",
+  "examples/languages/go/go.mod",
+  "examples/languages/go/go.sum",
+  "examples/languages/go/managed-check-inputs.json",
+  "examples/languages/go/managed-extra-inputs.json",
+  "examples/languages/java/.mvn/checksums/checksums.sha256",
+  "examples/languages/java/check-inputs.nix",
+  "examples/languages/java/flake.lock",
+  "examples/languages/java/flake.nix",
+  "examples/languages/java/managed-check-inputs.json",
+  "examples/languages/java/package.nix",
+  "examples/languages/java/pom.xml",
+  "examples/languages/javascript/.pnpmfile.cjs",
+  "examples/languages/javascript/check-inputs.nix",
+  "examples/languages/javascript/flake.lock",
+  "examples/languages/javascript/flake.nix",
+  "examples/languages/javascript/managed-bootstrap.json",
+  "examples/languages/javascript/managed-check-inputs.json",
+  "examples/languages/javascript/managed-registry.json.br",
+  "examples/languages/javascript/package.json",
+  "examples/languages/javascript/package.nix",
+  "examples/languages/javascript/pnpm-lock.yaml",
+  "examples/languages/javascript/pnpm-workspace.yaml",
+  "examples/languages/php/.composer-version",
+  "examples/languages/php/.composer/checksums.json",
+  "examples/languages/php/check-inputs.nix",
+  "examples/languages/php/composer.json",
+  "examples/languages/php/composer.lock",
+  "examples/languages/php/flake.lock",
+  "examples/languages/php/flake.nix",
+  "examples/languages/php/managed-check-inputs.json",
+  "examples/languages/php/managed-extra-inputs.json",
+  "examples/languages/php/package.nix",
+  "examples/languages/php/tools/.composer/checksums.json",
+  "examples/languages/php/tools/compat/.composer/checksums.json",
+  "examples/languages/php/tools/compat/composer.json",
+  "examples/languages/php/tools/compat/composer.lock",
+  "examples/languages/php/tools/composer.json",
+  "examples/languages/php/tools/composer.lock",
+  "examples/languages/python/check-inputs.nix",
+  "examples/languages/python/flake.lock",
+  "examples/languages/python/flake.nix",
+  "examples/languages/python/managed-check-inputs.json",
+  "examples/languages/python/managed-extra-inputs.json",
+  "examples/languages/python/package.nix",
+  "examples/languages/python/pyproject.toml",
+  "examples/languages/python/uv.lock",
+  "examples/languages/ruby/Gemfile",
+  "examples/languages/ruby/Gemfile.lock",
+  "examples/languages/ruby/check-inputs.nix",
+  "examples/languages/ruby/flake.lock",
+  "examples/languages/ruby/flake.nix",
+  "examples/languages/ruby/managed-check-inputs.json",
+  "examples/languages/ruby/package.nix",
+  "examples/languages/rust/Cargo.lock",
+  "examples/languages/rust/Cargo.toml",
+  "examples/languages/rust/check-inputs.nix",
+  "examples/languages/rust/flake.lock",
+  "examples/languages/rust/flake.nix",
+  "examples/languages/rust/managed-check-inputs.json",
+  "examples/languages/rust/package.nix",
+  "examples/languages/typescript/.pnpmfile.cjs",
+  "examples/languages/typescript/check-inputs.nix",
+  "examples/languages/typescript/flake.lock",
+  "examples/languages/typescript/flake.nix",
+  "examples/languages/typescript/managed-bootstrap.json",
+  "examples/languages/typescript/managed-check-inputs.json",
+  "examples/languages/typescript/managed-registry.json.br",
+  "examples/languages/typescript/package.json",
+  "examples/languages/typescript/package.nix",
+  "examples/languages/typescript/pnpm-lock.yaml",
+  "examples/languages/typescript/pnpm-workspace.yaml",
+  "flake.lock",
+  "flake.nix",
+  "managed-bootstrap.json",
+  "managed-check-inputs.json",
+  "managed-registry.json.br",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+]
+prepare = ["node", "{workbench}/scripts/prepare-managed-development.mjs", "nix", "{image}"]
+verify = ["node", "{workbench}/scripts/prepare-development.mjs", "nix", "--verify"]
+
+[[development.profiles]]
+name = "guix"
+builder = "guix"
+workspace = "host"
+container_config = ".devcontainer/guix/devcontainer.json"
+[development.profiles.offline]
+registry = "ghcr.io/greghogan/workbench/development-guix"
+inputs = [
+  ".devcontainer/guix/environments.scm",
+  ".devcontainer/guix/image.json",
+  ".devcontainer/guix/image.scm",
+  ".tool-versions",
+  "browser.scm",
+  "scripts/native-assets.json",
+  ".pnpmfile.cjs",
+  ".npmrc",
+  "channels.scm",
+  "check-inputs.scm",
+  "examples/frameworks/react/.pnpmfile.cjs",
+  "examples/frameworks/react/check-inputs.scm",
+  "examples/frameworks/react/managed-bootstrap.json",
+  "examples/frameworks/react/managed-check-inputs.json",
+  "examples/frameworks/react/managed-dependencies.json",
+  "examples/frameworks/react/managed-registry.json.br",
+  "examples/frameworks/react/manifest.scm",
+  "examples/frameworks/react/package.json",
+  "examples/frameworks/react/package.scm",
+  "examples/frameworks/react/pnpm-lock.yaml",
+  "examples/frameworks/react/pnpm-workspace.yaml",
+  "examples/languages/c/check-inputs.scm",
+  "examples/languages/c/guix-toolchain.scm",
+  "examples/languages/c/managed-check-inputs.json",
+  "examples/languages/c/manifest.scm",
+  "examples/languages/c/package.scm",
+  "examples/languages/cpp/check-inputs.scm",
+  "examples/languages/cpp/guix-toolchain.scm",
+  "examples/languages/cpp/managed-check-inputs.json",
+  "examples/languages/cpp/manifest.scm",
+  "examples/languages/cpp/package.scm",
+  "examples/languages/go/check-inputs.scm",
+  "examples/languages/go/go.mod",
+  "examples/languages/go/go.sum",
+  "examples/languages/go/managed-check-inputs.json",
+  "examples/languages/go/managed-extra-inputs.json",
+  "examples/languages/go/manifest.scm",
+  "examples/languages/go/package.scm",
+  "examples/languages/java/.mvn/checksums/checksums.sha256",
+  "examples/languages/java/check-inputs.scm",
+  "examples/languages/java/managed-check-inputs.json",
+  "examples/languages/java/manifest.scm",
+  "examples/languages/java/package.scm",
+  "examples/languages/java/pom.xml",
+  "examples/languages/javascript/.pnpmfile.cjs",
+  "examples/languages/javascript/check-inputs.scm",
+  "examples/languages/javascript/managed-bootstrap.json",
+  "examples/languages/javascript/managed-check-inputs.json",
+  "examples/languages/javascript/managed-registry.json.br",
+  "examples/languages/javascript/manifest.scm",
+  "examples/languages/javascript/package.json",
+  "examples/languages/javascript/package.scm",
+  "examples/languages/javascript/pnpm-lock.yaml",
+  "examples/languages/javascript/pnpm-workspace.yaml",
+  "examples/languages/php/.composer-version",
+  "examples/languages/php/.composer/checksums.json",
+  "examples/languages/php/check-inputs.scm",
+  "examples/languages/php/composer.json",
+  "examples/languages/php/composer.lock",
+  "examples/languages/php/managed-check-inputs.json",
+  "examples/languages/php/managed-extra-inputs.json",
+  "examples/languages/php/manifest.scm",
+  "examples/languages/php/package.scm",
+  "examples/languages/php/tools/.composer/checksums.json",
+  "examples/languages/php/tools/compat/.composer/checksums.json",
+  "examples/languages/php/tools/compat/composer.json",
+  "examples/languages/php/tools/compat/composer.lock",
+  "examples/languages/php/tools/composer.json",
+  "examples/languages/php/tools/composer.lock",
+  "examples/languages/python/check-inputs.scm",
+  "examples/languages/python/managed-check-inputs.json",
+  "examples/languages/python/managed-extra-inputs.json",
+  "examples/languages/python/manifest.scm",
+  "examples/languages/python/package.scm",
+  "examples/languages/python/pyproject.toml",
+  "examples/languages/python/uv.lock",
+  "examples/languages/ruby/Gemfile",
+  "examples/languages/ruby/Gemfile.lock",
+  "examples/languages/ruby/check-inputs.scm",
+  "examples/languages/ruby/managed-check-inputs.json",
+  "examples/languages/ruby/manifest.scm",
+  "examples/languages/ruby/package.scm",
+  "examples/languages/rust/Cargo.lock",
+  "examples/languages/rust/Cargo.toml",
+  "examples/languages/rust/check-inputs.scm",
+  "examples/languages/rust/guix-crates.scm",
+  "examples/languages/rust/managed-check-inputs.json",
+  "examples/languages/rust/manifest.scm",
+  "examples/languages/rust/package.scm",
+  "examples/languages/typescript/.pnpmfile.cjs",
+  "examples/languages/typescript/check-inputs.scm",
+  "examples/languages/typescript/managed-bootstrap.json",
+  "examples/languages/typescript/managed-check-inputs.json",
+  "examples/languages/typescript/managed-registry.json.br",
+  "examples/languages/typescript/manifest.scm",
+  "examples/languages/typescript/package.json",
+  "examples/languages/typescript/package.scm",
+  "examples/languages/typescript/pnpm-lock.yaml",
+  "examples/languages/typescript/pnpm-workspace.yaml",
+  "managed-bootstrap.json",
+  "managed-check-inputs.json",
+  "managed-registry.json.br",
+  "manifest.scm",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+]
+prepare = ["node", "{workbench}/scripts/prepare-managed-development.mjs", "guix", "{image}"]
+verify = ["node", "{workbench}/scripts/prepare-development.mjs", "guix", "--verify"]
+
+[[development.profiles]]
+name = "native-toolchain"
+builder = "native"
+workspace = "host"
+container_config = ".devcontainer/toolchain.json"
+[development.profiles.offline]
+kind = "toolchain"
+registry = "ghcr.io/greghogan/workbench/toolchain-native"
+inputs = [
+  ".devcontainer/Dockerfile",
+  ".node-version",
+  ".tool-versions",
+  "examples/frameworks/react/.node-version",
+  "examples/languages/c/.llvm-version",
+  "examples/languages/c/.tool-versions",
+  "examples/languages/c/.vcpkg-version",
+  "examples/languages/cpp/.llvm-version",
+  "examples/languages/cpp/.tool-versions",
+  "examples/languages/cpp/.vcpkg-version",
+  "examples/languages/go/.go-version",
+  "examples/languages/java/.java-version",
+  "examples/languages/java/.tool-versions",
+  "examples/languages/javascript/.node-version",
+  "examples/languages/php/.composer-version",
+  "examples/languages/php/.php-version",
+  "examples/languages/php/.xdebug-version",
+  "examples/languages/python/.tool-versions",
+  "examples/languages/ruby/.ruby-version",
+  "examples/languages/rust/.tool-versions",
+  "examples/languages/rust/rust-toolchain.toml",
+  "examples/languages/typescript/.node-version",
+  "scripts/bootstrap-tools.json",
+  "scripts/keys",
+  "scripts/llvm-assets.json",
+  "scripts/native-assets.json",
+  "scripts/prepare-image-tools.mjs",
+  "scripts/split-prepared-inputs.mjs",
+]
+[[development.profiles]]
+name = "nix-toolchain"
+builder = "nix"
+workspace = "host"
+container_config = ".devcontainer/nix/devcontainer.json"
+[development.profiles.offline]
+kind = "toolchain"
+registry = "ghcr.io/greghogan/workbench/toolchain-nix"
+inputs = [
+  ".devcontainer/nix/image.nix",
+  "browser.nix",
+  "examples/frameworks/react/flake.lock",
+  "examples/frameworks/react/flake.nix",
+  "examples/languages/c/flake.lock",
+  "examples/languages/c/flake.nix",
+  "examples/languages/cpp/flake.lock",
+  "examples/languages/cpp/flake.nix",
+  "examples/languages/go/flake.lock",
+  "examples/languages/go/flake.nix",
+  "examples/languages/java/flake.lock",
+  "examples/languages/java/flake.nix",
+  "examples/languages/javascript/flake.lock",
+  "examples/languages/javascript/flake.nix",
+  "examples/languages/php/flake.lock",
+  "examples/languages/php/flake.nix",
+  "examples/languages/python/flake.lock",
+  "examples/languages/python/flake.nix",
+  "examples/languages/ruby/flake.lock",
+  "examples/languages/ruby/flake.nix",
+  "examples/languages/rust/flake.lock",
+  "examples/languages/rust/flake.nix",
+  "examples/languages/typescript/flake.lock",
+  "examples/languages/typescript/flake.nix",
+  "flake.lock",
+  "flake.nix",
+  "scripts/native-assets.json",
+  "scripts/prepare-nix-profiles.mjs",
+]
+prepare = ["node", "{workbench}/scripts/prepare-managed-development.mjs", "nix", "{image}"]
+[[development.profiles]]
+name = "guix-toolchain"
+builder = "guix"
+workspace = "host"
+container_config = ".devcontainer/guix/devcontainer.json"
+[development.profiles.offline]
+kind = "toolchain"
+registry = "ghcr.io/greghogan/workbench/toolchain-guix"
+inputs = [
+  ".devcontainer/guix/environments.scm",
+  ".devcontainer/guix/image.json",
+  ".devcontainer/guix/image.scm",
+  "browser.scm",
+  "channels.scm",
+  "examples/frameworks/react/manifest.scm",
+  "examples/languages/c/guix-toolchain.scm",
+  "examples/languages/c/manifest.scm",
+  "examples/languages/cpp/guix-toolchain.scm",
+  "examples/languages/cpp/manifest.scm",
+  "examples/languages/go/manifest.scm",
+  "examples/languages/java/manifest.scm",
+  "examples/languages/javascript/manifest.scm",
+  "examples/languages/php/manifest.scm",
+  "examples/languages/python/manifest.scm",
+  "examples/languages/ruby/manifest.scm",
+  "examples/languages/rust/coverage-tool.scm",
+  "examples/languages/rust/manifest.scm",
+  "examples/languages/typescript/manifest.scm",
+  "manifest.scm",
+  "scripts/ci-guix-bootstrap.scm",
+  "scripts/native-assets.json",
+  "scripts/prepare-guix-profiles.mjs",
+]
+prepare = ["node", "{workbench}/scripts/prepare-managed-development.mjs", "guix", "{image}"]

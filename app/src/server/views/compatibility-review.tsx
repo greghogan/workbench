@@ -5,7 +5,7 @@ import { mutationForm } from "./action-forms.js";
 import { markdown } from "./markdown-view.js";
 import { recordURL, routeURL } from "../routes/locations.js";
 import { sourceURL } from "../routes/sources.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { pendingReviewNeighbors } from "../review/review-navigation.js";
 import { Route } from "../routes/routes.js";
 import { shell } from "./page-frame.js";
 import type { ViewContext } from "../workspace/view-context.js";
@@ -57,7 +57,7 @@ export function compatibilityStatus(context: ViewContext) {
 export function compatibilityReviewPage(context: ViewContext): string {
   const { report, error } = context.compatibility;
   const assessment = report?.sources.length ? report.assessment : null;
-  const previous = context.reviewQueue.at(-1);
+  const { previous, next, position, total } = pendingReviewNeighbors(context, "compatibility");
   return shell(
     context,
     "Policy compatibility",
@@ -66,16 +66,22 @@ export function compatibilityReviewPage(context: ViewContext): string {
       {context.compatibilityNeedsHumanReview && (
         <nav class="review-navigation" aria-label="Review queue navigation">
           {previous ? (
-            <a rel="prev" href={reviewLocation(context, previous)}>
+            <a rel="prev" href={previous.href}>
               ← Previous
             </a>
           ) : (
             <span class="muted">← Previous</span>
           )}
           <span>
-            {String(context.reviewQueue.length + 1)} of {String(context.reviewQueue.length + 1)}
+            {String(position)} of {String(total)}
           </span>
-          <span class="muted">Next →</span>
+          {next ? (
+            <a rel="next" href={next.href}>
+              Next →
+            </a>
+          ) : (
+            <span class="muted">Next →</span>
+          )}
         </nav>
       )}
       {compatibilityStatus(context)}

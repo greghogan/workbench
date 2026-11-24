@@ -72,6 +72,10 @@ export interface ToolAsset extends ArtifactSource {
   zipLinks?: Record<string, string>;
 }
 
+export function toolDownloadPath(asset: Pick<ToolAsset, "sha256" | "url">): string {
+  return join(userDirectory("cache"), "downloads", `${asset.sha256}-${basename(new URL(asset.url).pathname)}`);
+}
+
 /** Redirects never downgrade transport. Content is verified before extraction or execution. */
 export async function download(
   asset: Pick<ToolAsset, "url" | "backupUrls" | "sha256" | "attestation" | "signature" | "checksums" | "repository">,
@@ -79,10 +83,8 @@ export async function download(
 ): Promise<string> {
   if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("tool artifact requires a recorded SHA-256 digest");
   artifactSourceUrls(asset.url, asset.backupUrls);
-  const url = new URL(asset.url);
-  const folder = join(userDirectory("cache"), "downloads");
-  mkdirSync(folder, { recursive: true, mode: 0o700 });
-  const target = join(folder, `${asset.sha256}-${basename(url.pathname)}`);
+  const target = toolDownloadPath(asset);
+  mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
   const temporary = `${target}.${randomUUID()}.partial`;
   const deadline = AbortSignal.timeout(artifactLimits.milliseconds);
   const signal = options.signal ? AbortSignal.any([deadline, options.signal]) : deadline;

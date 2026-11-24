@@ -1,11 +1,11 @@
-FROM node:24-trixie@sha256:8c761eca2bf7eec965f946cf47b8090143cb41f45f2f8699af0cc0298d2d2d19 AS node-bootstrap
-FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS base
+FROM node:24-trixie@sha256:6e5d4c38403930b420404f190be8563396dca2bd156a6cb4722707b0efcf6fc1 AS node-bootstrap
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS base
 COPY --from=node-bootstrap /usr/local /usr/local
 COPY --from=node-bootstrap /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 RUN printf 'Acquire::Retries "3";\nAPT::Update::Error-Mode "any";\n' > /etc/apt/apt.conf.d/80workbench-retries \
     && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt update \
     && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt upgrade --no-install-recommends -y \
-    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates curl git gnupg python3 gcc g++ make musl-tools \
+    && apt-get -o Acquire::https::CaInfo=/etc/ssl/certs/ca-certificates.crt install --no-install-recommends -y ca-certificates curl git gnupg python3 gcc g++ make musl-tools bubblewrap \
        zip unzip xz-utils zstd pkg-config binutils libzstd1 libedit2 libncurses6 zlib1g liblzma5 libssl-dev libyaml-dev libffi-dev libxml2-dev libonig-dev zlib1g-dev libcurl4-openssl-dev autoconf \
        libglib2.0-0t64 libnspr4 libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libdbus-1-3 \
        libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 libexpat1 libxcb1 libxkbcommon0 libudev1 libasound2t64 libatspi2.0-0t64 fonts-liberation \
@@ -21,19 +21,28 @@ ENV WORKBENCH_CACHE_HOME=/opt/workbench/cache WORKBENCH_DATA_HOME=/opt/workbench
     GOMODCACHE=/opt/workbench/cache/go-mod GOCACHE=/tmp/go-build npm_config_cache=/opt/workbench/cache/npm PIP_CACHE_DIR=/opt/workbench/cache/pip \
     CARGO_HOME=/opt/workbench/cache/ci/cargo RUSTUP_HOME=/opt/workbench/cache/ci/rustup
 
-FROM base AS preparation
+FROM base AS acquisition
 WORKDIR /tmp/preparation
 COPY . .
 ARG TARGETARCH
 RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
-    --mount=type=cache,id=workbench-native-${TARGETARCH},target=/opt/workbench,sharing=locked \
-    node scripts/prepare-development.mjs native \
-    && node scripts/split-prepared-inputs.mjs /opt/workbench /prepared-tools /prepared-dependencies
-FROM base
-COPY --from=preparation --chown=ubuntu:ubuntu /prepared-tools /opt/workbench
-COPY --from=preparation --chown=ubuntu:ubuntu /prepared-dependencies /opt/workbench
+    --mount=type=cache,id=workbench-native-v2-${TARGETARCH},target=/opt/workbench,sharing=locked \
+    node scripts/prepare-image-tools.mjs \
+    && node scripts/split-prepared-inputs.mjs --tools-only /opt/workbench /prepared-tools
 
+FROM base AS toolchain
+COPY --from=acquisition --chown=ubuntu:ubuntu /prepared-tools /opt/workbench
 # The selected Rust compiler is mounted by cross; these linkers use distribution-managed musl.
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     CC_x86_64_unknown_linux_musl=musl-gcc CC_aarch64_unknown_linux_musl=musl-gcc
+
+FROM acquisition AS preparation
+RUN --mount=type=secret,id=github_token,env=GH_TOKEN \
+    --mount=type=cache,id=workbench-native-v2-${TARGETARCH},target=/opt/workbench,sharing=locked \
+    cp -a /prepared-tools/. /opt/workbench/ \
+    && node scripts/prepare-development.mjs native --dependencies-only \
+    && node scripts/split-prepared-inputs.mjs /opt/workbench /retained-tools /prepared-dependencies
+
+FROM toolchain AS development
+COPY --from=preparation --chown=ubuntu:ubuntu /prepared-dependencies /opt/workbench

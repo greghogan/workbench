@@ -258,11 +258,15 @@ function reconcile(root: string, operation: BranchIntegration): void {
   if (errors.length) throw new InvalidInput(errors.join("\n"));
 }
 function runGit(root: string, kind: IntegrationKind, args: string[]): void {
-  const result = spawnSync("git", ["-C", root, "-c", "rerere.autoupdate=false", kind, ...args], {
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    env: { ...process.env, GIT_EDITOR: "true" },
-  });
+  const result = spawnSync(
+    "git",
+    ["-C", root, "-c", "rerere.autoupdate=false", "-c", "commit.gpgSign=false", kind, ...args],
+    {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, GIT_EDITOR: "true" },
+    },
+  );
   if (result.error || result.status !== 0)
     throw new StateConflict(
       `${kind} stopped. Resolve conflicts and run 'workbench ${kind} --continue', or use --abort.\n${result.stderr || result.stdout}`,

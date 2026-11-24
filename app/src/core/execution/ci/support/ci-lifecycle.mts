@@ -52,7 +52,7 @@ export class CILifecycle {
 export async function executeCI(
   command: string,
   args: string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean } = {},
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean; stderr?: boolean } = {},
 ): Promise<string> {
   const owner = owners.getStore();
   const settings = {
@@ -69,7 +69,19 @@ export async function executeCI(
     if (problem) throw problem;
     return outcome.stdout;
   }
-  const outcome = await runOwnedChild(command, args, settings);
+  const outcome = await runOwnedChild(
+    command,
+    args,
+    options.stderr
+      ? {
+          ...settings,
+          output(stdout, stderr) {
+            stdout.pipe(process.stderr, { end: false });
+            stderr.pipe(process.stderr, { end: false });
+          },
+        }
+      : settings,
+  );
   const problem = processFailure(command, outcome);
   if (problem) throw problem;
   return "";

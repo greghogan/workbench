@@ -299,21 +299,42 @@ export function currentBuildkitCacheKeys(root: string): string[] {
     .map((value) => value.name);
 }
 
+interface DockerVolumeUsage {
+  Name: string;
+  Size: string;
+  Links: string | number;
+}
+
+async function readDockerVolumeUsage(signal?: AbortSignal): Promise<DockerVolumeUsage[]> {
+  return JSON.parse(
+    await dockerQuery(["system", "df", "-v", "--format", "{{json .Volumes}}"], signal),
+  ) as DockerVolumeUsage[];
+}
+
 export async function inspectBuildkitCache(
   checkout?: string,
   signal?: AbortSignal,
   measure = true,
+  discoverOwners?: (checkouts: string[]) => void,
 ): Promise<BuilderCacheReport> {
   signal?.throwIfAborted();
   const query = (args: string[]) => dockerQuery(args, signal);
   const report: BuilderCacheReport = { entries: [], issues: [] };
-  if (!existsSync(base())) return report;
+  const receipts: Receipt[] = [];
+  if (existsSync(base()))
+    for (const file of readdirSync(base()).filter((name) => /^workbench-buildkit-[a-f0-9]{24}\.json$/.test(name))) {
+      try {
+        const value = readReceipt(join(base(), file));
+        if (!checkout || value.checkout === checkout) receipts.push(value);
+      } catch (error) {
+        report.issues.push(describeError(error));
+      }
+    }
+  if (!report.issues.length) discoverOwners?.([...new Set(receipts.map((receipt) => receipt.checkout))]);
   let engine: string | undefined;
-  let usage: { Name: string; Size: string }[] | undefined;
-  for (const file of readdirSync(base()).filter((name) => /^workbench-buildkit-[a-f0-9]{24}\.json$/.test(name))) {
+  let usage: DockerVolumeUsage[] | undefined;
+  for (const value of receipts) {
     try {
-      const value = readReceipt(join(base(), file));
-      if (checkout && value.checkout !== checkout) continue;
       let blockedBy: string | undefined;
       let actual: Awaited<ReturnType<typeof verify>> = {};
       try {
@@ -326,13 +347,9 @@ export async function inspectBuildkitCache(
       if (!blockedBy && !actual.volume && !actual.container) continue;
       if (!blockedBy && existsSync(`${lockPath(value)}.lock`))
         blockedBy = "active or recovery-required preparation lock";
-      if (measure)
-        usage ??= JSON.parse(await query(["system", "df", "-v", "--format", "{{json .Volumes}}"])) as {
-          Name: string;
-          Size: string;
-        }[];
-      if (measure && !usage?.some((item) => item.Name === volumeName(value)))
-        throw new Error(`Docker volume usage is unavailable: ${volumeName(value)}`);
+      if (measure) usage ??= await readDockerVolumeUsage(signal);
+      const measured = usage?.find((item) => item.Name === volumeName(value));
+      if (measure && !measured) throw new Error(`Docker volume usage is unavailable: ${volumeName(value)}`);
       report.entries.push({
         key: value.name,
         builder: "buildkit",
@@ -341,9 +358,7 @@ export async function inspectBuildkitCache(
         lock: lockPath(value),
         identity: hash(JSON.stringify(value)),
         volumes: [volumeName(value)],
-        bytes: measure
-          ? parseDockerBytes(usage?.find((item) => item.Name === volumeName(value))?.Size ?? "")
-          : undefined,
+        bytes: measured ? parseDockerBytes(measured.Size) : undefined,
         ...(blockedBy ? { blockedBy } : {}),
       });
     } catch (error) {

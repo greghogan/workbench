@@ -1,5 +1,7 @@
 (use-modules (gnu packages) (guix packages) (guix profiles))
 
+(define toolchain-only? (equal? (getenv "WORKBENCH_ARTIFACT_KIND") "toolchain"))
+
 ;; Development tools for the Workbench source checkout.
 (manifest-add
  (specifications->manifest
@@ -37,7 +39,10 @@
     "shellcheck"
     "shfmt"
     "xz"))
- (list (package->manifest-entry
-        (load (string-append (dirname (current-filename)) "/check-inputs.scm")))
-       (package->manifest-entry
-        (load (string-append (dirname (current-filename)) "/browser.scm")))))
+ (append
+  (if toolchain-only?
+      '()
+      (list (package->manifest-entry
+             (load (string-append (dirname (current-filename)) "/check-inputs.scm")))))
+  (list (package->manifest-entry
+         (load (string-append (dirname (current-filename)) "/browser.scm"))))))

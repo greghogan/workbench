@@ -23,7 +23,14 @@ export interface DevelopmentProfile {
   workspace: Workspace;
   container_config?: string;
   toolchain?: string;
-  offline?: { paths?: string[]; inputs: string[]; verify?: string[]; prepare?: string[]; registry?: string };
+  offline?: {
+    kind?: "toolchain";
+    paths?: string[];
+    inputs: string[];
+    verify?: string[];
+    prepare?: string[];
+    registry?: string;
+  };
 }
 
 export function validateToolProfiles(value: unknown, context: string): void {
@@ -136,7 +143,9 @@ export function validateDevelopmentProfiles(value: unknown, context: string): vo
       if (!profile.offline || typeof profile.offline !== "object" || Array.isArray(profile.offline))
         throw new InvalidInput(`${context}: offline must be a table`);
       const offline = profile.offline as Record<string, unknown>;
-      fields(offline, ["paths", "inputs", "verify", "prepare", "registry"], context);
+      fields(offline, ["kind", "paths", "inputs", "verify", "prepare", "registry"], context);
+      if (offline.kind !== undefined && offline.kind !== "toolchain")
+        throw new InvalidInput(`${context}: offline.kind must be toolchain when specified`);
       if (offline.paths !== undefined) {
         if (
           !Array.isArray(offline.paths) ||

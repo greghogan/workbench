@@ -292,6 +292,19 @@ function withPrivateIndex<T>(
     return action(run);
   });
 }
+
+/** Materialize one immutable tree without changing the repository's index or checkout. */
+export function materializeGitTree(root: string, tree: string, destination: string): void {
+  withPrivateIndex(root, tree, (run) => {
+    run([
+      "-c",
+      "core.symlinks=true",
+      "checkout-index",
+      "--all",
+      "--prefix=" + resolve(destination).replaceAll("\\", "/") + "/",
+    ]);
+  });
+}
 /** Persist retained baseline bytes through one Git process, independent of the current worktree. */
 export function writeReviewBlobs(root: string, contents: readonly Buffer[]): string[] {
   if (!contents.length) return [];
@@ -308,6 +321,14 @@ export function writeReviewBlobs(root: string, contents: readonly Buffer[]): str
 export function workingReviewTree(root: string): string {
   return withPrivateIndex(root, headAt(root), (run) => {
     run(["add", "-A", "--", "."]);
+    return run(["write-tree"]);
+  });
+}
+/** Refresh only the paths in a retained proof using Git's worktree normalization. */
+export function refreshReviewPaths(root: string, tree: string, paths: readonly string[]): string {
+  if (!paths.length) return tree;
+  return withPrivateIndex(root, tree, (run) => {
+    run(["--literal-pathspecs", "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"], paths.join("\0") + "\0");
     return run(["write-tree"]);
   });
 }

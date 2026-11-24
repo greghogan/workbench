@@ -10,3 +10,14 @@
 ## Subproject citations maps
 
 - [workbench-app](../app/workbench/citation-map.md)
+- [workbench-c](../examples/languages/c/workbench/citation-map.md)
+- [workbench-cpp](../examples/languages/cpp/workbench/citation-map.md)
+- [workbench-go](../examples/languages/go/workbench/citation-map.md)
+- [workbench-java](../examples/languages/java/workbench/citation-map.md)
+- [workbench-javascript](../examples/languages/javascript/workbench/citation-map.md)
+- [workbench-php](../examples/languages/php/workbench/citation-map.md)
+- [workbench-python](../examples/languages/python/workbench/citation-map.md)
+- [workbench-react](../examples/frameworks/react/workbench/citation-map.md)
+- [workbench-ruby](../examples/languages/ruby/workbench/citation-map.md)
+- [workbench-rust](../examples/languages/rust/workbench/citation-map.md)
+- [workbench-typescript](../examples/languages/typescript/workbench/citation-map.md)

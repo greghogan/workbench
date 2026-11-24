@@ -24,6 +24,7 @@ import { syncRecordSequences } from "./record-sequences.js";
 import { syncTaskChecklists } from "../tasks/task-checklists.js";
 import { decisionScopes } from "./decisions.js";
 import { withConfigurationSnapshot } from "../configuration/configuration-snapshot.js";
+import { readArtifactCatalog } from "../artifacts/artifact-catalog.js";
 
 function collectMarkdown(directory: string, files: Set<string>): void {
   if (!existsSync(directory) || lstatSync(directory).isSymbolicLink()) return;
@@ -51,6 +52,9 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
   }
   for (const action of [
     () => readChecks(root),
+    () => {
+      if (existsSync(join(root, projectPaths.profiles))) readArtifactCatalog(root);
+    },
     () => {
       validateManagedImageInputs(root);
     },

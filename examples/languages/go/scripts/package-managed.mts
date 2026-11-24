@@ -6,7 +6,7 @@ import { builderCPUArguments } from "./resources.mjs";
 const [builder, format, nixImage] = process.argv.slice(2);
 if (!format) throw new Error("Specify the release package format");
 const output = process.env.WORKBENCH_RELEASE_OUTPUT;
-if (!output) throw new Error("use workbench release prepare to supply a private output directory");
+if (!output) throw new Error("use workbench artifact build --kind release to supply a private output directory");
 function run(command: string, args: readonly string[], capture = false) {
   const env = { ...process.env };
   delete env.GUIX_BUILD_OPTIONS;
@@ -64,13 +64,9 @@ if (builder === "nix" || builder === "nix-docker") {
     ]);
   } else run("sh", ["-eu", "-c", script, "workbench-package", resolve("."), output]);
 } else if (builder === "guix") {
-  if (!["tarball", "relocatable", "portable", "docker", "squashfs", "apptainer"].includes(format))
+  if (!["tarball", "relocatable", "portable", "docker", "squashfs"].includes(format))
     throw new Error("unsupported Guix package format");
-  const packFormat = ["squashfs", "apptainer"].includes(format)
-    ? "squashfs"
-    : format === "docker"
-      ? "docker"
-      : "tarball";
+  const packFormat = format === "squashfs" || format === "docker" ? format : "tarball";
   const artifact = run(
     "guix",
     [

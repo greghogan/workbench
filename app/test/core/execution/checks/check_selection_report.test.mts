@@ -2,10 +2,12 @@ import { Writable } from "node:stream";
 import { readLog } from "../../../../src/core/storage/logs/log-reader.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { stringify } from "smol-toml";
 import { join, resolve } from "node:path";
 import { expect, test } from "vitest";
 import { planChecks } from "../../../../src/core/execution/checks/check-plan.ts";
 import { readChecks } from "../../../../src/core/execution/checks/check-configuration.ts";
+import { inspectChecks } from "../../../../src/core/execution/checks/checks.ts";
 import {
   CheckReport,
   writeCheckReport,
@@ -18,6 +20,54 @@ import { stageFixtures } from "../../../fixtures/check-stages.mjs";
 
 const fixture = stageFixtures();
 const distribution = resolve(import.meta.dirname, "../../../../..");
+
+test("suite defaults, check overrides, and setup produce one input scope", () => {
+  const { root, config, save } = fixture();
+  config.check = [];
+  save();
+  const automation = join(root, "workbench/automation.toml");
+  const inputs = {
+    input_groups: {
+      base: { paths: ["service"] },
+      license: { paths: ["LICENSE"] },
+      tests: { paths: ["test fixtures"], depends_on: ["license"] },
+    },
+    check_suite: [
+      {
+        language: "typescript",
+        path: "service",
+        input_groups: ["base"],
+        check_inputs: { test: ["tests"] },
+      },
+    ],
+  };
+  writeFileSync(automation, stringify(inputs));
+  const checks = readChecks(root);
+  expect(checks.find((check) => check.role === "setup")?.inputs?.paths).toEqual(["service"]);
+  expect(checks.find((check) => check.role === "test")?.inputs?.paths).toEqual(["LICENSE", "test fixtures"]);
+  const invalid = [
+    [{ ...inputs.input_groups, license: { depends_on: ["tests"] } }, /input group cycle/],
+    [{ ...inputs.input_groups, tests: { paths: ["../outside"] } }, /unsafe relative path/],
+    [{ ...inputs.input_groups, tests: { depends_on: ["missing"] } }, /unknown input group 'missing'/],
+  ] as const;
+  for (const [groups, message] of invalid) {
+    writeFileSync(automation, stringify({ ...inputs, input_groups: groups }));
+    expect(() => readChecks(root)).toThrow(message);
+  }
+});
+
+test.runIf(process.platform === "win32")("Windows uses whole-project inputs even with declared groups", () => {
+  const { root, config, save } = fixture();
+  config.check = [{ name: "Test", role: "test", input_groups: ["service"], command: [process.execPath, "step.cjs"] }];
+  save();
+  writeFileSync(
+    join(root, "workbench/automation.toml"),
+    stringify({ input_groups: { service: { paths: ["step.cjs"] } } }),
+  );
+  const plan = inspectChecks(root, { environment: "native", stage: "commit" });
+  expect(plan.inputScope.mode).toBe("whole-project");
+  expect(plan.cacheGroups).toBeUndefined();
+});
 
 function contractDetails(report: { runs: CheckRunResult[] }, role: string): CheckDetail[] {
   const run = required(report.runs[0], "Expected fixture run");
@@ -75,6 +125,54 @@ test("role unions preserve configured order and insert setup once; exclusions re
     expect(() => roles(selection)).toThrow();
   }
 });
+
+test("prepare selects working or staged inputs and leaves both source versions unchanged", () => {
+  const { root, config, save } = fixture();
+  const lock = join(root, "fixture.lock");
+  const output = join(root, "prepared-input");
+  config.check.push({
+    name: "Acquire fixture dependency",
+    role: "acquire",
+    path: ".",
+    stages: [],
+    command: [
+      process.execPath,
+      "-e",
+      "const fs = require('node:fs'); if (fs.readFileSync('dependency','utf8') !== 'ready') process.exit(9); " +
+        "fs.writeFileSync(process.argv[1], fs.readFileSync('fixture.lock')); fs.writeFileSync('fixture.lock', 'rewritten');",
+      output,
+    ],
+  });
+  save();
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout;
+  };
+  git("init", "-q");
+  writeFileSync(lock, "staged lock");
+  git("add", ".");
+  writeFileSync(lock, "working lock");
+  for (const [args, expected] of [
+    [[], "working lock"],
+    [["--staged"], "staged lock"],
+  ] as const) {
+    const result = spawnSync(
+      process.execPath,
+      [join(distribution, "bin/workbench.mjs"), "prepare", "--path", ".", ...args],
+      {
+        cwd: root,
+        env: { ...process.env, WORKBENCH_PROJECT_ROOT: root },
+        encoding: "utf8",
+      },
+    );
+    expect(result.status, result.stderr + result.stdout).toBe(0);
+    expect(readFileSync(output, "utf8")).toBe(expected);
+    expect(readFileSync(lock, "utf8")).toBe("working lock");
+    expect(git("show", ":fixture.lock")).toBe("staged lock");
+    expect(existsSync(join(root, "dependency"))).toBe(false);
+  }
+}, 30_000);
 
 test("CI-only target filters select compatible variants without restricting manual execution", () => {
   const { root, config, save } = fixture();

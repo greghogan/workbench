@@ -1,6 +1,6 @@
 import { maintainPlanning } from "./planning-retention.js";
 import { realpathSync } from "node:fs";
-import { gitAncestor, gitRevision } from "../../git/refs.js";
+import { gitRevision } from "../../git/refs.js";
 import { gitBytes, readGitTree, readGitObjects } from "../../git/git-snapshot.js";
 import { withRepositoryOperation } from "../../git/repository-state.js";
 import { StateConflict } from "../../runtime/input-errors.js";
@@ -26,12 +26,14 @@ import { readDraftGroups, prepareDraftGroups, draftGroupCommands } from "./plann
 import { rewrittenPlanEntries, updatePlanQueueReferences } from "./plan-updates.js";
 
 function committedTransfer(root: string, data: TransferData, tip: string): boolean {
-  if (data.sourceHead && !gitAncestor(root, data.sourceHead, tip))
+  if (data.sourceHead && !gitRevision(root, `${data.sourceHead}^{commit}`))
     throw new StateConflict(
-      "Implementation history changed; reconcile the plan handoff before retiring its saved version",
+      `${data.plans.map((plan) => plan.task).join(", ")}: the recorded implementation base is unavailable; preserve the saved plan for reconciliation`,
     );
   for (const plan of data.plans) {
+    // A rebased delivery need not descend from the original base. Its captured plan and files still have to match.
     const commits = gitBytes(root, [
+      "--literal-pathspecs",
       "log",
       "--full-history",
       "--reverse",
@@ -47,6 +49,8 @@ function committedTransfer(root: string, data: TransferData, tip: string): boole
       .filter(Boolean);
     const commit = commits[0];
     if (!commit) return false;
+    if (commits.length > 1)
+      throw new StateConflict(`${plan.task}: multiple implementation commits added the task; reconcile its handoff`);
     const files = readGitTree(root, commit),
       entry = files.get(plan.path),
       contents = entry ? readGitObjects(root, [entry.oid]).get(entry.oid) : undefined;
@@ -109,6 +113,7 @@ export function finishPlanTransfers(
   const tip = gitRevision(root, `${revision}^{commit}`);
   if (!tip) return [];
   const finished: string[] = [];
+  const blocked: string[] = [];
   for (const stored of readPlanOperations(root).filter(
     (entry) =>
       entry.operation.kind === "transfer" &&
@@ -116,7 +121,13 @@ export function finishPlanTransfers(
       entry.operation.checkout === realpathSync.native(root),
   )) {
     const data = decodeTransfer(root, stored);
-    if (!committedTransfer(root, data, tip)) continue;
+    try {
+      if (!committedTransfer(root, data, tip)) continue;
+    } catch (error) {
+      if (!(error instanceof StateConflict)) throw error;
+      blocked.push(error.message);
+      continue;
+    }
     const pending = planningOperation(root);
     if (pending && !pending.completed) recoverPlanningCheckpoint(root);
     updatePlanQueueReferences(root, new Map(data.plans.map((plan) => [plan.reference, plan.task])));
@@ -171,5 +182,6 @@ export function finishPlanTransfers(
     finished.push(...data.plans.map((plan) => plan.task));
   }
   maintainPlanning(root);
+  if (blocked.length) throw new StateConflict(blocked.join("\n"));
   return finished;
 }

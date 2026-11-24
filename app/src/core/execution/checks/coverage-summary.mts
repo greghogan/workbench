@@ -13,7 +13,7 @@ export interface SummaryOptions {
   notice?: string | undefined;
 }
 import { spawnSync } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { isRecord } from "../../runtime/values.mjs";
 
@@ -122,13 +122,19 @@ export function reportSummaryChange(current: Summary, root: string, output: stri
     throw new Error("invalid coverage baseline revision");
   const repository = options.repository ?? root;
   const path = relative(repository, output).split(sep).join("/");
-  const git = spawnSync("git", ["-C", coverageRepository(repository), "cat-file", "blob", `${revision}:${path}`], {
-    encoding: "utf8",
-    maxBuffer: 8 * 1024 * 1024,
-  });
+  const captured = process.env.WORKBENCH_CHECK_BASELINE;
+  let committed: string | undefined;
+  if (captured) committed = readFileSync(captured, "utf8");
+  else {
+    const git = spawnSync("git", ["-C", coverageRepository(repository), "cat-file", "blob", `${revision}:${path}`], {
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    if (!git.error && git.status === 0) committed = git.stdout;
+  }
   let baseline: Summary | undefined;
-  if (!git.error && git.status === 0) {
-    baseline = readCoverageSummary(JSON.parse(git.stdout));
+  if (committed) {
+    baseline = readCoverageSummary(JSON.parse(committed));
     const total = baseline.total;
     if (!total || coverageMetrics.some((metric) => current.total?.[metric] && !total[metric]))
       throw new Error("invalid committed coverage summary");

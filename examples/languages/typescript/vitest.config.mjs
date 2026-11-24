@@ -25,6 +25,7 @@ export default defineConfig({
     coverage: {
       enabled: false,
       provider: "v8",
+      clean: process.env.WORKBENCH_CHECK_SCOPED !== "1",
       include: ["src/**/*.ts"],
       reporter: ["text", "json-summary"],
       thresholds: { lines: 100, statements: 100, functions: 100, branches: 100 },

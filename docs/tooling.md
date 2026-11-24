@@ -516,7 +516,7 @@ selected build storage. Workbench removes its raw V8 dumps and merge inputs afte
 Prepared release artifacts are regenerable products, including after their publication elsewhere. External storage
 selection applies to them alongside other build products; `workbench cache` includes their size under builds.
 `make clean` and cache pruning remove them, while `make distclean` additionally removes project dependencies.
-Preparation is explicit through `make release` or `workbench release prepare`; full CI also runs configured release
+Preparation is explicit through `make release` or `workbench artifact build PROFILE --kind release`. Full CI runs configured release
 preparation and verification without publishing. Ordinary commit gates do not prepare releases.
 
 Cache inspection groups check logs and successful gate results with their owning checkout under `CHECKS`. Normal pruning
@@ -524,8 +524,8 @@ removes both along with build products; `--dependencies` additionally removes in
 active runs and preserves directories whose ownership cannot be established.
 
 `workbench paths` reports the selected root's `WORKBENCH_DIST_DIR`; pass `--toolchain NAME` when inspecting a named
-compiler/runtime profile. Named release profiles use the checkout root's generation and report their exact artifact
-paths through `workbench release prepare --json`. Recipes may use `WORKBENCH_RELEASE_OUTPUT` to select a specific
+compiler/runtime profile. `workbench artifact build PROFILE --kind release --json` reports the retained artifact and
+the generation that owns it. Recipes may use `WORKBENCH_RELEASE_OUTPUT` to select a specific
 staging directory; otherwise adapters use `WORKBENCH_DIST_DIR`, then fall back to project-local `dist/` when running
 independently. Changing storage preference leaves existing artifacts in their previous locations; regeneration and
 cleanup are explicit.

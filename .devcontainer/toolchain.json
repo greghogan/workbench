@@ -1,0 +1,20 @@
+{
+  "name": "Workbench native toolchain",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "options": [
+      "--target=toolchain",
+      "--network=host",
+      "--secret=id=github_token,env=GH_TOKEN",
+      "--no-cache-filter=base"
+    ]
+  },
+  "remoteUser": "ubuntu",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workbench,type=bind",
+  "workspaceFolder": "/workbench",
+  "containerEnv": {
+    "WORKBENCH_DEVCONTAINER": "1",
+    "WORKBENCH_CONTAINER_CHECKOUT": "${localWorkspaceFolder}"
+  }
+}

@@ -2,8 +2,9 @@
 summary: Adaptive plans, task accounts across commits, human decisions, relationships, and completion evidence.
 agent_instruction:
   Obtain human approval of a concrete plan before implementing a major feature or materially expanding its approved
-  scope. Record significant implementation decisions and their reasons, distinguishing agent choices from human
-  direction. Update the owning task records in every retained commit delivering task work.
+  scope. Use the local task queue to record when tracked work starts, pauses, and is verified. Record significant
+  implementation decisions and their reasons, distinguishing agent choices from human direction. Update the owning task
+  records in every retained commit delivering task work.
 ---
 
 # ADR-7: Tasks and feedback

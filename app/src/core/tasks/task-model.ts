@@ -22,6 +22,10 @@ export interface TaskRecord {
   digest: string;
   reviewDigest?: string;
   approval?: TaskApprovalView;
+  previouslyApproved?: true;
+  finalized?: true;
+  committedDelivery?: true;
+  verificationStale?: true;
   acceptanceNeedsReview?: true;
   planning?: { name: string; approved: boolean; problem?: string };
   planDigest: string;

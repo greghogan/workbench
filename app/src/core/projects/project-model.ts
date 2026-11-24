@@ -30,9 +30,12 @@ export interface CheckDefinition {
   project?: string;
   path?: string;
   command: string[];
+  input_groups?: string[];
   stages?: string[];
+  extended?: boolean;
   online?: boolean;
   requires_setup?: boolean;
+  requires_build?: string[];
   environment?: string;
   warn_seconds?: number;
   ci?: TargetDefinition;
@@ -43,6 +46,11 @@ export interface CheckDefinition {
     environments?: string[];
     ci?: TargetDefinition;
   };
+}
+export interface CheckInputGroup {
+  paths?: string[];
+  outputs?: string[];
+  depends_on?: string[];
 }
 export interface CheckOrderDefinition {
   root: string;
@@ -59,7 +67,7 @@ export type Config = Record<string, unknown> & {
   tool?: { repository: string; revision: string };
   bundle?: { compression?: "brotli" | "zlib" | "zstd" };
   markdown?: { wrap_width?: number };
-  review?: { changes?: boolean; tasks?: boolean; task_approvals?: boolean };
+  review?: { changes?: boolean; tasks?: boolean; task_approvals?: boolean; signed_commits?: boolean };
   checks?: {
     environment?: string;
     nix_docker_image?: string;
@@ -80,6 +88,12 @@ export type Config = Record<string, unknown> & {
   };
   compatibility?: { required?: boolean; data?: "ask" | "migrate" | "delete" };
   check?: CheckDefinition[];
-  check_suite?: { language: string; path: string }[];
+  check_suite?: {
+    language: string;
+    path: string;
+    input_groups?: string[];
+    check_inputs?: Record<string, string[]>;
+  }[];
+  input_groups?: Record<string, CheckInputGroup>;
   check_order?: CheckOrderDefinition[];
 };

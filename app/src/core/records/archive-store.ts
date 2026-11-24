@@ -13,6 +13,7 @@ import { readBoundedFile, hashFile } from "../runtime/file-reads.js";
 import { join, posix, relative, resolve } from "node:path";
 import { lstatSync } from "node:fs";
 import { gitBytes, readGitObjects, type GitEntry } from "../git/git-snapshot.js";
+import { convertedWorkingGitOid } from "../git/tree-publication.js";
 import { readProjectState } from "../projects/project-state.js";
 import { parse } from "smol-toml";
 import { projectPaths } from "../projects/project-paths.js";
@@ -173,7 +174,7 @@ export interface InventoryRecord {
   archive?: { revision: string; entry: GitEntry };
 }
 
-function verifyLiveCopy(path: string, entry: GitEntry, maximum: number): void {
+function verifyLiveCopy(root: string, path: string, entry: GitEntry, maximum: number): void {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return;
   const oid = hashFile(path, maximum, "record copy", {
@@ -181,7 +182,11 @@ function verifyLiveCopy(path: string, entry: GitEntry, maximum: number): void {
     prefix: (size) => `blob ${String(size)}\0`,
   });
   const mode = process.platform === "win32" ? entry.mode : stat.mode & 0o111 ? "100755" : "100644";
-  if (oid !== entry.oid || mode !== entry.mode)
+  if (
+    mode !== entry.mode ||
+    (oid !== entry.oid &&
+      convertedWorkingGitOid(root, relative(root, path).replaceAll("\\", "/"), entry.oid.length, maximum) !== entry.oid)
+  )
     throw new StateConflict(`Live and archived contents differ: ${path}. Restore or reconcile the record explicitly.`);
 }
 
@@ -190,7 +195,7 @@ export function readProjectRecordFile(root: string, path: string, maximum = 2 * 
     archive = projectArchive(root),
     entry = archive?.files.get(key);
   if (entry && archive) {
-    verifyLiveCopy(path, entry, maximum);
+    verifyLiveCopy(root, path, entry, maximum);
     const body = readArchiveFileAt(root, archive.revision, key, maximum);
     if (body) return body;
   }
@@ -222,10 +227,10 @@ export function recordInventory(
   for (const item of archived) {
     const existing = byNumber.get(item.number);
     if (existing) {
-      verifyLiveCopy(existing.path, item.entry, 2 * 1024 * 1024);
+      verifyLiveCopy(root, existing.path, item.entry, 2 * 1024 * 1024);
       for (const [path, entry] of archive.files)
         if (path.startsWith(item.path.slice(0, -3) + "/"))
-          verifyLiveCopy(join(root, path), entry, Number.MAX_SAFE_INTEGER);
+          verifyLiveCopy(root, join(root, path), entry, Number.MAX_SAFE_INTEGER);
     }
     result.push({
       number: item.number,

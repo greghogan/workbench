@@ -535,3 +535,30 @@ test("explicit task associations survive consumed receipts and branch rebases un
   expect(f.review(AgentReviewKind.Task, { base: "HEAD" }).tasks).not.toContain("demo:TSK-0");
   expect(upstream).not.toBe(f.git(["rev-parse", "HEAD"]));
 });
+
+test("reviewing one task on the outgoing tree does not attest to another task's work", () => {
+  const f = fixture();
+  const references = ["demo:TSK-0", "demo:TSK-1"];
+  for (const [index, reference] of references.entries()) {
+    writeFileSync(
+      join(f.root, `workbench/tasks/TSK-0${String(index)}.md`),
+      `---\nstatus: Planned\n---\n\n# TSK-${String(index)}: Task ${String(index)}\n\nReview this delivery.\n`,
+    );
+    changeTaskStatus(f.root, reference, "Approved", undefined, true);
+  }
+  f.git(["add", "workbench"]);
+  f.review(AgentReviewKind.Changes, { tasks: references });
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "implement two tasks"]);
+  finishAgentCommit(f.root);
+
+  const first = f.review(AgentReviewKind.Task, { base: f.base, tasks: ["demo:TSK-0"] });
+  expect(first.tasks).toEqual(["demo:TSK-0"]);
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/Accumulated work review is required for demo:TSK-1/);
+
+  f.review(AgentReviewKind.Task, { base: f.base, tasks: ["demo:TSK-1"] });
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/human acceptance/i);
+});

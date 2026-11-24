@@ -1,11 +1,15 @@
-import { readWorkflow, executionJob } from "../../../fixtures/workflow.mjs";
+import { readWorkflow, executionJob, reusableJob } from "../../../fixtures/workflow.mjs";
 import { required } from "../../../../src/core/runtime/invariants.ts";
 import { expect, test } from "vitest";
 
-test("development publication natively qualifies all required images without a dependency on Checks", () => {
-  const workflow = readWorkflow(new URL("../../../../../.github/workflows/publication.yml", import.meta.url));
-  expect(Object.keys(workflow.on).sort()).toEqual(["push", "workflow_dispatch"]);
-  expect(required(executionJob(workflow, "publish").strategy, "Publication matrix").matrix.include).toEqual([
+test("artifact publication natively qualifies all required images before obtaining registry write credentials", () => {
+  const dispatcher = readWorkflow(new URL("../../../../../.github/workflows/publication.yml", import.meta.url));
+  const image = reusableJob(dispatcher, "image");
+  expect(Object.keys(dispatcher.on).sort()).toEqual(["push", "workflow_dispatch"]);
+  expect(dispatcher.on.workflow_dispatch).toMatchObject({ inputs: { kind: { default: "toolchain" } } });
+  expect(image.uses).toBe("./.github/workflows/publish-image.yml");
+  expect(image.with?.kind).toBe("${{ inputs.kind || 'toolchain' }}");
+  expect(required(image.strategy, "Publication matrix").matrix.include).toEqual([
     { builder: "native", architecture: "x64" },
     { builder: "nix", architecture: "x64" },
     { builder: "guix", architecture: "x64" },
@@ -13,21 +17,30 @@ test("development publication natively qualifies all required images without a d
     { builder: "nix", architecture: "arm64" },
     { builder: "guix", architecture: "arm64" },
   ]);
-  const steps = executionJob(workflow, "publish").steps;
+  const workflow = readWorkflow(new URL("../../../../../.github/workflows/publish-image.yml", import.meta.url));
+  const prepare = executionJob(workflow, "prepare");
+  const delivery = executionJob(workflow, "publish");
   expect(workflow.permissions.packages).toBeUndefined();
-  expect(required(executionJob(workflow, "publish").permissions, "Publication permissions").packages).toBe("write");
-  const commands = steps.flatMap((step) => (step.run ? [step.run] : []));
-  expect(commands.find((command) => command.includes("bin/workbench.mjs"))).toBe(
-    "node bin/workbench.mjs project add .",
-  );
-  expect(commands.some((command) => command.includes("actions/runs"))).toBe(false);
-  expect(commands.some((command) => command.includes("release prepare"))).toBe(false);
-  const prepare = commands.findIndex((command) => command.includes("development prepare"));
-  const verify = commands.findIndex((command) => command.includes("development verify"));
-  const publish = commands.findIndex((command) => command.includes("development publish"));
-  expect(prepare).toBeGreaterThanOrEqual(0);
-  expect(verify).toBeGreaterThanOrEqual(prepare);
-  expect(publish).toBeGreaterThan(verify);
+  expect(prepare.permissions?.packages).toBeUndefined();
+  expect(delivery.permissions?.packages).toBe("write");
+  const build = prepare.steps.findIndex((step) => step.run?.includes('artifact build "$BUILDER"'));
+  const transfer = prepare.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
+  const receive = delivery.steps.find((step) => step.uses?.startsWith("actions/download-artifact@"));
+  expect(build).toBeGreaterThanOrEqual(0);
+  expect(prepare.steps[build]?.run).toContain('--export "$transfer"');
+  expect(transfer?.with?.name).toBeDefined();
+  expect(receive?.with?.name).toBe(transfer?.with?.name);
+  expect(
+    prepare.steps.some((step) => step.env?.REGISTRY_TOKEN !== undefined || step.run?.includes("docker login")),
+  ).toBe(false);
+
+  const qualify = delivery.steps.findIndex((step) => step.run?.includes('artifact import "$BUILDER"'));
+  const publish = delivery.steps.findIndex((step) => step.run?.includes('artifact publish "$BUILDER"'));
+  expect(qualify).toBeGreaterThan(delivery.steps.indexOf(required(receive, "Image download")));
+  expect(delivery.steps[qualify]?.run).toContain('--sha256 "$digest"');
+  expect(publish).toBeGreaterThan(qualify);
+  expect(delivery.steps[publish]?.run).toContain("docker login");
+  expect(delivery.steps.filter((step) => step.env?.REGISTRY_TOKEN)).toEqual([delivery.steps[publish]]);
 });
 
 test("check jobs retain read-only registry access and cannot acquire publication permissions", () => {

@@ -178,11 +178,10 @@ export class ReviewInventory {
     let standalone = 0;
     for (const unit of allCommitReviews(this.root)) {
       if (!unit.pending) continue;
-      const owner = reviewTaskOwner(reviewTaskPaths(this.root, unit.revision, unit.parents[0]), tasks.byPath);
-      if (!owner)
+      const owner = reviewTaskOwner(reviewTaskPaths(this.root, unit.revision, unit.parents), tasks.byPath);
+      if (!owner || !tasks.outcomes.has(owner.reference))
         standalone += reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path));
-      else if (owner.metadata.status === "Accepted") tasks.outcomes.add(owner.reference);
     }
-    return { count: pending.size + standalone + tasks.outcomes.size + Number(compatibility), inputs };
+    return { count: pending.size + standalone + tasks.approvals + tasks.outcomes.size + Number(compatibility), inputs };
   }
 }

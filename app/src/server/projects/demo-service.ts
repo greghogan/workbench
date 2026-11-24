@@ -9,9 +9,16 @@ import { runOwnedChild } from "../../core/runtime/owned-child.mjs";
 import { createDemonstration } from "../demo/demonstration.js";
 import { settleCleanup } from "../../core/diagnostics/diagnostics.mjs";
 import { startWebServer } from "../http/server.js";
+import { randomBytes } from "node:crypto";
+import { authorizationCheck } from "../http/browser-auth.js";
+
+const demonstrationToken = "WORKBENCH_DEMONSTRATION_TOKEN";
 
 /** The demonstration changes only its child environment; the hub retains its personal context. */
 export async function serveDemonstration(distribution: string, directory: string): Promise<void> {
+  const token = process.env[demonstrationToken];
+  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new Error("Missing demonstration listener credential");
+  Reflect.deleteProperty(process.env, demonstrationToken);
   const demo = await createDemonstration(distribution, directory);
   let application: Awaited<ReturnType<typeof startWebServer>> | undefined;
   let stop: () => void = () => undefined;
@@ -24,6 +31,7 @@ export async function serveDemonstration(distribution: string, directory: string
         ? { workerBundle: process.env.WORKBENCH_DEMONSTRATION_BUNDLE }
         : {}),
       collectionDefaults: demo.collectionDefaults,
+      authorizeListener: authorizationCheck(`Bearer ${token}`),
     });
     const stopped = new Promise<void>((resolve) => {
       stop = resolve;
@@ -104,6 +112,8 @@ async function launchDemonstration(distribution: string, directory: string, sign
   signal?.throwIfAborted();
   const controller = new AbortController();
   const env = { ...process.env };
+  const token = randomBytes(32).toString("base64url");
+  env[demonstrationToken] = token;
   for (const kind of ["CONFIG", "DATA", "CACHE", "STATE"])
     env[`WORKBENCH_${kind}_HOME`] = join(directory, kind.toLowerCase());
   env.WORKBENCH_PROJECT_ROOT = directory;
@@ -217,16 +227,20 @@ async function launchDemonstration(distribution: string, directory: string, sign
   };
   try {
     const info = await published;
+    const endpoint = new URL(info.url);
     const handle = (request: IncomingMessage, response: ServerResponse): Promise<void> =>
       new Promise((resolve, reject) => {
-        const target = new URL(request.url ?? "/", info.url),
-          headers = { ...request.headers, host: target.host };
-        if (headers.origin) headers.origin = target.origin;
-        const outgoing = httpRequest(target, { method: request.method, headers }, (incoming) => {
-          response.writeHead(incoming.statusCode ?? 502, incoming.headers);
-          incoming.pipe(response);
-          incoming.once("end", resolve).once("error", reject);
-        });
+        const headers = { ...request.headers, host: endpoint.host, authorization: `Bearer ${token}` };
+        if (headers.origin) headers.origin = endpoint.origin;
+        const outgoing = httpRequest(
+          endpoint,
+          { path: request.url ?? "/", method: request.method, headers },
+          (incoming) => {
+            response.writeHead(incoming.statusCode ?? 502, incoming.headers);
+            incoming.pipe(response);
+            incoming.once("end", resolve).once("error", reject);
+          },
+        );
         outgoing.once("error", (cause) => {
           reject(new WebError(503, "Demonstration connection interrupted; refresh to reconnect", { cause }));
         });

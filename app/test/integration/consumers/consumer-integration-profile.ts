@@ -140,6 +140,25 @@ export async function exerciseConsumerProfile(
             application,
             ...(language === "rust" ? ["--exclude-tool", "miri"] : []),
           ]);
+          if (language === "go") {
+            await cli("go-native-build", project, [
+              "shell",
+              "--path",
+              application,
+              "--environment",
+              "native",
+              "--",
+              "sh",
+              "-ec",
+              [
+                "go_executable=$(command -v go)",
+                'export PATH="${go_executable%/*}" CGO_ENABLED=0 GOPROXY=off GOTOOLCHAIN=local GOWORK=off',
+                "if command -v workbench >/dev/null 2>&1; then exit 1; fi",
+                "go build -mod=readonly -o ./build/native-count.exe ./cmd/count",
+                'test "$(./build/native-count.exe a banana)" = 3',
+              ].join("\n"),
+            ]);
+          }
           // Ruby's language-server transport must accept the Unicode project path even on a C-locale host.
           await check(
             `${language}-gate`,
@@ -207,7 +226,7 @@ export async function exerciseConsumerProfile(
             "MAVEN_ARGS",
           ];
           writeFileSync(configPath, editToml(configText, config));
-          await check(`${language}-offline`, project, ["--role", "test"], false, offline);
+          await check(`${language}-offline`, project, ["--role", "test"], process.platform === "win32", offline);
         });
         if (language === "java") {
           await scenarios.run(

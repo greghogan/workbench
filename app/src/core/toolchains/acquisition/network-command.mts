@@ -11,7 +11,11 @@ export function classifyAcquisitionOutput(text: string): AcquisitionReason {
     /HTTP(?:\/[\d.]+)?[ :]+(?:401|403)\b|denied:|unauthorized|authentication required|authentication failed/i.test(text)
   )
     return AcquisitionReason.Authentication;
-  if (/manifest unknown|no such manifest|manifest_unknown|HTTP(?:\/[\d.]+)?[ :]+404\b/i.test(text))
+  if (
+    /manifest unknown|no such manifest|manifest_unknown|HTTP(?:\/[\d.]+)?[ :]+404\b|^ERROR: [\w.:-]+\/[\w./-]+:[\w.-]+: not found\r?$/im.test(
+      text,
+    )
+  )
     return AcquisitionReason.Missing;
   if (/checksum mismatch|signature verification failed|hash sum mismatch/i.test(text))
     return AcquisitionReason.Integrity;

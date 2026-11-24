@@ -9,6 +9,7 @@ import { ProjectHierarchy, projectName } from "../../../src/core/projects/projec
 import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
 import { provider, distribution } from "../../fixtures/adoption.mjs";
 import { previewCollection, applyCollection } from "../../../src/server/projects/collection-service.ts";
+import { changeTaskQueue } from "../../../src/core/tasks/task-queue.ts";
 const fixtures = webServers();
 function formValues(form: HTMLFormElement): Record<string, string> {
   return Object.fromEntries(
@@ -138,11 +139,8 @@ test("workflow source changes retain the view and include only the selected scop
   expect(await response.json()).toMatchObject({ redirect: "/work?scope=graphmp" });
   const work = await read("/work?scope=graphmp");
   expect(work.querySelectorAll(".task-queue > li")).toHaveLength(1);
-  const remove = work.querySelector<HTMLInputElement>('form input[name="operation"][value="remove"]')?.form;
-  if (!remove) throw new Error("Missing queue removal action");
-  const removed = await postWebForm(web, remove.getAttribute("action") ?? "", formValues(remove));
-  expect(removed.status).toBe(200);
-  expect(await removed.json()).toMatchObject({ redirect: "/work?scope=graphmp" });
+  expect(work.querySelector('.task-queue > li[data-task-node="solver:TSK-0"]')).not.toBeNull();
+  changeTaskQueue(root, { action: "remove", reference: "solver:TSK-0" });
   expect((await read("/work?scope=solver")).querySelectorAll(".task-queue > li")).toHaveLength(0);
   expect((await read("/work?scope=graphmp")).querySelectorAll(".task-queue > li")).toHaveLength(0);
 });
@@ -192,10 +190,18 @@ test("header search spans project scopes and searches collections separately", a
   const request = { source: source.directory, commit: source.commit, collection: ".", visibility: "public" as const };
   applyCollection(root, request, previewCollection(root, request).digest);
   const web = await fixtures.start(root);
-  const overview = parseDOM((await readWebPage(web, "/")).html, { url: web.url }).window.document;
-  expect(overview.querySelector('form[role="search"] input[name="all"]')?.getAttribute("value")).toBe("1");
-  expect(overview.querySelector<HTMLSelectElement>('form[role="search"] select[name="type"]')?.value).toBe("");
-  expect(overview.querySelector('form[role="search"] option:checked')?.textContent).toBe("All types");
+  const charters = parseDOM((await readWebPage(web, "/")).html, { url: web.url }).window.document;
+  expect(charters.querySelector('form[role="search"] input[name="all"]')?.getAttribute("value")).toBe("1");
+  expect(charters.querySelector<HTMLSelectElement>('form[role="search"] select[name="type"]')?.value).toBe("");
+  expect(charters.querySelector('form[role="search"] option:checked')?.textContent).toBe("All types");
+  const collectionLanding = charters.querySelector('[data-source-navigation] a[href="/?collection=company"]');
+  expect(collectionLanding?.textContent).toBe("company");
+  const companyCharters = parseDOM((await readWebPage(web, "/?collection=company")).html).window.document;
+  expect(
+    [...companyCharters.querySelectorAll("main [data-record-id]")].map((record) =>
+      record.getAttribute("data-record-id"),
+    ),
+  ).toEqual(["company:CHARTER"]);
   const results = parseDOM((await readWebPage(web, "/records?all=1&q=decision")).html, { url: web.url }).window
     .document;
   expect(results.querySelector("h1")?.textContent).toBe("Search results");

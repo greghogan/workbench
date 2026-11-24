@@ -1,5 +1,18 @@
 # Python reference project
 
+## Native build and run
+
+Install uv and use the Python version in `.python-version`. uv reads the committed lockfile before running the
+example.
+
+```sh
+uv run --locked --no-dev python -c 'from workbench_python_reference.arithmetic import count_byte; print(count_byte(b"banana", 97))'
+```
+
+The result is `3`.
+
+## Workbench workflow
+
 This standalone project is Workbench's executable reference for Python configuration. It is not a registered Workbench
 scope and has no example charter.
 

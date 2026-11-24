@@ -46,10 +46,9 @@ function fields(contents: string): {
 export function prepareDocumentComparison(
   difference: SourceDifference,
   pageTitle?: string,
-  parser?: MarkdownParser,
-  budget?: ComparisonBudget,
+  options: { parser?: MarkdownParser; previousParser?: MarkdownParser; budget?: ComparisonBudget } = {},
 ) {
-  const work = new ComparisonWork(budget);
+  const work = new ComparisonWork(options.budget);
   const old = fields(difference.before),
     next = fields(difference.after);
   const changes = (work.available()
@@ -62,7 +61,7 @@ export function prepareDocumentComparison(
   return {
     old,
     next,
-    compared: compareDocuments(old.body, next.body, pageTitle, { work, ...(parser ? { parser } : {}) }),
+    compared: compareDocuments(old.body, next.body, pageTitle, { ...options, work }),
     sameMetadata: isDeepStrictEqual(old.values, next.values),
     rows: keys.map((key) => {
       const before = old.values[key],

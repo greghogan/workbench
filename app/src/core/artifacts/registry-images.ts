@@ -15,6 +15,7 @@ import { existsSync } from "node:fs";
 import { readConfig } from "../projects/project-configuration.js";
 import { imageReference } from "./container-references.js";
 import {
+  imageDigest,
   imageHash as hash,
   imageProfileLock,
   imageProfileMaintenanceLock,
@@ -50,6 +51,28 @@ export async function registryImageStatus(
       ? { state: RegistryAvailability.Missing }
       : { state: RegistryAvailability.Unavailable, detail };
   }
+}
+
+/** Resolve the tag at the registry, independent of any local tags or repository digests. */
+export async function registryImageDigest(reference: string, signal?: AbortSignal): Promise<string | undefined> {
+  if (!imageReference(reference)) throw new Error("Invalid registry image reference");
+  const owner = ciProcessOwner();
+  let result: string;
+  try {
+    result = await acquireCommand(
+      "Resolve registry image digest",
+      "docker",
+      ["buildx", "imagetools", "inspect", "--format", "{{json .Manifest.Digest}}", reference],
+      { capture: true, ...(signal ? { signal } : {}), ...(owner ? { owner } : {}) },
+    );
+  } catch (error) {
+    if (acquisitionReason(error) === AcquisitionReason.Missing) return undefined;
+    throw error;
+  }
+  const digest: unknown = JSON.parse(result);
+  if (typeof digest !== "string" || !imageDigest.test(digest))
+    throw new Error(`Registry returned an invalid manifest digest for ${reference}`);
+  return `${reference.slice(0, reference.lastIndexOf(":"))}@${digest}`;
 }
 
 function managementFor(root: string, repository: string): RegistryManagement {

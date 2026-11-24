@@ -9,6 +9,7 @@ export interface TaskDecision {
   outcome?: string;
   snapshot?: string;
   source?: "developer-requested-review";
+  comparisonOnly?: true;
 }
 export interface TaskDecisionState {
   reference: string;
@@ -26,7 +27,18 @@ function decodeTaskDecisions(input: unknown): TaskDecision[] {
   const decisions = records(input, "Invalid task decisions").map((value): TaskDecision => {
     if (
       Object.keys(value).some(
-        (key) => !["reference", "status", "digest", "updated", "tree", "outcome", "snapshot", "source"].includes(key),
+        (key) =>
+          ![
+            "reference",
+            "status",
+            "digest",
+            "updated",
+            "tree",
+            "outcome",
+            "snapshot",
+            "source",
+            "comparisonOnly",
+          ].includes(key),
       )
     )
       throw new InvalidInput("Unknown human task decision field");
@@ -48,6 +60,8 @@ function decodeTaskDecisions(input: unknown): TaskDecision[] {
     const source = value.source;
     if (source !== undefined && (source !== "developer-requested-review" || status !== "Approved" || !snapshot))
       throw new InvalidInput("Invalid project review authorization");
+    if (value.comparisonOnly !== undefined && (value.comparisonOnly !== true || status !== "Approved" || !snapshot))
+      throw new InvalidInput("Invalid historical task approval");
     return {
       reference,
       status,
@@ -57,6 +71,7 @@ function decodeTaskDecisions(input: unknown): TaskDecision[] {
       ...(outcome ? { outcome } : {}),
       ...(snapshot ? { snapshot } : {}),
       ...(source ? { source } : {}),
+      ...(value.comparisonOnly === true ? { comparisonOnly: true } : {}),
     };
   });
   if (decisions.length > 20000 || new Set(decisions.map(decisionIdentity)).size !== decisions.length)

@@ -1,5 +1,18 @@
 # Go reference
 
+## Native build and run
+
+With the Go version from `.go-version` on `PATH`, run:
+
+```sh
+go build -mod=readonly ./...
+go run -mod=readonly ./cmd/count a banana
+```
+
+The result is `3`.
+
+## Workbench workflow
+
 The Go reference uses gofmt, go vet, all Staticcheck checks, uncached tests, coverage, and the race detector on all
 supported native targets: Linux x64/ARM64, Windows x64, and macOS ARM64. `.go-version` owns the native toolchain;
 `go.mod` declares the minimum and locks tool/module requirements with `go.sum`. Automatic toolchain substitution is

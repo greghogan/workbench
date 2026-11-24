@@ -226,9 +226,9 @@ parents in another phase; the selected execution queue retains its explicit run 
 `--project <id>` for a scope, and `--json` for structured output. `workbench task show <reference>` reads the full
 record; `task show <reference> --diff` compares it with the retained approved plan. Human decisions use
 `workbench task approve`, `accept`, `replan`, or `cancel` followed by the task reference. `--expected <sha256>` binds a
-decision to the digest returned by `task show --json`. Cancellation requires `--reason "Why work stopped"`.
-Pass several scoped references to `task approve` or `task accept` for one terminal confirmation. When supplying
-digests, repeat `--expected` in reference order. `task approve` also accepts scoped named plans.
+decision to the digest returned by `task show --json`. Supply an optional `--reason "Why work stopped"` when canceling.
+Pass several scoped references to `task approve` or `task accept` for one terminal confirmation. When supplying digests,
+repeat `--expected` in reference order. `task approve` also accepts scoped named plans.
 
 Future plans can remain outside implementation history. `workbench task plan configure --branch workbench/plans` enables
 an independent planning branch; the branch name is configurable and storage is disabled by default. An optional
@@ -260,14 +260,14 @@ saves exact bytes to a new file and refuses to replace an existing file. Later c
 `task plan rename service background-service --expected <digest>` updates saved relationships and queue references
 together. Related edits checkpoint together; unrelated drafts remain uncommitted.
 
-Plans puts started tasks needing revised approval first, then orders each group by Added date, oldest first. Approval
-appends work to the local queue. A started task awaiting revised approval stays visible in Work with its ID, position,
-and progress. `workbench queue --ready` lists eligible started tasks before unstarted work. Starting requires approval and satisfied
-prerequisites. `queue start plan/service` assigns a numeric task ID and copies the plan, its supporting files, and
-approval into implementation. Starting a child also preserves its ancestor context without approving that context or
-starting siblings. The numeric task becomes authoritative. After its first implementation commit is verified, Workbench
-retires the saved plan and updates remaining references. `task plan recover` resumes interrupted transfers, renames, and
-checkpoints while preserving intervening edits.
+Plans orders the backlog by Added date, oldest first. Approval appends work to the local queue. A task awaiting revised
+approval moves to Reviews and retains its queue position and completed work. `workbench queue --ready` lists eligible
+started tasks before unstarted work. Starting requires approval and satisfied prerequisites. `queue start plan/service`
+assigns a numeric task ID and copies the plan, its supporting files, and approval into implementation. Starting a child
+also preserves its ancestor context without approving that context or starting siblings. The numeric task becomes
+authoritative. After its first implementation commit is verified, Workbench retires the saved plan and updates remaining
+references. `task plan recover` resumes interrupted transfers, renames, and checkpoints while preserving intervening
+edits.
 
 Create future plans and checkpoint drafts through the CLI. The browser supports editing, approval, cancellation, and
 deletion of existing plans. Approval checkpoints the approved version when planning storage is enabled.
@@ -285,9 +285,10 @@ its output identifies a recovery reference.
 `task revert REFERENCE --reason TEXT` instead prepares an inverse change, retaining the task account and later unrelated
 work. Applying it stages files without committing and returns the outcome to verification: review and commit normally,
 then obtain human acceptance of the revised result. Mixed task commits must be separated first. Both operations retain
-recovery references; `task recover` resumes an interrupted application. The browser offers the same previews and
-explicit confirmations. Cancellation preserves existing work; accepted work must be reopened or explicitly reverted.
-Active queued work must be released or blocked before cancellation.
+recovery references; `task recover` resumes an interrupted application. To cancel a task with committed work, open its
+task actions in the browser and choose whether to remove the commits locally or add an inverse commit. The preview
+shows the affected files and any known publication. Release or block active work before cancellation. Reopen or revert
+accepted work from its task page.
 
 Use `workbench commit history --branches` to list local branches, or `commit history BRANCH` to read its retained
 first-parent history. `--from REVISION` continues an older page; `--diff` and optional `--file PATH` show one commit's
@@ -313,10 +314,15 @@ Use `queue start <reference>` to claim work; `queue implemented <reference> --ev
 verified result pending acceptance. `queue block <reference> "Reason"` suspends work; `queue release <reference>`
 returns it to queued and discards its local evidence. `queue remove <reference>` removes inactive work from the
 selection. Agents maintain this execution progress through the CLI. The browser shows progress and blockers and provides
-human approval, ordering, and acceptance; it does not dispatch agents or change their execution progress. Shared-state
-changes retain a bounded recovery record while publishing record files, regenerated maps, queue progress, and human
-decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer human decisions stop
-recovery with a diagnostic rather than overwriting them.
+human approval, ordering, and acceptance; it does not dispatch agents or change their execution progress.
+
+When a change needs revised plan approval, pause implementation and run `workbench task replan <reference>`. This
+sends the task to Reviews, releases its active claim, and keeps its queue position. Approval makes the task eligible
+to resume once its other prerequisites are satisfied. Use `queue block` for an independent obstacle.
+
+Shared-state changes retain a bounded recovery record while publishing record files, regenerated maps, queue progress,
+and human decisions. A later task mutation recovers interrupted publication; conflicting user edits or newer human
+decisions stop recovery with a diagnostic rather than overwriting them.
 
 The queue persists under the native Workbench state directory, is never committed, and survives cache cleanup. These
 commands coordinate work; they do not launch agents or commit, squash, or push changes. Publication restrictions are
@@ -613,17 +619,17 @@ amended commit. `--task REFERENCE` explicitly associates work; changed approved 
 also provide associations. Receipts are local, uncommitted Git metadata and contain no executable instructions.
 
 Before publication, use `workbench review task --base REVISION` with the same recording options to assess the
-accumulated outgoing work against the destination's current tip. After fetching and rebasing, collaborators' commits
-form the baseline; their local receipts are not required. The commit hook checks local change review, and the push hook
-checks the accumulated outgoing review. File content, mode, path, and baseline changes invalidate the applicable review.
+accumulated outgoing work against the destination's current tip. Use `--task REFERENCE` to review a specific task
+against the start of its delivery. Review all associated tasks before publication. After fetching and rebasing,
+collaborators' commits form the baseline. The commit hook checks local change review, and the push hook checks the
+accumulated outgoing review. File content, mode, path, and baseline changes invalidate the applicable review.
 
-Each worktree retains only its latest change review and accumulated review. New reviews replace superseded receipts; the
-post-commit hook releases change evidence after a successful commit. Explicit task associations remain attached to
-pending branch work, including after a rebase; consuming a receipt cannot remove an acceptance requirement. The hook
-uses the committed Workbench distribution or the installed command, independently of unstaged launcher changes and
-project registration. Failed pushes can reuse matching accumulated evidence. A later push that observes the reviewed
-snapshot at the destination retires that receipt; otherwise a newer accumulated review replaces it. Observing published
-branch work also retires its pending associations. Human file acknowledgments and task decisions are stored separately.
+Retained provisional commits keep their matching change receipts. Task reviews retain evidence for their selected
+tasks and Git snapshots. Explicit task associations remain attached to pending branch work across rebases. The hook uses
+the committed Workbench distribution or installed command, so unstaged launcher changes and project registration leave
+review enforcement intact. Failed pushes can reuse matching evidence. A later push retires receipts and pending
+associations when it observes the covered work at the destination. Human acknowledgments and task decisions are stored
+separately.
 
 With human task decisions enabled, task approval and acceptance require confirmation through the interactive task CLI or
 task page. Local implementation commits may precede acceptance. Task acceptance covers the exact record and supporting
@@ -698,21 +704,53 @@ recovery. Successful integration does not replace semantic review, configured ch
 ### Review retained commits
 
 `workbench commit reviews` lists provisional review units in parent order. Review a unit with
-`workbench review --commit REVISION`, or open it from the browser review queue. Each unit compares immutable contents
-against its own parent. Current files are a separate unit. A later review does not approve an earlier intermediate
-version; amendments that change a reviewed version require another acknowledgment.
+`workbench review --commit REVISION`, or open it from the browser review queue. A merge shows a comparison against
+each parent in order, including files that match the first parent but differ from another. Current files are a
+separate unit. Each acknowledgment applies to its displayed versions, so an amendment that changes those versions
+requires another review. During a merge, `workbench review` presents the staged result against each parent.
 
 Agents inspect a retained unit with `workbench review changes --commit REVISION`. After reviewing it and verifying its
 source snapshot, record its printed digest with `--record --expected DIGEST --summary TEXT --verification TEXT`. Rebased
-units reuse document acknowledgments when both sides of the comparison remain the same. Changed project trees require
-renewed agent review and verification.
+units reuse document acknowledgments when both sides of the comparison remain the same. For merges, keeping the
+result tree and all parent trees in order preserves the acknowledgment even if the commit IDs change. Changed project
+trees require renewed agent review and verification.
 
-`workbench commit finalize` previews pending decisions and a finalization digest. After arranging commit boundaries and
-completing human review, task acceptance, and agent reviews, use `workbench commit finalize --apply --expected DIGEST`.
-It preserves source trees and author metadata, removes provisional markers in parent order, and leaves unrelated index
-and working changes intact. Original and prepared histories remain behind the reported recovery references.
-`workbench commit finalize --recover` resumes an interrupted activation. Published checkpoints and active Git operations
-block finalization; no command here pushes a branch.
+`workbench commit finalize` previews which commits are ready and reports why others are waiting. Use
+`workbench commit finalize --apply --expected DIGEST` to finalize the ready history. Only complete accepted task
+deliveries qualify. An independent reviewed side of a merge can qualify while another side waits. Finalization keeps
+waiting commits provisional, preserves source trees, authorship, and checkout files, and updates affected local branches
+and tags together. Original and prepared histories remain available through local recovery references. Published
+checkpoints and active Git operations block finalization. When a tag would move, Workbench checks the configured remotes
+for that tag before applying.
+
+Task acceptance and document review schedule finalization in the background. When an outcome is accepted in the working
+files, finalization waits for that version to enter Git history. An active Git operation, active task, or signed work
+attributed to another author can also delay the rewrite. The server retries after observing the Git operation end.
+Workbench also checks after a commit or another handoff on the branch. `workbench commit finalize` reports any
+remaining wait.
+
+Background finalization creates unsigned replacements for locally authored history. Manual finalization can retain
+signatures when the original keys are available. Signed originals remain in recovery references. Run `workbench sign`
+before publishing if the project requires signed commits.
+
+### Commit signing
+
+`workbench commit` uses Git's configured signer when running in a terminal with `commit.gpgSign` enabled. If signing is
+unavailable, the reviewed local commit remains unsigned. Background finalization can finish unsigned work without
+opening a signing prompt.
+
+Run `workbench sign` to sign your unsigned unpublished commits reachable from the current branch, including merge
+parents. The recorded author name and email must match your Git configuration. Supply a local branch or tag to sign
+another history. Git opens any signing prompt in the terminal. Workbench checks locally known publication history and
+explains how to fetch when it cannot establish that an affected tag is unpublished. It verifies the replacements before
+moving affected local branches and tags together. Signing and finalization retain both Git dates. By default,
+`workbench commit --amend` also retains them. Git's configured signer sets any separate signature creation time.
+Use `workbench commit recovery` to inspect retained originals.
+
+To require trusted signatures on outgoing commits, set `signed_commits = true` under `[review]` in `workbench/config.toml`
+and use the Workbench pre-push hook. The policy defaults to `false`. The hook uses the destination and ref update supplied
+by `git push` and reports missing signatures separately from invalid or untrusted ones. Sign the unsigned history or
+resolve Git's trust settings, then retry `git push`.
 
 Fold accepted task-state changes into their owning delivery before finalizing, rather than adding approval-only commits.
 For an earlier retained snapshot, agents may use `review task --commit REVISION --base START` after checking that
@@ -721,7 +759,22 @@ the versions on both sides of the comparison still match. The original local rec
 
 ### Git recovery references
 
-`workbench commit recovery` lists retained backups from integration, finalization, and deletion. Inspect a reference
-with Git before releasing it. `workbench commit recovery --delete REFERENCE --expected OBJECT --yes` removes that exact
-reference without changing project branches. Cleanup refuses unfinished repository operations and changed references.
-Removing the last reference can make its contents eligible for Git garbage collection; cleanup is explicit.
+The next `workbench sign`, `workbench commit`, or `workbench commit finalize` resumes interrupted signing or
+finalization. A scheduled finalization can also resume the rewrite. Workbench uses the original checkout and keeps
+prepared signatures. If a branch or tag now points somewhere unexpected or was deleted, Workbench names it and preserves
+the retained histories. `git push` checks its original outgoing revisions.
+
+`workbench commit recovery` lists retained backups from integration, signing, finalization, and deletion. Inspect a
+reference with Git before releasing it. `workbench commit recovery --delete REFERENCE --expected OBJECT --yes` removes
+that exact reference without changing project branches. Cleanup refuses unfinished repository operations and changed
+references. Recovery references have no expiry. After removal, Git can collect objects once its ordinary retention rules
+allow it.
+
+### Git reference storage
+
+Both Git ref formats support linked worktrees. Reftable updates shared branch and tag refs atomically and can prevent
+the kind of partial update Workbench reports for the files format. To migrate, check `git rev-parse --show-ref-format`
+and confirm that Git and any other tools using the repository support reftable. Back up the repository, stop Workbench
+and other Git writers, and remove linked worktrees after preserving their work. Use
+`git refs migrate --ref-format=reftable --dry-run` to inspect the conversion, then run it without `--dry-run` and check
+`git refs verify` before recreating the worktrees. See the [Git refs manual](https://git-scm.com/docs/git-refs).

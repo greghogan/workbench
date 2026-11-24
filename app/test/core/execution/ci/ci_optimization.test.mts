@@ -11,6 +11,7 @@ import { ciMatrix } from "../../../../src/core/execution/ci/ci.ts";
 import { ciCacheFixtures } from "../../../fixtures/ci-cache.mts";
 
 const repository = resolve(import.meta.dirname, "../../../../..");
+const releaseArchive = process.platform === "linux" ? "tar.gz" : "zip";
 
 const fixture = ciCacheFixtures();
 
@@ -20,7 +21,7 @@ test("shared CI setup preserves every configured root and target", () => {
   for (const [section, fields] of [
     ["native", ["os", "architecture", "runner", "node"]],
     ["compatibility", ["runtime", "version", "architecture", "runner", "node"]],
-    ["environments", ["environment", "node"]],
+    ["environments", ["environment", "architecture", "runner", "node"]],
   ] as const) {
     const key = (entry: object, path: string) =>
       JSON.stringify([
@@ -44,7 +45,9 @@ test("shared CI setup preserves every configured root and target", () => {
   expect(
     shared.compatibility.include.filter((entry) => entry.runtime === "gcc").every((entry) => entry.paths.length === 2),
   ).toBe(true);
-  expect(shared.environments.include).toHaveLength(2);
+  expect(
+    shared.environments.include.map(({ environment, architecture }) => `${environment}/${architecture}`).sort(),
+  ).toEqual(["guix/arm64", "guix/x64", "nix/arm64", "nix/x64"]);
   expect(shared.devcontainer).toEqual(original.devcontainer);
 });
 
@@ -99,10 +102,15 @@ test("grouped execution continues checking other roots after one fails", () => {
   mkdirSync(join(root, "bin"));
   writeFileSync(
     join(root, "bin/workbench.mjs"),
-    `import { appendFileSync } from "node:fs"; import { resolve } from "node:path";
+    `import { appendFileSync, readFileSync } from "node:fs"; import { join, resolve } from "node:path";
      const args=process.argv.slice(2); if(args[0]==="project" && args[1]==="add") process.exit(0); appendFileSync("events.jsonl", JSON.stringify(args)+"\\n");
      if(args.includes("bad")) process.exitCode=2;
-     else if(args[0]==="paths") console.log(JSON.stringify({variables:{WORKBENCH_DIST_DIR:resolve(args[args.indexOf("--path")+1],"dist")}}));`,
+     else if(args[0]==="paths") console.log(JSON.stringify({variables:{WORKBENCH_DIST_DIR:resolve(args[args.indexOf("--path")+1],"dist")}}));
+     else if(args.includes("release-verify")){
+       const staged=process.env.WORKBENCH_RELEASE_ARTIFACT;
+       if(staged===resolve("good/dist") || readFileSync(join(staged,"package.txt"),"utf8")!=="verified fixture") process.exit(3);
+       if(args.includes("rejected")) process.exit(4);
+     }`,
   );
   const result = spawnSync(process.execPath, [join(repository, "scripts/ci-run.mjs"), "environment"], {
     cwd: root,
@@ -130,21 +138,24 @@ test("grouped execution continues checking other roots after one fails", () => {
     .trim()
     .split("\n")
     .map((text) => JSON.parse(text) as string[]);
-  expect(nativeEvents).toHaveLength(3);
-  expect(nativeEvents[2]).toContain("good");
-  expect(nativeEvents[2]).toContain("ci-checks");
+  expect(nativeEvents.map(([command]) => command)).toEqual(["tools", "tools", "prepare", "ci-checks"]);
+  expect(nativeEvents.slice(1).every((args) => args.includes("good"))).toBe(true);
   mkdirSync(join(root, "good/dist"), { recursive: true });
   writeFileSync(join(root, "good/dist/package.txt"), "verified fixture");
+  mkdirSync(join(root, "rejected/dist"), { recursive: true });
+  writeFileSync(join(root, "rejected/dist/package.txt"), "verified fixture");
   writeFileSync(output, "");
   const releases = spawnSync(process.execPath, [join(repository, "scripts/ci-run.mjs"), "release"], {
     cwd: root,
-    env: { ...process.env, CHECK_ROOTS: '["bad","good"]', GITHUB_OUTPUT: output, RUNNER_TEMP: root },
+    env: { ...process.env, CHECK_ROOTS: '["bad","good","rejected"]', GITHUB_OUTPUT: output, RUNNER_TEMP: root },
     encoding: "utf8",
   });
   expect(releases.status).toBe(1);
   expect(readFileSync(output, "utf8")).toBe('roots=["good"]\n');
   expect(readFileSync(join(root, "release-artifacts/1.txt"), "utf8")).toBe("good\n");
-  expect(existsSync(join(root, "release-artifacts/1.tar.gz"))).toBe(true);
+  expect(existsSync(join(root, `release-artifacts/1.${releaseArchive}`))).toBe(true);
+  expect(releases.stderr).toMatch(/rejected: .*failed: 4/);
+  expect(existsSync(join(root, `release-artifacts/2.${releaseArchive}`))).toBe(false);
   const releaseEvents = readFileSync(join(root, "events.jsonl"), "utf8")
     .trim()
     .split("\n")
@@ -269,6 +280,11 @@ test("local guest executes the shared phases, retains releases separately, and c
   );
   mkdirSync(join(root, "scripts"));
   await copyScriptClosure(repository, root, "scripts/ci-run.mjs");
+  mkdirSync(join(root, "bundle"));
+  writeFileSync(
+    join(root, "bundle/package.cjs"),
+    `module.exports = require(${JSON.stringify(join(repository, "bundle/package.cjs"))});\n`,
+  );
   const selections: (TargetSelection & { id: string; path: string })[] = [
     { id: "bad", kind: "native", path: "bad", release: true },
     { id: "good", kind: "native", path: ".", release: true },
@@ -326,7 +342,9 @@ test("local guest executes the shared phases, retains releases separately, and c
     results.map(({ success }) => success),
     result.stdout + result.stderr,
   ).toEqual([false, true, true, true, true]);
-  expect(existsSync(join(required(results[1], "Release result").report, "release-artifacts/0.tar.gz"))).toBe(true);
+  expect(existsSync(join(required(results[1], "Release result").report, `release-artifacts/0.${releaseArchive}`))).toBe(
+    true,
+  );
   expect(readFileSync(join(required(results[1], "Release result").report, "release-artifacts/0.txt"), "utf8")).toBe(
     ".\n",
   );

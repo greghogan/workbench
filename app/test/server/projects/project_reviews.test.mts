@@ -79,8 +79,9 @@ test("cold and open review counts follow task outcomes, revised approval and sup
   mkdirSync(join(directory, "TSK-00/details"));
   await compare(1);
   writeFileSync(join(directory, "TSK-00/details/requirement.md"), "Preserve pending work.\n");
-  await compare(0);
+  await compare(1);
   approve();
+  await compare(0);
   changeTaskQueue(root, { action: "start", reference: "TSK-0" });
   changeTaskQueue(root, { action: "implemented", reference: "TSK-0", detail: "Supporting requirement verified." });
   await compare(1);

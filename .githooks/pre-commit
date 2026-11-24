@@ -53,13 +53,23 @@ else
         exit "$scan_status"
     fi
 fi
-if [[ -f "$staged_snapshot/scripts/setup-development.mjs" ]]; then
-    bash "$staged_snapshot/.githooks/prepare-source" "$repository_root" "$staged_snapshot"
-fi
 if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
     snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
-else
+elif command -v workbench >/dev/null 2>&1; then
     snapshot_launcher=(workbench)
+else
+    printf '%s\n' 'workbench: pre-commit requires Workbench on PATH.' \
+        '  Follow the project README or see:' \
+        "  https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+    exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'workbench: pre-commit requires Node.js on PATH.' \
+        "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+    exit 1
+fi
+if [[ -f "$staged_snapshot/scripts/setup-development.mjs" ]]; then
+    bash "$staged_snapshot/.githooks/prepare-source" "$repository_root" "$staged_snapshot"
 fi
 local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
 export WORKBENCH_PROJECT_ROOT="$staged_snapshot"

@@ -95,7 +95,6 @@
 }
 .document-diff:not(.split) {
   max-width: var(--document-width);
-  margin-inline: auto;
 }
 .document-diff.split {
   position: relative;

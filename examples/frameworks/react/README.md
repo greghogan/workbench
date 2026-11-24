@@ -5,14 +5,14 @@ separate Workbench build command. This example selects the ordinary TypeScript c
 
 ## Native use
 
-Use the Node version in `.node-version` and the package manager declared in `package.json`:
+Use the Node version in `.node-version` and the pnpm version declared in `package.json`:
 
 ```sh
-corepack pnpm install --frozen-lockfile
-corepack pnpm run check
-corepack pnpm run coverage
-corepack pnpm run build
-corepack pnpm run release
+pnpm install --frozen-lockfile
+pnpm run check
+pnpm run coverage
+pnpm run build
+pnpm run release
 node scripts/check-site.mjs dist/site
 ```
 

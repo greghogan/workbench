@@ -1,4 +1,5 @@
-import { configFromData, languageRootsFromData } from "../../../src/core/projects/project-configuration.ts";
+import { readConfig, readLanguageRoots } from "../../../src/core/projects/project-configuration.ts";
+import { projectPaths } from "../../../src/core/projects/project-paths.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,13 +19,8 @@ afterEach(() => {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "workbench-image-inputs-"));
   temporary.push(root);
-  const config = configFromData(
-    parse(readFileSync(join(repository, "workbench/config.toml"), "utf8")),
-    undefined,
-    "fixture",
-  );
-  const registry = parse(readFileSync(join(repository, "workbench/projects.toml"), "utf8"));
-  const files = new Set(["workbench/config.toml", "workbench/projects.toml"]);
+  const config = readConfig(repository);
+  const files = new Set<string>([projectPaths.config, projectPaths.projects, projectPaths.profiles]);
   for (const profile of required(
     required(config.development, "Expected fixture value: config.development").profiles,
     "Expected fixture value",
@@ -34,9 +30,8 @@ function fixture() {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     cpSync(join(repository, file), join(root, file));
   }
-  for (const entry of languageRootsFromData(registry, "fixture"))
-    mkdirSync(join(root, entry.path), { recursive: true });
-  return { root, config, registry };
+  for (const entry of readLanguageRoots(repository)) mkdirSync(join(root, entry.path), { recursive: true });
+  return { root, config };
 }
 
 test("reference dependency images survive checkout edits and invalidate on their own dependency authorities", () => {
@@ -44,9 +39,11 @@ test("reference dependency images survive checkout edits and invalidate on their
   expect(() => {
     validateManagedImageInputs(root);
   }).not.toThrow();
-  const profiles = required(config.development, "Expected fixture value: config.development").profiles;
-  const identities = () =>
-    required(profiles, "Expected fixture value").map((profile: DevelopmentProfile) => offlineInputs(root, profile));
+  const profiles = required(config.development?.profiles, "Development profiles");
+  const development = profiles.filter((profile) => profile.offline?.kind !== "toolchain");
+  const toolchains = profiles.filter((profile) => profile.offline?.kind === "toolchain");
+  const identities = (selected: readonly DevelopmentProfile[] = development) =>
+    selected.map((profile) => offlineInputs(root, profile));
   const baseline = identities();
   for (const file of [
     "src/main.ts",
@@ -64,14 +61,12 @@ test("reference dependency images survive checkout edits and invalidate on their
     writeFileSync(join(root, file), "ordinary checkout edit");
     expect(identities(), file).toEqual(baseline);
   }
-  required(config.markdown, "Expected fixture value: config.markdown").wrap_width = 100;
-  const offline = required(
-    required(required(profiles, "Expected fixture value")[1], "Second profile").offline,
-    "Offline configuration",
-  );
+  const configPath = join(root, projectPaths.config);
+  const declarations = parse(readFileSync(configPath, "utf8"));
+  writeFileSync(configPath, stringify({ ...declarations, markdown: { ...config.markdown, wrap_width: 100 } }));
+  const offline = required(required(development[1], "Second profile").offline, "Offline configuration");
   offline.verify = ["updated-verification"];
   offline.registry = "ghcr.io/example/another-repository";
-  writeFileSync(join(root, "workbench/config.toml"), stringify(config));
   expect(identities()).toEqual(baseline);
 
   for (const [file, builder] of [
@@ -86,15 +81,19 @@ test("reference dependency images survive checkout edits and invalidate on their
       original = readFileSync(path);
     writeFileSync(path, Buffer.concat([original, Buffer.from("\nchanged dependency input\n")]));
     for (const [index, identity] of identities().entries()) {
-      if (required(required(profiles, "Expected fixture value")[index], "Expected fixture value").builder === builder)
+      if (required(development[index], "Prepared development profile").builder === builder)
         expect(identity, file).not.toBe(baseline[index]);
       else expect(identity, file).toBe(baseline[index]);
     }
     writeFileSync(path, original);
     expect(identities()).toEqual(baseline);
   }
-  // All environments acquire the Playwright-paired engine from the shared pinned inventory.
-  for (const file of ["pnpm-lock.yaml", ".tool-versions", "scripts/native-assets.json"]) {
+  const toolchainBaseline = identities(toolchains);
+  for (const [file, toolchainChanges] of [
+    ["pnpm-lock.yaml", []],
+    [".tool-versions", ["native"]],
+    ["scripts/native-assets.json", ["native", "nix", "guix"]],
+  ] as const) {
     const path = join(root, file),
       original = readFileSync(path);
     writeFileSync(path, Buffer.concat([original, Buffer.from("\nchanged dependency input\n")]));
@@ -102,6 +101,12 @@ test("reference dependency images survive checkout edits and invalidate on their
       identities().every((identity, index) => identity !== baseline[index]),
       file,
     ).toBe(true);
+    expect(
+      toolchains
+        .filter((profile, index) => offlineInputs(root, profile) !== toolchainBaseline[index])
+        .map(({ builder }) => builder),
+      file,
+    ).toEqual(toolchainChanges);
     writeFileSync(path, original);
   }
 });

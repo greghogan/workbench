@@ -14,7 +14,7 @@ import tar from "tar-stream";
 import { openPromise, type Entry, type ZipFile } from "yauzl";
 import { archiveDecoder } from "./artifact-decoders.js";
 import { ByteLimit, TarGuard, type ArtifactLimits } from "./artifact-streams.js";
-import { archivePath } from "./archive-paths.js";
+import { archivePath, unsafeArchiveText } from "./archive-paths.js";
 
 function nextZipEntry(zip: ZipFile, signal: AbortSignal): Promise<Entry | undefined> {
   return new Promise((resolve, reject) => {
@@ -106,7 +106,7 @@ export async function extractZipArchive(
   destination: string,
   strip: number,
   limits: ArtifactLimits,
-  links: Readonly<Record<string, string>> = {},
+  links: Readonly<Record<string, string>> | "contained" = {},
 ): Promise<string> {
   if (limits.milliseconds <= 0) throw new Error("tool extraction exceeded its deadline");
   const controller = new AbortController();
@@ -132,6 +132,7 @@ export async function extractZipArchive(
     if (Buffer.byteLength(zip.comment) > limits.metadata) throw new Error("archive metadata exceeds its size limit");
     const names = new Set<string>();
     const pendingLinks = new Map<string, string>();
+    const pathKey = (name: string) => (process.platform === "win32" ? name.toLowerCase() : name);
     let bytes = 0;
     let entries = 0;
     for (
@@ -145,7 +146,7 @@ export async function extractZipArchive(
       if (entry.fileNameLength + entry.extraFieldLength + entry.fileCommentLength > limits.metadata)
         throw new Error("archive metadata exceeds its size limit");
       const name = archivePath(entry.fileName);
-      const key = process.platform === "win32" ? name.toLowerCase() : name;
+      const key = pathKey(name);
       if (names.has(key)) throw new Error("tool archive contains duplicate paths");
       names.add(key);
       if (
@@ -157,8 +158,9 @@ export async function extractZipArchive(
       const mode = entry.externalFileAttributes >>> 16;
       const type = mode & 0o170000;
       const directory = entry.fileName.endsWith("/");
-      const link = type === 0o120000 && Object.hasOwn(links, name) ? links[name] : undefined;
-      if ((type !== 0 && type !== (directory ? 0o040000 : 0o100000) && link === undefined) || entry.isEncrypted())
+      const expected = links !== "contained" && Object.hasOwn(links, name) ? links[name] : undefined;
+      const link = type === 0o120000 && !directory && (links === "contained" || expected !== undefined);
+      if ((type !== 0 && type !== (directory ? 0o040000 : 0o100000) && !link) || entry.isEncrypted())
         throw new Error("ZIP tool archives must contain only unencrypted files and directories");
       const size = entry.uncompressedSize;
       if (!Number.isSafeInteger(size) || size < 0 || size > limits.file || (directory && size !== 0))
@@ -167,12 +169,8 @@ export async function extractZipArchive(
       if (bytes > limits.retained || bytes > limits.decompressed)
         throw new Error("archive exceeds its retained byte limit");
       const output = join(destination, name);
-      if (link !== undefined) {
+      if (link) {
         if (process.platform === "win32") throw new Error("ZIP symbolic links require a POSIX host");
-        archivePath(link);
-        const prefix = name.split("/").slice(0, strip).join("/");
-        const target = posix.join(posix.dirname(name), link);
-        if (strip && !target.startsWith(`${prefix}/`)) throw new Error("ZIP symbolic link escapes the retained root");
         if (size > limits.metadata) throw new Error("ZIP symbolic link exceeds metadata limit");
         const source = await zip.openReadStreamPromise(entry);
         active = source;
@@ -188,9 +186,15 @@ export async function extractZipArchive(
           }),
           { signal: controller.signal },
         );
-        if (Buffer.concat(chunks).toString("utf8") !== link)
+        const target = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+        if (expected !== undefined && target !== expected)
           throw new Error("ZIP symbolic link differs from its reviewed target");
-        pendingLinks.set(name, link);
+        if (!target || unsafeArchiveText(target) || posix.isAbsolute(target))
+          throw new Error("Unsafe ZIP symbolic link target");
+        const prefix = name.split("/").slice(0, strip).join("/");
+        const resolved = archivePath(posix.join(posix.dirname(name), target));
+        if (strip && !resolved.startsWith(`${prefix}/`)) throw new Error("ZIP symbolic link escapes the retained root");
+        pendingLinks.set(name, target);
         active = undefined;
       } else if (directory) mkdirSync(output, { recursive: true, mode: 0o700 });
       else {
@@ -214,8 +218,13 @@ export async function extractZipArchive(
         throw new Error("tool archive has an unexpected directory layout");
       content = join(destination, root);
     }
-    if (Object.keys(links).some((name) => !pendingLinks.has(name)))
+    if (links !== "contained" && Object.keys(links).some((name) => !pendingLinks.has(name)))
       throw new Error("ZIP is missing a reviewed symbolic link");
+    const linkPaths = new Set([...pendingLinks.keys()].map(pathKey));
+    for (const name of pendingLinks.keys()) {
+      for (let directory = posix.dirname(name); directory !== "."; directory = posix.dirname(directory))
+        if (linkPaths.has(pathKey(directory))) throw new Error("ZIP symbolic link has another link as its parent");
+    }
     for (const [name, target] of pendingLinks) {
       const path = join(destination, name);
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });

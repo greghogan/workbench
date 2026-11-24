@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createReadStream, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { brotliDecompressSync } from "node:zlib";
-import type { ManagedInputRepository } from "./managed-inputs.js";
+import { managedInputSource, type ManagedInputRepository } from "./managed-inputs.js";
 
-/** A read-only loopback registry exposes pinned metadata through the manager's normal HTTP interface. */
+/** A read-only loopback registry serves pinned metadata and archives to the package manager. */
 export async function managedRegistry(repository: ManagedInputRepository) {
   const bytes = readFileSync(join(repository.directory, "registry.json.br"));
   if (
@@ -17,6 +17,18 @@ export async function managedRegistry(repository: ManagedInputRepository) {
   const packages = JSON.parse(
     brotliDecompressSync(bytes, { maxOutputLength: 512 * 1024 ** 2 }).toString("utf8"),
   ) as Record<string, unknown>;
+  const archives = new Map<string, string>();
+  for (const entry of repository.declaration.inputs) {
+    if (
+      !entry.destination.startsWith("npm/") ||
+      (entry.platforms && !entry.platforms.includes(`linux-${process.arch}`))
+    )
+      continue;
+    const name = decodeURIComponent(new URL(entry.url).pathname.slice(1));
+    const previous = archives.get(name);
+    if (previous && previous !== entry.url) throw new Error(`Ambiguous managed registry archive: ${name}`);
+    archives.set(name, entry.url);
+  }
   const server = createServer((request, response) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405).end();
@@ -27,6 +39,32 @@ export async function managedRegistry(repository: ManagedInputRepository) {
       name = decodeURIComponent(new URL(request.url ?? "", "http://localhost").pathname.slice(1));
     } catch {
       response.writeHead(400).end();
+      return;
+    }
+    const archive = archives.get(name);
+    if (archive) {
+      try {
+        const file = managedInputSource(repository, archive);
+        response.writeHead(200, {
+          "Content-Type": "application/octet-stream",
+          "Content-Length": statSync(file).size,
+          "Cache-Control": "public, immutable",
+        });
+        if (request.method === "HEAD") response.end();
+        else {
+          const stream = createReadStream(file);
+          stream.once("error", () => {
+            response.destroy();
+          });
+          response.once("close", () => {
+            stream.destroy();
+          });
+          stream.pipe(response);
+        }
+      } catch {
+        if (response.headersSent) response.destroy();
+        else response.writeHead(500).end("Managed package archive failed verification");
+      }
       return;
     }
     if (!Object.hasOwn(packages, name)) {

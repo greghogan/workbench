@@ -8,7 +8,7 @@
   },
   "require-dev": {
     "workbench/verified-composer": "1.0.0",
-    "phpunit/phpunit": "11.5.57",
+    "phpunit/phpunit": "11.5.58",
     "brianium/paratest": "7.8.6"
   },
   "repositories": [

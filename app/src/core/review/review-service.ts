@@ -7,7 +7,7 @@ import { closeSync, existsSync, fstatSync, lstatSync, openSync, readSync } from 
 import { resolve } from "node:path";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../diagnostics/diagnostics.mjs";
 import { storageReviewContext } from "../records/archive-transfer-proof.js";
-import { GitSnapshot, writeRawReviewObjects } from "../git/git-snapshot.js";
+import { GitSnapshot, writeRawReviewObjects, type GitEntry } from "../git/git-snapshot.js";
 import { readConfig, readProjects } from "../projects/project-configuration.js";
 import { recordDocument } from "../records/record-document.js";
 import {
@@ -24,6 +24,7 @@ import { ownedPath } from "../runtime/paths.js";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 import {
   decodePresentedReview,
+  decodeReviewChange,
   reviewBuffer,
   reviewContents,
   reviewFileLimit,
@@ -37,6 +38,7 @@ export interface ReviewChange {
   before: string;
   after: string;
   charter: boolean;
+  merge?: { tree: string; parents: readonly { tree: string; file: string }[] };
 }
 const changesDigest = (changes: unknown[]): string =>
   createHash("sha256").update(JSON.stringify(changes)).digest("hex");
@@ -86,6 +88,22 @@ export function proposedReview(
   snapshot = new GitSnapshot(root, { staged: source === ReviewSource.Staged }),
   hashWorking: (file: string, algorithm: string, read: () => string) => string = (_file, _algorithm, read) => read(),
 ) {
+  return inspectReview(root, source, snapshot, hashWorking);
+}
+
+export function proposedMergeReview(root: string, snapshot: GitSnapshot, tree: string, parents: readonly string[]) {
+  if (parents.length < 2 || parents.length > 256 || parents[0] !== snapshot.head)
+    throw new InvalidInput("Invalid parent set for merge review");
+  return inspectReview(root, ReviewSource.Staged, snapshot, (_file, _algorithm, read) => read(), { tree, parents });
+}
+
+function inspectReview(
+  root: string,
+  source: ReviewSource,
+  snapshot: GitSnapshot,
+  hashWorking: (file: string, algorithm: string, read: () => string) => string,
+  merge?: { tree: string; parents: readonly string[] },
+) {
   const changes: ReviewChange[] = [];
   const working = source === ReviewSource.Working;
   const trees = working
@@ -93,6 +111,9 @@ export function proposedReview(
       ? [new RecordTree(root, snapshot.head, snapshot)]
       : []
     : proposedRecordTrees(root, snapshot);
+  const parentTrees = merge?.parents.map((parent) => reviewGit(root, ["rev-parse", `${parent}^{tree}`]).trim());
+  for (const parent of merge?.parents.slice(1) ?? [])
+    trees.push(new RecordTree(root, parent, new GitSnapshot(root, { base: parent, staged: false })));
   const scopes = working ? readProjects(root).map((project) => project.path) : [];
   const collections = working ? (readConfig(root).collections?.sources ?? []).map((pin) => pin.id) : [];
   const allScopes = [...new Set([...scopes, ...trees.flatMap((tree) => tree.scopes)])];
@@ -187,17 +208,23 @@ export function proposedReview(
     }
   } else {
     const after = trees[0],
-      before = trees[1];
+      parents = trees.slice(1);
     const zero = "0".repeat(reviewGit(root, ["rev-parse", "--show-object-format"]).trim() === "sha256" ? 64 : 40);
+    const identity = (entry: GitEntry | undefined) => (entry ? `${entry.mode}:${entry.oid}` : `000000:${zero}`);
     for (const path of new Set(trees.flatMap((tree) => [...tree.entries.keys()]))) {
       const locations = trees.map((tree) => tree.classify(path));
       if (!locations.some((location) => location.protected) || !reviewRequired(path)) continue;
-      const previous = before?.entries.get(path),
-        current = after?.entries.get(path);
-      const prior = previous ? `${previous.mode}:${previous.oid}` : `000000:${zero}`;
-      const next = current ? `${current.mode}:${current.oid}` : `000000:${zero}`;
-      if (prior !== next)
-        changes.push({ path, before: prior, after: next, charter: locations.some((location) => location.charter) });
+      const prior = identity(parents[0]?.entries.get(path)),
+        next = identity(after?.entries.get(path)),
+        comparisons = parentTrees?.map((tree, index) => ({ tree, file: identity(parents[index]?.entries.get(path)) }));
+      if (comparisons ? comparisons.some(({ file }) => file !== next) : prior !== next)
+        changes.push({
+          path,
+          before: prior,
+          after: next,
+          charter: locations.some((location) => location.charter),
+          ...(merge && comparisons ? { merge: { tree: merge.tree, parents: comparisons } } : {}),
+        });
     }
   }
   changes.sort((a, b) => a.path.localeCompare(b.path));
@@ -206,7 +233,7 @@ export function proposedReview(
   return { changes, digest, receipt };
 }
 
-function reviewReceipt(root: string): string {
+export function reviewReceipt(root: string): string {
   return resolve(root, reviewGit(root, ["rev-parse", "--git-path", "workbench/review.json"]).trim());
 }
 
@@ -230,17 +257,6 @@ interface Acknowledgment {
 
 function table(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function readChange(value: unknown): ReviewChange | undefined {
-  if (
-    !table(value) ||
-    typeof value.path !== "string" ||
-    typeof value.before !== "string" ||
-    typeof value.after !== "string" ||
-    typeof value.charter !== "boolean"
-  )
-    return undefined;
-  return { path: value.path, before: value.before, after: value.after, charter: value.charter };
 }
 function readApproval(value: unknown, change: ReviewChange): Approval | undefined {
   if (
@@ -308,7 +324,7 @@ function decodeReviewReceipt(value: unknown): Map<string, Acknowledgment> {
   const changes: ReviewChange[] = [];
   const paths = new Set<string>();
   for (const entry of value.changes as unknown[]) {
-    const change = readChange(entry);
+    const change = decodeReviewChange(entry);
     if (!change || paths.has(change.path)) throw new InvalidInput("Invalid review receipt");
     paths.add(change.path);
     changes.push(change);
@@ -320,7 +336,7 @@ function decodeReviewReceipt(value: unknown): Map<string, Acknowledgment> {
       throw new InvalidInput("Invalid review receipt");
     for (const alternate of value.alternatives as unknown[]) {
       if (!table(alternate)) throw new InvalidInput("Invalid review receipt");
-      const change = readChange(alternate.change);
+      const change = decodeReviewChange(alternate.change);
       const approval = change ? readApproval(alternate.approval, change) : undefined;
       if (!change || !approval || !paths.has(change.path)) throw new InvalidInput("Invalid review receipt");
       result.set(reviewChangeDigest(change), { change, approval });
@@ -652,6 +668,7 @@ export function reviewedBaselines(
     [...savedApprovals(receipt).values()].flatMap((ack) =>
       (path === undefined || ack.change.path === path) &&
       ack.latest &&
+      !ack.change.merge &&
       matchingHead(ack.approval.head) &&
       ack.approval.contents !== undefined
         ? [
@@ -684,11 +701,11 @@ export function preserveTranslatedReviews(
         selected: Acknowledgment[] = [];
       for (const unit of next)
         for (const change of unit.changes) {
-          if (saved.has(reviewChangeDigest(change))) continue;
+          if (change.merge || saved.has(reviewChangeDigest(change))) continue;
           for (const oldUnit of prior) {
             const previous = oldUnit.changes.find((item) => item.path === change.path),
               approval = previous ? saved.get(reviewChangeDigest(previous))?.approval : undefined;
-            if (!previous || !approval || previous.charter !== change.charter) continue;
+            if (!previous || previous.merge || !approval || previous.charter !== change.charter) continue;
             const same = (a: string, b: string) => {
               if (a.split(":")[0] !== b.split(":")[0]) return false;
               const left = reviewFileContents(root, a, oldUnit.snapshot),

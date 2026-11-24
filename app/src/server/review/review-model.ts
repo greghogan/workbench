@@ -111,13 +111,6 @@ export function prepareReviewPage(
   const primaryParameters = { ...parameters, path: owner };
   const primary =
     selected && context.index.reviews.needsReview(selected) ? reviewPageModel(context, primaryParameters) : undefined;
-  const representative = selected ?? group.changes[0];
-  if (!representative) throw new WebError(404, "protected record not found; refresh the queue");
-  const navigation = context.index.reviews.navigation(
-    representative.digest,
-    context.compatibilityNeedsHumanReview,
-    context.reviewQueue,
-  );
   const layout = differenceLayout(parameters);
   const supporting = group.changes
     .filter((change) => change.path !== owner && context.index.reviews.needsReview(change))
@@ -130,7 +123,6 @@ export function prepareReviewPage(
     unchanged,
     heading,
     owner,
-    navigation,
     layout,
     presentations: [...(primary ? [primary] : []), ...supporting].filter((model) => model.canApprove),
   };

@@ -3,15 +3,13 @@ import { verificationCharterPath } from "../distribution/verification-resources.
 import { createOwnedScratch, type OwnedScratch } from "../runtime/owned-scratch.mjs";
 import { captureOwnedChild, processCancellation } from "../runtime/owned-child.mjs";
 import { settleCleanup } from "../diagnostics/diagnostics.mjs";
-import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parse } from "smol-toml";
-import { pathToFileURL } from "node:url";
-import { extractArchive } from "../toolchains/tool-downloads.js";
 import { npmCommand } from "../toolchains/npm-command.js";
 import { readDistributionManifest } from "../distribution/distribution-source-manifest.js";
+import { readReleaseChecksum, stageReleaseArchive } from "../distribution/release-archive.js";
 import { cpuBudget } from "../execution/checks/cpu-budget.mjs";
 import { workQueue } from "../execution/checks/work-admission.mjs";
 
@@ -101,23 +99,13 @@ export async function verifyWorkbenchPackage(
   try {
     writeFileSync(join(temporary, "gitconfig"), "");
     const packaged = join(artifacts, "workbench-artifacts");
-    const bytes = readFileSync(join(packaged, "workbench.tar.gz"));
-    const digest = createHash("sha256").update(bytes).digest("hex");
-    if (readFileSync(join(packaged, "SHA256SUMS"), "utf8") !== `${digest}  workbench.tar.gz\n`)
-      throw new Error("Workbench release archive checksum mismatch");
-    // Verify and extract the same private bytes, independently of the staging directory.
-    const archive = join(temporary, "workbench.tar.gz");
-    writeFileSync(archive, bytes);
-    const extracted = join(temporary, "runtime with spaces 雪");
-    mkdirSync(extracted);
-    const directory = await extractArchive(archive, extracted, {
-      url: pathToFileURL(archive).href,
-      sha256: digest,
-      format: "tar",
-      strip: 1,
-      bin: "bin",
-    });
-    readDistributionManifest(directory);
+    const staging = join(temporary, "runtime with spaces 雪");
+    mkdirSync(staging, { mode: 0o700 });
+    const { archive, directory, manifest } = await stageReleaseArchive(
+      join(packaged, "workbench.tar.gz"),
+      readReleaseChecksum(packaged),
+      staging,
+    );
     const consumer = join(temporary, "consumer");
     mkdirSync(consumer);
     await run(process.execPath, [join(directory, "bin/workbench.mjs"), "--help"], directory);
@@ -183,7 +171,7 @@ export async function verifyWorkbenchPackage(
     ]);
     const installed = join(prefix, ...(process.platform === "win32" ? [] : ["lib"]), "node_modules/@workbench/cli");
     const launcher = join(installed, "bin/workbench.mjs");
-    if (readDistributionManifest(installed).sha256 !== readDistributionManifest(directory).sha256)
+    if (readDistributionManifest(installed).sha256 !== manifest.sha256)
       throw new Error("npm installation changed the candidate's original source manifest");
     const index = parse(readFileSync(join(installed, "languages/index.toml"), "utf8")) as { languages: string[] };
     await workQueue(index.languages, { capacity: cpuBudget(), signal }, async (language) => {

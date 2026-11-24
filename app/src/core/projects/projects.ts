@@ -77,7 +77,7 @@ export function planProject(
     }
     edits.write(configPath, editToml(configText, value));
   }
-  if (edits.read("Makefile") === undefined)
+  if (!options.recordsOnly && edits.read("Makefile") === undefined)
     edits.create("Makefile", readText(join(distributionRoot(root), "Makefile")));
   const ignore = edits.read(".gitignore") ?? "";
   if (!ignore.split(/\r?\n/).includes(".workbench-cache-operations/"))

@@ -109,7 +109,7 @@ export async function verifyCIImages(root: string, remote?: string, url?: string
   const targets = ciTargets(root);
   const selections = new Map<string, { name: string; architecture: string }>();
   for (const target of targets) {
-    if (target.os !== "linux" || !["native", "environment"].includes(target.kind)) continue;
+    if (target.os !== "linux") continue;
     const builder = target.environment === "nix-docker" ? "nix" : target.environment;
     const name = configured[builder];
     if (!name) continue;

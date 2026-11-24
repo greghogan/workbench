@@ -87,7 +87,7 @@ test("execution validates protocol completeness and stale requests cannot overwr
 
 test("agent execution needs no plan approval and the browser only reviews the completed outcome", async () => {
   const web = await servers.start(root);
-  const initial = parseDOM((await readWebPage(web, "/work")).html).window.document;
+  const initial = parseDOM((await readWebPage(web, "/records?type=EXP")).html).window.document;
   expect(initial.querySelector("main")?.textContent).toContain("Compare parsers");
   expect(
     parseDOM((await readWebPage(web, "/plans")).html).window.document.querySelector("main")?.textContent,

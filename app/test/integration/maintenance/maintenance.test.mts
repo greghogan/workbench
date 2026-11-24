@@ -310,6 +310,21 @@ test("release sources filter drafts and prereleases and preserve published verif
   assert.equal((await sources.rust("nightly"))[0]?.version, "nightly-2026-10-29");
 });
 
+test("browser metadata uses the same release tag when the raw GitHub endpoint is unavailable", async () => {
+  const sources = new MaintenanceSources((url, accept) => {
+    if (new URL(url).hostname === "raw.githubusercontent.com") return Promise.reject(new Error("Connection reset"));
+    assert.equal(
+      url,
+      "https://api.github.com/repos/microsoft/playwright/contents/packages/playwright-core/browsers.json?ref=v1.65.1",
+    );
+    assert.equal(accept, "application/vnd.github.raw+json");
+    return Promise.resolve(
+      JSON.stringify({ browsers: [{ name: "chromium-headless-shell", browserVersion: "159.0.8154.6" }] }),
+    );
+  });
+  assert.equal((await sources.playwrightBrowser("1.65.1")).version, "159.0.8154.6");
+});
+
 test("discovery distinguishes available, failed, constrained, and current targets without treating failures as fresh", async () => {
   const data = fixture({
     "package.json": JSON.stringify({

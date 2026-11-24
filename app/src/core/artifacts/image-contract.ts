@@ -62,7 +62,7 @@ export function imageDisplayTag(reference: string): string {
 export function localPreparedReference(reference: string): boolean {
   const separator = reference.indexOf(":");
   return (
-    /^workbench-prepared-[a-f0-9]{24}$/.test(reference.slice(0, separator)) &&
+    /^workbench-(prepared|candidate)-[a-f0-9]{24}$/.test(reference.slice(0, separator)) &&
     parsePreparedTag(reference.slice(separator + 1)) !== undefined
   );
 }

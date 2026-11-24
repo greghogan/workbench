@@ -1,6 +1,9 @@
 import { TaskExecution, decodeQueue, type TaskQueueEntry, type TaskQueue } from "./task-queue-state.js";
 export { TaskExecution, decodeQueue, type TaskQueueEntry, type TaskQueue } from "./task-queue-state.js";
 import { readWorkGraph, workReference } from "./planning/work-plans.js";
+import { parsePlanReference } from "./planning/plan-model.js";
+import { planClaim } from "./planning/plan-operation-store.js";
+import { readPlan } from "./planning/planning-store.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -19,8 +22,11 @@ import { ProjectEdits } from "../projects/project-edits.js";
 import { projectQueueKey } from "../projects/project-registry.js";
 import { userDirectory } from "../storage/storage.js";
 import { taskDigest, TaskGraph, type TaskRecord } from "./task-model.js";
+import { gitRevision } from "../git/refs.js";
+import { taskRepositoryDirectory } from "./task-project-state.js";
 
 import { recordTaskImplementation } from "./task-implementations.js";
+import { observeTaskVerifications } from "./task-snapshot.js";
 import {
   applyTaskDecisionChange,
   decisionChangeApplied,
@@ -116,6 +122,7 @@ export class TaskReadiness {
     return (
       task.metadata.status === "Accepted" ||
       (task.metadata.status === "Approved" &&
+        !task.verificationStale &&
         (!task.approval || task.approval.current) &&
         this.allowImplementationEvidence &&
         (entry
@@ -130,9 +137,10 @@ export class TaskReadiness {
     if (task.planning?.problem) add(TaskBlockerKind.State, task.planning.problem);
     if ((task.planning && !task.planning.approved) || (task.approval && !task.approval.current))
       add(TaskBlockerKind.State, "Review and approve the current plan");
-    if (task.metadata.status !== "Approved")
+    if (task.metadata.status !== "Approved" && !task.acceptanceNeedsReview)
       add(TaskBlockerKind.State, `Task is ${task.metadata.status.toLowerCase()}`);
-    if (task.metadata.status === "Accepted" || task.metadata.status === "Canceled") return reasons;
+    if ((task.metadata.status === "Accepted" && !task.acceptanceNeedsReview) || task.metadata.status === "Canceled")
+      return reasons;
     const entry = this.entries.get(task.reference);
     if (!entry && this.allowImplementationEvidence && task.implementation)
       add(
@@ -144,9 +152,11 @@ export class TaskReadiness {
     if (entry?.state === TaskExecution.Implemented)
       add(
         TaskBlockerKind.Verification,
-        entry.planDigest === task.planDigest
-          ? "Awaiting developer acceptance"
-          : "Task changed after verification; release and reverify",
+        task.verificationStale
+          ? "The delivered source changed; release and reverify"
+          : entry.planDigest === task.planDigest
+            ? "Awaiting developer acceptance"
+            : "Task changed after verification; release and reverify",
       );
     for (const id of task.dependencies) {
       const dependency = this.graph.byReference.get(id);
@@ -186,7 +196,10 @@ export function inspectQueue(readiness: TaskReadiness) {
   return { ...queue, digest: queueDigest(queue), entries, ready };
 }
 export function inspectTaskQueue(root: string) {
-  return inspectQueue(new TaskReadiness(readWorkGraph(root), readTaskQueue(root)));
+  const graph = readWorkGraph(root),
+    queue = readTaskQueue(root);
+  observeTaskVerifications(root, graph.tasks, queue.entries);
+  return inspectQueue(new TaskReadiness(graph, queue));
 }
 export type QueueChange =
   | { action: "add"; references: string[] }
@@ -194,17 +207,25 @@ export type QueueChange =
   | { action: "move"; reference: string; before?: string; after?: string };
 export function changeTaskQueue(root: string, change: QueueChange, expected?: string): TaskQueue {
   return withTaskLock(root, () => {
-    const graph = readWorkGraph(root),
-      queue = readTaskQueue(root);
+    const queue = readTaskQueue(root);
     if (expected !== undefined && expected !== queueDigest(queue))
       throw new StateConflict("Task queue changed; refresh and retry");
     const now = new Date().toISOString();
     if (change.action === "add") {
+      let graph: TaskGraph | undefined;
       for (const value of change.references) {
-        const reference = workReference(root, value),
-          task = graph.require(reference);
-        if (task.metadata.status !== "Approved" || (task.planning && !task.planning.approved))
-          throw new StateConflict(`${reference}: approve the task before queueing it`);
+        const reference = workReference(root, value);
+        if (reference.includes(":plan/")) {
+          const identity = parsePlanReference(reference),
+            plan = readPlan(root, identity);
+          if (planClaim(root, reference))
+            throw new StateConflict(`${reference}: queue the implementation task after transferring the plan`);
+          if (!plan.approval?.current) throw new StateConflict(`${reference}: approve the task before queueing it`);
+        } else {
+          const task = (graph ??= readWorkGraph(root)).require(reference);
+          if (task.metadata.status !== "Approved")
+            throw new StateConflict(`${reference}: approve the task before queueing it`);
+        }
         if (!queue.entries.some((entry) => entry.reference === reference))
           queue.entries.push({ reference, state: TaskExecution.Queued, updated: now });
       }
@@ -226,8 +247,11 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
           throw new StateConflict("Release active work before removing it from the queue");
         queue.entries.splice(index, 1);
       } else {
-        const task = graph.require(reference);
+        const graph = readWorkGraph(root),
+          task = graph.require(reference);
         if (taskStarted(entry)) entry.started = true;
+        if (change.action === "start" || change.action === "implemented")
+          observeTaskVerifications(root, graph.tasks, queue.entries);
         if (change.action === "start") {
           if (task.planning)
             throw new StateConflict("Transfer the approved plan into an implementation task before starting it");
@@ -235,14 +259,17 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
           if (reasons.length) throw new StateConflict(`${reference}: ${reasons.join("; ")}`);
           entry.state = TaskExecution.Active;
           entry.started = true;
+          const head = entry.startedFrom ?? (taskRepositoryDirectory(root) ? gitRevision(root, "HEAD") : undefined);
+          if (head) entry.startedFrom = head;
           delete entry.evidence;
           delete entry.reason;
+          delete entry.verification;
           entry.planDigest = task.planDigest;
         } else if (change.action === "implemented") {
           if (entry.state !== TaskExecution.Active && entry.state !== TaskExecution.Implemented)
             throw new StateConflict("Start the task before reporting it implemented");
           if (!change.detail?.trim()) throw new InvalidInput("Supply verification evidence for implemented work");
-          if (task.metadata.status !== "Approved" || taskNeedsPlanApproval(task))
+          if ((task.metadata.status !== "Approved" && !task.acceptanceNeedsReview) || taskNeedsPlanApproval(task))
             throw new StateConflict("Task approval was revoked during implementation");
           const dependencies = new TaskReadiness(graph, {
             ...queue,
@@ -261,7 +288,8 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
           entry.planDigest = task.planDigest;
           delete entry.reason;
           decodeQueue(queue);
-          recordTaskImplementation(root, task, entry.evidence);
+          const proof = recordTaskImplementation(root, task, entry.evidence, entry.startedFrom, entry.verification);
+          if (proof) entry.verification = proof;
         } else if (change.action === "block") {
           if (!change.detail?.trim()) throw new InvalidInput("Supply the reason work is blocked");
           entry.state = TaskExecution.Blocked;
@@ -271,6 +299,7 @@ export function changeTaskQueue(root: string, change: QueueChange, expected?: st
           delete entry.reason;
           delete entry.evidence;
           delete entry.planDigest;
+          delete entry.verification;
         }
         entry.updated = now;
       }

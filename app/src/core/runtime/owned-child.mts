@@ -26,6 +26,10 @@ export interface OwnedChildOptions {
   shutdown?: "cancel" | "drain";
   stopDescendantsOnExit?: boolean;
   windowsVerbatimArguments?: boolean;
+  windowsAdmission?: {
+    jobId: string;
+    wait(pid: number, signal: AbortSignal): Promise<void>;
+  };
   output?: (stdout: Readable, stderr: Readable) => void;
 }
 export function processCancellation() {
@@ -102,6 +106,7 @@ async function runWindowsOwnedChild(
         ? {}
         : { windowsVerbatimArguments: options.windowsVerbatimArguments }),
       ...(options.stopDescendantsOnExit === undefined ? {} : { stopDescendantsOnExit: options.stopDescendantsOnExit }),
+      ...(options.windowsAdmission === undefined ? {} : { machineJobId: options.windowsAdmission.jobId }),
     });
   } catch (failure) {
     try {
@@ -135,6 +140,15 @@ async function runWindowsOwnedChild(
       if (cancelling) {
         options.signal.addEventListener("abort", cancel, { once: true });
         if (options.signal.aborted) cancel();
+      }
+      if (options.windowsAdmission) {
+        await running.ready;
+        if (!child.pid) throw new Error("The Windows job supervisor has no process ID");
+        const stopped = new AbortController();
+        void running.completion.then(() => {
+          stopped.abort(new Error("The Windows job supervisor ended while awaiting machine admission"));
+        });
+        await options.windowsAdmission.wait(child.pid, AbortSignal.any([options.signal, stopped.signal]));
       }
       await running.admit();
     } catch (error) {

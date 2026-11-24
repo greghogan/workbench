@@ -10,6 +10,9 @@
 (define (latest name)
   (first (find-packages-by-name name)))
 
+(define selected-cmake (specification->package "cmake-minimal@4.3.3"))
+(define selected-ninja (specification->package "ninja"))
+
 (define selected-gcc-toolchain (latest "gcc-toolchain"))
 (define channel-gcc (lookup-package-input selected-gcc-toolchain "gcc"))
 

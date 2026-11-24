@@ -2,9 +2,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { WebError } from "./errors.js";
 export function requestOrigin(request: IncomingMessage): string {
   const host = request.headers.host ?? "";
-  if (!/^(localhost|127\.0\.0\.1|\[::1\]):\d{1,5}$/.test(host))
+  const port = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::(\d{1,5}))?$/.exec(host);
+  if (!port || (port[1] !== undefined && (Number(port[1]) === 0 || Number(port[1]) > 65535)))
     throw new WebError(403, "the web UI requires a loopback Host");
-  const origin = `http://${host}`;
+  const origin = new URL(`http://${host}`).origin;
   if (request.headers.origin && request.headers.origin !== origin)
     throw new WebError(403, "request origin does not match this local service");
   const site = request.headers["sec-fetch-site"];

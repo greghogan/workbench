@@ -1,4 +1,4 @@
-import { record, string } from "../runtime/values.mjs";
+import { record, string, strings } from "../runtime/values.mjs";
 import { InvalidInput } from "../runtime/input-errors.js";
 export const TaskExecution = {
   Queued: "Queued",
@@ -12,14 +12,33 @@ export interface TaskQueueEntry {
   state: TaskExecution;
   updated: string;
   started?: true;
+  startedFrom?: string;
   reason?: string;
   evidence?: string;
   planDigest?: string;
+  verification?: { tree: string; paths: string[] };
 }
 export interface TaskQueue {
   version: 1;
   revision: number;
   entries: TaskQueueEntry[];
+}
+export function decodeTaskVerification(value: unknown): NonNullable<TaskQueueEntry["verification"]> {
+  const proof = record(value, "Invalid task verification");
+  const tree = string(proof.tree, "Missing verification tree");
+  const paths = strings(proof.paths, "Invalid verification paths");
+  if (
+    !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(tree) ||
+    paths.some(
+      (path) =>
+        !path ||
+        path.startsWith("/") ||
+        path.includes("\0") ||
+        path.split("/").some((part) => part === ".." || part === "." || part === ".git"),
+    )
+  )
+    throw new InvalidInput("Invalid task verification");
+  return { tree, paths };
 }
 export function decodeQueue(input: unknown): TaskQueue {
   const data = record(input, "Invalid task queue");
@@ -38,7 +57,18 @@ export function decodeQueue(input: unknown): TaskQueue {
     const entry = record(input, "Invalid task queue entry");
     if (
       Object.keys(entry).some(
-        (key) => !["reference", "state", "updated", "started", "reason", "evidence", "planDigest"].includes(key),
+        (key) =>
+          ![
+            "reference",
+            "state",
+            "updated",
+            "started",
+            "startedFrom",
+            "reason",
+            "evidence",
+            "planDigest",
+            "verification",
+          ].includes(key),
       )
     )
       throw new InvalidInput("Unknown task queue entry field");
@@ -49,7 +79,9 @@ export function decodeQueue(input: unknown): TaskQueue {
       !Object.values(TaskExecution).includes(entry.state as TaskExecution) ||
       typeof entry.updated !== "string" ||
       !Number.isFinite(Date.parse(entry.updated)) ||
-      (entry.started !== undefined && entry.started !== true)
+      (entry.started !== undefined && entry.started !== true) ||
+      (entry.startedFrom !== undefined &&
+        (typeof entry.startedFrom !== "string" || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(entry.startedFrom)))
     )
       throw new InvalidInput("Invalid or duplicate task queue entry");
     references.add(reference);
@@ -66,14 +98,17 @@ export function decodeQueue(input: unknown): TaskQueue {
       throw new InvalidInput("Implemented work requires evidence and a plan digest");
     if (entry.state === TaskExecution.Blocked && !entry.reason)
       throw new InvalidInput("Blocked work requires a reason");
+    const verification = entry.verification === undefined ? undefined : decodeTaskVerification(entry.verification);
     return {
       reference,
       state: entry.state as TaskExecution,
       updated: entry.updated,
       ...(entry.started === true ? { started: true as const } : {}),
+      ...(entry.startedFrom === undefined ? {} : { startedFrom: entry.startedFrom }),
       ...(entry.reason === undefined ? {} : { reason: string(entry.reason, "Invalid queue reason") }),
       ...(entry.evidence === undefined ? {} : { evidence: string(entry.evidence, "Invalid queue evidence") }),
       ...(entry.planDigest === undefined ? {} : { planDigest: string(entry.planDigest, "Invalid queue planDigest") }),
+      ...(verification ? { verification } : {}),
     };
   });
   return {

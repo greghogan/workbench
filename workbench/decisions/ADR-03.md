@@ -11,8 +11,11 @@ runtime, and distribution choices.
 
 Adoption preserves existing project files and tool choices. Generated agent context reflects the project's selected
 scopes, checks, and reconciled guidance. Committed records, maps, and agent guidance remain usable without the
-executable or access to their upstream providers. Ordinary application builds must not require Workbench solely because
-its record conventions were adopted.
+executable or access to their upstream providers.
+
+Consuming projects retain a documented native build and run path using their declared toolchains and dependencies.
+Optional integrations leave that path available when Workbench is absent. Workbench-managed commands and enabled gates
+explain how to obtain the required executable and preserve their configured checks.
 
 Rationale: Independent adoption preserves consumer authority and makes useful records available without a dependency on
 the tool or its providers.

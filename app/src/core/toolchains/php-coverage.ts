@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { assetFor } from "./native/native-assets.js";
 import { readText } from "../runtime/files.js";
 import { download, extractArchive } from "./tool-downloads.js";
@@ -13,48 +14,66 @@ import { required } from "../runtime/invariants.js";
 import { exactVersion } from "./toolchains.js";
 
 /** The extension cache belongs to the selected PHP executable and ABI, never merely the Xdebug release. */
-export async function executePhpCoverage(directory: string, distribution: string, args: string[]): Promise<void> {
+export function phpCoverageInstallation(directory: string, distribution: string, env: NodeJS.ProcessEnv = process.env) {
   if (process.platform !== "linux") throw new Error("Native PHP coverage is configured for Linux");
   const version = exactVersion(readText(join(directory, ".xdebug-version")).trim(), ".xdebug-version");
   const asset = required(
     assetFor(distribution, { name: "xdebug", version, source: ".xdebug-version" }),
     "missing verified Xdebug source",
   );
-  const php = execute("php", ["-r", "echo PHP_BINARY;"], { capture: true }).trim();
-  const configuration = execute(join(dirname(php), "php-config"), ["--configure-options"], { capture: true });
+  const php = execute("php", ["-r", "echo PHP_BINARY;"], { capture: true, env }).trim();
+  const configuration = execute(join(dirname(php), "php-config"), ["--configure-options"], { capture: true, env });
   const identity = createHash("sha256")
     .update(php)
     .update(configuration)
     .update(acquisitionIdentity(asset))
     .digest("hex");
-  const destination = join(userDirectory("cache"), "toolchains", "xdebug", version, identity);
-  await withCacheLock(destination, async () => {
-    if (!existsSync(destination)) {
-      const archive = await download(asset);
-      mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
-      const stage = `${destination}.${randomUUID()}.partial`;
-      mkdirSync(stage, { mode: 0o700 });
-      try {
-        const extracted = await extractArchive(archive, stage, asset);
-        const source = join(extracted, `xdebug-${version}`);
-        if (!existsSync(join(source, "config.m4"))) throw new Error("Xdebug source archive has an unexpected layout");
-        execute(join(dirname(php), "phpize"), [], { cwd: source });
-        execute(join(source, "configure"), [`--with-php-config=${join(dirname(php), "php-config")}`], { cwd: source });
-        execute("make", [`-j${String(cpuBudget())}`], { cwd: source });
-        const modules = join(source, "modules");
-        if (!existsSync(join(modules, "xdebug.so"))) throw new Error("Xdebug build omitted its extension");
-        writeFileSync(join(modules, ".workbench-extension"), identity);
-        writeFileSync(join(modules, "xdebug.ini"), `zend_extension="${join(destination, "xdebug.so")}"\n`);
-        renameSync(modules, destination);
-      } finally {
-        rmSync(stage, { recursive: true, force: true });
-      }
-    }
+  return {
+    version,
+    asset,
+    php,
+    identity,
+    destination: join(userDirectory("cache"), "toolchains", "xdebug", version, identity),
+  };
+}
+
+export async function executePhpCoverage(directory: string, distribution: string, args: string[]): Promise<void> {
+  const { version, asset, php, identity, destination } = phpCoverageInstallation(directory, distribution);
+  const scoped = process.env.WORKBENCH_CHECK_SCOPED === "1";
+  const verify = () => {
     if (readText(join(destination, ".workbench-extension")) !== identity)
       throw new Error("incomplete Xdebug installation");
-  });
+  };
+  if (scoped) verify();
+  else
+    await withCacheLock(destination, async () => {
+      if (!existsSync(destination)) {
+        const archive = await download(asset);
+        mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+        const stage = `${destination}.${randomUUID()}.partial`;
+        mkdirSync(stage, { mode: 0o700 });
+        try {
+          const extracted = await extractArchive(archive, stage, asset);
+          const source = join(extracted, `xdebug-${version}`);
+          if (!existsSync(join(source, "config.m4"))) throw new Error("Xdebug source archive has an unexpected layout");
+          execute(join(dirname(php), "phpize"), [], { cwd: source });
+          execute(join(source, "configure"), [`--with-php-config=${join(dirname(php), "php-config")}`], {
+            cwd: source,
+          });
+          execute("make", [`-j${String(cpuBudget())}`], { cwd: source });
+          const modules = join(source, "modules");
+          if (!existsSync(join(modules, "xdebug.so"))) throw new Error("Xdebug build omitted its extension");
+          writeFileSync(join(modules, ".workbench-extension"), identity);
+          writeFileSync(join(modules, "xdebug.ini"), `zend_extension="${join(destination, "xdebug.so")}"\n`);
+          renameSync(modules, destination);
+        } finally {
+          rmSync(stage, { recursive: true, force: true });
+        }
+      }
+      verify();
+    });
   // Xdebug must filter before PHPUnit and Composer load; a late filter retains their branch graphs.
-  const startup = mkdtempSync(join(dirname(destination), ".coverage-"));
+  const startup = mkdtempSync(join(scoped ? tmpdir() : dirname(destination), ".coverage-"));
   const filter = join(startup, "filter.php");
   const production = `${join(directory, "src")}/`.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
   try {

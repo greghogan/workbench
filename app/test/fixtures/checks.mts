@@ -14,6 +14,7 @@ export function configuredCheck(overrides: Partial<ConfiguredCheck> = {}): Confi
     environment: "native",
     dockerImage: undefined,
     stages: ["commit", "ci"],
+    extended: false,
     online: false,
     requiresSetup: true,
     coverage: undefined,
@@ -26,6 +27,7 @@ export function checkPlan(root: string, checks: ConfiguredCheck[]): ReturnType<t
     cleanup: false,
     ordering: [],
     automatic: false,
+    offline: false,
     excluded: [],
     sessions: [{ directory: root, environment: "native", checks }],
   };
@@ -35,6 +37,7 @@ export function inspection(roles: string[]): ReturnType<typeof inspectChecks> {
     stage: null,
     structuralValidation: false,
     allowEmpty: false,
+    inputScope: { mode: "whole-project", reason: "No input groups declared" },
     execution: { availableCpus: 1, maxJobs: 1, sessions: [] },
     excluded: [],
     selected: roles.map((role) => ({

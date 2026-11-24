@@ -3,13 +3,15 @@ import { createHash } from "node:crypto";
 import { closeSync, existsSync, lstatSync, openSync, readSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
-import { readProjects } from "../projects/project-configuration.js";
+import { readProjects, selectProject } from "../projects/project-configuration.js";
 import { readText } from "../runtime/files.js";
 import { rootOf } from "../projects/project-context.js";
 import { scan } from "./record-files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { type Project } from "../projects/project-model.js";
 import { createRecord } from "./record-creation.js";
+import { withCacheLock } from "../storage/cache-lock.js";
+import { StateConflict } from "../runtime/input-errors.js";
 
 interface Notes {
   summary: string;
@@ -176,19 +178,44 @@ export async function addRelease(root: string, specificationPath: string, projec
     };
   });
   validateArtifacts(artifacts, specificationPath);
-  return createRecord(root, "REL", projectId, (number, project) =>
-    yamlStringify({
-      id: `${project.id}-REL-${number}`,
-      version: specification.version,
-      revision: specification.revision,
-      tag: specification.tag,
-      released: specification.released,
-      yanked: false,
-      notes: specification.notes,
-      artifacts,
-      ...(specification.extensions ? { extensions: specification.extensions } : {}),
-    }),
-  );
+  const project = selectProject(root, projectId);
+  return withCacheLock(join(root, "workbench", "release-publication"), async () => {
+    for (const candidate of scan(rootOf(root, project), "REL")) {
+      const prior = parseRelease(readText(candidate.path), candidate.path, candidate.number, project.id);
+      if (prior.tag !== specification.tag) continue;
+      if (
+        prior.revision !== specification.revision ||
+        prior.version !== specification.version ||
+        prior.artifacts.length !== artifacts.length ||
+        prior.artifacts.some(
+          ({ target, file, url, bytes, sha256 }) =>
+            !artifacts.some(
+              (entry) =>
+                entry.target === target &&
+                entry.file === file &&
+                entry.url === url &&
+                entry.bytes === bytes &&
+                entry.sha256 === sha256,
+            ),
+        )
+      )
+        throw new StateConflict("An existing release record describes a different publication");
+      return candidate.path;
+    }
+    return createRecord(root, "REL", project.id, (number) =>
+      yamlStringify({
+        id: `${project.id}-REL-${number}`,
+        version: specification.version,
+        revision: specification.revision,
+        tag: specification.tag,
+        released: specification.released,
+        yanked: false,
+        notes: specification.notes,
+        artifacts,
+        ...(specification.extensions ? { extensions: specification.extensions } : {}),
+      }),
+    );
+  });
 }
 
 export function renderReleaseIndex(root: string, project: Project): string {

@@ -17,7 +17,7 @@ export function workflowWindows(
   const problem = (status: 400 | 409, message: string) =>
     new WebError(status, message, { recovery: { href: sourceURL(context, route), label: "Refresh workflow" } });
   const phases: readonly WorkflowPhase[] =
-    route === Route.Plans ? ["plans"] : route === Route.Work ? ["work", "available", "experiments"] : ["reviews"];
+    route === Route.Plans ? ["plans"] : route === Route.Work ? ["work"] : ["approvals", "reviews"];
   if (parameters.phase && !phases.includes(parameters.phase))
     throw problem(400, "Select a phase from this workflow page");
   if (parameters.cursor_revision && parameters.cursor_revision !== context.revision)
@@ -43,6 +43,7 @@ export function workflowWindows(
       throw problem(400, "Invalid workflow windows");
     windows = input as Record<string, string>;
   }
+  let rendered = 0;
   return <T>(phase: WorkflowPhase, items: readonly T[], id: (item: T) => string) => {
     const key = `workflow-${phase}`,
       selected = parameters.phase === phase,
@@ -64,7 +65,9 @@ export function workflowWindows(
         : selected && parameters.before
           ? position(parameters.before)
           : Math.min(items.length, start + batch);
-    if (end < start || end - start > recordWindowLimit) throw problem(400, "Workflow window exceeds its limit");
+    const length = end - start;
+    if (length < 0 || rendered + length > recordWindowLimit) throw problem(400, "Workflow window exceeds its limit");
+    rendered += length;
     const visible = items.slice(start, end),
       first = visible[0],
       last = visible.at(-1),

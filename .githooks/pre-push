@@ -11,7 +11,6 @@ if [[ "${PATH:-}" == "$git_exec_path":* ]]; then
 fi
 
 repository_root=$(git rev-parse --show-toplevel)
-local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
 snapshots=$(mktemp -d)
 trap 'rm -rf -- "$snapshots"' EXIT
 checked_updates=()
@@ -63,14 +62,25 @@ while read -r local_ref local_object remote_ref remote_object extra; do
             continue
         fi
     fi
+    if [[ -f "$snapshot/bin/workbench.mjs" ]]; then
+        launcher=(node "$snapshot/bin/workbench.mjs")
+    elif command -v workbench >/dev/null 2>&1; then
+        launcher=(workbench)
+    else
+        printf '%s\n' 'workbench: pre-push requires Workbench on PATH.' \
+            '  Follow the project README or see:' \
+            "  https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+        exit 1
+    fi
+    if ! command -v node >/dev/null 2>&1; then
+        printf '%s\n' 'workbench: pre-push requires Node.js on PATH.' \
+            "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+        exit 1
+    fi
     if [[ -f "$snapshot/scripts/setup-development.mjs" ]]; then
         bash "$snapshot/.githooks/prepare-source" "$repository_root" "$snapshot"
     fi
-    if [[ -f "$snapshot/bin/workbench.mjs" ]]; then
-        launcher=(node "$snapshot/bin/workbench.mjs")
-    else
-        launcher=(workbench)
-    fi
+    local_config_root=$(cd -- "$repository_root" && node -p 'process.cwd()')
     printf 'Checking outgoing %s (%s).\n' "$local_ref" "$commit"
     WORKBENCH_PUSH_LOCAL_REF="$local_ref" WORKBENCH_PUSH_REMOTE_REF="$remote_ref" \
         WORKBENCH_PUSH_TIP="$commit" WORKBENCH_PUSH_REMOTE="$remote_object" \

@@ -1,4 +1,5 @@
-import { configFromData, languageRootsFromData } from "../../../src/core/projects/project-configuration.ts";
+import { readArtifactCatalog, releasePackageRows } from "../../../src/core/artifacts/artifact-catalog.ts";
+import { readConfig, readLanguageRoots, readProjects } from "../../../src/core/projects/project-configuration.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -6,22 +7,18 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { parse } from "smol-toml";
 
 const repository = resolve(import.meta.dirname, "../../../..");
 test("every example declares both managed release builders and source-owned behavioral verification", () => {
-  const projects = parse(readFileSync(join(repository, "workbench/projects.toml"), "utf8"));
-  const config = configFromData(
-    parse(readFileSync(join(repository, "workbench/config.toml"), "utf8")),
-    undefined,
-    "fixture",
-  );
-  for (const root of languageRootsFromData(projects, "fixture").filter(({ path }) => path !== ".")) {
+  const config = readConfig(repository);
+  const packages = releasePackageRows(readArtifactCatalog(repository));
+  const owners = new Map(readProjects(repository).map(({ id, path }) => [path, id]));
+  for (const root of readLanguageRoots(repository).filter(({ path }) => path !== ".")) {
     expect(readFileSync(join(repository, root.path, "LICENSE"))).toEqual(readFileSync(join(repository, "LICENSE")));
     for (const profile of required(
       required(config.development, "Expected fixture value: config.development").profiles,
       "Expected fixture value",
-    ).filter((profile) => profile.offline)) {
+    ).filter((profile) => profile.offline && profile.offline.kind !== "toolchain")) {
       const names =
         profile.builder === "nix"
           ? ["package.nix"]
@@ -34,14 +31,9 @@ test("every example declares both managed release builders and source-owned beha
           expect(required(profile.offline, "Expected fixture value").inputs).toContain(authority);
       }
     }
-    for (const builder of ["nix", "guix"]) {
-      expect(
-        required(
-          required(config.release, "Expected fixture value: config.release").profiles,
-          "Expected fixture value",
-        ).some((profile) => profile.path === root.path && profile.builder === builder),
-      ).toBe(true);
-    }
+    const owner = required(owners.get(root.path), `${root.path} must own its packaging recipes`);
+    const builders = packages.filter(({ definition }) => definition.owner === owner).map(({ builder }) => builder);
+    expect(builders).toEqual(expect.arrayContaining(["nix", "guix"]));
     if (root.language === "go") continue;
     const check = JSON.parse(readFileSync(join(repository, root.path, "managed-release-check.json"), "utf8")) as {
       image: string;

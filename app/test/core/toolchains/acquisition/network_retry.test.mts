@@ -128,14 +128,15 @@ test("bounded cause traversal identifies transport failures without looping on c
   const cycle = new Error("cycle");
   cycle.cause = cycle;
   expect(transientNetworkFailure(cycle)).toBe(false);
-  expect(
-    transientNetworkFailure(
-      new AggregateError([
-        cycle,
-        new Error("connection", { cause: Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }) }),
-      ]),
-    ),
-  ).toBe(true);
+  for (const code of ["ETIMEDOUT", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH"])
+    expect(
+      transientNetworkFailure(
+        new AggregateError([
+          cycle,
+          new Error("connection", { cause: Object.assign(new Error("incomplete transfer"), { code }) }),
+        ]),
+      ),
+    ).toBe(true);
   const now = Date.now();
   expect(retryAfterMilliseconds(new Date(now + 3000).toUTCString(), now)).toBeGreaterThan(0);
   expect(retryAfterMilliseconds("invalid", now)).toBe(0);
@@ -159,6 +160,9 @@ test("acquisition signatures distinguish transient service failures from authent
     "compiler error: missing symbol",
   ])
     expect(classifyAcquisitionOutput(text), text).not.toBe(AcquisitionReason.Unavailable);
+  expect(classifyAcquisitionOutput("ERROR: docker.io/library/alpine:unknown-tag: not found")).toBe(
+    AcquisitionReason.Missing,
+  );
 });
 
 test("a real acquisition child recovers from an outage while a deterministic failure runs once", async () => {

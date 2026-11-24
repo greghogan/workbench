@@ -8,10 +8,10 @@
   },
   "require-dev": {
     "workbench/verified-composer": "1.0.0",
-    "phpstan/phpstan": "2.3.5",
-    "friendsofphp/php-cs-fixer": "3.95.27",
-    "phpunit/phpunit": "13.4.6",
-    "brianium/paratest": "7.27.5"
+    "phpstan/phpstan": "2.3.7",
+    "friendsofphp/php-cs-fixer": "3.95.32",
+    "phpunit/phpunit": "13.4.8",
+    "brianium/paratest": "7.29.0"
   },
   "repositories": [
     {

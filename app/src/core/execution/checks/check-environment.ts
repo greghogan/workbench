@@ -57,6 +57,7 @@ const contextNames = [
   "WORKBENCH_SHELL_ROOT",
   "WORKBENCH_CI_TARGET",
   "WORKBENCH_CI_CANDIDATE",
+  "WORKBENCH_CI_REPOSITORY",
   "WORKBENCH_CONTAINER_CHECKOUT",
   "WORKBENCH_LOCAL_CI_IMAGE",
   "WORKBENCH_COVERAGE_BASE",
@@ -64,6 +65,8 @@ const contextNames = [
   "WORKBENCH_CPUS",
   "WORKBENCH_CPU_BUDGET",
   "WORKBENCH_RELEASE_OUTPUT",
+  "WORKBENCH_LAUNCHD_HELPER_INPUT",
+  "WORKBENCH_WINDOWS_SERVICE_HELPER_INPUT",
   "WORKBENCH_RELEASE_FORMAT",
   "WORKBENCH_RELEASE_BUILDER",
   "WORKBENCH_RELEASE_PLATFORM",
@@ -113,6 +116,7 @@ const languageBudgets: Record<string, string[]> = {
 // Nested integration workflows must find the same manager stores as their owning project.
 // Keep storage locations across roots without forwarding other languages' compiler or test options.
 const managerLocations: Record<string, string[]> = {
+  go: ["GOMODCACHE", "GOPATH"],
   rust: ["CARGO_HOME", "RUSTUP_HOME"],
   python: ["UV_PYTHON_INSTALL_DIR", "UV_PYTHON_CACHE_DIR"],
 };

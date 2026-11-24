@@ -214,7 +214,8 @@ export async function runJavaCheck(options: JavaCheckOptions): Promise<void> {
           }
         : undefined;
     const cwd = workspace ? scratch.directory : consumer;
-    const repository = workspace ? join(scratch.directory, "repository") : shared;
+    const privateRepository = workspace !== undefined || process.env.WORKBENCH_CHECK_SCOPED === "1";
+    const repository = privateRepository ? join(scratch.directory, "repository") : shared;
     const common = [
       "--batch-mode",
       "--strict-checksums",
@@ -224,7 +225,7 @@ export async function runJavaCheck(options: JavaCheckOptions): Promise<void> {
       `-Dmaven.repo.local=${repository}`,
       `-Dworkbench.cpus=${String(cpus)}`,
     ];
-    if (workspace) {
+    if (privateRepository) {
       await prepareMavenCheckRepository(shared, external, repository, cancellation.signal);
       const global = join(scratch.directory, "global-settings.xml");
       writeFileSync(global, emptySettings);
@@ -250,6 +251,9 @@ export async function runJavaCheck(options: JavaCheckOptions): Promise<void> {
         "-Daether.artifactResolver.postProcessor.trustedChecksums.record=false",
         "-Daether.artifactResolver.postProcessor.trustedChecksums.failIfMissing=true",
         `-Daether.trustedChecksumsSource.summaryFile.basedir=${join(consumer, ".mvn/checksums")}`,
+      );
+    if (!workspace)
+      common.push(
         `-Dworkbench.build=${join(consumer, "target")}`,
         `-Dworkbench.application=${String(runtime.kind === "application")}`,
         `-Dworkbench.runtimeArgs=${javaRuntimeArguments(runtime).join(" ")}`,
@@ -258,7 +262,7 @@ export async function runJavaCheck(options: JavaCheckOptions): Promise<void> {
       ...Object.entries(properties).map(([name, value]) => `-D${name}=${value}`),
       ...(options.profiles?.length ? [`-P${options.profiles.join(",")}`] : []),
     );
-    const env = workspace
+    const env = privateRepository
       ? isolatedMavenEnvironment(process.env, cwd, `-XX:ActiveProcessorCount=${String(cpus)}`)
       : { ...process.env, MAVEN_OPTS: `${process.env.MAVEN_OPTS ?? ""} -XX:ActiveProcessorCount=${String(cpus)}` };
     const command = commandInvocation(

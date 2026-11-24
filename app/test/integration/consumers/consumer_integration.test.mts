@@ -9,6 +9,7 @@ import { ConsumerCommands, consumerCommandDiagnostics } from "./consumer-integra
 import { ciTargets } from "../../../src/core/execution/ci/ci-targets.ts";
 import { readCITargets, targetPhases } from "../../../src/core/execution/ci/support/ci-contract.mjs";
 import { buildPaths } from "../../../src/core/artifacts/builds.ts";
+import { goCountFixture } from "../../fixtures/go-starter.mjs";
 
 const repository = resolve(import.meta.dirname, "../../../..");
 const temporary: string[] = [];
@@ -122,7 +123,10 @@ test("every shipped starter has a distinct behavioral fault and adoption snapsho
     for (const path of [source?.path ?? "", "README.md"]) {
       const destination = join(project, path);
       mkdirSync(resolve(destination, ".."), { recursive: true });
-      cpSync(join(repository, metadata.reference, path), destination);
+      cpSync(
+        language === "go" && path === "count.go" ? goCountFixture : join(repository, metadata.reference, path),
+        destination,
+      );
     }
     const fault = consumerFault(language, project);
     expect(fault.broken).not.toBe(fault.original);
