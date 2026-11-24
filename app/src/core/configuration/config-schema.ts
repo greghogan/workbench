@@ -22,6 +22,17 @@ function fail(location: string, expected: string): never {
 const text: Validator = (value, location) => {
   if (typeof value !== "string" || !value.trim()) fail(location, "a nonempty string");
 };
+const inputGroupName: Validator = (value, location) => {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9-]*$/.test(value))
+    fail(location, "an input group name using lowercase letters, digits and hyphens");
+};
+const inputGroupPath: Validator = (value, location) => {
+  text(value, location);
+  const path = value as string;
+  relativePath(path, location);
+  if (path.split("/").some((part) => part.toLowerCase() === ".git") || /\p{Cc}/u.test(path))
+    fail(location, "a project path outside Git metadata");
+};
 export const projectNameField: Validator = (value, location) => {
   text(value, location);
   if (typeof value !== "string" || value !== value.trim() || value.length > 128 || /[\p{Cc}]/u.test(value))
@@ -337,9 +348,27 @@ const configTable = table({
   documentation: array(
     table({ project: text, source_map: text, source_paths: array(text), source_excludes: array(text) }),
   ),
-  check_suite: array(table({ language: text, path: text })),
+  check_suite: array(
+    table({
+      language: text,
+      path: text,
+      input_groups: array(inputGroupName),
+      check_inputs: (value, location) => {
+        mapping(value, location);
+        for (const [name, groups] of Object.entries(value as Record<string, unknown>))
+          array(inputGroupName)(groups, `${location}.${name}`);
+      },
+    }),
+  ),
+  input_groups: (value, location) => {
+    mapping(value, location);
+    for (const [name, definition] of Object.entries(value as Record<string, unknown>)) {
+      inputGroupName(name, location);
+      table({ paths: array(inputGroupPath), depends_on: array(inputGroupName) })(definition, `${location}.${name}`);
+    }
+  },
   check_order: array(table({ root: text, after: text, phase: choice("setup", "complete") })),
-  check: array(table({ ...commandFields, project: text, path: text })),
+  check: array(table({ ...commandFields, project: text, path: text, input_groups: array(inputGroupName) })),
 });
 
 export const validateConfig: Validator = (value, location) => {
@@ -386,4 +415,12 @@ export const validateRegistry = table({
   ),
 });
 
-export const automationKeys = new Set(["check", "check_suite", "check_order", "documentation", "review", "extensions"]);
+export const automationKeys = new Set([
+  "check",
+  "check_suite",
+  "check_order",
+  "input_groups",
+  "documentation",
+  "review",
+  "extensions",
+]);

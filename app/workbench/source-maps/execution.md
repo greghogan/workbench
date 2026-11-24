@@ -116,8 +116,11 @@
   optional connectivity probe.
 - `src/core/execution/checks/check-plan.ts`: selects stages, scoped roots, setup sessions, and coverage variants.
 - `src/core/execution/checks/check-cache.ts`, `src/core/execution/checks/check-inputs.ts`,
-  `src/core/execution/checks/check-source-policy.ts`: classifies code inputs, fingerprints source/tool/environment
-  evidence, and refreshes security checks during local reuse.
+  `src/core/execution/checks/check-input-scope.ts`, `src/core/execution/checks/check-source-policy.ts`: Resolve declared
+  input groups and fingerprint source, tool, and environment evidence.
+- `src/core/execution/checks/check-cache-plan.ts`, `src/core/execution/checks/check-cache-groups.ts`,
+  `src/core/execution/checks/check-cache-store.ts`: Reuse independent check results, run required prerequisites and fresh
+  security checks, and retain successful evidence for each group.
 - `src/core/execution/checks/check-environment.ts`: Constructs native tool environments from declared inputs, selected
   SDKs and root-specific budgets, and identifies external configuration inputs.
 - `src/core/execution/checks/check-runner.ts`, `src/core/execution/checks/check-progress.ts`: schedules independent

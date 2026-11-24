@@ -11,7 +11,7 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
-import { delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { cpus, hostname, release } from "node:os";
 import { distributionRoot } from "../../projects/project-context.js";
@@ -22,12 +22,13 @@ import { resolveCheckCommand } from "../../toolchains/toolchains.js";
 import { checkExecution } from "./check-resources.js";
 import { buildCheckout, buildPaths, buildStorageSettings } from "../../artifacts/builds.js";
 import { localConfiguration } from "../environments/environments.js";
-import type { CheckSelection, planChecks } from "./check-plan.js";
+import type { CheckPlan, CheckSelection } from "./check-plan.js";
 import { checkSourcePolicy } from "./check-source-policy.js";
 import { ownedPath } from "../../runtime/paths.js";
 import { withConfigurationSnapshot } from "../../configuration/configuration-snapshot.js";
+import { checkGateInputScope, inputScopeMatcher, type CheckInputScope } from "./check-input-scope.js";
+import { distributionPathIncluded } from "../../distribution/distribution-layout.js";
 
-type Plan = ReturnType<typeof planChecks>;
 export const inputDigest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const slash = (path: string) => path.split(sep).join("/");
 
@@ -74,20 +75,52 @@ function git(root: string, args: string[], env: NodeJS.ProcessEnv): string {
 }
 
 /** Index snapshots and working directories use the same path/content/mode representation. */
-export function sourceFingerprint(root: string, owner = root, staged = false): string {
+export function sourceFingerprint(
+  root: string,
+  owner = root,
+  staged = false,
+  inputs?: readonly string[],
+  whole = false,
+): string {
+  return sourceInventory(root, owner, staged, whole ? undefined : inputs)(inputs, whole);
+}
+
+function sourceInventory(root: string, owner: string, staged: boolean, discover?: readonly string[]) {
   const env = checkBaseEnvironment(root, root);
   if (!staged && realpathSync(git(root, ["rev-parse", "--show-toplevel"], env).trim()) !== root)
     throw new Error("source inventory requires the project's Git root");
-  const index = git(owner, ["ls-files", "--stage", "-z"], env);
+  const tree = staged ? currentExecutionEnvironment().WORKBENCH_REVIEW_TREE : undefined;
+  if (tree !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(tree))
+    throw new Error("invalid staged source tree");
+  const inventory = tree
+    ? git(owner, ["ls-tree", "--full-tree", "-rz", tree], env)
+    : git(owner, ["ls-files", "--stage", "-z"], env);
   const modes = new Map<string, { mode: string; oid: string }>();
-  for (const entry of index.split("\0").filter(Boolean)) {
-    const match = /^([0-9]+) ([a-f0-9]+) ([0-3])\t([\s\S]+)$/.exec(entry);
-    if (match?.[3] !== "0") throw new Error("source index has unresolved entries");
-    modes.set(match[4] ?? "", { mode: match[1] ?? "", oid: match[2] ?? "" });
+  for (const entry of inventory.split("\0").filter(Boolean)) {
+    const separator = entry.indexOf("\t");
+    const [mode, object, stage] = entry.slice(0, separator).split(" ");
+    const oid = tree ? stage : object;
+    if (!mode || !oid || separator < 0) throw new Error("invalid Git source inventory");
+    if (!tree && stage !== "0") throw new Error("source index has unresolved entries");
+    modes.set(entry.slice(separator + 1), { mode, oid });
   }
   const names = new Set(modes.keys());
   if (!staged)
-    for (const name of git(root, ["ls-files", "--others", "--exclude-standard", "-z"], env).split("\0").filter(Boolean))
+    for (const name of git(
+      root,
+      [
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+        ...(discover && process.platform === "linux" && !discover.includes(".")
+          ? ["--", ...discover.map((path) => `:(top,literal)${path}`)]
+          : []),
+      ],
+      env,
+    )
+      .split("\0")
+      .filter(Boolean))
       names.add(name);
   const policy = checkSourcePolicy(root);
   const addInput = (name: string): void => {
@@ -97,36 +130,73 @@ export function sourceFingerprint(root: string, owner = root, staged = false): s
     else names.add(name);
   };
   for (const input of policy.inputs) addInput(input);
-  const entries: unknown[] = [];
-  for (const name of [...names].sort()) {
-    if (isAbsolute(name) || name.split("/").some((part) => !part || part === "." || part === ".." || part === ".git"))
-      throw new Error("unsafe source inventory path");
-    if (!policy.includes(name)) continue;
-    const path = join(root, name);
-    const indexed = modes.get(name);
-    if (indexed?.mode === "160000") {
-      if (existsSync(join(path, ".git"))) throw new Error("initialized submodules require fresh checks");
-      entries.push([name, "gitlink", indexed.oid]);
-      continue;
+  const digest = memoize(fileDigest);
+  return (inputs?: readonly string[], whole = false) => {
+    const selected = new Set(names);
+    const matches = inputs && !whole ? inputScopeMatcher(inputs) : undefined;
+    const namedExclusions = inputs && inputScopeMatcher(inputs.filter((name) => !policy.includes(name)));
+    const includes = (name: string) =>
+      (!matches || matches(name)) && (policy.includes(name) || namedExclusions?.(name) === true);
+    const entries: unknown[] = [];
+    if (inputs)
+      for (const name of inputs) {
+        // Explicit files can be ignored by Git. Directories use the normal Git inventory.
+        ownedPath(root, posix.dirname(name));
+        const metadata = sourceMetadata(join(root, name));
+        if (metadata?.isDirectory()) entries.push([name, "directory"]);
+        else if (metadata) selected.add(name);
+      }
+    for (const name of [...selected].sort()) {
+      if (isAbsolute(name) || name.split("/").some((part) => !part || part === "." || part === ".." || part === ".git"))
+        throw new Error("unsafe source inventory path");
+      if (!includes(name)) continue;
+      const path = join(root, name);
+      const indexed = modes.get(name);
+      if (indexed?.mode === "160000") {
+        if (existsSync(join(path, ".git"))) throw new Error("initialized submodules require fresh checks");
+        entries.push([name, "gitlink", indexed.oid]);
+        continue;
+      }
+      const metadata = sourceMetadata(path);
+      if (!metadata) continue;
+      if (metadata.isSymbolicLink()) {
+        const link = readlinkSync(path);
+        const target = realpathSync(path);
+        if (!target.startsWith(`${root}${sep}`) || !statSync(target).isFile())
+          throw new Error("source links outside the tree or to directories require fresh checks");
+        if (
+          matches &&
+          (!includes(slash(relative(root, target))) || !includes(slash(relative(root, resolve(dirname(path), link)))))
+        )
+          throw new Error("source link target is outside the declared inputs");
+        entries.push([name, "link", link, digest(target)]);
+      } else if (metadata.isFile()) {
+        const executable = process.platform === "win32" ? indexed?.mode === "100755" : !!(metadata.mode & 0o111);
+        entries.push([name, executable ? "executable" : "file", digest(path)]);
+      } else throw new Error("non-file source entries require fresh checks");
     }
-    let metadata;
-    try {
-      metadata = lstatSync(path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-      throw error;
-    }
-    if (metadata.isSymbolicLink()) {
-      const target = realpathSync(path);
-      if (!target.startsWith(`${root}${sep}`) || !statSync(target).isFile())
-        throw new Error("source links outside the tree or to directories require fresh checks");
-      entries.push([name, "link", readlinkSync(path), fileDigest(target)]);
-    } else if (metadata.isFile()) {
-      const executable = process.platform === "win32" ? indexed?.mode === "100755" : !!(metadata.mode & 0o111);
-      entries.push([name, executable ? "executable" : "file", fileDigest(path)]);
-    } else throw new Error("non-file source entries require fresh checks");
+    return inputDigest(entries);
+  };
+}
+
+function memoize<T>(read: (key: string) => T): (key: string) => T {
+  const cached = new Map<string, T>();
+  return (key) => {
+    const found = cached.get(key);
+    if (found !== undefined) return found;
+    const value = read(key);
+    cached.set(key, value);
+    return value;
+  };
+}
+
+function sourceMetadata(path: string) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return undefined;
   }
-  return inputDigest(entries);
 }
 
 const distributionGenerated = new Set([
@@ -141,26 +211,43 @@ const distributionGenerated = new Set([
   ".collections",
   "__pycache__",
 ]);
-function distributionFingerprint(root: string): string {
+function distributionFingerprint(root: string, runtimeOnly = false): string {
   try {
-    return sourceFingerprint(root);
+    if (!runtimeOnly) return sourceFingerprint(root);
   } catch {
     /* Installed distributions need no Git checkout. */
   }
   const entries: unknown[] = [];
   const policy = checkSourcePolicy(root);
-  function walk(directory: string): void {
-    for (const name of readdirSync(directory).sort()) {
-      if (distributionGenerated.has(name)) continue;
-      const path = join(directory, name),
-        metadata = lstatSync(path);
-      if (!policy.includes(slash(relative(root, path)))) continue;
-      if (metadata.isDirectory()) walk(path);
-      else if (metadata.isFile()) entries.push([slash(relative(root, path)), metadata.mode & 0o111, fileDigest(path)]);
-      else if (metadata.isSymbolicLink()) throw new Error("distribution links require fresh checks");
-    }
+  function walk(name: string): void {
+    if (
+      distributionGenerated.has(posix.basename(name)) ||
+      (runtimeOnly ? !distributionPathIncluded(name) : !policy.includes(name))
+    )
+      return;
+    const path = join(root, name);
+    const metadata = sourceMetadata(path);
+    if (metadata?.isDirectory()) for (const child of readdirSync(path).sort()) walk(`${name}/${child}`);
+    else if (metadata?.isFile()) entries.push([name, metadata.mode & 0o111, fileDigest(path)]);
+    else if (metadata?.isSymbolicLink()) throw new Error("distribution links require fresh checks");
   }
-  walk(root);
+  // A source checkout can also be its own distribution. Bind the runtime inputs
+  // independently of the selected checks without folding every project root back into their key.
+  const names = runtimeOnly
+    ? [
+        ".node-version",
+        ".tool-versions",
+        "package.json",
+        "pnpm-lock.yaml",
+        "bin",
+        "bundle",
+        "languages",
+        "scripts",
+        "app/resources",
+        "app/src",
+      ]
+    : readdirSync(root).sort();
+  for (const name of names) walk(name);
   return inputDigest(entries);
 }
 
@@ -183,6 +270,8 @@ export interface CheckFingerprint {
   components: Record<string, string>;
   environmentVariables?: Record<string, string> | undefined;
   configurationFiles?: Record<string, string> | undefined;
+  inputScope?: CheckInputScope;
+  freshSource?: string;
 }
 
 /** Optional, bounded diagnostics; neither values nor arbitrary receipt text may reach the terminal. */
@@ -238,15 +327,68 @@ export function changedCheckInputs(before: CheckFingerprint, after: CheckFingerp
   return Object.keys(before.components).filter((name) => before.components[name] !== after.components[name]);
 }
 
+export function changedRunInputs(before: CheckFingerprint, after: CheckFingerprint): string[] {
+  const changed = changedCheckInputs(before, after);
+  if (before.freshSource !== after.freshSource && !changed.includes("source")) changed.unshift("source");
+  return changed;
+}
+
 /** Only identified native environments are reusable; mutable managed shells run fresh. */
-export function checkFingerprint(root: string, options: CheckSelection, plan: Plan): CheckFingerprint {
+export function checkFingerprint(root: string, options: CheckSelection, plan: CheckPlan): CheckFingerprint {
   return withConfigurationSnapshot(() => configuredFingerprint(root, options, plan));
 }
 
-function configuredFingerprint(root: string, options: CheckSelection, plan: Plan): CheckFingerprint {
+function checkSourceContext(root: string) {
+  const owner = realpathSync(currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root));
+  const staged = currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1";
+  return { owner, staged, sourceOwner: staged ? owner : root };
+}
+
+type ReadSource = (paths?: readonly string[], whole?: boolean) => string;
+
+function sourceReader(root: string, owner: string, staged: boolean): ReadSource {
+  let inventory: ReturnType<typeof sourceInventory> | undefined;
+  const read = memoize((key) => {
+    inventory ??= sourceInventory(root, owner, staged);
+    const [paths, whole] = JSON.parse(key) as [string[] | null, boolean];
+    return inventory(paths ?? undefined, whole);
+  });
+  return (paths, whole = false) => read(JSON.stringify([paths ?? null, whole]));
+}
+
+/** Share Git inventory, bytes, and probes across group receipts for one observation. */
+export function checkFingerprintBatch(root: string, options: CheckSelection) {
+  const { sourceOwner, staged } = checkSourceContext(root);
+  const shared = {
+    source: sourceReader(root, sourceOwner, staged),
+    confirm: sourceReader(root, sourceOwner, staged),
+    digest: memoize(fileDigest),
+    distribution: memoize((path) => distributionFingerprint(path, path === root)),
+    probes: new Map<string, string>(),
+  };
+  return {
+    fingerprint: (plan: CheckPlan, scope: CheckInputScope) =>
+      withConfigurationSnapshot(() => configuredFingerprint(root, options, plan, { scope, ...shared })),
+    freshSource: () => shared.source(),
+  };
+}
+
+function configuredFingerprint(
+  root: string,
+  options: CheckSelection,
+  plan: CheckPlan,
+  batch?: {
+    scope: CheckInputScope;
+    source: ReadSource;
+    confirm: ReadSource;
+    digest: (path: string) => string;
+    distribution: (path: string) => string;
+    probes: Map<string, string>;
+  },
+): CheckFingerprint {
   if (plan.sessions.some((session) => session.environment !== "native"))
     throw new Error("managed environments require fresh checks");
-  const owner = realpathSync(currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root));
+  const { owner, staged, sourceOwner } = checkSourceContext(root);
   const paths = plan.sessions.map((session) => buildPaths(root, session.directory, "native", options));
   const normalize = (value: string) => {
     // Snapshot outputs stay isolated; their generated locations are not different check inputs.
@@ -260,8 +402,31 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
     }
     return value.replaceAll(root, "<checkout>").replaceAll(owner, "<checkout>");
   };
-  const staged = currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1";
-  const source = sourceFingerprint(root, staged ? owner : root, staged);
+  const readSource: ReadSource =
+    batch?.source ?? ((inputs, whole) => sourceFingerprint(root, sourceOwner, staged, inputs, whole));
+  const confirmSource = batch?.confirm ?? readSource;
+  const digest = batch?.digest ?? fileDigest;
+  let inputScope = batch?.scope ?? checkGateInputScope(plan.sessions, checkSourcePolicy(root).inputs);
+  let source: string | undefined;
+  if (inputScope.mode === "scoped") {
+    try {
+      source = readSource(inputScope.paths);
+    } catch {
+      inputScope = {
+        mode: "whole-project",
+        reason: "Declared inputs could not be inventoried safely",
+        paths: inputScope.paths,
+      };
+    }
+  }
+  const whole = inputScope.mode === "whole-project";
+  source ??= readSource(inputScope.paths, whole);
+  const freshSource =
+    !batch &&
+    inputScope.mode === "scoped" &&
+    plan.sessions.some((session) => session.checks.some((check) => check.role === "secret"))
+      ? readSource()
+      : undefined;
   const distribution = distributionRoot(root);
   const toolFiles = new Map<string, string>();
   const binaries = new Map<string, string>();
@@ -269,13 +434,13 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
     const path = executable(name, cwd, env);
     let hash = binaries.get(path);
     if (!hash) {
-      hash = fileDigest(path);
+      hash = digest(path);
       binaries.set(path, hash);
     }
     toolFiles.set(normalize(path), inputDigest([hash, statSync(path).mode & 0o111]));
     return path;
   };
-  const probes = new Map<string, string>();
+  const probes = batch?.probes ?? new Map<string, string>();
   const allocation = checkExecution(root, plan);
   const environments: unknown[] = [];
   const variableInputs = new Map<string, [string, string][]>();
@@ -283,7 +448,7 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
   const sessions = plan.sessions.map((session, index) => {
     const env = nativeCheckEnvironment(root, session.directory, options, allocation.cpuLimit, paths[index]);
     const configuration = checkConfigurationFiles(root, session.directory, env)
-      .map((path): [string, string | null] => [normalize(path), existsSync(path) ? fileDigest(path) : null])
+      .map((path): [string, string | null] => [normalize(path), existsSync(path) ? digest(path) : null])
       .sort(([a], [b]) => a.localeCompare(b));
     for (const [path, digest] of configuration) configurationInputs.set(path, inputDigest(digest));
     const scope = slash(relative(root, session.directory)) || ".";
@@ -320,7 +485,7 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
             name = found.stdout.trim();
           }
           const path = binary(name, session.directory, env);
-          const key = inputDigest([path, probe.args, env]);
+          const key = inputDigest([path, probe.args, env, session.directory]);
           let version = probes.get(key);
           if (version === undefined) {
             const result = spawnSync(path, probe.args, {
@@ -334,10 +499,10 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
               throw new Error(
                 `${probe.name} cannot start: ${result.error?.message ?? (result.stderr.trim().slice(-1000) || `exit status ${String(result.status)}`)}`,
               );
-            version = normalize(result.stdout + result.stderr);
+            version = result.stdout + result.stderr;
             probes.set(key, version);
           }
-          toolVersions.push([tool.name, probe.name, version]);
+          toolVersions.push([tool.name, probe.name, normalize(version)]);
         }
       } catch (cause) {
         const path = slash(relative(root, session.directory)) || ".";
@@ -367,8 +532,8 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
     "/usr/lib/sysimage/rpm/rpmdb.sqlite",
   ]
     .filter((path) => existsSync(path))
-    .map((path) => [path, fileDigest(path)]);
-  if (source !== sourceFingerprint(root, staged ? owner : root, staged))
+    .map((path) => [path, digest(path)]);
+  if (source !== confirmSource(inputScope.paths, whole))
     throw new Error("source files changed while identifying inputs");
   const revision = base.WORKBENCH_COVERAGE_BASE ?? "HEAD";
   if (!revision || revision.startsWith("-") || /[\r\n:]/.test(revision))
@@ -386,11 +551,15 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
   const material = {
     version: 1,
     source,
+    ...(inputScope.mode === "scoped" ? { inputScope } : {}),
     sessions,
     environment: environments,
     hostFiles,
     baselines,
-    distribution: distribution === root ? source : distributionFingerprint(distribution),
+    distribution:
+      distribution === root && inputScope.mode === "whole-project"
+        ? source
+        : (batch?.distribution(distribution) ?? distributionFingerprint(distribution, distribution === root)),
     tools: [...toolFiles].sort(([a], [b]) => a.localeCompare(b)),
     platform: [process.platform, process.arch, release(), hostname(), cpus()[0]?.model, process.versions],
     allocation,
@@ -398,6 +567,8 @@ function configuredFingerprint(root: string, options: CheckSelection, plan: Plan
   };
   return {
     key: inputDigest(material),
+    inputScope,
+    ...(freshSource === undefined ? {} : { freshSource }),
     environmentVariables: safeEnvironmentDigests(
       Object.fromEntries([...variableInputs].map(([name, values]) => [name, inputDigest(values)])),
     ),

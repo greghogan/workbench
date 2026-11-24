@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { readLog } from "../../../../src/core/storage/logs/log-reader.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { stringify } from "smol-toml";
 import { join, resolve } from "node:path";
 import { expect, test } from "vitest";
 import { planChecks } from "../../../../src/core/execution/checks/check-plan.ts";
@@ -18,6 +19,41 @@ import { stageFixtures } from "../../../fixtures/check-stages.mjs";
 
 const fixture = stageFixtures();
 const distribution = resolve(import.meta.dirname, "../../../../..");
+
+test("suite defaults, check overrides, and setup produce one input scope", () => {
+  const { root, config, save } = fixture();
+  config.check = [];
+  save();
+  const automation = join(root, "workbench/automation.toml");
+  const inputs = {
+    input_groups: {
+      base: { paths: ["service"] },
+      license: { paths: ["LICENSE"] },
+      tests: { paths: ["test fixtures"], depends_on: ["license"] },
+    },
+    check_suite: [
+      {
+        language: "typescript",
+        path: "service",
+        input_groups: ["base"],
+        check_inputs: { test: ["tests"] },
+      },
+    ],
+  };
+  writeFileSync(automation, stringify(inputs));
+  const checks = readChecks(root);
+  expect(checks.find((check) => check.role === "setup")?.inputs?.paths).toEqual(["service"]);
+  expect(checks.find((check) => check.role === "test")?.inputs?.paths).toEqual(["LICENSE", "test fixtures"]);
+  const invalid = [
+    [{ ...inputs.input_groups, license: { depends_on: ["tests"] } }, /input group cycle/],
+    [{ ...inputs.input_groups, tests: { paths: ["../outside"] } }, /unsafe relative path/],
+    [{ ...inputs.input_groups, tests: { depends_on: ["missing"] } }, /unknown input group 'missing'/],
+  ] as const;
+  for (const [groups, message] of invalid) {
+    writeFileSync(automation, stringify({ ...inputs, input_groups: groups }));
+    expect(() => readChecks(root)).toThrow(message);
+  }
+});
 
 function contractDetails(report: { runs: CheckRunResult[] }, role: string): CheckDetail[] {
   const run = required(report.runs[0], "Expected fixture run");

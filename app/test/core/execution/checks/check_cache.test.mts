@@ -1,7 +1,7 @@
 import { promised } from "../../../fixtures/promised.mjs";
 import type { planChecks } from "../../../../src/core/execution/checks/check-plan.ts";
 import { required } from "../../../../src/core/runtime/invariants.ts";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import type { CheckRunResult } from "../../../../src/core/execution/checks/check-report.ts";
 import { type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { join } from "node:path";
@@ -30,6 +30,41 @@ vi.mock("node:child_process", async (original) => {
 });
 
 const fixture = checkCacheFixtures();
+
+test("whole-project groups refresh independently and cannot validate a changed reused input", async () => {
+  const f = fixture();
+  const broad = required(f.plan.sessions[0], "fixture session");
+  const original = required(broad.checks[0], "fixture check");
+  broad.directory = join(f.root, "broad");
+  broad.checks.push({ ...original, name: "Security scan", role: "secret", requiresSetup: false });
+  const scope = join(f.root, "scoped");
+  for (const directory of [broad.directory, scope]) mkdirSync(directory);
+  const input = join(scope, "source.txt");
+  writeFileSync(input, "scoped input");
+  f.plan.sessions.push({
+    ...broad,
+    directory: scope,
+    checks: [{ ...original, name: "Independent check", inputs: { groups: ["example"], paths: ["scoped"] } }],
+  });
+  await f.run();
+  writeFileSync(join(f.root, "source.txt"), "a change only for the broad group");
+  const reports: CheckRunResult[] = [];
+  await expect(
+    f.run(
+      {},
+      (selected) =>
+        promised(() => {
+          expect(selected.sessions.map((session) => session.directory)).toEqual([broad.directory]);
+          writeFileSync(input, "changed while refreshing");
+        }),
+      (report) => {
+        reports.push(report);
+      },
+    ),
+  ).rejects.toThrow("check inputs changed during execution");
+  expect(reports.find((report) => report.reused)?.checks.map((check) => check.name)).toEqual(["Independent check"]);
+  expect(inspectBuildCache(f.root).entries.filter((entry) => entry.kind === "checks")).toHaveLength(2);
+});
 
 test("security refresh recomputes only selected ordering and leaves the full evidence plan unchanged", async () => {
   const f = fixture();
@@ -87,7 +122,11 @@ test.each([false, true])(
     const original = required(reports[0], "fresh report");
     await f.run({ report: join(f.base, "second.json") }, undefined, record);
     expect(f.executions()).toBe(1);
-    expect(reports[1]).toEqual({ ...original, reused: { verified: expect.any(String) as unknown } });
+    expect(reports[1]).toEqual({
+      ...original,
+      reused: { verified: expect.any(String) as unknown },
+      cache: { outcome: "reused", inputScope: original.cache?.inputScope },
+    });
     await f.run({ cache: false, report: join(f.base, "forced.json") }, undefined, record);
     await f.run({}, undefined, record);
     expect(f.executions()).toBe(2);
@@ -261,6 +300,72 @@ test("security checks and their setup run fresh on cache hits and failures propa
       });
     }),
   ).rejects.toThrow(/inputs changed/);
+});
+
+test.skipIf(process.platform === "win32")(
+  "scoped reuse includes setup modes and still detects changes during a fresh whole-project scan",
+  async () => {
+    const f = fixture();
+    const group = required(f.plan.sessions[0], "fixture session");
+    const test = required(group.checks[0], "fixture check");
+    const helper = join(f.root, "helper");
+    writeFileSync(helper, "#!/bin/sh\nexit 0\n");
+    test.inputs = { groups: ["suite"], paths: ["source.txt"] };
+    group.checks.push(
+      { ...test, name: "Setup", role: "setup", inputs: { groups: ["shared"], paths: ["helper"] } },
+      { ...test, name: "Security", role: "secret", requiresSetup: false, inputs: test.inputs },
+    );
+    const outsider = join(f.root, "out-of-scope.txt");
+    writeFileSync(outsider, "unchanged");
+    await f.run();
+    writeFileSync(outsider, "unrelated edit");
+    await f.run();
+    expect(f.executions()).toBe(2); // One gate and one security refresh.
+    const phases: string[][] = [];
+    await f.run({}, (selected) =>
+      promised(() => {
+        phases.push(selected.sessions.flatMap((session) => session.checks.map((check) => check.role)));
+      }),
+    );
+    chmodSync(helper, 0o755);
+    await f.run({}, (selected) =>
+      promised(() => {
+        phases.push(selected.sessions.flatMap((session) => session.checks.map((check) => check.role)));
+      }),
+    );
+    expect(phases).toEqual([["secret"], ["test", "setup", "secret"]]);
+    await expect(
+      f.run({}, () =>
+        promised(() => {
+          writeFileSync(outsider, "edited during security refresh");
+        }),
+      ),
+    ).rejects.toThrow(/source.*rerun checks/);
+  },
+);
+
+test.skipIf(process.platform === "win32")("an undeclared symlink target uses whole-project evidence", async () => {
+  const f = fixture();
+  const group = required(f.plan.sessions[0], "fixture session");
+  const test = required(group.checks[0], "fixture check");
+  mkdirSync(join(f.root, "suite"));
+  symlinkSync("../source.txt", join(f.root, "suite/input"));
+  writeFileSync(join(f.root, "ignored-output"), "explicit input outside the Git inventory");
+  test.inputs = { groups: ["suite"], paths: ["suite", "ignored-output"] };
+  const reports: CheckRunResult[] = [];
+  const run = () => f.run({}, undefined, (report) => reports.push(report));
+  await run();
+  await run();
+  writeFileSync(join(f.root, "source.txt"), "new link target contents");
+  await run();
+  writeFileSync(join(f.root, "ignored-output"), "explicit input changed");
+  await run();
+  expect(reports.map((report) => report.cache)).toMatchObject(
+    ["fresh", "reused", "fresh", "fresh"].map((outcome) => ({
+      outcome,
+      inputScope: { mode: "whole-project", reason: "Declared inputs could not be inventoried safely" },
+    })),
+  );
 });
 
 test.each([false, true])("working success satisfies a staged snapshot with external storage %s", async (external) => {

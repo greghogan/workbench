@@ -58,6 +58,9 @@ import { planChecks, type CheckSelection } from "./check-plan.js";
 import { terminalTable } from "../../diagnostics/terminal-table.js";
 import { readChecks, type ConfiguredCheck } from "./check-configuration.js";
 import { prepareCheckCommand } from "./check-preparation.js";
+import { checkGateInputScope } from "./check-input-scope.js";
+import { scopedCheckGroups } from "./check-cache-plan.js";
+import { safeOutput } from "../../diagnostics/terminal-output.js";
 
 export interface CheckInspectionOptions extends CheckSelection {
   json?: boolean;
@@ -80,6 +83,12 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
   const environment = executionPreference(root, options.environment, options.profile);
   const plan = planChecks(root, configured, { ...options, ...(environment ? { environment } : {}) });
   const execution = checkExecution(root, plan);
+  const scopes = scopedCheckGroups(root, plan)?.map(({ path, session, scope }) => ({
+    path,
+    environment: session.environment,
+    checks: session.checks.map((check) => check.name),
+    inputScope: scope,
+  }));
   const describe = (check: ConfiguredCheck, environment: string) => ({
     name: check.name,
     role: check.role,
@@ -91,11 +100,14 @@ function inspectConfiguredChecks(root: string, options: CheckSelection) {
     ...(check.extended ? { extended: true } : {}),
     online: check.online,
     requiresSetup: check.requiresSetup,
+    ...(check.inputs ? { inputs: check.inputs } : {}),
   });
   return {
     stage: plan.stage ?? null,
     structuralValidation: (options.role?.length ?? 0) === 0 && (options.excludeRole?.length ?? 0) === 0,
     allowEmpty: !!readConfig(root).checks?.allow_empty,
+    inputScope: checkGateInputScope(plan.sessions, readConfig(root).checks?.inputs),
+    ...(scopes ? { cacheGroups: scopes } : {}),
     execution: {
       availableCpus: execution.availableCpus,
       maxJobs: execution.maxJobs,
@@ -167,6 +179,21 @@ export function listChecks(root: string, options: CheckInspectionOptions = {}, h
         `  ${session.path} (${session.environment}): ${session.cpus === null ? "tool-default parallelism" : `${String(session.cpus)} workers maximum`}${after.length ? `; after ${after.join(", ")}` : ""}.`,
       );
     }
+    const scope = plan.inputScope;
+    console.log(checkPlanSubheading("Cache inputs"));
+    const showScope = (inputScope: typeof scope, indent: string) => {
+      if (inputScope.mode === "scoped") {
+        console.log(`${indent}Groups: ${inputScope.groups.join(", ")}`);
+        for (const path of inputScope.paths) console.log(`${indent}${safeOutput(path)}`);
+      } else console.log(`${indent}Whole project · ${safeOutput(inputScope.reason)}`);
+    };
+    if (plan.cacheGroups) {
+      for (const group of plan.cacheGroups) {
+        console.log(`  ${group.path} (${group.environment})`);
+        for (const check of group.checks) console.log(`    ${safeOutput(check)}`);
+        showScope(group.inputScope, "    ");
+      }
+    } else showScope(scope, "  ");
   }
   if (options.all && plan.excluded.length) {
     console.log(checkPlanSubheading("Excluded checks"));
@@ -209,7 +236,7 @@ export async function runChecks(
                 root,
                 options,
                 plan,
-                (selected) => runCheckGroups(root, options, selected, cancellation, owner, recordReport),
+                (selected, cache) => runCheckGroups(root, options, selected, cancellation, owner, recordReport, cache),
                 cancellation.signal,
                 recordReport,
               );

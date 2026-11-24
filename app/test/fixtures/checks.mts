@@ -36,6 +36,7 @@ export function inspection(roles: string[]): ReturnType<typeof inspectChecks> {
     stage: null,
     structuralValidation: false,
     allowEmpty: false,
+    inputScope: { mode: "whole-project", reason: "No input groups declared" },
     execution: { availableCpus: 1, maxJobs: 1, sessions: [] },
     excluded: [],
     selected: roles.map((role) => ({

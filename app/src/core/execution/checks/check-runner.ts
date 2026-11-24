@@ -18,7 +18,7 @@ import {
 } from "../../diagnostics/diagnostics.mjs";
 import { startLogRun, finishLogRun, logRetention } from "../../storage/logs/log-storage.js";
 import { processFailure } from "../../runtime/process-outcome.mjs";
-import { CheckReport, writeCheckReport, type CheckRunResult } from "./check-report.js";
+import { CheckReport, writeCheckReport, type CheckCacheReport, type CheckRunResult } from "./check-report.js";
 import { checkDetailPrefix } from "./check-detail-data.mjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -49,6 +49,7 @@ export async function runCheckGroups(
   cancellation: CheckCancellation,
   owner: ProcessLock,
   recordReport?: (report: CheckRunResult) => void,
+  cache?: CheckCacheReport,
 ): Promise<CheckRunResult> {
   const total = plan.sessions.reduce((sum, session) => sum + session.checks.length, 0);
   const progress = new CheckProgress(total);
@@ -76,6 +77,7 @@ export async function runCheckGroups(
   const checkout = currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root);
   const run = randomUUID();
   const report = new CheckReport(run, plan);
+  if (cache) report.result.cache = cache;
   const reportState = { finished: false };
   const logs = checkLogDirectory(storageRoot, checkout, ".", run);
   const finishReport = async (owned: boolean, failure?: unknown) => {

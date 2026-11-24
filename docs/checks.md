@@ -378,8 +378,8 @@ inputs. Matching successful evidence can then be reused; changed inputs require 
 supply no new success evidence. `--no-cache` also waits for ownership and then runs fresh. Different checkouts have
 independent queues. A wait that exceeds 30 minutes fails with the lock location for inspection.
 
-The source fingerprint conservatively covers the whole project; it does not infer which files affect each check. The
-source inventory includes tracked files and non-ignored untracked files, with contents and executable modes. Project
+The source fingerprint covers the whole project by default. The source inventory includes tracked files and
+non-ignored untracked files, with contents and executable modes. Project
 records and sidecars, adopted collections, charters, record/source maps, generated `AGENTS.md`, and each registered
 root's `coverage/coverage-summary.json` are excluded by default. Test-owned fixtures remain inputs, as do executable
 files such as `workbench/config.toml`, `projects.toml`, `automation.toml`, and `quality.json`. Record/map validation,
@@ -396,6 +396,39 @@ inputs = [ "workbench/experiments/EXP-00/driver.py" ]
 Entries are literal project-relative file or directory paths; directories include their descendants. Explicit inputs
 also include otherwise ignored files. Missing inputs become part of the inventory when created. Symlinks are not
 permitted in explicit input paths. Staged snapshots use their own files, never unstaged contents in the owning checkout.
+
+Projects can opt in to a narrower cache key by declaring the complete inputs of their reusable checks and required
+setup in `workbench/automation.toml`. A launcher suite can declare its directory and the shared license it reads.
+
+```toml
+[input_groups.shared]
+paths = ["LICENSE"]
+
+[input_groups.launcher]
+paths = ["services/launcher"]
+depends_on = ["shared"]
+
+[[check_suite]]
+language = "go"
+path = "services/launcher"
+input_groups = ["launcher"]
+```
+
+Paths are literal repository-relative names. A directory includes tracked and non-ignored untracked descendants,
+including additions, removals, and renames. A named file or an entry in `checks.inputs` can include ignored material.
+Use `input_groups` on an individual `[[check]]`, or set an override in `check_inputs` on a suite, keyed by the
+check's name in its language automation. Groups may depend on other groups. Workbench includes project configuration
+and `checks.inputs` in every scoped gate. Include any shared fixtures, scripts, and other files the commands read.
+
+`workbench check --list` and `--json` show the effective scopes. Native gates with declared inputs can reuse successful
+results independently for checks with different input scopes in the same root and environment. Commands still run in
+their configured order. Put outputs needed by other checks in declared setup so fresh checks can recreate them when
+their neighbors are reused. A group with an incomplete or unreliable scope falls back to whole-project inputs or runs
+fresh.
+
+The execution report's `cache` field shows which checks ran fresh or reused results, the input scope, and any fallback.
+Fresh security checks can read the whole project. A source change during those scans prevents reuse from satisfying the
+current gate.
 
 The key also covers committed coverage baseline contents, Workbench distribution, resolved command and tool executable
 contents, tool version probes, host identity, effective tool environments and selected configuration files, storage

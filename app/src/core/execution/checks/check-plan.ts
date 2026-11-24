@@ -45,6 +45,8 @@ export interface CheckSelection {
   machineJobserver?: string;
 }
 
+export type CheckPlan = ReturnType<typeof planChecks> & { resourceSessions?: number };
+
 export function commandArguments(value: unknown, label: string): asserts value is string[] {
   if (!Array.isArray(value) || !value.length || value.some((part: unknown) => typeof part !== "string" || !part))
     throw new InvalidInput(`${label}: needs a nonempty command array`);

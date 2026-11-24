@@ -30,6 +30,7 @@ export interface CheckDefinition {
   project?: string;
   path?: string;
   command: string[];
+  input_groups?: string[];
   stages?: string[];
   extended?: boolean;
   online?: boolean;
@@ -44,6 +45,10 @@ export interface CheckDefinition {
     environments?: string[];
     ci?: TargetDefinition;
   };
+}
+export interface CheckInputGroup {
+  paths?: string[];
+  depends_on?: string[];
 }
 export interface CheckOrderDefinition {
   root: string;
@@ -81,6 +86,12 @@ export type Config = Record<string, unknown> & {
   };
   compatibility?: { required?: boolean; data?: "ask" | "migrate" | "delete" };
   check?: CheckDefinition[];
-  check_suite?: { language: string; path: string }[];
+  check_suite?: {
+    language: string;
+    path: string;
+    input_groups?: string[];
+    check_inputs?: Record<string, string[]>;
+  }[];
+  input_groups?: Record<string, CheckInputGroup>;
   check_order?: CheckOrderDefinition[];
 };
