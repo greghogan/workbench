@@ -28,6 +28,7 @@ export async function verifyWorkbenchPackage(
   source = process.cwd(),
   exercise?: (installed: VerifiedWorkbenchPackage) => Promise<void>,
   options: {
+    packageDirectory?: string;
     signal?: AbortSignal;
     scope?: OwnedScratch;
     environment?: NodeJS.ProcessEnv;
@@ -35,7 +36,9 @@ export async function verifyWorkbenchPackage(
   } = {},
 ): Promise<void> {
   const root = resolve(source);
-  artifacts = resolve(artifacts ?? process.env.WORKBENCH_DIST_DIR ?? join(root, "dist"));
+  const packaged = options.packageDirectory
+    ? resolve(options.packageDirectory)
+    : join(resolve(artifacts ?? process.env.WORKBENCH_DIST_DIR ?? join(root, "dist")), "workbench-artifacts");
   const scratch = options.scope ?? createOwnedScratch(tmpdir(), "workbench-release-check");
   const temporary = options.scope ? mkdtempSync(join(scratch.directory, "verification-")) : scratch.directory;
   const owner = scratch.owner;
@@ -57,6 +60,7 @@ export async function verifyWorkbenchPackage(
         "WORKBENCH_BUILD_DIR",
         "WORKBENCH_DIST_DIR",
         "WORKBENCH_DEPENDENCIES_DIR",
+        "WORKBENCH_RELEASE_ARTIFACT",
         "WORKBENCH_RELEASE_OUTPUT",
         "WORKBENCH_STORAGE_PROJECT",
         "WORKBENCH_EXECUTING_SPEC",
@@ -98,7 +102,6 @@ export async function verifyWorkbenchPackage(
   let failure: unknown;
   try {
     writeFileSync(join(temporary, "gitconfig"), "");
-    const packaged = join(artifacts, "workbench-artifacts");
     const staging = join(temporary, "runtime with spaces 雪");
     mkdirSync(staging, { mode: 0o700 });
     const { archive, directory, manifest } = await stageReleaseArchive(

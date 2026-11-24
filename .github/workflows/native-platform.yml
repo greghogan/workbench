@@ -161,21 +161,21 @@ jobs:
         with:
           arch: ${{ fromJSON(inputs.platform).architecture }}
       - name: Make room for retained images
-        if: needs.prepare.outputs.container == 'true'
+        if: needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
       - name: Authenticate for read-only image acquisition
-        if: needs.prepare.outputs.container == 'true'
+        if: needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.actor }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - id: cache
         uses: ./.github/actions/ci-cache
-        if: needs.prepare.outputs.container != 'true'
+        if: needs.prepare.outputs.container != 'true' || matrix.operation == 'integration'
         with:
           target: ${{ inputs.platform }}
       - name: Restore native SDK host prerequisites
-        if: needs.prepare.outputs.container != 'true'
+        if: needs.prepare.outputs.container != 'true' || matrix.operation == 'integration'
         env:
           CHECK_ROOTS: ${{ toJSON(fromJSON(inputs.platform).paths) }}
         run: node scripts/ci-native-prerequisites.mts
@@ -205,7 +205,7 @@ jobs:
           path: ${{ runner.temp }}/workbench-reports/
           retention-days: 30
       - name: Remove transient registry credentials
-        if: always() && needs.prepare.outputs.container == 'true'
+        if: always() && needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         run: docker logout ghcr.io
 
   status:

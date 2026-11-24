@@ -709,7 +709,9 @@ export function prepareIsolatedChecks(
           initialized.add(group);
           const setup = group.setup.map(
             ({ directory, command }) =>
-              `(cd ${quote(translate(directory))} && ${translated(resolveCheckCommand(directory, command, toolRoot))
+              `(cd ${quote(translate(directory))} && ${translated(
+                resolveCheckCommand(directory, command, toolRoot, group.backend.kind === "macos"),
+              )
                 .map(quote)
                 .join(" ")})`,
           );

@@ -156,13 +156,15 @@ declares OCI recipes, the image must appear there with its declared kind for eve
 Its prepared roots must cover all the language roots selected for that builder. Qualify and publish toolchain-only
 images for each required architecture before selecting them in `ci.images`. CI restores locked inputs for the
 operation's selected roots and toolchains separately. The offline and online check partitions reuse that acquisition.
+C and C++ dependencies in Nix and Guix are prepared with the selected manager and compiler. Their prepared store lives
+for the CI operation and supplies the ordinary check and packaging containers.
 
 The local workspace can remain `host`. Omit `ci.images.native` to use verified tools and caches directly on Linux.
-macOS and Windows always use native host execution. Nix and Guix CI pull their prepared images from the configured
-registry and fail if retrieval fails. Their host shells remain available for local development. Build, verify, and
-publish the required images before pushing a change that affects them, using local preparation or the explicit native
-preparation workflow.
-Routine check jobs never build them. The pre-push gate checks registry manifests for every prepared image required by
+Native consumer integration runs on the runner so its fixture projects can acquire dependencies and exercise the Linux
+network boundary. macOS and Windows always use native host execution. Nix and Guix CI pull prepared toolchain images
+from the configured registry. Their host shells remain available for local development. Build, verify, and publish
+required images before pushing a change that affects them, using local preparation or the native preparation workflow.
+The pre-push gate checks registry manifests for every prepared image required by
 the outgoing revision's CI targets, including other Linux architectures. It does not pull layers, build images, or
 accept a local-only image as proof of publication. Missing images and registry access failures block the push with the
 affected profiles and references. Combined checks perform the same availability check in their online phase. Registry

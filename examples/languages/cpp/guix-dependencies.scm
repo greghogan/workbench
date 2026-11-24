@@ -1,9 +1,13 @@
-(use-modules (guix packages) (guix download) (guix base16) (gnu packages pretty-print))
+(use-modules (guix packages) (guix download) (guix base16) (guix utils) (gnu packages pretty-print))
 
 ;; Match the verified fmt recipe at the project's vcpkg revision, including its upstream fix.
 (define fmt-reference
   (package/inherit fmt-12
     (version "12.2.0")
+    (arguments
+     (substitute-keyword-arguments (package-arguments fmt-12)
+       ;; CTest's parallel launch gate measures the host, including unrelated jobs.
+       ((#:parallel-tests? _ #t) #f)))
     (source
      (origin
        (method url-fetch)

@@ -468,6 +468,9 @@ async function runConfiguredChecks(
             ...command,
           ]
         : command;
+    const sourceViews = new Set(
+      options.isolationGroups?.flatMap(({ backend, checks }) => (backend.kind === "macos" ? checks : [])),
+    );
     const script = (wrap: (name: string, command: string[]) => string[] = (_name, command) => command) =>
       [
         ...checkOutputPrelude(total, verbose, logID, control),
@@ -485,7 +488,8 @@ async function runConfiguredChecks(
           : []),
         group
           .flatMap((entry) => {
-            const command = resolveCheckCommand(directory, entry.command, distributionRoot(root));
+            const absoluteDistribution = sourceViews.has(entry.name);
+            const command = resolveCheckCommand(directory, entry.command, distributionRoot(root), absoluteDistribution);
             const sourceSetup = entry.role === "setup" && usesPreparedCheckModules(root, [entry]);
             const setup =
               sourceSetup && directory === root && environment === "native" && shouldPrepareSource(options)
@@ -509,8 +513,12 @@ async function runConfiguredChecks(
                   entry.name,
                   resolveCheckCommand(
                     directory,
-                    ["node", "{workbench}/scripts/check-coverage-summary.mjs"],
+                    [
+                      environment === "native" ? process.execPath : "node",
+                      "{workbench}/scripts/check-coverage-summary.mjs",
+                    ],
                     distributionRoot(root),
+                    absoluteDistribution,
                   ),
                 )
                   .map(quote)

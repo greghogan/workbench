@@ -167,11 +167,13 @@ test("PECL .tgz sources receive bounded gzip decoding", async () => {
 });
 
 test.each([false, true])(
-  "ordinary tar extraction supports Unicode destinations with relative paths=%s",
+  "ordinary tar extraction supports Unicode archive and destination paths with relative paths=%s",
   async (useRelative) => {
     const { extractArchive } = await import("../../../../src/core/toolchains/tool-downloads.ts");
     const bytes = await tarBytes();
-    const { root, archive } = fixture(bytes, ".tar");
+    const { root } = fixture(bytes, ".tar");
+    const archive = join(root, "archive with spaces 雪.tar");
+    writeFileSync(archive, bytes);
     const destination = join(root, "runtime with spaces 雪");
     mkdirSync(destination);
     await extractArchive(

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import { afterEach, expect, test, vi } from "vitest";
 import { parse, stringify } from "smol-toml";
 import { synchronize } from "../../../../src/core/records/sync.ts";
@@ -13,6 +14,7 @@ import {
   nativeCheckBackend,
 } from "../../../../src/core/execution/checks/check-isolation.ts";
 import { materializeCheckSource } from "../../../../src/core/execution/checks/check-source-view.ts";
+import { readLog } from "../../../../src/core/storage/logs/log-reader.ts";
 import type { CheckRunResult } from "../../../../src/core/execution/checks/check-report.ts";
 import { consumer, distribution, git } from "../../../fixtures/adoption.mjs";
 
@@ -154,6 +156,12 @@ test.skipIf(!backend)("native scope hides undeclared project files and keeps out
 });
 
 const native = nativeCheckBackend();
+test.runIf(process.platform === "darwin" && process.env.GITHUB_ACTIONS === "true")(
+  "the hosted macOS runner provides a working App Sandbox",
+  () => {
+    expect(native?.kind).toBe("macos");
+  },
+);
 test.runIf(backend !== undefined || process.platform !== "linux")(
   "offline check gates enforce their platform contract",
   async () => {
@@ -299,7 +307,7 @@ test.skipIf(!native)("the CLI stores scoped results only after enforcing the sou
   synchronize(root);
   git(root, "add", ".");
   git(root, "commit", "-m", "Scoped check fixture");
-  const run = (name: string, args: string[] = ["--stage", "commit"], success = true) => {
+  const run = async (name: string, args: string[] = ["--stage", "commit"], success = true) => {
     const report = join(root, ".reports", name + ".json");
     const result = spawnSync(
       process.execPath,
@@ -310,18 +318,47 @@ test.skipIf(!native)("the CLI stores scoped results only after enforcing the sou
         env: { ...process.env, CI: undefined, GITHUB_ACTIONS: undefined, GITLAB_CI: undefined },
       },
     );
-    expect(result.status === 0, result.stdout + result.stderr).toBe(success);
-    return (JSON.parse(readFileSync(report, "utf8")) as { runs: CheckRunResult[] }).runs;
+    const runs = existsSync(report)
+      ? (JSON.parse(readFileSync(report, "utf8")) as { runs: CheckRunResult[] }).runs
+      : [];
+    let diagnostics = result.stdout + result.stderr;
+    if ((result.status === 0) !== success) {
+      for (const check of runs.flatMap((item) => item.checks))
+        for (const detail of check.details)
+          if (detail.kind === "coverage-unavailable") diagnostics += `\n${detail.reason}`;
+      const files = new Set(
+        runs.flatMap((item) => [
+          ...item.checks.filter((check) => check.status === "failed").map((check) => check.log),
+          ...item.groups.flatMap(({ stdout, stderr }) => [stdout, stderr]),
+        ]),
+      );
+      const group = /failed; read full output: workbench logs read '([^']+\.log)'/.exec(diagnostics)?.[1];
+      if (group) files.add(group.replace(/\.log$/, ".stderr.log"));
+      for (const failure of files) {
+        if (!failure || ![failure, failure + ".gz", failure + ".zst"].some(existsSync)) continue;
+        await readLog(
+          failure,
+          new Writable({
+            write(chunk: Buffer, _encoding, done) {
+              diagnostics += chunk.toString("utf8");
+              done();
+            },
+          }),
+        );
+      }
+    }
+    expect(result.status === 0, `${name}\n${diagnostics}`).toBe(success);
+    return runs;
   };
   if (!native) throw new Error("Native check isolation is unavailable");
   const scope = { backend: checkBackendName(native), inputScope: { mode: "scoped" } };
-  expect(run("fresh")[0]?.cache?.groups).toMatchObject([scope]);
+  expect((await run("fresh"))[0]?.cache?.groups).toMatchObject([scope]);
   expect(existsSync(join(root, "generated"))).toBe(false);
   writeFileSync(omitted, "changed and still outside the scope");
-  expect(run("reuse")[0]?.reused).toBeDefined();
-  expect(run("forced", ["--stage", "commit", "--no-cache"])[0]?.cache?.groups).toMatchObject([scope]);
+  expect((await run("reuse"))[0]?.reused).toBeDefined();
+  expect((await run("forced", ["--stage", "commit", "--no-cache"]))[0]?.cache?.groups).toMatchObject([scope]);
   writeFileSync(summary, coverage(1));
-  const [measured] = run("coverage", ["--stage", "ci"]);
+  const [measured] = await run("coverage", ["--stage", "ci"]);
   expect(measured?.cache?.groups).toMatchObject([scope]);
   expect(measured?.checks[0]?.details).toContainEqual(
     expect.objectContaining({
@@ -333,7 +370,7 @@ test.skipIf(!native)("the CLI stores scoped results only after enforcing the sou
   expect(readFileSync(summary, "utf8")).toBe(coverage(1));
   writeFileSync(join(root, "verify.cjs"), 'require("node:fs").readFileSync("omitted.txt");\n');
   for (const name of ["denied", "denied-again"]) {
-    const [report] = run(name, [], false);
+    const [report] = await run(name, [], false);
     expect(report?.status).toBe("failed");
     expect(report?.reused).toBeUndefined();
   }

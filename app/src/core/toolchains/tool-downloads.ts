@@ -9,12 +9,14 @@ import { formatByteCount } from "../runtime/byte-size.js";
 import { redact } from "../diagnostics/diagnostics.mjs";
 import {
   chmodSync,
+  closeSync,
   createReadStream,
   createWriteStream,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -159,16 +161,24 @@ export async function extractArchive(
   if (asset.format === "zip") return extractZipArchive(archive, destination, asset.strip, limits, asset.zipLinks);
   if (asset.format === "7z") return extractSevenZip(archive, destination, asset.strip, limits);
   await boundTarArchive(archive, limits);
-  if (process.platform === "win32" && !process.env.SystemRoot)
-    throw new Error("SystemRoot is required to locate Windows tar.exe");
-  const tar =
-    process.platform === "win32"
-      ? join(required(process.env.SystemRoot, "expected process.env.SystemRoot"), "System32/tar.exe")
-      : "tar";
+  const windows = process.platform === "win32";
+  if (windows && !process.env.SystemRoot) throw new Error("SystemRoot is required to locate Windows tar.exe");
+  const tar = windows
+    ? join(required(process.env.SystemRoot, "expected process.env.SystemRoot"), "System32/tar.exe")
+    : "tar";
   // bsdtar otherwise interprets UTF-8 ustar names using the Windows ANSI code page.
-  const charset = process.platform === "win32" ? ["--options=hdrcharset=UTF-8"] : [];
+  const runTar = (mode: string, args: string[], options: Parameters<typeof execute>[2]) => {
+    if (!windows) return execute(tar, [mode, resolve(archive), ...args], options);
+    // Windows tar interprets archive filename arguments using the active code page. Open the path in Node.
+    const input = openSync(archive, "r");
+    try {
+      return execute(tar, [mode, "-", "--options=hdrcharset=UTF-8", ...args], { ...options, stdin: input });
+    } finally {
+      closeSync(input);
+    }
+  };
   const members = archiveListing(
-    execute(tar, ["-tf", archive, ...charset], {
+    runTar("-tf", [], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -182,7 +192,7 @@ export async function extractArchive(
   if (new Set(names.map(key)).size !== names.length) throw new Error("tool archive contains duplicate paths");
   const links = new Set<string>();
   const listing = archiveListing(
-    execute(tar, ["-tvf", archive, ...charset], {
+    runTar("-tvf", [], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -219,17 +229,14 @@ export async function extractArchive(
   try {
     const list = selection ? join(selection, "paths") : undefined;
     if (list) writeFileSync(list, members.filter((member) => include?.(archivePath(member))).join("\0") + "\0");
-    execute(
-      tar,
+    runTar(
+      "-xf",
       [
-        "-xf",
-        resolve(archive),
-        ...charset,
         "--no-same-owner",
         "-C",
         ".",
         // --null also makes GNU tar's names literal; BSD tar does not support --verbatim-files-from.
-        ...(list ? ["--no-recursion", "--null", "--files-from", resolve(list)] : []),
+        ...(list ? ["--no-recursion", "--null", "--files-from", relative(destination, list)] : []),
       ],
       { timeout: limits.milliseconds, cwd: destination },
     );

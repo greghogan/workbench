@@ -39,7 +39,7 @@ test.each([CIOperation.Integration, CIOperation.Release])(
 const [command]=process.argv.slice(2);
 if(command==='project') {}
 else if(command==='check') console.log(readFileSync('targets.json','utf8'));
-else if(command==='config') console.log('<unset>');
+else if(command==='config') console.log(process.env.FIXTURE_CI_IMAGES ?? '<unset>');
 else throw new Error('Unexpected CLI operation');`,
       );
       writeFileSync(
@@ -63,6 +63,9 @@ if(phase!=='native-install' && process.env.WORKBENCH_CI_TARGET==='.' && process.
         WORKBENCH_CI_CANDIDATE: candidate,
         GITHUB_REPOSITORY: "owner/project",
         GITHUB_SHA: revision,
+        ...(process.platform === "linux" && operation === CIOperation.Integration
+          ? { FIXTURE_CI_IMAGES: JSON.stringify({ native: "native-toolchain" }) }
+          : {}),
         FAIL_TARGET: "1",
       };
       const run = (extra: NodeJS.ProcessEnv = {}) =>
@@ -172,8 +175,8 @@ else if(args[0]==='ci-image-job') {
 } else throw Error('Unexpected CLI operation');
 `,
       );
-      const job = nativeCIJobs(targets, "linux", process.arch).find((job) => job.operation === CIOperation.Integration);
-      if (!job) throw Error("Missing integration operation");
+      const job = nativeCIJobs(targets, "linux", process.arch).find((job) => job.operation === CIOperation.Release);
+      if (!job) throw Error("Missing release operation");
       const result = spawnSync(process.execPath, [join(repository, "scripts/ci-platform.mts"), "run"], {
         cwd: root,
         encoding: "utf8",
@@ -189,7 +192,7 @@ else if(args[0]==='ci-image-job') {
       });
       expect(result.status, result.stdout + result.stderr).toBe(0);
       const executed = JSON.parse(readFileSync(join(root, "executed.json"), "utf8")) as Record<string, string>;
-      expect(executed).toEqual({ profile: "fixture", operation: CIOperation.Integration, image, candidate, targets });
+      expect(executed).toEqual({ profile: "fixture", operation: CIOperation.Release, image, candidate, targets });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

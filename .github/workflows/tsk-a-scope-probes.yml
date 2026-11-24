@@ -1,0 +1,23 @@
+name: TSK-A targeted platform verification
+on:
+  push:
+    branches: [ci/tsk-a-scope-probes]
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .node-version
+      - run: node scripts/setup-development.mjs
+      - name: Verify fresh-checkout fixtures and managed preparation
+        run: node node_modules/vitest/vitest.mjs run app/test/integration/consumers/consumer_automation.test.mts app/test/integration/maintenance/maintenance_cache.test.mts app/test/core/execution/checks/check_environments.test.mts
+      - name: Verify that the production App Sandbox is active
+        run: |
+          node node_modules/vitest/vitest.mjs run app/test/core/execution/checks/check_isolation.test.mts --reporter=verbose

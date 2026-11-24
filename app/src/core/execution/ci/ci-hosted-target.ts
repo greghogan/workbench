@@ -53,6 +53,7 @@ export async function executePreparedCISelection(
     const run = createRunReport(ids, directory);
     const split =
       options.operation === CIOperation.Checks && targets.every((target) => target.kind !== "compatibility");
+    const networks = split ? ["offline", "online"] : options.operation === CIOperation.Release ? ["offline"] : ["all"];
     const selections = targets.map((target) => ({
       path: target.path,
       ...(target.kind === "native" && target.toolchain ? { toolchain: target.toolchain } : {}),
@@ -78,7 +79,7 @@ export async function executePreparedCISelection(
         : { WORKBENCH_CI_OPERATION: options.operation, WORKBENCH_CI_INSTALL_PREREQUISITES: "1" }),
     };
     await withPreparedProfile(root, options.profile, { image: options.image, selections }, async (execute) => {
-      for (const network of split ? ["offline", "online"] : ["all"]) {
+      for (const network of networks) {
         await lifecycle.checkpoint();
         const partition = split ? join(partitionRoot, network) : directory;
         mkdirSync(partition, { recursive: true });

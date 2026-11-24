@@ -195,13 +195,17 @@ export async function exerciseConsumerProfile(
           const tracked = (await git(`${language}-tracked`, project, ["ls-files", "-z"])).split("\0").filter(Boolean);
           const before = consumerSnapshot(project, tracked);
           const rejected = await cli(
-            `${language}-repeat`,
+            `${language}-repeat-starter`,
             project,
-            ["init", "--language", language, "--root", application],
+            ["language", "init", language, application],
             true,
           );
           assert.match(consumerCommandDiagnostics(rejected).stderr, /already registered/);
-          assert.deepEqual(consumerSnapshot(project, tracked), before, "Repeated init must preserve user files");
+          assert.deepEqual(
+            consumerSnapshot(project, tracked),
+            before,
+            "Repeated starter setup must preserve user files",
+          );
           const offline = {
             ...env,
             WORKBENCH_OFFLINE: "1",

@@ -5,6 +5,7 @@ import { CILifecycle, executeCI } from "../app/src/core/execution/ci/support/ci-
 import { readCITargets } from "../app/src/core/execution/ci/support/ci-contract.mjs";
 import {
   assertOperationCoverage,
+  CIOperation,
   nativeCIJobs,
   operationPhases,
 } from "../app/src/core/execution/ci/support/ci-operations.mjs";
@@ -85,7 +86,8 @@ await runCIEntry("Native platform operation", async () => {
       );
       const reports = join(temporary, "workbench-reports");
       mkdirSync(reports, { recursive: true });
-      if (profile) {
+      // Consumer tests acquire on the host and isolate ordinary Linux checks in their own network namespace.
+      if (profile && job.operation !== CIOperation.Integration) {
         const selection = join(reports, "targets.json");
         writeFileSync(selection, JSON.stringify(job.targets));
         await run([

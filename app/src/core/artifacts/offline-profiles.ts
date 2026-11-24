@@ -412,6 +412,7 @@ async function runImage(
     distributionMount?: string;
     managedInputs?: { root: string; directory: string }[];
     nativeDependencyMounts?: { directory: string; guest: string }[];
+    managedPreparation?: { image: string; builder: "nix" | "guix" };
     stderr?: boolean;
     storeArchive?: StoreVerification;
     session?: { user: string; gitDirectories: string[]; signal: AbortSignal };
@@ -430,6 +431,7 @@ async function runImage(
   };
   const store = options.storeArchive;
   const session = options.session;
+  const preparation = options.managedPreparation;
   if (
     platform.Os !== "linux" ||
     platform.Architecture !== (architecture === "x64" ? "amd64" : "arm64") ||
@@ -487,12 +489,20 @@ async function runImage(
       ...(architecture === process.arch ? [] : ["--platform", `linux/${architecture === "x64" ? "amd64" : "arm64"}`]),
       "--name",
       container,
-      `--network=${store ? "none" : (options.network ?? "none")}`,
+      `--network=${preparation ? "bridge" : store ? "none" : (options.network ?? "none")}`,
+      ...(preparation?.builder === "guix"
+        ? [
+            "--cap-add=SYS_ADMIN",
+            "--cap-add=NET_ADMIN",
+            "--security-opt=seccomp=unconfined",
+            "--ulimit=nofile=65536:65536",
+          ]
+        : []),
       ...(config.runArgs ?? []),
       ...(config.containerUser ? ["--user", config.containerUser] : []),
       ...Object.entries(config.containerEnv ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
       "--mount",
-      mountFields("type=bind", `src=${source}`, `dst=${workspace}`),
+      mountFields("type=bind", `src=${source}`, `dst=${workspace}`, ...(preparation ? ["readonly"] : [])),
       ...(session?.gitDirectories ?? []).flatMap((directory) => [
         "--mount",
         mountFields("type=bind", `src=${directory}`, `dst=${directory}`),
@@ -527,6 +537,19 @@ async function runImage(
     const machines = architecture === "arm64" ? ["arm64", "aarch64"] : ["amd64", "x86_64"];
     if (!machines.includes(machine))
       throw new Error(`Container execution reports ${JSON.stringify(machine)}; expected linux-${architecture}`);
+    if (profile.builder !== "native") {
+      const socket =
+        profile.builder === "guix" ? "/var/guix/daemon-socket/socket" : "/nix/var/nix/daemon-socket/socket";
+      await docker([
+        "exec",
+        container,
+        "/bin/sh",
+        "-ec",
+        'attempt=0; until test -S "$1"; do attempt=$((attempt + 1)); if test "$attempt" -ge 60; then echo "Package manager did not create $1" >&2; exit 1; fi; sleep 1; done',
+        "workbench-store-ready",
+        socket,
+      ]);
+    }
     if (store)
       await docker([
         "exec",
@@ -539,7 +562,7 @@ async function runImage(
         JSON.stringify(store.expected),
         ...(session ? [session.user] : []),
       ]);
-    if (config.remoteUser) {
+    if (config.remoteUser && !preparation) {
       await docker([
         "exec",
         "--user",
@@ -559,11 +582,11 @@ async function runImage(
       ...executionEnvironment(root),
       WORKBENCH_DEVCONTAINER: "1",
       WORKBENCH_PREPARED: "1",
-      ...((options.network ?? "none") === "none" ? { WORKBENCH_OFFLINE: "1" } : {}),
+      ...(!preparation && (options.network ?? "none") === "none" ? { WORKBENCH_OFFLINE: "1" } : {}),
       WORKBENCH_PROJECT_ROOT: workspace,
       WORKBENCH_DISTRIBUTION_ROOT: guestDistribution,
       ...(process.env.CI ? { CI: process.env.CI } : {}),
-      ...(!store && process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
+      ...(!store && !preparation && process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
       ...(dependencies.length
         ? {
             WORKBENCH_CI_MANAGED_INPUTS: JSON.stringify(
@@ -608,6 +631,11 @@ async function runImage(
     await docker(["exec", ...execution, ...command], {
       env: { ...process.env, ...(environment.GH_TOKEN === undefined ? {} : { GH_TOKEN: environment.GH_TOKEN }) },
     });
+    if (preparation) {
+      await lifecycle.checkpoint();
+      await docker(["stop", container]);
+      await docker(["commit", container, preparation.image]);
+    }
     return 0;
   } finally {
     try {
@@ -1541,12 +1569,12 @@ export async function withPreparedProfile(
     groups.set(toolchain, paths);
   }
   const managedInputs: { root: string; directory: string }[] = [];
+  const selectedPaths = new Set([...groups.values()].flatMap((group) => [...group]));
   if (profile.offline.kind === "toolchain" && profile.builder !== "native") {
     const cancellation = processCancellation();
     try {
-      const paths = new Set([...groups.values()].flatMap((group) => [...group]));
       const { maxJobs } = builderExecutionResources(root);
-      for (const path of paths) {
+      for (const path of selectedPaths) {
         const directory = await acquireManagedArtifactInputs(
           ownedPath(root, path),
           `linux-${process.arch}`,
@@ -1564,11 +1592,15 @@ export async function withPreparedProfile(
       ? { distributionMount: distribution }
       : {}),
   };
-  const execute = (nativeDependencyMounts?: { directory: string; guest: string }[]) => {
+  const execute = (
+    nativeDependencyMounts?: { directory: string; guest: string }[],
+    acquired?: { image: string; environments: string },
+  ) => {
     const run: PreparedRun = async (command, execution = {}) => {
-      await runImage(root, profile, config, image, root, {
+      await runImage(root, profile, config, acquired?.image ?? image, root, {
         ...common,
         ...execution,
+        ...(acquired ? { env: { ...execution.env, WORKBENCH_ENVIRONMENTS: acquired.environments } } : {}),
         command,
         network: execution.network ?? "host",
         ...(managedInputs.length ? { managedInputs } : {}),
@@ -1577,8 +1609,66 @@ export async function withPreparedProfile(
     };
     return action(run);
   };
-  if (profile.offline.kind !== "toolchain" || profile.builder !== "native") {
+  if (profile.offline.kind !== "toolchain") {
     await execute();
+    return;
+  }
+  if (profile.builder !== "native") {
+    // The C and C++ libraries are compiled by the pinned package manager for its own compiler and runtime.
+    const roots = readLanguageRoots(root)
+      .filter(({ language, path }) => (language === "c" || language === "cpp") && selectedPaths.has(path))
+      .map(({ path }) => path);
+    if (!roots.length) {
+      await execute();
+      return;
+    }
+    const temporary = mkdtempSync(join(tmpdir(), "workbench-ci-managed-"));
+    const source = join(temporary, "source");
+    const acquired = {
+      image: `workbench-offline:ci-dependencies-${randomUUID()}`,
+      environments: "/home/workbench/ci-environments",
+    };
+    let failure: unknown;
+    try {
+      await snapshotCIProject(root, source);
+      const { cores, maxJobs } = builderExecutionResources(root);
+      await runImage(root, profile, config, image, source, {
+        ...common,
+        managedPreparation: { image: acquired.image, builder: profile.builder },
+        command: [
+          "node",
+          "{workbench}/scripts/prepare-ci-managed-profiles.mts",
+          profile.builder,
+          acquired.environments,
+          String(cores),
+          String(maxJobs),
+          ...roots,
+        ],
+      });
+      await execute(undefined, acquired);
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      await settleCleanup(
+        [
+          async () => {
+            const images = await executeCI(
+              "docker",
+              ["image", "ls", "--quiet", "--filter", `reference=${acquired.image}`],
+              {
+                capture: true,
+              },
+            );
+            if (images.trim()) await executeCI("docker", ["image", "rm", acquired.image]);
+          },
+          () => {
+            removeOwnedTree(temporary);
+          },
+        ],
+        failure,
+      );
+    }
     return;
   }
   const inputs = mkdtempSync(join(tmpdir(), "workbench-ci-dependencies-"));

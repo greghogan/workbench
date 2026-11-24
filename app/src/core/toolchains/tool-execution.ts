@@ -38,14 +38,17 @@ export function execute(
     env?: NodeJS.ProcessEnv;
     capture?: boolean;
     stdoutToStderr?: boolean;
+    stdin?: number;
     maxBuffer?: number;
     timeout?: number;
   } = {},
 ): string {
-  const { capture, stdoutToStderr, ...rest } = options;
+  const { capture, stdoutToStderr, stdin, ...rest } = options;
   const invocation = commandInvocation(command, args, rest.env, rest.cwd);
   const result = spawnSync(required(invocation[0], "tool execution needs a command"), invocation.slice(1), {
-    stdio: capture ? ["ignore", "pipe", "pipe"] : stdoutToStderr ? ["inherit", 2, 2] : "inherit",
+    stdio: capture
+      ? [stdin ?? "ignore", "pipe", "pipe"]
+      : [stdin ?? "inherit", stdoutToStderr ? 2 : "inherit", "inherit"],
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     ...rest,

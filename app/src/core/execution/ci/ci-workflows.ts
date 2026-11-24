@@ -539,7 +539,7 @@ function githubPlatformWorkflow(context: CIRenderContext, destination: CIDestina
         steps: [
           ...steps.before,
           cache,
-          prerequisites,
+          { ...prerequisites, if: `${prerequisites.if} || matrix.operation == 'integration'` },
           {
             uses: action(context, "actions/download-artifact"),
             with: { name: "prepared-${{ fromJSON(inputs.platform).id }}", path: ".workbench-ci/prepared" },

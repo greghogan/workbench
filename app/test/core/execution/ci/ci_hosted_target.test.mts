@@ -212,7 +212,7 @@ test.each([CIOperation.Checks, CIOperation.Release])(
             ["none", "offline"],
             ["host", "online"],
           ]
-        : [["host", "all"]],
+        : [["none", "offline"]],
     );
   },
 );

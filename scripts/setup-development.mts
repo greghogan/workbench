@@ -271,19 +271,12 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
     }
     if (!prepared && !preparedDependenciesMatch(root))
       throw new Error("Prepared source dependencies do not match the declared pins");
-    await run(process.execPath, [join(root, "scripts/build-tooling.mts"), "--maintainers-only"]);
-    const { reuseBundles } = await import("./bundle-cache.mts");
-    if (!reuseBundles(root)) {
-      const { compileBundles, publishBundles } = await import("./bundle-build.mjs");
-      const { collectToolingArtifacts } = await import("./build-tooling.mts");
-      const { verifyRuntimeDependencies } = await import("./runtime-dependencies.mjs");
-      cancellation.signal.throwIfAborted();
-      console.error("Building local Workbench bundles…");
-      const bundles = await compileBundles(root, cancellation.signal);
-      verifyRuntimeDependencies({ root, artifacts: collectToolingArtifacts(root), ...bundles });
-      publishBundles(root, bundles);
-    }
     if (temporary && !configuredVirtualStore && !values["build-only"] && !lifecycle) {
+      // The compiler's child process must release the bootstrap executable before pnpm can replace it on Windows.
+      await run(process.execPath, [join(root, "scripts/setup-development.mjs"), "--build-only"], root, {
+        ...environment,
+        WORKBENCH_SOURCE_SETUP: undefined,
+      });
       await run(process.execPath, [
         join(root, "bin/workbench.mjs"),
         "package-manager-exec",
@@ -304,6 +297,19 @@ export async function setupDevelopment(root: string, args = process.argv.slice(2
         !lstatSync(localVirtualStore).isSymbolicLink()
       )
         rmSync(localVirtualStore, { recursive: true });
+    } else {
+      await run(process.execPath, [join(root, "scripts/build-tooling.mts"), "--maintainers-only"]);
+      const { reuseBundles } = await import("./bundle-cache.mts");
+      if (!reuseBundles(root)) {
+        const { compileBundles, publishBundles } = await import("./bundle-build.mjs");
+        const { collectToolingArtifacts } = await import("./build-tooling.mts");
+        const { verifyRuntimeDependencies } = await import("./runtime-dependencies.mjs");
+        cancellation.signal.throwIfAborted();
+        console.error("Building local Workbench bundles…");
+        const bundles = await compileBundles(root, cancellation.signal);
+        verifyRuntimeDependencies({ root, artifacts: collectToolingArtifacts(root), ...bundles });
+        publishBundles(root, bundles);
+      }
     }
   } finally {
     cancellation.close();

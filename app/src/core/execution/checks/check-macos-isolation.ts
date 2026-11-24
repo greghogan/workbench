@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, lstatSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { removeOwnedTree } from "../../runtime/owned-scratch.mjs";
 
 const codesign = "/usr/bin/codesign";
 const shell = "/bin/sh";
@@ -72,7 +73,7 @@ export function signCheckShell(parent: string, readOnly: readonly string[], writ
       if (!info) return;
       if (!info.isDirectory() || info.uid !== process.getuid?.())
         throw new Error("The macOS scope container changed ownership");
-      rmSync(container, { recursive: true });
+      removeOwnedTree(container);
     },
   };
 }

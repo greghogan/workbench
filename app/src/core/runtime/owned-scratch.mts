@@ -23,19 +23,20 @@ interface ScratchRecord {
 
 /** Clean an already-owned tree, including read-only package-manager directories. */
 export function removeOwnedTree(directory: string): void {
+  const options = { recursive: true, force: true, maxRetries: 3, retryDelay: 50 };
   try {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, options);
   } catch (error) {
-    if (!["EACCES", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+    if (!["EACCES", "EPERM", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
     const allowRemoval = (path: string) => {
-      const info = lstatSync(path);
-      if (!info.isDirectory()) return;
+      const info = lstatSync(path, { throwIfNoEntry: false });
+      if (!info?.isDirectory()) return;
       if ((info.mode & 0o700) !== 0o700) chmodSync(path, info.mode | 0o700);
       for (const entry of readdirSync(path, { withFileTypes: true }))
         if (entry.isDirectory()) allowRemoval(join(path, entry.name));
     };
     allowRemoval(directory);
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, options);
   }
 }
 function record(directory: string): ScratchRecord | undefined {

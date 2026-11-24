@@ -36,12 +36,17 @@ function packageManager(directory: string, distribution: string): string[] {
 }
 
 /** Resolve the package-manager pin from its native authority, not copied command strings. */
-export function resolveCheckCommand(directory: string, command: string[], distribution?: string): string[] {
+export function resolveCheckCommand(
+  directory: string,
+  command: string[],
+  distribution?: string,
+  absoluteDistribution = false,
+): string[] {
   command = command.map((part) => {
     if (part !== "{workbench}" && !part.startsWith("{workbench}/")) return part;
     if (!distribution) throw new Error("a Workbench distribution is required to resolve {workbench}");
-    if (part === "{workbench}") return relative(directory, distribution).split(sep).join("/") || ".";
-    return `${relative(directory, distribution).split(sep).join("/") || "."}/${part.slice("{workbench}/".length)}`;
+    const base = absoluteDistribution ? distribution : relative(directory, distribution).split(sep).join("/") || ".";
+    return part === "{workbench}" ? base : `${base}/${part.slice("{workbench}/".length)}`;
   });
   return command[0] === "{packageManager}"
     ? [...packageManager(directory, distribution ?? distributionRoot(directory)), ...command.slice(1)]
