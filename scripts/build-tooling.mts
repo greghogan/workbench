@@ -8,10 +8,10 @@ import {
   toolingIgnores,
   type ToolingArtifact,
 } from "../app/src/core/distribution/tooling-artifacts.mts";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync, rmSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { build, transform } from "esbuild";
-import { format, resolveConfig } from "prettier";
+import { build, transform, version as esbuildVersion } from "esbuild";
+import { format, resolveConfig, version as prettierVersion } from "prettier";
 import type { CoverageSourceMap } from "./node-coverage-reports.mjs";
 import { parse } from "smol-toml";
 import { parseArgs } from "node:util";
@@ -25,6 +25,9 @@ import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { authoredTooling } from "./authored-tooling.mts";
 import { buildDiagramAssets } from "./build-diagram-assets.mts";
 import { bundleLicenses } from "./bundle-licenses.mts";
+import { guixBootstrapContract, guixBootstrapDockerfile, guixBootstrapProgram } from "./managed-files.mts";
+import { bundleInputDigest, developmentToolingReceipt } from "./bundle-cache.mts";
+import { isRecord } from "../app/src/core/runtime/values.mjs";
 
 export type ToolingOperation = "build" | "verify" | "prepare-development";
 
@@ -77,18 +80,66 @@ export function collectToolingArtifacts(root: string, scope: "all" | "developmen
     .filter((artifact) => scope === "all" || !artifact.tracked);
 }
 
+function developmentToolingIdentity(sourceInputs: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify([process.version, process.platform, esbuildVersion, prettierVersion, sourceInputs]))
+    .digest("hex");
+}
+
+function emittedIdentity(path: string): string | undefined {
+  const file = lstatSync(path, { throwIfNoEntry: false });
+  if (!file?.isFile() || file.size > 16 * 1024 * 1024) return undefined;
+  return createHash("sha256")
+    .update(String(file.mode & 0o111))
+    .update("\0")
+    .update(readFileSync(path))
+    .digest("hex");
+}
+
+function reusableDevelopmentTooling(root: string, identity: string, outputs: string[]): boolean {
+  try {
+    const path = join(root, developmentToolingReceipt);
+    const receipt = lstatSync(path, { throwIfNoEntry: false });
+    if (!receipt?.isFile() || receipt.size > 256 * 1024) return false;
+    const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return (
+      isRecord(value) &&
+      value.inputs === identity &&
+      isRecord(value.outputs) &&
+      outputs.length === Object.keys(value.outputs).length &&
+      outputs.every((path) => {
+        const expected = (value.outputs as Record<string, unknown>)[path];
+        return typeof expected === "string" && expected === emittedIdentity(join(root, path));
+      })
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Keep copied reference helpers and installed packages executable with ordinary Node. */
 export async function buildTooling({
   root: suppliedRoot,
   operation,
+  sourceInputs,
+  signal,
 }: {
   root: string;
   operation: ToolingOperation;
+  sourceInputs?: string;
+  signal?: AbortSignal;
 }): Promise<void> {
+  signal?.throwIfAborted();
   const root = realpathSync(suppliedRoot);
   const check = operation === "verify";
   const maintainersOnly = operation === "prepare-development";
   const retainedBundleInputs = new Set<string>();
+  const artifacts = collectToolingArtifacts(root, maintainersOnly ? "development" : "all");
+  const outputs = maintainersOnly
+    ? artifacts.flatMap((artifact) => (artifact.emission === "none" ? [] : [artifact.output]))
+    : [];
+  const identity =
+    maintainersOnly && outputs.length ? developmentToolingIdentity(sourceInputs ?? bundleInputDigest(root)) : undefined;
   const ignorePath = join(root, ".gitignore");
   if (existsSync(ignorePath)) {
     const original = readFileSync(ignorePath, "utf8"),
@@ -98,6 +149,7 @@ export async function buildTooling({
     if (operation === "build" && original !== expected)
       writeAtomic(ignorePath, expected, statSync(ignorePath).mode & 0o777);
   }
+  if (identity && reusableDevelopmentTooling(root, identity, outputs)) return;
   const cleanDeletedSources = (directory: string): void => {
     if (!existsSync(directory)) return;
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -213,6 +265,7 @@ export async function buildTooling({
     } else writeAtomic(assetPath, asset);
   }
   const emit = async (policy: ToolingArtifact): Promise<void> => {
+    signal?.throwIfAborted();
     if (nativeSources.has(policy.source) || bundledOnlySources.has(policy.source)) {
       const obsolete = generatedOutput(policy.source);
       if (obsolete && existsSync(join(root, obsolete))) {
@@ -266,11 +319,24 @@ export async function buildTooling({
       if (!output) throw new Error(`${source}: fixture compilation produced no output`);
       code = output.text;
     } else {
+      const guixBootstrap = policy.source === "scripts/prepare-managed-development.mts";
       const result = await transform(readFileSync(source, "utf8"), {
         loader: "ts",
         target: "es2022",
         format: commonjs ? "cjs" : "esm",
         sourcefile: basename(source),
+        ...(guixBootstrap
+          ? {
+              define: {
+                __workbenchGuixBootstrapContract: JSON.stringify(
+                  guixBootstrapContract(
+                    readFileSync(join(root, guixBootstrapDockerfile)),
+                    readFileSync(join(root, guixBootstrapProgram)),
+                  ),
+                ),
+              },
+            }
+          : {}),
         // Formatting reference JavaScript would invalidate the original emission map.
         sourcemap: reference ? false : "inline",
         sourcesContent: true,
@@ -285,7 +351,7 @@ export async function buildTooling({
       );
     // A portable generated-file identity distinguishes identical helpers even after copying or renaming them.
     code = code.replace(
-      /(sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,)([^\s]+)/,
+      /^(\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,)([\w+/=]+)$/m,
       (_, prefix: string, encoded: string) => {
         const map = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as CoverageSourceMap;
         map.file = relative(root, destination).split("\\").join("/");
@@ -307,12 +373,28 @@ export async function buildTooling({
       if (process.platform !== "win32" && (statSync(source).mode & 0o111) !== (statSync(destination).mode & 0o111))
         throw new Error(`${relative(root, destination)} has stale executable permissions; run pnpm run tooling:build`);
     } else {
-      writeAtomic(destination, code, statSync(source).mode & 0o777);
+      const mode = statSync(source).mode & 0o777;
+      const previous = lstatSync(destination, { throwIfNoEntry: false });
+      if (
+        !previous?.isFile() ||
+        (process.platform !== "win32" && (previous.mode & 0o111) !== (mode & 0o111)) ||
+        readFileSync(destination, "utf8") !== code
+      )
+        writeAtomic(destination, code, mode);
     }
   };
-  const artifacts = collectToolingArtifacts(root, maintainersOnly ? "development" : "all");
   for (const artifact of artifacts.filter((item) => item.emission !== "bundle")) await emit(artifact);
   for (const artifact of artifacts.filter((item) => item.emission === "bundle")) await emit(artifact);
+  signal?.throwIfAborted();
+  if (identity && identity === developmentToolingIdentity(bundleInputDigest(root))) {
+    const observed = Object.fromEntries(outputs.map((path) => [path, emittedIdentity(join(root, path))]));
+    if (Object.values(observed).every((value) => value !== undefined))
+      writeAtomic(
+        join(root, developmentToolingReceipt),
+        JSON.stringify({ inputs: identity, outputs: observed }) + "\n",
+        0o600,
+      );
+  }
   if (!maintainersOnly) {
     const inputs = [...retainedBundleInputs].filter((path) => path.split(/[\\/]/).includes("node_modules"));
     const notices = inputs.length ? bundleLicenses(root, inputs) : "";

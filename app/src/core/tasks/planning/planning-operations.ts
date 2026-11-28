@@ -1,8 +1,9 @@
 import { installRepositoryHooks } from "../../git/archive-protection.js";
 import { changeTaskQueue } from "../task-queue.js";
+import { readWorkGraph } from "./work-plans.js";
 
 import { gitRevision, validateBranch } from "../../git/refs.js";
-import { planClaim, readPlanOperations } from "./plan-operation-store.js";
+import { planClaim, readPlanOperations, type StoredPlanOperation } from "./plan-operation-store.js";
 import { readDraftGroups, prepareDraftGroups, draftGroupCommands } from "./planning-draft-groups.js";
 import { indexPlanningRevision, validatePlanEntries } from "./planning-index.js";
 
@@ -78,14 +79,16 @@ export function preparePlanDraftUpdates(
   root: string,
   changes: readonly PlanDraftUpdate[],
   operation?: string,
+  planning?: readonly StoredPlanOperation[],
 ): string[] {
   if (new Set(changes.map((change) => change.identity.reference)).size !== changes.length)
     throw new InvalidInput("Change each plan only once");
   const scopes = new Set(planningScopes(root).map((scope) => scope.id));
+  const operations = planning ?? (changes.length ? readPlanOperations(root) : []);
   const commands = changes.flatMap((change) => {
     const identity = planIdentity(change.identity.scope, change.identity.name);
     if (!scopes.has(identity.scope)) throw new InvalidInput("Unknown plan scope");
-    const current = currentPlan(root, identity, change.expected, operation);
+    const current = currentPlan(root, identity, change.expected, operation, operations);
     if (current?.conflict)
       throw new StateConflict("Resolve concurrent planning edits before changing their identities");
     return draftCommands(root, identity, change.entries, current);
@@ -103,8 +106,8 @@ export function preparePlanDraftUpdates(
   ];
 }
 export function publishPlanDraftUpdates(root: string, changes: readonly PlanDraftUpdate[], operation?: string): void {
-  mutable(root, () => {
-    transaction(root, preparePlanDraftUpdates(root, changes, operation));
+  mutable(root, (planning) => {
+    transaction(root, preparePlanDraftUpdates(root, changes, operation, planning));
   });
 }
 function currentPlan(
@@ -112,8 +115,9 @@ function currentPlan(
   identity: PlanIdentity,
   expected: string | undefined,
   operation?: string,
+  planning?: readonly StoredPlanOperation[],
 ): PlanView | undefined {
-  const claim = planClaim(root, identity.reference);
+  const claim = planClaim(root, identity.reference, planning);
   if (claim && claim.operation.ref !== operation)
     throw new StateConflict(
       `The implementation copy is authoritative: ${claim.task} in ${claim.operation.operation.checkout}`,
@@ -125,13 +129,13 @@ function currentPlan(
     throw new StateConflict("Plan changed; inspect its current version before saving");
   return view;
 }
-function mutable<T>(root: string, action: () => T): T {
+function mutable<T>(root: string, action: (planning?: readonly StoredPlanOperation[]) => T): T {
   return withRepositoryOperation(
     root,
-    () => {
+    (planning) => {
       if (planningOperation(root)?.completed === false)
         throw new StateConflict("Recover the planning checkpoint before editing plans");
-      return action();
+      return action(planning);
     },
     "planning",
   );
@@ -222,11 +226,11 @@ export function savePlanDraft(
   contents: string,
   options: { expected?: string; files?: ReadonlyMap<string, PlanFile> } = {},
 ): PlanView {
-  return mutable(root, () => {
+  return mutable(root, (planning) => {
     planIdentity(identity.scope, identity.name);
     if (!planningScopes(root).some((scope) => scope.id === identity.scope))
       throw new InvalidInput("Unknown project scope for this plan");
-    const current = currentPlan(root, identity, options.expected);
+    const current = currentPlan(root, identity, options.expected, undefined, planning);
     return setDraft(
       root,
       identity,
@@ -247,8 +251,8 @@ export function resolvePlanDraft(
   expected: string,
   files?: ReadonlyMap<string, PlanFile>,
 ): PlanView {
-  return mutable(root, () => {
-    const current = currentPlan(root, identity, expected);
+  return mutable(root, (planning) => {
+    const current = currentPlan(root, identity, expected, undefined, planning);
     if (!current?.draft || !current.conflict) throw new InvalidInput("No conflicting draft needs resolution");
     const entries = editedPlanEntries(root, current.entries, withPlanAddedAt(contents, current.contents), files);
     const tree = treeFromEntries(root, entries),
@@ -289,12 +293,14 @@ export function approvePlanDraft(
   expected: string,
   humanReviewed: boolean,
 ): PlanView {
-  mutable(root, () => {
+  mutable(root, (planning) => {
     if (!humanReviewed) throw new InvalidInput("Human confirmation is required for plan approval");
-    const current = currentPlan(root, identity, expected);
+    const current = currentPlan(root, identity, expected, undefined, planning);
     if (!current) throw new InvalidInput("Plan not found");
-    if (current.approval?.current) return current;
-    return setDraft(root, identity, approvedEntries(root, current), current);
+    const problem = readWorkGraph(root).byReference.get(identity.reference)?.planning?.problem;
+    if (problem) throw new StateConflict(problem);
+    if (!current.approval?.current)
+      transaction(root, draftCommands(root, identity, approvedEntries(root, current), current));
   });
   if (planningSettings(root).branch) checkpointPlans(root, [identity]);
   changeTaskQueue(root, { action: "add", references: [identity.reference] });
@@ -304,13 +310,13 @@ export function approvePlanDraft(
 export function disablePlanning(root: string): void {
   withRepositoryOperation(
     root,
-    () => {
+    (planning) => {
       if (
         savedPlanTrees(root).size ||
         draftPlanIdentities(root).length ||
         draftPlanIdentities(root, planningPaths.removals).length ||
         readDraftGroups(root).groups.length ||
-        readPlanOperations(root).length
+        (planning ?? readPlanOperations(root)).length
       )
         throw new StateConflict("Checkpoint and preserve existing plans before disabling their storage");
       const settings = planningSettings(root),

@@ -12,6 +12,7 @@ import { reviewAnnotations, type TextPart } from "../review/document-comparison.
 import type { ComparisonResult } from "../review/comparison-result.js";
 export interface DifferenceContext {
   record?: MarkdownRecord | undefined;
+  previousRecord?: MarkdownRecord;
   records: RecordLookup;
   pageTitle?: string;
 }
@@ -58,7 +59,7 @@ export function sourceDiffView(
 ): JSX.Element {
   if (!difference) return <p class="empty">No changes.</p>;
   const parser = markdownParser(context.record, context.records),
-    previous = markdownParser(context.record, context.records, "previous-"),
+    previous = markdownParser(context.previousRecord ?? context.record, context.records, "previous-"),
     current = markdownParser(context.record, context.records, "current-");
   const {
     old,
@@ -66,7 +67,7 @@ export function sourceDiffView(
     compared,
     rows: metadataRows,
     sameMetadata,
-  } = prepareDocumentComparison(difference, context.pageTitle, parser);
+  } = prepareDocumentComparison(difference, context.pageTitle, { parser, previousParser: previous });
   for (const renderer of [parser, previous, current]) reviewAnnotations(renderer);
   const rows = metadataRows.map(({ key, before, after, same, parts }) => {
     const value = (side: "unified" | "previous" | "current") => {
@@ -120,7 +121,7 @@ export function sourceDiffView(
     };
     return { unified: value("unified"), previous: value("previous"), current: value("current") };
   });
-  const modeChanges = parsePatch(difference.patch).flatMap((patch) => {
+  const modeChanges = (difference.patch ? parsePatch(difference.patch) : []).flatMap((patch) => {
     const description = fileModeChange(patch.oldMode, patch.newMode);
     return description ? [<p class="diff-header">{description}</p>] : [];
   });

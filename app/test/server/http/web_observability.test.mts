@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { type ServerResponse, IncomingMessage, ServerResponse as Response } from "node:http";
 import * as fs from "node:fs";
-import { webServers, readWebPage, hiddenValue, postWebForm } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, hiddenValue, postWebForm } from "../../fixtures/web.mjs";
 import { configureDiagnostics, type DiagnosticEvent } from "../../../src/core/diagnostics/diagnostics.mjs";
 
 import { Socket } from "node:net";
@@ -82,7 +82,7 @@ test("HTTP failures correlate private operator causes with a controlled browser 
         }),
       ),
   });
-  const page = await readWebPage(web, "/collections");
+  const page = await readReconciledWebPage(web, "/collections");
   const response = await postWebForm(web, "/actions/collection-preview", {
     csrf: hiddenValue(page.html, "csrf"),
     source: "/fixture",
@@ -125,7 +125,7 @@ test("a completed edit remains applied when the following refresh fails", async 
   const events = collect(),
     root = servers.project(),
     web = await servers.start(root);
-  const editor = await readWebPage(web, "/records/demo:ADR-0?view=edit");
+  const editor = await readReconciledWebPage(web, "/records/demo:ADR-0?view=edit");
   const file = join(root, "workbench/decisions/ADR-00.md"),
     reconcile = web.monitor.reconcile.bind(web.monitor);
   // Watcher reconciliation can race the action. Fail every refresh after the edit reaches disk,

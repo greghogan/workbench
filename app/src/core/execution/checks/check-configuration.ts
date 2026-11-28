@@ -9,6 +9,7 @@ import { catalog } from "../../configuration/language-config.js";
 import { readCheckOrder } from "./check-order.js";
 import { checkEnvironment, type CheckEnvironment } from "../environments/environments.js";
 import { checkPolicy, commandArguments } from "./check-plan.js";
+import { checkInputGroups, type DeclaredCheckInputs } from "./check-input-scope.js";
 import {
   withConfigurationSnapshot,
   readConfigurationToml as readToml,
@@ -25,11 +26,15 @@ export interface ConfiguredCheck {
   environment: CheckEnvironment;
   dockerImage: string | undefined;
   stages: string[];
+  extended: boolean;
   online: boolean;
+  parallel?: boolean;
   requiresSetup: boolean;
+  requiresBuild?: string[];
   coverage: ReturnType<typeof checkPolicy>["coverage"];
   ciTargets?: import("./check-targets.js").CheckTargets;
   source?: string;
+  inputs?: DeclaredCheckInputs;
 }
 
 const validRole = /^[a-z][a-z0-9-]*$/;
@@ -40,6 +45,7 @@ export function readChecks(root: string): ConfiguredCheck[] {
 
 function configuredChecks(root: string): ConfiguredCheck[] {
   const config = readConfig(root);
+  const inputGroups = checkInputGroups(config.input_groups);
   const projects = readProjects(root);
   if (config.checks?.allow_empty !== undefined && typeof config.checks.allow_empty !== "boolean")
     throw new Error("checks.allow_empty must be Boolean");
@@ -53,6 +59,7 @@ function configuredChecks(root: string): ConfiguredCheck[] {
   if (defaultEnvironment === "nix-docker" && !dockerImage)
     throw new Error("checks.nix_docker_image is required for 'nix-docker'");
   const seen = new Set<string>();
+  const directories = new Map<string, string>();
   const definitions: CheckDefinition[] = [...(config.check ?? [])];
   const sources = new Map<string, string>();
   const automation = ownedPath(root, projectPaths.automation);
@@ -67,9 +74,16 @@ function configuredChecks(root: string): ConfiguredCheck[] {
       throw new Error(`check_suite: register ${suite.language}@${suite.path} as a language root first`);
     const language = languages.find((entry) => entry.id === suite.language);
     if (!language) throw new Error(`check_suite: unknown language '${suite.language}'`);
+    const context = `check_suite '${suite.language}@${suite.path}'`;
+    inputGroups(suite.input_groups, context);
+    for (const name of Object.keys(suite.check_inputs ?? {}))
+      if (!language.command.some((check) => (check.name ?? check.role) === name))
+        throw new Error(`${context}: check_inputs names unknown check '${name}'`);
     for (const check of language.command) {
-      const name = `${suite.language}@${suite.path}: ${check.name ?? check.role}`;
-      definitions.push({ ...check, name, path: suite.path });
+      const label = check.name ?? check.role;
+      const name = `${suite.language}@${suite.path}: ${label}`;
+      const groups = Object.hasOwn(suite.check_inputs ?? {}, label) ? suite.check_inputs?.[label] : suite.input_groups;
+      definitions.push({ ...check, name, path: suite.path, ...(groups === undefined ? {} : { input_groups: groups }) });
       sources.set(name, `${language.source}: ${join(language.directory, "automation.toml")}`);
     }
   }
@@ -82,9 +96,13 @@ function configuredChecks(root: string): ConfiguredCheck[] {
           "project",
           "path",
           "command",
+          "input_groups",
           "stages",
+          "extended",
           "online",
+          "parallel",
           "requires_setup",
+          "requires_build",
           "environment",
           "warn_seconds",
           "coverage",
@@ -109,14 +127,17 @@ function configuredChecks(root: string): ConfiguredCheck[] {
     if (!project) throw new Error(`check '${entry.name}' names unknown project '${String(entry.project)}'`);
     if (entry.path !== undefined && entry.project !== undefined)
       throw new Error(`check '${entry.name}' has an unsafe or ambiguous path`);
-    if (entry.path !== undefined) registeredRootPath(entry.path, `check '${entry.name}' path`);
-    if (entry.path) ownedPath(root, entry.path);
-    if (entry.path && entry.path !== ".") {
-      let directory = root;
-      for (const component of entry.path.split("/")) {
-        directory = join(directory, component);
-        if (!existsSync(directory) || !lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink())
+    let directory: string;
+    if (entry.path === undefined) directory = rootOf(root, project);
+    else {
+      const selected = directories.get(entry.path);
+      if (selected !== undefined) directory = selected;
+      else {
+        registeredRootPath(entry.path, `check '${entry.name}' path`);
+        directory = ownedPath(root, entry.path);
+        if (entry.path !== "." && !lstatSync(directory, { throwIfNoEntry: false })?.isDirectory())
           throw new Error(`check '${entry.name}' path must be a real directory`);
+        directories.set(entry.path, directory);
       }
     }
     if (entry.warn_seconds !== undefined && (!Number.isFinite(entry.warn_seconds) || entry.warn_seconds <= 0))
@@ -127,20 +148,55 @@ function configuredChecks(root: string): ConfiguredCheck[] {
     );
     if (selectedEnvironment === "nix-docker" && !dockerImage)
       throw new Error(`check '${entry.name}' needs checks.nix_docker_image`);
+    const inputs = inputGroups(entry.input_groups, `check '${entry.name}'`);
+    const requiresBuild = entry.requires_build;
+    if (
+      requiresBuild !== undefined &&
+      (!Array.isArray(requiresBuild) ||
+        !requiresBuild.length ||
+        requiresBuild.some((name) => typeof name !== "string" || !name.trim()) ||
+        new Set(requiresBuild).size !== requiresBuild.length ||
+        ["setup", "acquire", "build", "clean", "distclean"].includes(role))
+    )
+      throw new Error(`check '${entry.name}': requires_build must name distinct prerequisite build checks`);
     return {
       ...policy,
       name: entry.name,
       role,
       command: entry.command,
       project,
-      directory: entry.path === undefined ? rootOf(root, project) : join(root, entry.path),
+      directory,
       location: entry.path ?? project.id,
       warnSeconds: entry.warn_seconds,
       environment: selectedEnvironment,
       dockerImage,
       source: sources.get(entry.name) ?? `project: ${projectSource}`,
+      ...(inputs === undefined ? {} : { inputs }),
+      ...(requiresBuild === undefined ? {} : { requiresBuild }),
     };
   });
+  const byName = new Map(checks.map((check) => [check.name, check]));
+  for (const check of checks) {
+    const outputs: string[] = [];
+    for (const name of check.requiresBuild ?? []) {
+      const prerequisite = byName.get(name);
+      if (
+        prerequisite?.role !== "build" ||
+        prerequisite.directory !== check.directory ||
+        prerequisite.environment !== check.environment ||
+        prerequisite.online ||
+        !prerequisite.inputs?.outputs?.length
+      )
+        throw new Error(
+          `check '${check.name}': '${name}' must be a build in the same root and environment with declared outputs`,
+        );
+      for (const path of prerequisite.inputs.outputs) {
+        if (outputs.some((other) => path === other || path.startsWith(other + "/") || other.startsWith(path + "/")))
+          throw new Error(`check '${check.name}': prerequisite build outputs overlap at '${path}'`);
+        outputs.push(path);
+      }
+    }
+  }
   readCheckOrder(root, checks);
   return checks;
 }

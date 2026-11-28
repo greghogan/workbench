@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { prepareWorkbenchPackage } from "../../../src/core/artifacts/package.ts";
+import { readReleaseChecksum, stageReleaseArchive } from "../../../src/core/distribution/release-archive.ts";
 import {
   distributionManifestFile,
   readDistributionManifest,
@@ -37,16 +38,20 @@ test("a prepared candidate retains its original manifest independently of subseq
   writeFileSync(join(root, "package.json"), contents);
   const candidate = await prepareWorkbenchPackage(root, { output: join(root, "dist") });
   writeFileSync(join(root, "package.json"), "a different checkout manifest");
-  expect(readDistributionManifest(candidate.directory)).toEqual({
+  const sha256 = readReleaseChecksum(dirname(candidate.archive));
+  const staged = await stageReleaseArchive(candidate.archive, sha256, fixture());
+  expect(staged.manifest).toEqual({
     contents,
     sha256: createHash("sha256").update(contents).digest("hex"),
   });
-  const runtime = JSON.parse(readFileSync(join(candidate.directory, "package.json"), "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const runtime = JSON.parse(readFileSync(join(staged.directory, "package.json"), "utf8")) as Record<string, unknown>;
   expect(runtime.scripts).toBeUndefined();
   expect(runtime.devDependencies).toBeUndefined();
+  const rejected = fixture();
+  writeFileSync(candidate.archive, "archive changed after the checksum was selected");
+  await expect(stageReleaseArchive(candidate.archive, sha256, rejected)).rejects.toThrow(/checksum mismatch/);
+  expect(readdirSync(rejected)).toEqual([]);
+  expect(readDistributionManifest(staged.directory)).toEqual(staged.manifest);
 });
 test.each(["malformed", "array", "oversized"])("%s manifests are rejected", (kind) => {
   const root = fixture();

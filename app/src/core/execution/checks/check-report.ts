@@ -1,11 +1,61 @@
 import { CheckEvent, type ProcessTermination } from "../../diagnostics/diagnostic-contract.mjs";
 import { CheckState, diagnosticError, describeError, type DiagnosticError } from "../../diagnostics/diagnostics.mjs";
 import { performance } from "node:perf_hooks";
-import { mkdirSync, writeFileSync, linkSync, rmSync, lstatSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync, linkSync, rmSync, lstatSync, realpathSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import {
+  CacheLockState,
+  inspectCacheMetadataLock,
+  recoverCacheMetadataLock,
+  withCacheLock,
+} from "../../storage/cache-lock.js";
+import { ownedPath } from "../../runtime/paths.js";
+import { userDirectory } from "../../storage/storage.js";
+import { createHash, randomUUID } from "node:crypto";
 import { type CheckDetail, checkDetailPrefix, readCheckDetail } from "./check-detail-data.mjs";
 import type { planChecks } from "./check-plan.js";
+import type { CheckInputScope } from "./check-input-scope.js";
+
+export interface CheckCacheReport {
+  outcome: "fresh" | "reused";
+  inputScope: CheckInputScope;
+  reason?: string;
+  groups?: { path: string; environment: string; checks: string[]; inputScope: CheckInputScope; backend?: string }[];
+}
+
+export type CheckGateRunner = (
+  plan: import("./check-plan.js").CheckPlan,
+  cache: CheckCacheReport,
+  buildProducts?: Map<string, string>,
+) => Promise<CheckRunResult>;
+
+export interface CheckPhase {
+  name: string;
+  started: string;
+  durationMs: number;
+  status: "passed" | "failed";
+  root?: string;
+  environment?: string;
+}
+export type CheckPhaseObserver = (phase: CheckPhase) => void;
+
+export async function measureCheckPhase<T>(
+  name: string,
+  action: () => T,
+  observe?: CheckPhaseObserver,
+): Promise<Awaited<T>> {
+  if (!observe) return await action();
+  const wallTime = new Date().toISOString();
+  const started = performance.now();
+  let status: CheckPhase["status"] = "failed";
+  try {
+    const result = await action();
+    status = "passed";
+    return result;
+  } finally {
+    observe({ name, started: wallTime, durationMs: performance.now() - started, status });
+  }
+}
 
 export interface CheckResult {
   name: string;
@@ -30,6 +80,7 @@ export interface CheckRunResult {
   finished?: string;
   status: Exclude<CheckState, typeof CheckState.Pending | typeof CheckState.Blocked>;
   reused?: { verified: string };
+  cache?: CheckCacheReport;
   logs?: string;
   logFinalizationDurationMs?: number;
   error?: string;
@@ -131,8 +182,10 @@ export class CheckReport {
     if (check.started !== undefined)
       check.durationMs ??= Math.max(0, this.now() - (this.started.get(check) ?? this.now()));
   }
-  failureLog(group: number): string | undefined {
-    return this.groups[group]?.find((check) => check.status === CheckState.Failed)?.log;
+  failureLog(group: number, step?: number): string | undefined {
+    return step === undefined
+      ? this.groups[group]?.find((check) => check.status === CheckState.Failed)?.log
+      : this.groups[group]?.[step - 1]?.log;
   }
   retainedLogs(group: number, directory: string, files: string[]): void {
     for (const file of files) {
@@ -152,10 +205,10 @@ export class CheckReport {
       };
     }
   }
-  detail(group: number, line: string): { check: CheckResult; detail: CheckDetail } | undefined {
+  detail(group: number, line: string, step?: number): { check: CheckResult; detail: CheckDetail } | undefined {
     // Failed steps replay their captured diagnostics after the authenticated failure event.
-    const check = this.active.get(group);
-    if (!check) return;
+    const check = step === undefined ? this.active.get(group) : this.groups[group]?.[step - 1];
+    if (check?.started === undefined) return;
     if (check.details.length >= 32 || Buffer.byteLength(line) > 16384) {
       check.omittedDetails++;
       return;
@@ -191,8 +244,32 @@ export class CheckReport {
   }
 }
 
-export function checkReportDestination(path: string): void {
-  if (lstatSync(path, { throwIfNoEntry: false })) throw new Error(`${path}: report destination already exists`);
+export async function withCheckReport<T>(path: string, run: (destination: string) => Promise<T>): Promise<T> {
+  mkdirSync(dirname(path), { recursive: true });
+  const destination = join(realpathSync(dirname(path)), basename(path));
+  const assertAvailable = () => {
+    if (lstatSync(destination, { throwIfNoEntry: false }))
+      throw new Error(path + ": report destination already exists");
+  };
+  assertAvailable();
+  const identity = process.platform === "linux" ? destination : destination.normalize("NFD").toLowerCase();
+  const key = createHash("sha256").update(identity).digest("hex");
+  const reservation = ownedPath(userDirectory("state"), `check-report-reservations/${key}`);
+  const owner = inspectCacheMetadataLock(reservation);
+  if (owner.state === CacheLockState.Abandoned)
+    recoverCacheMetadataLock(reservation, { expected: owner.digest, guard: assertAvailable });
+  else if (owner.state !== CacheLockState.Unlocked)
+    throw new Error(path + ": report destination is reserved by another run");
+  return withCacheLock(
+    reservation,
+    async () => {
+      assertAvailable();
+      return run(destination);
+    },
+    0,
+    undefined,
+    { mutable: false },
+  );
 }
 
 /** Publish a complete report atomically without replacing caller-owned data. */

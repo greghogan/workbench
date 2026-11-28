@@ -123,10 +123,13 @@ export interface PlanClaim {
   reference: string;
   task: string;
 }
-export function planClaims(root: string): PlanClaim[] {
+export function planClaims(
+  root: string,
+  operations: readonly StoredPlanOperation[] = readPlanOperations(root),
+): PlanClaim[] {
   const claims: PlanClaim[] = [],
     names = new Set<string>();
-  for (const stored of readPlanOperations(root)) {
+  for (const stored of operations) {
     if (stored.operation.kind !== "transfer") continue;
     for (const plan of stored.operation.payload.plans) {
       const reference = plan.reference,
@@ -140,9 +143,13 @@ export function planClaims(root: string): PlanClaim[] {
   }
   return claims;
 }
-export function planClaim(root: string, reference: string): PlanClaim | undefined {
+export function planClaim(
+  root: string,
+  reference: string,
+  operations?: readonly StoredPlanOperation[],
+): PlanClaim | undefined {
   parsePlanReference(reference);
-  return planClaims(root).find((claim) => claim.reference === reference);
+  return planClaims(root, operations).find((claim) => claim.reference === reference);
 }
 
 /** Preserve the intended Git mode before an unstaged handoff can be represented in an index. */

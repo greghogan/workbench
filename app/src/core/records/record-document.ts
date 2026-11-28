@@ -1,6 +1,7 @@
 import { parseDocument, parse as yamlParse, stringify } from "yaml";
 import { isRecord } from "../runtime/values.mjs";
 import { normalizedNumber, type Kind } from "./record-identity.js";
+import { observeRecord } from "./record-observation.js";
 
 export type ProseKind = Exclude<Kind, "CIT" | "REL">;
 export const taskStatuses = ["Planned", "Approved", "Accepted", "Canceled"] as const;
@@ -97,6 +98,14 @@ export function splitFrontmatter(contents: string): { yaml: string; body: string
 
 /** Syntax parsing is independent of completeness: incomplete drafts can still be formatted. */
 export function parseProseRecord(contents: string, path: string): { metadata: Record<string, unknown>; body: string } {
+  return observeRecord(
+    `prose:${contents}`,
+    () => parseProse(contents, path),
+    () => contents.length * 4,
+  );
+}
+
+function parseProse(contents: string, path: string): { metadata: Record<string, unknown>; body: string } {
   const parts = splitFrontmatter(contents);
   if (!parts) throw new Error(`${path}: expected YAML frontmatter delimited by ---`);
   const document = parseDocument(parts.yaml);

@@ -29,6 +29,30 @@ export function workingGitEntry(root: string, path: string, oidLength: number): 
   };
 }
 
+/** Read the blob Git would store for a working file with checkout conversions. */
+export function convertedWorkingGitOid(
+  root: string,
+  path: string,
+  oidLength: number,
+  maximum = Number.MAX_SAFE_INTEGER,
+): string {
+  return withStableFile(ownedPath(root, path), (descriptor, metadata) => {
+    if (metadata.size > maximum) throw new StateConflict(`Working file exceeds its byte limit: ${path}`);
+    const result = spawnSync("git", ["-C", root, "hash-object", `--path=${path}`, "--stdin"], {
+      stdio: [descriptor, "pipe", "pipe"],
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
+    });
+    const oid = result.status === 0 ? result.stdout.trim() : "";
+    if (oid.length !== oidLength || !/^[a-f0-9]+$/.test(oid))
+      throw new StateConflict(`Cannot verify the working file: ${path}`, {
+        cause: result.error ?? new Error(result.stderr.trim()),
+      });
+    return oid;
+  });
+}
+
 /** A retry accepts either side of a prepared transition and preserves unrelated index/worktree edits. */
 export function publishGitTree(
   root: string,
@@ -69,23 +93,7 @@ export function publishGitTree(
     if (compatible(entry, file.before) || compatible(entry, file.after)) return;
     // A clean checkout can differ from its blob because Git applies EOL or encoding conversions.
     if (entry) {
-      const converted = withStableFile(ownedPath(root, file.path), (descriptor) => {
-        const result = spawnSync("git", ["-C", root, "hash-object", `--path=${file.path}`, "--stdin"], {
-          stdio: [descriptor, "pipe", "pipe"],
-          encoding: "utf8",
-          maxBuffer: 1024 * 1024,
-          env: { ...process.env, GIT_NO_LAZY_FETCH: "1" },
-        });
-        if (
-          result.error ||
-          result.status !== 0 ||
-          !new RegExp(`^[a-f0-9]{${String(after.length)}}$`).test(result.stdout.trim())
-        )
-          throw new StateConflict(`Cannot verify the working file: ${file.path}`, {
-            cause: result.error ?? new Error(result.stderr.trim()),
-          });
-        return { ...entry, oid: result.stdout.trim() };
-      });
+      const converted = { ...entry, oid: convertedWorkingGitOid(root, file.path, after.length) };
       if (compatible(converted, file.before) || compatible(converted, file.after)) return;
     }
     throw new StateConflict(`File changed; preserving it for recovery: ${file.path}`);

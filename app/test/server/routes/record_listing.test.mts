@@ -8,7 +8,7 @@ test("mixed numeric tasks and named plans keep stable forward and backward recor
     width = String(count).length,
     numeric = Array.from({ length: count }, (_, number) => `demo:TSK-${number.toString(36).toUpperCase()}`),
     planned = Array.from({ length: count }, (_, number) => `demo:plan/idea-${String(number).padStart(width, "0")}`),
-    expected = [...numeric, ...planned],
+    expected = [...numeric.toReversed(), ...planned],
     records: BrowserRecord[] = [...expected].reverse().map((id) => ({
       id,
       type: "TSK",
@@ -37,7 +37,7 @@ test("mixed numeric tasks and named plans keep stable forward and backward recor
   const second = pages[1]?.[0];
   if (!second) throw new Error("Expected a second record window");
   expect(recordBatch(records, null, null, second).visible.map((record) => record.id)).toEqual(pages[0]);
-  const lastNumeric = numeric.at(-1);
+  const lastNumeric = numeric[0];
   if (!lastNumeric) throw new Error("Missing numeric boundary");
   expect(recordBatch(records, lastNumeric, null).visible[0]?.id).toBe(planned[0]);
 });

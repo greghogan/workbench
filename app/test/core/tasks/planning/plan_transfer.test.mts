@@ -184,7 +184,7 @@ test("retirement waits for the first implementation commit, recovers after inter
   expect(git(root, "rev-parse", "HEAD")).toBe(head);
   expect(git(root, "write-tree")).toBe(index);
 });
-test("a changed first source plan preserves its saved version and claim for reconciliation", async () => {
+test("a changed first source plan stays recoverable while another plan retires", async () => {
   const root = fixture();
   approved(root);
   await startPlan(root, service.reference);
@@ -192,9 +192,32 @@ test("a changed first source plan preserves its saved version and claim for reco
   writeFileSync(file, readFileSync(file, "utf8").replace("Install a service", "Implement a different service"));
   git(root, "add", "workbench");
   git(root, "commit", "-qm", "Change the approved plan");
+  const independent = planIdentity("demo", "independent");
+  approved(root, independent);
+  await startPlan(root, independent.reference);
+  git(root, "add", "workbench");
+  git(root, "commit", "-qm", "Implement the independent plan");
+
   expect(() => finishPlanTransfers(root)).toThrow(/differs from the transferred plan/);
   expect(readPlan(root, service).approval?.current).toBe(true);
+  expect(readPlans(root).map((plan) => plan.reference)).toEqual([service.reference]);
   expect(readPlanOperations(root)).toHaveLength(1);
+});
+
+test("a rewritten implementation base still retires the matching plan with its attachments", async () => {
+  const root = fixture();
+  git(root, "commit", "--allow-empty", "-qm", "Implementation base");
+  approved(root);
+  await startPlan(root, service.reference);
+  const oldBase = git(root, "rev-parse", "HEAD");
+  git(root, "commit", "--amend", "--allow-empty", "-qm", "Rewritten implementation base");
+  expect(git(root, "rev-parse", "HEAD")).not.toBe(oldBase);
+  git(root, "add", "workbench");
+  git(root, "commit", "-qm", "Implement service");
+
+  expect(finishPlanTransfers(root)).toEqual(["demo:TSK-0"]);
+  expect(readPlans(root)).toEqual([]);
+  expect(readPlanOperations(root)).toEqual([]);
 });
 
 test("renaming a queued plan preserves approval, relationships, order, and recovery without checkpointing unrelated drafts", () => {

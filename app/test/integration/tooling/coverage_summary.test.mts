@@ -11,6 +11,7 @@ import {
   coverageChange,
   coverageRepository,
   normalizedSummary,
+  readCoverageSummary,
   reportCoverageChange,
 } from "../../../src/core/execution/checks/coverage-summary.mjs";
 
@@ -57,7 +58,8 @@ test("coverage changes use relative paths and report regressions, additions, rem
       ]),
       root,
     );
-    assert.deepEqual(Object.keys(after), ["total", "src/added.ts", "src/z.ts"]);
+    assert.deepEqual(Object.keys(after), ["src/added.ts", "src/z.ts"]);
+    assert.deepEqual(after["src/added.ts"]?.lines, { total: 1, covered: 1 });
     assert.equal(JSON.stringify(after).includes(root), false);
     const delta = coverageChange(after, before, "HEAD");
     assert.match(delta, /src\/z.ts \| lines \| 100% \(1\/1\) \| 0% \(0\/1\) \| -100.00 pp/);
@@ -97,7 +99,17 @@ test("coverage presents the selected committed baseline in console output and th
     const summaryPath = join(root, "coverage/coverage-summary.json");
     const jobSummary = join(root, "job-summary.md");
     git("init", "-q");
-    writeFileSync(summaryPath, JSON.stringify(normalizedSummary(map(1), root)));
+    const legacy = {
+      total: { lines: { covered: 1, total: 1, skipped: 0, pct: 100 } },
+      "src/value.ts": {
+        lines: { covered: 1, total: 1, skipped: 0, pct: 100 },
+        statements: { covered: 1, total: 1, skipped: 0, pct: 100 },
+        functions: { covered: 1, total: 1, skipped: 0, pct: 100 },
+        branches: { covered: 0, total: 0, skipped: 0, pct: 100 },
+      },
+    };
+    assert.deepEqual(readCoverageSummary(legacy), normalizedSummary(map(1), root));
+    writeFileSync(summaryPath, JSON.stringify(legacy));
     git("add", "coverage/coverage-summary.json");
     git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "Coverage baseline");
     const revision = git("rev-parse", "HEAD");

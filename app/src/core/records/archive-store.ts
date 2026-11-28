@@ -13,6 +13,7 @@ import { readBoundedFile, hashFile } from "../runtime/file-reads.js";
 import { join, posix, relative, resolve } from "node:path";
 import { lstatSync } from "node:fs";
 import { gitBytes, readGitObjects, type GitEntry } from "../git/git-snapshot.js";
+import { convertedWorkingGitOid } from "../git/tree-publication.js";
 import { readProjectState } from "../projects/project-state.js";
 import { parse } from "smol-toml";
 import { projectPaths } from "../projects/project-paths.js";
@@ -22,6 +23,7 @@ import { record } from "../runtime/values.mjs";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { compareRecordNumbers, type Kind } from "./record-identity.js";
 import { scan } from "./record-files.js";
+import { observeRecord, observeRecordBytes } from "./record-observation.js";
 
 const validatedIndexes = new WeakSet<ArchiveIndex>();
 const validatedDocuments = new WeightedCache<boolean>(32 * 1024 * 1024);
@@ -128,6 +130,14 @@ export function readArchiveIndex(root: string, revision: string): ArchiveIndex {
 }
 
 export function projectArchive(root: string): ArchiveIndex | undefined {
+  return observeRecord(
+    `archive:${root}`,
+    () => inspectProjectArchive(root),
+    () => 128,
+  );
+}
+
+function inspectProjectArchive(root: string): ArchiveIndex | undefined {
   const revision = archiveRevision(root);
   if (!revision) return undefined;
   if (!readConfig(root).records?.archive_branch)
@@ -173,7 +183,7 @@ export interface InventoryRecord {
   archive?: { revision: string; entry: GitEntry };
 }
 
-function verifyLiveCopy(path: string, entry: GitEntry, maximum: number): void {
+function verifyLiveCopy(root: string, path: string, entry: GitEntry, maximum: number): void {
   const stat = lstatSync(path, { throwIfNoEntry: false });
   if (!stat) return;
   const oid = hashFile(path, maximum, "record copy", {
@@ -181,7 +191,11 @@ function verifyLiveCopy(path: string, entry: GitEntry, maximum: number): void {
     prefix: (size) => `blob ${String(size)}\0`,
   });
   const mode = process.platform === "win32" ? entry.mode : stat.mode & 0o111 ? "100755" : "100644";
-  if (oid !== entry.oid || mode !== entry.mode)
+  if (
+    mode !== entry.mode ||
+    (oid !== entry.oid &&
+      convertedWorkingGitOid(root, relative(root, path).replaceAll("\\", "/"), entry.oid.length, maximum) !== entry.oid)
+  )
     throw new StateConflict(`Live and archived contents differ: ${path}. Restore or reconcile the record explicitly.`);
 }
 
@@ -190,11 +204,13 @@ export function readProjectRecordFile(root: string, path: string, maximum = 2 * 
     archive = projectArchive(root),
     entry = archive?.files.get(key);
   if (entry && archive) {
-    verifyLiveCopy(path, entry, maximum);
+    verifyLiveCopy(root, path, entry, maximum);
     const body = readArchiveFileAt(root, archive.revision, key, maximum);
     if (body) return body;
   }
-  return readBoundedFile(path, maximum, "record file");
+  return maximum === 2 * 1024 * 1024
+    ? observeRecordBytes(path, () => readBoundedFile(path, maximum, "record file"))
+    : readBoundedFile(path, maximum, "record file");
 }
 
 export function projectRecordFileExists(root: string, path: string): boolean {
@@ -205,6 +221,20 @@ export function projectRecordFileExists(root: string, path: string): boolean {
 }
 
 export function recordInventory(
+  root: string,
+  scopePath: string,
+  kind: Kind,
+  committedRecords?: ReadonlySet<string>,
+): InventoryRecord[] {
+  if (committedRecords) return inspectRecordInventory(root, scopePath, kind, committedRecords);
+  return observeRecord(
+    `inventory:${kind}:${root}:${scopePath}`,
+    () => inspectRecordInventory(root, scopePath, kind),
+    (records) => records.reduce((size, item) => size + item.path.length * 2 + 120, 0),
+  );
+}
+
+function inspectRecordInventory(
   root: string,
   scopePath: string,
   kind: Kind,
@@ -222,10 +252,10 @@ export function recordInventory(
   for (const item of archived) {
     const existing = byNumber.get(item.number);
     if (existing) {
-      verifyLiveCopy(existing.path, item.entry, 2 * 1024 * 1024);
+      verifyLiveCopy(root, existing.path, item.entry, 2 * 1024 * 1024);
       for (const [path, entry] of archive.files)
         if (path.startsWith(item.path.slice(0, -3) + "/"))
-          verifyLiveCopy(join(root, path), entry, Number.MAX_SAFE_INTEGER);
+          verifyLiveCopy(root, join(root, path), entry, Number.MAX_SAFE_INTEGER);
     }
     result.push({
       number: item.number,
@@ -248,7 +278,7 @@ export function readInventoryRecords(root: string, items: readonly InventoryReco
     for (const item of chunk) {
       const body = item.archive
         ? readArchiveFileAt(root, item.archive.revision, relative(root, item.path).split("\\").join("/"))
-        : readBoundedFile(item.path, 2 * 1024 * 1024, "record");
+        : observeRecordBytes(item.path, () => readBoundedFile(item.path, 2 * 1024 * 1024, "record"));
       if (!body) throw new InvalidInput(`Missing record: ${relative(root, item.path)}`);
       result.set(item.path, body);
     }

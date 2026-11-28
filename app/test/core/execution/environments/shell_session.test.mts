@@ -184,14 +184,21 @@ test.skipIf(process.platform === "win32")(
         join(root, "bundle/main.cjs"),
         "require('node:fs').writeFileSync('nested.json',JSON.stringify({args:process.argv.slice(2),root:process.env.WORKBENCH_SHELL_ROOT}));",
       );
-      for (const shell of ["bash", "zsh", "fish"]) {
+      const shells = [
+        ["bash", "--noprofile", "--norc"],
+        ["zsh", "-f"],
+        ["fish", "--no-config"],
+      ] as const;
+      for (const [shell, ...startupFlags] of shells) {
         if (spawnSync(shell, ["--version"]).status !== 0) continue;
         expect(
           await shellSession(root, root, { path: ".", environment: "nix", profile: "", toolchain: "" }, [
             shell,
+            ...startupFlags,
             "-c",
             "workbench 'literal argument'",
           ]),
+          shell,
         ).toBe(0);
         expect(JSON.parse(readFileSync(join(root, "nested.json"), "utf8"))).toEqual({
           args: ["literal argument"],

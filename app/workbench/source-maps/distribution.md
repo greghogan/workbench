@@ -1,7 +1,8 @@
 # Distribution and updates
 
-- `src/core/distribution/bundle-artifacts.mts`, `src/core/distribution/bundle-layout.mts`, `src/core/distribution/node-runtimes.mts`: Share bundle identities,
-  compression, deferred loading, and runtime requirements with repository build tooling.
+- `src/core/distribution/bundle-artifacts.mts`, `src/core/distribution/bundle-layout.mts`,
+  `src/core/distribution/node-runtimes.mts`: Share bundle identities, compression, deferred loading, and runtime
+  requirements with repository build tooling.
 
 - `src/cli/launcher.ts`: Validates the bootstrap runtime, resolves project pins, and dispatches exact Git packages
   through npm.
@@ -12,9 +13,25 @@
 - `src/core/distribution/distribution-identity.ts`: Reads immutable package source identity for project-pin dispatch.
 - `src/core/artifacts/package.ts`, `src/core/artifacts/package-output.ts`, `src/core/artifacts/package-verify.ts`:
   Package source files and references into verified, reproducible Node-based releases with owned output replacement.
-- `src/cli/installation.ts`: Installs owned user or system command launchers.
+- `src/cli/installation.ts`: Installs and updates owned command launchers and manages installed service registrations.
+- `src/core/distribution/systemd-service.ts`: Manages owned systemd units, including service readiness and release
+  activation.
+- `test/integration/distribution/unix-jobserver-fixture.mts`: Exercise installed check admission and recovery under two
+  OS accounts in the native system service check.
+- `src/core/distribution/launchd-service.ts`, `src/core/distribution/launchd-paths.mts`: Register the macOS user agent
+  and shared daemon, preserve launchd socket ownership during process restarts, and drain owned jobs on removal.
+- `src/core/distribution/windows-service.ts`, `src/core/distribution/windows-user-service.ts`: Manage owned Windows
+  SCM services and per-account logon tasks for installed releases.
+- `src/server/http/windows-jobserver.ts`: Admits Windows check commands through the SCM control channel and recovers
+  leases only after their Windows Job Objects drain.
 - `src/core/distribution/runtime-distribution.ts`: Materializes an external executable into disposable CI checkouts.
 - `src/core/distribution/distribution-manifest.ts`: Verifies artifact inventories and resolves recorded input hashes.
+- `src/core/distribution/release-archive.ts`: Verifies release checksums and unpacks a private copy for qualification
+  and installation.
+- `src/core/distribution/installed-release.ts`: Retains verified archives by digest and switches or restores the
+  release selected by the stable CLI and service entry point.
+- `src/core/distribution/release-transition.ts`: Persists the previous release and affected service before an update
+  so the launcher can recover from interruption.
 - `src/core/distribution/update.ts`, `src/core/distribution/update-git.ts`, `src/core/distribution/update-prepare.ts`:
   Prepare and apply executable-pin updates in isolated checkouts.
 - `src/core/records/sync.ts`: Coordinates derived project context.
@@ -34,6 +51,21 @@
 
 - `src/core/artifacts`: Builds and verifies development images and release packages, including input and publication
   identities.
+
+- `src/core/artifacts/artifact-catalog.ts`, `src/core/artifacts/artifact-files.ts`: Resolve project artifact profiles, bind
+  output and verification identities, and transfer authenticated file artifacts.
+
+- `src/core/artifacts/release-directory.ts`: Packs and extracts Linux tarballs and macOS and Windows ZIPs. CI verifies
+  extracted files before retaining the archive.
+
+- `src/core/artifacts/image-transfer.ts`, `src/core/artifacts/image-transfer-archive.ts`: Transfer authenticated
+  untagged Docker archives and qualify the image on the receiving host before activation.
+
+- `src/core/artifacts/artifact-release.ts`, `src/core/artifacts/github-release.mts`, `src/core/artifacts/gitlab-release.ts`:
+  Deliver verified artifacts and record hosted release outputs.
+
+- `src/core/artifacts/preparation-store.ts`, `src/core/storage/managed-builder-store.ts`: Select preparation backends,
+  verify Docker's access to local cache directories, and attach shared stores.
 
 - `src/core/verification`: Runs installed-product rehearsals against disposable projects and distributions.
 

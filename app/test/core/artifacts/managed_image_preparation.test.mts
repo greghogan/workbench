@@ -113,6 +113,7 @@ test
       expect(existsSync(required(selected.roots[1], "Other environment profile").profile)).toBe(true);
     }
     await pruneBuildCache({ report: report, dependencies: true, apply: true });
+    expect(existsSync(join(base, "store-profile"))).toBe(true);
     expect(
       required(plan, "Expected fixture value: plan")
         .roots.map((root) => root.profile)

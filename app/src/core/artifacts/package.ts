@@ -25,6 +25,7 @@ import { required } from "../runtime/invariants.js";
 import { packageOutput } from "./package-output.js";
 export { packageOutput } from "./package-output.js";
 export { verifyWorkbenchPackage } from "./package-verify.js";
+export { verifyPackedRelease } from "./release-directory.js";
 export {
   decodeJavaRuntime,
   javaRuntime,
@@ -33,7 +34,7 @@ export {
 } from "../toolchains/java-release.js";
 export type { JavaSourceArtifacts } from "../toolchains/java-release.js";
 export { readMavenWorkspace, mavenWorkspaceIdentity } from "../toolchains/maven/maven-workspace.js";
-import { distributionSourceFile } from "../distribution/distribution-identity.js";
+import { distributionSourceFile, launchdNativeHelper } from "../distribution/distribution-identity.js";
 import { distributionManifestFile } from "../distribution/distribution-source-manifest.js";
 
 interface PackageMetadata {
@@ -183,7 +184,11 @@ function packageEntries(directory: string): PackageEntry[] {
   return entries;
 }
 
-async function archive(entries: PackageEntry[], source: CommittedSource | undefined): Promise<Buffer> {
+async function archive(
+  entries: PackageEntry[],
+  source: CommittedSource | undefined,
+  executableGenerated: ReadonlySet<string>,
+): Promise<Buffer> {
   // Git owns executable flags even when a Windows checkout cannot represent them.
   // Read/write bits and directory modes are normalized independently of host umask.
   const headerFor = (entry: PackageEntry): PackageEntry["header"] => ({
@@ -193,11 +198,10 @@ async function archive(entries: PackageEntry[], source: CommittedSource | undefi
         ? 0o755
         : entry.header.type === "symlink"
           ? 0o777
-          : (
-                source
-                  ? source.files.get(entry.name.replaceAll(sep, "/"))?.mode === "100755"
-                  : Boolean(entry.header.mode & 0o111)
-              )
+          : executableGenerated.has(entry.name.replaceAll(sep, "/")) ||
+              (source
+                ? source.files.get(entry.name.replaceAll(sep, "/"))?.mode === "100755"
+                : Boolean(entry.header.mode & 0o111))
             ? 0o755
             : 0o644,
   });
@@ -237,7 +241,7 @@ async function archive(entries: PackageEntry[], source: CommittedSource | undefi
 /** Build the platform-neutral Node package and a deterministic archive without publishing it. */
 export async function prepareWorkbenchPackage(
   root: string = process.cwd(),
-  options: { output?: string; generated?: readonly { path: string; contents: Uint8Array }[] } = {},
+  options: { output?: string; generated?: readonly { path: string; contents: Uint8Array; executable?: true }[] } = {},
 ) {
   // The executable distribution carries runtime assets; project policy is adopted separately.
 
@@ -253,10 +257,15 @@ export async function prepareWorkbenchPackage(
   const files = distributionFiles(metadata.files);
   const source = committedSource(root, metadata);
   const generated = new Map<string, Uint8Array>();
+  const executableGenerated = new Set<string>();
   for (const file of options.generated ?? []) {
     relativePath(file.path, "generated package file");
     if (!file.path.startsWith("bundle/") || generated.has(file.path) || source?.files.has(file.path))
       throw new Error(`${file.path}: generated bundles must be distinct from committed source`);
+    if (file.executable) {
+      if (file.path !== launchdNativeHelper) throw new Error(`${file.path}: unexpected generated executable`);
+      executableGenerated.add(file.path);
+    } else if (file.path === launchdNativeHelper) throw new Error("The macOS service helper must be executable");
     generated.set(file.path, file.contents);
   }
   let entries: PackageEntry[] = [];
@@ -273,7 +282,7 @@ export async function prepareWorkbenchPackage(
     for (const [path, bytes] of generated) {
       const target = ownedPath(output, path);
       mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, bytes, { mode: 0o644, flag: "wx" });
+      writeFileSync(target, bytes, { mode: executableGenerated.has(path) ? 0o755 : 0o644, flag: "wx" });
     }
     for (const reserved of [sourceIdentity, distributionManifestFile])
       if (existsSync(join(output, reserved))) throw new Error(`${reserved} is reserved for verified package metadata`);
@@ -302,7 +311,7 @@ export async function prepareWorkbenchPackage(
     writeFileSync(join(output, "package.json"), JSON.stringify(runtime, null, 2) + "\n");
     entries = packageEntries(output);
   });
-  const bytes = await archive(entries, source);
+  const bytes = await archive(entries, source, executableGenerated);
   const artifacts = join(dirname(destination), "workbench-artifacts");
   packageOutput(root, artifacts, (output: string) => {
     writeFileSync(join(output, "workbench.tar.gz"), bytes);

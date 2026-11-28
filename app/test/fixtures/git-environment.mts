@@ -1,9 +1,9 @@
 import { gitNullConfiguration } from "../../src/core/runtime/windows-host.ts";
 
 /** Test repositories own Git identity, configuration, and checkout state. */
-export function isolateFixtureGit(env: NodeJS.ProcessEnv): void {
+export function isolateFixtureGit(env: NodeJS.ProcessEnv, configuration = gitNullConfiguration): void {
   for (const name of Object.keys(env)) if (/^GIT_/i.test(name)) Reflect.deleteProperty(env, name);
-  env.GIT_CONFIG_GLOBAL = gitNullConfiguration;
+  env.GIT_CONFIG_GLOBAL = configuration;
   env.GIT_CONFIG_NOSYSTEM = "1";
 
   if (process.platform === "win32") {

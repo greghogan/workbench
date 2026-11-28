@@ -30,18 +30,17 @@ export function selectLogRetention(runs: readonly RetentionRun[], policy: LogRet
   const sorted = [...runs].sort(compareRetentionRuns);
   const protectedRun = newest ?? sorted.filter((run) => run.eligible).at(-1)?.directory;
   let retainedBytes = sorted.reduce((total, run) => total + run.bytes, 0);
+  let nextScan = Infinity;
   const remove: string[] = [];
-  for (const run of sorted)
-    if (
-      run.eligible &&
-      run.directory !== protectedRun &&
-      ((policy.maxAgeDays > 0 && now - run.completed > policy.maxAgeDays * 86400000) ||
-        (policy.maxBytes > 0 && retainedBytes > policy.maxBytes))
-    ) {
+  for (const run of sorted) {
+    if (!run.eligible || run.directory === protectedRun) continue;
+    const deadline = policy.maxAgeDays > 0 ? run.completed + policy.maxAgeDays * 86_400_000 + 1 : Infinity;
+    if (deadline <= now || (policy.maxBytes > 0 && retainedBytes > policy.maxBytes)) {
       remove.push(run.directory);
       retainedBytes -= run.bytes;
-    }
-  return { remove, retainedBytes };
+    } else nextScan = Math.min(nextScan, deadline);
+  }
+  return { remove, retainedBytes, nextScan };
 }
 export const LogRetentionOutcome = {
   Disabled: "disabled",

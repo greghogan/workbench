@@ -121,6 +121,8 @@ async function withArtifactSources<T>(
 ): Promise<T> {
   const urls = artifactSourceUrls(urlText, backupUrls);
   const url = new URL(urlText);
+  if (process.env.WORKBENCH_OFFLINE === "1")
+    throw new Error(`Artifact is unavailable offline: ${url.origin}${url.pathname}`);
   return retryNetwork(
     `Acquire ${url.origin}${url.pathname}`,
     async () => {

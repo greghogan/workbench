@@ -61,18 +61,9 @@ test("Ruby coverage validates fresh suites, source containment and counters", ()
   const report = {
     suite: { coverage: { [file]: { lines: [null, 1, 0], branches: { condition: { yes: 1, no: 0 } } } } },
   };
-  expect(required(rubyCoverageSummary(report, root).total, "Expected fixture value").lines).toEqual({
-    total: 2,
-    covered: 1,
-    skipped: 0,
-    pct: 50,
+  expect(rubyCoverageSummary(report, root)).toEqual({
+    "lib/count.rb": { lines: { total: 2, covered: 1 }, branches: { total: 2, covered: 1 } },
   });
-  expect(
-    required(
-      required(rubyCoverageSummary(report, root).total, "Expected fixture value").branches,
-      "Expected fixture value",
-    ).pct,
-  ).toBe(50);
   expect(() => rubyCoverageSummary({}, root)).toThrow(/fresh/);
   expect(() => rubyCoverageSummary({ a: report.suite, b: report.suite }, root)).toThrow(/fresh/);
   required(report.suite.coverage[file], "Expected fixture value: report.suite.coverage[file]").lines = [-1];

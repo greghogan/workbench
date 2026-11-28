@@ -1,15 +1,22 @@
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { expect, test } from "vitest";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { expect, test, vi } from "vitest";
 import { createHash } from "node:crypto";
 import {
   GitSnapshot,
+  gitBytes,
+  gitPaths,
+  stagedReviewTree,
   writeRawReviewObjects,
   readGitObjects,
+  readGitCommit,
   writeReviewBlobs,
   readGitTree,
 } from "../../../src/core/git/git-snapshot.ts";
 import { MissingResource } from "../../../src/core/runtime/input-errors.ts";
+import { withRepositoryReads } from "../../../src/core/git/repository-reads.ts";
+import { repositoryStatePath } from "../../../src/core/git/repository-state.ts";
+import { taskRepositoryDirectory } from "../../../src/core/tasks/task-project-state.ts";
 import {
   reviewStatus,
   ReviewSource,
@@ -22,6 +29,95 @@ import { webServers } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { WorkspaceCollector } from "../../../src/server/workspace/workspace-service.ts";
 const fixtures = webServers();
+
+test.each(["split", "sparse"] as const)(
+  "staged capture preserves a %s alternate index in a linked worktree",
+  (layout) => {
+    const root = fixtures.project();
+    for (const directory of ["visible", "hidden/nested"]) {
+      mkdirSync(join(root, directory), { recursive: true });
+      writeFileSync(join(root, directory, "file.txt"), "Baseline\n");
+    }
+    git(root, "add", "visible", "hidden");
+    git(root, "commit", "-qm", "Add both directories");
+    const linked = join(root, "linked-checkout");
+    git(root, "worktree", "add", "-qb", "linked-fixture", linked);
+    if (layout === "split") git(linked, "update-index", "--split-index");
+    else {
+      git(linked, "sparse-checkout", "set", "--cone", "--sparse-index", "visible");
+      expect(git(linked, "ls-files", "--sparse").split("\n")).toContain("hidden/");
+    }
+    writeFileSync(join(linked, "visible/file.txt"), "Staged in the linked checkout\n");
+    git(linked, "add", "visible/file.txt");
+    const expected = git(linked, "write-tree");
+    const live = git(linked, "rev-parse", "--path-format=absolute", "--git-path", "index");
+    const alternate = join(root, ".git", "alternate index");
+    copyFileSync(live, alternate);
+    const original = readFileSync(alternate);
+    const lock = alternate + ".lock";
+    writeFileSync(lock, "Another writer\n", { flag: "wx" });
+    vi.stubEnv("GIT_INDEX_FILE", relative(linked, alternate).replaceAll("\\", "/"));
+    expect(stagedReviewTree(linked)).toBe(expected);
+    expect(readFileSync(live)).toEqual(original);
+    expect(readFileSync(alternate)).toEqual(original);
+    expect(readFileSync(lock, "utf8")).toBe("Another writer\n");
+  },
+);
+
+test("staged capture identifies the conflicted path and preserves the active index", () => {
+  const root = fixtures.project();
+  const [blob] = writeReviewBlobs(root, [Buffer.from("Conflicting contents\n")]);
+  if (!blob) throw new Error("Missing conflict fixture blob");
+  const path = "conflicted path.txt";
+  gitBytes(root, ["update-index", "-z", "--index-info"], `100644 ${blob} 2\t${path}\0` + `100644 ${blob} 3\t${path}\0`);
+  const index = join(root, ".git", "index");
+  const original = readFileSync(index);
+  expect(() => stagedReviewTree(root)).toThrow(`resolve the conflicted index entry: ${path}`);
+  expect(readFileSync(index)).toEqual(original);
+});
+
+test.skipIf(process.platform === "win32")("batched Git paths preserve a newline in the metadata directory", () => {
+  const root = join(fixtures.project(), "metadata\nfixture");
+  mkdirSync(root);
+  git(root, "init", "-q");
+  const names = ["rebase-merge", "MERGE_HEAD", "index"];
+  expect(gitPaths(root, names)).toEqual(names.map((name) => join(root, ".git", name)));
+});
+
+test("commit reads follow a moving ref while an explicit object keeps its original contents", () => {
+  const root = fixtures.project();
+  withRepositoryReads(() => {
+    const original = readGitCommit(root, "HEAD");
+    expect(readGitCommit(root, original.oid)).toEqual(original);
+    git(root, "tag", "-am", "Keep the original commit", "review-base");
+    git(root, "commit", "--allow-empty", "-qm", "Advance the reviewed branch");
+    const updated = readGitCommit(root, "HEAD");
+    expect(updated.oid).toBe(git(root, "rev-parse", "HEAD"));
+    expect(updated.bytes.toString()).toContain(`parent ${original.oid}\n`);
+    expect(readGitCommit(root, "refs/tags/review-base")).toEqual(original);
+    expect(readGitCommit(root, original.oid)).toEqual(original);
+    expect(() => readGitCommit(root, "refs/heads/unavailable")).toThrow(MissingResource);
+  });
+});
+
+test("repository locations honor Git redirection without changing task ownership", () => {
+  const root = fixtures.project(),
+    other = fixtures.project();
+  try {
+    withRepositoryReads(() => {
+      const state = repositoryStatePath(root);
+      const owner = join(taskRepositoryDirectory(root) ?? "", "workbench");
+      expect(owner).toBe(state);
+      const redirected = repositoryStatePath(other);
+      vi.stubEnv("GIT_DIR", join(other, ".git"));
+      expect(repositoryStatePath(root)).toBe(redirected);
+      expect(join(taskRepositoryDirectory(root) ?? "", "workbench")).toBe(owner);
+    });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
 test("staging unchanged current contents does not change the workspace review revision", () => {
   const root = fixtures.project(),
     file = "workbench/decisions/ADR-00.md";
@@ -44,7 +140,7 @@ test("a current-file snapshot ignores staged contents and staged permission chan
   git(root, "update-index", "--chmod=+x", file);
   writeFileSync(join(root, file), "Current record.\n");
   const snapshot = new GitSnapshot(root, { staged: false });
-  expect(snapshot.changes).toEqual([]);
+  expect(snapshot.changedPaths).toEqual([]);
   const change = reviewStatus(root, ReviewSource.Working, snapshot).changes.find((change) => change.path === file);
   expect(change?.after).toMatch(/^100644:/);
   if (!change) throw new Error("Missing current-file review");
@@ -147,6 +243,21 @@ test("a large logical record inventory reads all objects across bounded Git outp
     result = readGitObjects(root, [...ids, ids[0] ?? ""]);
   expect(result.size).toBe(bodies.length);
   for (const [index, id] of ids.entries()) expect(result.get(id)?.equals(bodies[index] ?? Buffer.alloc(0))).toBe(true);
+});
+
+test("small reads of an exact blob honor the byte limit before and after reuse", () => {
+  const root = fixtures.project();
+  const bytes = Buffer.alloc(512, 255);
+  const [oid] = writeReviewBlobs(root, [bytes]);
+  if (!oid) throw new Error("Missing fixture blob");
+  withRepositoryReads(() => {
+    expect(() => readGitObjects(root, [oid], 4)).toThrow(/oversized/);
+    const first = readGitObjects(root, [oid], bytes.length).get(oid);
+    expect(first).toEqual(bytes);
+    first?.fill(0);
+    expect(readGitObjects(root, [oid]).get(oid)).toEqual(bytes);
+    expect(() => readGitObjects(root, [oid], 4)).toThrow(/oversized/);
+  });
 });
 
 test("retained blob limits count unique bytes across aliases and reject larger captures before acquisition", () => {

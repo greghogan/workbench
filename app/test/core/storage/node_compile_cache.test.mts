@@ -135,7 +135,7 @@ test("bytecode retention removes aged regular files and empty generations, prese
   symlinkSync(outside, join(root, "current-node/linked"), "junction");
   await pruneRuntimeCompileCache(0, now);
   expect(existsSync(old)).toBe(true);
-  await pruneRuntimeCompileCache(7, now);
+  expect(await pruneRuntimeCompileCache(7, now)).toBe(now + 7 * 86_400_000);
   expect(existsSync(join(root, "old-node"))).toBe(false);
   expect(readFileSync(fresh, "utf8")).toBe("fresh");
   expect(readFileSync(join(outside, "keep"), "utf8")).toBe("preserved");

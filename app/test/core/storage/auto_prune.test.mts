@@ -8,7 +8,7 @@ import {
   updateProjectRequirements,
   keepCacheAsset,
 } from "../../../src/core/projects/project-registry.ts";
-import { autoPrune } from "../../../src/core/storage/auto-prune.ts";
+import { autoPrune, pruneAfterGate } from "../../../src/core/storage/auto-prune.ts";
 import {
   managerInstallations,
   recordManagerInstallations,
@@ -26,11 +26,14 @@ const fake = vi.hoisted(() => ({
     }[],
     issues: [] as string[],
   },
+  observe: undefined as (() => void) | undefined,
   removed: [] as string[],
   measuredBytes: null as number | null | undefined,
 }));
 vi.mock("../../../src/core/toolchains/tool-cache.ts", () => ({
+  toolInstallationGroups: () => [],
   inspectToolCache: () => {
+    fake.observe?.();
     const first = fake.report.entries[0];
     if (first) fake.measuredBytes = cacheAmount(first.directory).bytes;
     return fake.report;
@@ -41,11 +44,15 @@ vi.mock("../../../src/core/toolchains/tool-cache.ts", () => ({
     return Promise.resolve([]);
   },
 }));
-vi.mock("../../../src/core/projects/project-requirements.ts", () => ({ projectRequirements: () => [] }));
+vi.mock("../../../src/core/projects/project-requirements.ts", () => ({
+  projectRequirements: () => [],
+  projectRequirementSnapshot: () => [],
+}));
 const roots: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
   fake.report.entries = [];
+  fake.observe = undefined;
   fake.removed = [];
   fake.measuredBytes = null;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -85,6 +92,15 @@ test("automatic pruning retires only superseded patches with working replacement
   const { root } = fixture();
   await autoPrune(root);
   expect(fake.removed).toEqual(["26.12.1"]);
+});
+test("automatic pruning stops before deleting a candidate when canceled during inspection", async () => {
+  const { root } = fixture();
+  const stop = new AbortController();
+  fake.observe = () => {
+    stop.abort();
+  };
+  await expect(pruneAfterGate(root, stop.signal)).rejects.toThrow(/aborted/i);
+  expect(fake.removed).toEqual([]);
 });
 test("disabled pruning, protected installations, and unsuccessful replacement evidence preserve old tools", async () => {
   const { base, root } = fixture();

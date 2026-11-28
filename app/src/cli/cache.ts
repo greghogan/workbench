@@ -124,11 +124,15 @@ export function printCacheReport(report: CacheReport): void {
     );
   } else if (report.checkout === "images") console.log("No owned local image tags found.");
   if (report.builders?.entries.length) {
-    console.log("Owned Docker builder volumes (separate size estimates):");
+    console.log("Owned builder stores and profile roots:");
     console.log(
       terminalTable(
         ["BUILDER", "SIZE", "STATUS"],
-        report.builders.entries.map((entry) => [entry.key, formatBytes(entry.bytes), entry.blockedBy ?? "removable"]),
+        report.builders.entries.map((entry) => [
+          entry.label ?? entry.key,
+          formatBytes(entry.bytes),
+          entry.blockedBy ?? entry.status ?? "removable",
+        ]),
         { quantities: [1] },
       ),
     );

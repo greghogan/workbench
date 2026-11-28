@@ -83,6 +83,12 @@ function managerEnvironment(root?: string, plans?: ReturnType<typeof nativeInsta
   return nativeEnvironment(resolve(root, uv?.root ?? "."), distributionRoot(root), { toolchain: false });
 }
 
+export function toolInstallationGroups(): string[] {
+  return directories(ownedPath(userDirectory("cache"), "toolchains")).flatMap((tool) =>
+    directories(tool).flatMap(directories),
+  );
+}
+
 /** No downloads or manager initialization: inspect only installed toolsets. */
 export function inspectToolCache(
   root?: string,
@@ -159,47 +165,44 @@ export function inspectToolCache(
       ...cacheAmount(entry.directory),
     });
   };
-  for (const tool of directories(ownedPath(userDirectory("cache"), "toolchains")))
-    for (const version of directories(tool))
-      for (const target of directories(version)) {
-        operations.push(...inspectCacheOperations(target));
-        for (const directory of directories(target)) {
-          const receipt = ownedPath(directory, ".workbench-artifact");
-          if (!existsSync(receipt) || !lstatSync(receipt).isFile()) {
-            const uncertain = inspectUnownedCache(
-              directory,
-              "Installation receipt is missing or is not a regular file",
-            );
-            if (uncertain) operations.push(uncertain);
-            continue;
-          }
-          if (lstatSync(receipt).size > 256) {
-            issues.push(`${directory}: invalid installation receipt`);
-            const uncertain = inspectUnownedCache(directory, "Invalid installation receipt");
-            if (uncertain) operations.push(uncertain);
-            continue;
-          }
-          const identity = readBoundedFile(receipt, 256, "installation receipt").toString("utf8").trim();
-          if (!/^[a-f0-9]{64}$/.test(identity) || !basename(directory).startsWith(identity.slice(0, 16))) {
-            issues.push(`${directory}: installation receipt does not match its location`);
-            const uncertain = inspectUnownedCache(directory, "Installation receipt does not match its location");
-            if (uncertain) operations.push(uncertain);
-            continue;
-          }
-          add({
-            provider: "workbench",
-            tool: basename(tool),
-            version: basename(version),
-            platform: basename(target),
-            directory,
-            identity,
-            protected:
-              existsSync(`${directory}.lock`) && !heldInstallations.includes(directory)
-                ? ["installation or cleanup lock"]
-                : [],
-          });
-        }
+  for (const target of toolInstallationGroups()) {
+    const version = dirname(target),
+      tool = dirname(version);
+    operations.push(...inspectCacheOperations(target));
+    for (const directory of directories(target)) {
+      const receipt = ownedPath(directory, ".workbench-artifact");
+      if (!existsSync(receipt) || !lstatSync(receipt).isFile()) {
+        const uncertain = inspectUnownedCache(directory, "Installation receipt is missing or is not a regular file");
+        if (uncertain) operations.push(uncertain);
+        continue;
       }
+      if (lstatSync(receipt).size > 256) {
+        issues.push(`${directory}: invalid installation receipt`);
+        const uncertain = inspectUnownedCache(directory, "Invalid installation receipt");
+        if (uncertain) operations.push(uncertain);
+        continue;
+      }
+      const identity = readBoundedFile(receipt, 256, "installation receipt").toString("utf8").trim();
+      if (!/^[a-f0-9]{64}$/.test(identity) || !basename(directory).startsWith(identity.slice(0, 16))) {
+        issues.push(`${directory}: installation receipt does not match its location`);
+        const uncertain = inspectUnownedCache(directory, "Installation receipt does not match its location");
+        if (uncertain) operations.push(uncertain);
+        continue;
+      }
+      add({
+        provider: "workbench",
+        tool: basename(tool),
+        version: basename(version),
+        platform: basename(target),
+        directory,
+        identity,
+        protected:
+          existsSync(`${directory}.lock`) && !heldInstallations.includes(directory)
+            ? ["installation or cleanup lock"]
+            : [],
+      });
+    }
+  }
   const rustHome = resolve(process.env.RUSTUP_HOME ?? join(homedir(), ".rustup"));
   if (existsSync(join(rustHome, "toolchains"))) {
     try {

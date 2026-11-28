@@ -15,7 +15,13 @@ export type CITarget = TargetSelection & {
   architecture: string;
   environment: string;
   phases: CIPhase[];
-  checks: { name: string; role: string; command: string[]; source: string | undefined }[];
+  checks: {
+    name: string;
+    role: string;
+    command: string[];
+    source: string | undefined;
+    ciNetwork?: "offline" | "online";
+  }[];
 };
 
 /** One configured target catalog serves hosted matrices and local selection. */
@@ -63,12 +69,12 @@ function configuredTargets(root: string): CITarget[] {
     })),
     ...[
       ...matrix.environments.include,
-      ...matrix.devcontainer.paths.map((path) => ({ path, environment: "devcontainer" })),
+      ...matrix.devcontainer.paths.map((path) => ({ path, environment: "devcontainer", architecture: "x64" })),
     ].map((entry) => ({
       kind: "environment" as const,
       path: entry.path,
       os: "linux",
-      architecture: "x64",
+      architecture: entry.architecture,
       environment: entry.environment,
       release: false as const,
     })),
@@ -101,7 +107,13 @@ function configuredTargets(root: string): CITarget[] {
               operatingSystem: target.os,
               architecture: target.architecture,
             }).sessions.flatMap((session) =>
-              session.checks.map(({ name, role, command, source }) => ({ name, role, command, source })),
+              session.checks.map(({ name, role, command, source, online }) => ({
+                name,
+                role,
+                command,
+                source,
+                ...("stage" in selection ? { ciNetwork: online ? ("online" as const) : ("offline" as const) } : {}),
+              })),
             ),
           );
     return {
@@ -166,6 +178,6 @@ export function groupedCIMatrix(matrix: ReturnType<typeof ciMatrix>) {
     compatibility: {
       include: group(matrix.compatibility.include, ["runtime", "version", "architecture", "runner", "node", "roles"]),
     },
-    environments: { include: group(matrix.environments.include, ["environment", "node"]) },
+    environments: { include: group(matrix.environments.include, ["environment", "architecture", "runner", "node"]) },
   };
 }

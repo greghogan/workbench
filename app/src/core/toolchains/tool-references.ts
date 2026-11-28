@@ -97,24 +97,27 @@ function retained(reference: ResultToolReference): boolean {
 
 /** Results own tool references. Removing a result releases them without a project lifecycle command. */
 export function recordResultTools(reference: ResultToolReference, admissionHeld = false): void {
+  recordResultToolBatch([reference], admissionHeld);
+}
+
+export function recordResultToolBatch(references: readonly ResultToolReference[], admissionHeld = false): void {
+  if (!references.length) return;
   const record = () => {
-    readBuildGeneration(reference.storageRoot, reference.directory, reference.kind, reference.identity);
     const state = readIndex();
-    const previous = state.results.find((r) => r.directory === reference.directory);
-    if (previous && retained(previous))
-      reference = {
-        ...reference,
-        tools: [
-          ...new Map([...previous.tools, ...reference.tools].map((tool) => [JSON.stringify(tool), tool])).values(),
-        ],
-      };
-    state.results = state.results.filter((r) => r.directory !== reference.directory);
-    state.results.push({
-      ...reference,
-      lastUsed: new Date().toISOString(),
-      platform: `${process.platform}-${process.arch}`,
-    });
-    writeAtomic(location(), JSON.stringify(state, null, 2) + "\n", 0o600);
+    const results = new Map(state.results.map((entry) => [entry.directory, entry]));
+    const lastUsed = new Date().toISOString();
+    const platform = `${process.platform}-${process.arch}`;
+    for (const reference of references) {
+      readBuildGeneration(reference.storageRoot, reference.directory, reference.kind, reference.identity);
+      const previous = results.get(reference.directory);
+      const tools =
+        previous && retained(previous)
+          ? [...new Map([...previous.tools, ...reference.tools].map((tool) => [JSON.stringify(tool), tool])).values()]
+          : reference.tools;
+      results.delete(reference.directory);
+      results.set(reference.directory, { ...reference, tools, lastUsed, platform });
+    }
+    writeAtomic(location(), JSON.stringify({ ...state, results: [...results.values()] }, null, 2) + "\n", 0o600);
   };
   if (admissionHeld) record();
   else withToolCacheAdmission(record);
@@ -133,6 +136,11 @@ export function verifyBuildResults(directories: string[]): void {
     }
     writeAtomic(location(), JSON.stringify(state, null, 2) + "\n", 0o600);
   });
+}
+
+/** Maintenance compares ownership and verified replacements independently of routine timestamp refreshes. */
+export function toolRetentionReferences(): ResultToolReference[] {
+  return readIndex().results.sort((a, b) => a.directory.localeCompare(b.directory));
 }
 
 /** Inspection refreshes from actual retained results, independently of present-day project pins. */

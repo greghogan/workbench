@@ -1,12 +1,14 @@
 import { afterEach, expect, test } from "vitest";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { invalidateCacheSize, withCacheMeasurementLocks } from "../../../src/core/storage/cache-size.ts";
 import { inspectToolReferences } from "../../../src/core/toolchains/tool-references.ts";
 import { cacheProjectFixture } from "../../fixtures/cache-project.mjs";
-import { autoPrune } from "../../../src/core/storage/auto-prune.ts";
-import { keepCacheAsset, registeredProjects } from "../../../src/core/projects/project-registry.ts";
+import { autoPrune, pruneAfterGate } from "../../../src/core/storage/auto-prune.ts";
+import { keepCacheAsset, projectPathKey, registeredProjects } from "../../../src/core/projects/project-registry.ts";
+import { userDirectory } from "../../../src/core/storage/storage.ts";
 import { collectCacheInventory } from "../../../src/server/cache/cache-inventory.ts";
+import { BrowserEvidenceRun, browserEvidenceMarker } from "../../../src/core/storage/browser-evidence.ts";
 const fixtures: ReturnType<typeof cacheProjectFixture>[] = [];
 afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.close();
@@ -56,11 +58,12 @@ test("explicitly retained old results continue to protect tools even after repla
   const result = f.result(root, old);
   keepCacheAsset(result.directory, true);
   f.working(root, replacement);
-  await autoPrune(root);
+  expect(await pruneAfterGate(root)).toBe("finished");
   expect(existsSync(result.directory)).toBe(true);
   expect(existsSync(old.directory)).toBe(true);
+  expect(await pruneAfterGate(root)).toBe("skipped");
   keepCacheAsset(result.directory, false);
-  await autoPrune(root);
+  expect(await pruneAfterGate(root)).toBe("finished");
   expect(existsSync(result.directory)).toBe(false);
   expect(existsSync(old.directory)).toBe(false);
 });
@@ -81,6 +84,35 @@ test("automatic retention defers busy accounting without deleting data and succe
   expect(existsSync(old.directory)).toBe(false);
   expect(existsSync(replacement.directory)).toBe(true);
 });
+
+test("missing browser ownership is preserved and a repaired record invalidates the retention decision", async () => {
+  const f = fixture();
+  const root = f.project("browser-ownership");
+  f.working(root, f.install("4.0.1"));
+  const run = new BrowserEvidenceRun(root);
+  await run.finish();
+  const marker = join(run.directory, browserEvidenceMarker);
+  const receipt = readFileSync(marker);
+  unlinkSync(marker);
+  expect(await pruneAfterGate(root)).toBe("finished");
+  expect(await pruneAfterGate(root)).toBe("skipped");
+  expect(existsSync(run.directory)).toBe(true);
+  writeFileSync(marker, receipt);
+  expect(await pruneAfterGate(root)).toBe("finished");
+  expect(existsSync(run.directory)).toBe(true);
+});
+
+test("an invalid retention receipt is replaced after the next successful scan", async () => {
+  const f = fixture();
+  const root = f.project("receipt");
+  f.working(root, f.install("4.0.1"));
+  expect(await pruneAfterGate(root)).toBe("finished");
+  const receipt = join(userDirectory("state"), "cache-retention", projectPathKey(root) + ".json");
+  writeFileSync(receipt, "invalid");
+  expect(await pruneAfterGate(root)).toBe("finished");
+  expect(await pruneAfterGate(root)).toBe("skipped");
+});
+
 test("metadata publishes before size measurements and completed scans reuse persistent estimates", async () => {
   const f = fixture(),
     tool = f.install("4.0.1"),

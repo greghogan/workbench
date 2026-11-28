@@ -1,5 +1,4 @@
-import { expect, test, vi } from "vitest";
-import * as differences from "../../../src/server/review/diff.ts";
+import { expect, test } from "vitest";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import { parseDOM } from "../../fixtures/dom.mjs";
@@ -126,13 +125,19 @@ test("working review resets at each retained commit while prior units keep their
   git(root, "commit", "-qm", "First provisional version\n\nWorkbench-Provisional: true");
   const first = git(root, "rev-parse", "HEAD");
   let snapshot = new WorkspaceCollector(root).collect();
-  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference?.patch).toBe("");
+  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference).toMatchObject({
+    before: text("First reviewed sentence."),
+    after: text("First reviewed sentence."),
+  });
   expect(snapshot.commitReviews.map(({ revision, paths }) => ({ revision, paths }))).toEqual([
     { revision: first, paths: [] },
   ]);
   writeFileSync(join(root, path), text("Second revised sentence."));
   snapshot = new WorkspaceCollector(root).collect();
-  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference?.patch).toContain("-First reviewed sentence.");
+  expect(snapshot.documents.get("demo:ADR-0")?.reviewed.difference).toMatchObject({
+    before: text("First reviewed sentence."),
+    after: text("Second revised sentence."),
+  });
   approveReviewFiles(root, [workingChange(root)], false, ReviewSource.Working);
   git(root, "add", path);
   checkReview(root);
@@ -146,31 +151,27 @@ test("working review resets at each retained commit while prior units keep their
   ]);
   git(root, "commit", "--amend", "-qm", "New commit baseline");
   expect(reviewedBaselines(root).has(path)).toBe(false);
-  expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-0")?.reviewed.difference?.patch).toBe("");
+  expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-0")?.reviewed.difference).toMatchObject({
+    before: text("Second revised sentence."),
+    after: text("Second revised sentence."),
+  });
   const added = "workbench/decisions/ADR-01.md";
   writeFileSync(join(root, added), text("New record."));
-  expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-1")?.reviewed.difference?.patch).toContain(
-    "+New record.",
-  );
+  expect(new WorkspaceCollector(root).collect().documents.get("demo:ADR-1")?.reviewed.difference).toMatchObject({
+    before: "",
+    after: text("New record."),
+  });
 });
-test("a reviewed baseline does not require another committed comparison", () => {
+test("the working document compares to the last acknowledgment when it differs from HEAD", () => {
   const root = fixture.project();
   writeFileSync(join(root, path), text("Reviewed sentence."));
   approveReviewFiles(root, [workingChange(root)], false, ReviewSource.Working);
   writeFileSync(join(root, path), text("Revised sentence."));
-  const failedHead = vi.spyOn(differences, "workingDiff").mockImplementationOnce(() => {
-    throw new Error("Fixture HEAD failure");
+  const document = new WorkspaceCollector(root).collect().documents.get("demo:ADR-0");
+  expect(document?.reviewed).toMatchObject({
+    state: "available",
+    difference: { before: text("Reviewed sentence."), after: text("Revised sentence.") },
   });
-  try {
-    const document = new WorkspaceCollector(root).collect().documents.get("demo:ADR-0");
-    expect(failedHead).not.toHaveBeenCalled();
-    expect(document?.reviewed.state).toBe("available");
-    expect(document?.reviewed.difference?.patch).toContain("-Reviewed sentence.");
-    expect(document?.reviewed.difference?.patch).toContain("+Revised sentence.");
-    expect(document?.contents).toContain("Revised sentence.");
-  } finally {
-    failedHead.mockRestore();
-  }
 });
 test("working additions, deletions, and supporting files have individual acknowledgments and charter attestation", () => {
   const root = fixture.project();
@@ -193,9 +194,10 @@ test("working additions, deletions, and supporting files have individual acknowl
 });
 test("review shows current contents independently of the staged commit", async () => {
   const root = fixture.project();
-  writeFileSync(join(root, path), text("Staged sentence."));
+  writeFileSync(join(root, path), "# ADR-0: Staged title\n\nStaged sentence.\n");
   git(root, "add", path);
-  writeFileSync(join(root, path), text("Working sentence."));
+  const working = "# ADR-0: Working title\n\nWorking sentence.\n";
+  writeFileSync(join(root, path), working);
   const web = await fixture.start(root);
   let { html } = await readWebPage(web, "/reviews");
   const dom = parseDOM(html, { url: web.url }).window.document;
@@ -204,7 +206,14 @@ test("review shows current contents independently of the staged commit", async (
   expect(rows[0]?.querySelectorAll("a[data-card-link]")).toHaveLength(1);
   expect(rows[0]?.textContent).not.toMatch(/Working file|Staged file/);
   ({ html } = await readWebPage(web, `/review?path=${path}`));
-  expect(parseDOM(html).window.document.querySelector(".document-diff")?.textContent).toContain("Working sentence.");
+  const document = parseDOM(html).window.document;
+  expect(document.querySelector(".document-diff")?.textContent).toContain("Working sentence.");
+  expect([...document.querySelectorAll("main h1")].map((heading) => heading.textContent)).toEqual([
+    "ADR-0: Working title",
+  ]);
+  const breadcrumbs = [...document.querySelectorAll('nav[aria-label="Breadcrumb"] a')];
+  expect(breadcrumbs.map((link) => link.textContent)).toEqual(["demo", "Reviews"]);
+  expect(new URL(breadcrumbs.at(-1)?.getAttribute("href") ?? "", web.url).searchParams.has("path")).toBe(false);
   expect(html).not.toContain("Staged sentence.");
   expect((await readWebPage(web, `/review?path=${path}&review_source=staged`)).response.status).toBe(400);
   const values = {
@@ -229,7 +238,7 @@ test("review shows current contents independently of the staged commit", async (
   expect(workingChange(root).approved).toBe(false);
   const download = await fetch(`${web.url}/review-file?path=${path}&digest=${values.digest}&side=after`);
   expect(download.status).toBe(200);
-  expect(await download.text()).toBe(text("Working sentence."));
+  expect(await download.text()).toBe(working);
 });
 
 test("working inspection preserves Git's index and never executes clean filters", () => {
@@ -317,22 +326,6 @@ test("ADR review compares the last acknowledgment in two complete, navigable lay
   expect((await readWebPage(web, `/review?path=${path}&baseline=head`)).response.status).toBe(400);
 });
 
-test("review headings identify the exact version once, with a linked queue parent", async () => {
-  const root = fixture.project();
-  writeFileSync(join(root, path), "# ADR-0: Staged title\n\nStaged contents.\n");
-  git(root, "add", path);
-  writeFileSync(join(root, path), "# ADR-0: Working title\n\nWorking contents.\n");
-  const web = await fixture.start(root);
-  const document = parseDOM((await readWebPage(web, `/review?path=${path}`)).html, { url: web.url }).window.document;
-  expect([...document.querySelectorAll("main h1")].map((heading) => heading.textContent)).toEqual([
-    "ADR-0: Working title",
-  ]);
-  expect(document.querySelector(".document-diff ins")?.textContent).toContain("Working");
-  const links = [...document.querySelectorAll('nav[aria-label="Breadcrumb"] a')];
-  expect(links.map((link) => link.textContent)).toEqual(["demo", "Reviews"]);
-  expect(new URL(links.at(-1)?.getAttribute("href") ?? "", web.url).searchParams.has("path")).toBe(false);
-});
-
 test.each([false, true])(
   "review navigation advances through files, skips prior approvals (%s), and ends at the queue",
   async (skipMiddle) => {
@@ -389,8 +382,9 @@ test("supporting file reviews offer only applicable views and keep binary inspec
   const queue = parseDOM((await readWebPage(web, "/reviews")).html, { url: web.url }).window.document;
   const links = [...queue.querySelectorAll("article.record-row a[data-card-link]")];
   expect(links).toHaveLength(1);
-  const document = parseDOM((await readWebPage(web, links[0]?.getAttribute("href") ?? "")).html, { url: web.url })
-    .window.document;
+  const document = parseDOM((await readWebPage(web, links[0]?.getAttribute("href") ?? "")).html, {
+    url: web.url,
+  }).window.document;
   expect(document.querySelector('.record-pane button:disabled[aria-label="Next review"]')).not.toBeNull();
   for (const [file] of files) {
     const section = document.querySelector(`[data-review-file="${file}"]`);

@@ -1,237 +1,237 @@
 {
   "node": {
-    "22.23.4": {
+    "26.13.1": {
       "linux-x64": {
-        "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz",
-        "sha256": "b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406",
+        "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-linux-x64.tar.gz",
+        "sha256": "518674de2b621728a5e4486f5fb3b7d2900bb3cc4aa97969edaa463db99f9778",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt",
-          "subject": "node-v22.23.4-linux-x64.tar.gz",
+          "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt",
+          "subject": "node-v26.13.1-linux-x64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v22.23.4/node-v22.23.4-linux-x64.tar.gz"]
-      },
-      "linux-arm64": {
-        "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-arm64.tar.gz",
-        "sha256": "f7a1e486dbc8b286847815b477d4fb5e9fb963ed4489c3e1588853d685f589f9",
-        "format": "tar",
-        "strip": 1,
-        "bin": "bin",
-        "checksums": {
-          "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt",
-          "subject": "node-v22.23.4-linux-arm64.tar.gz",
-          "signature": {
-            "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt.sig",
-            "keys": "scripts/keys/node.asc",
-            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt.sig"]
-          },
-          "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt"]
-        },
-        "backupUrls": ["https://nodejs.org/download/release/v22.23.4/node-v22.23.4-linux-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v26.13.1/node-v26.13.1-linux-x64.tar.gz"]
       },
       "darwin-arm64": {
-        "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz",
-        "sha256": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428",
+        "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-darwin-arm64.tar.gz",
+        "sha256": "aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt",
-          "subject": "node-v22.23.4-darwin-arm64.tar.gz",
+          "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt",
+          "subject": "node-v26.13.1-darwin-arm64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v22.23.4/node-v22.23.4-darwin-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v26.13.1/node-v26.13.1-darwin-arm64.tar.gz"]
       },
       "win32-x64": {
-        "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-win-x64.zip",
-        "sha256": "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20",
+        "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-win-x64.zip",
+        "sha256": "e2edda75bfb089654705cf65a13b58933bfd5f57148e8ebda916f58a2474f1f7",
         "format": "zip",
         "strip": 1,
         "bin": ".",
         "checksums": {
-          "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt",
-          "subject": "node-v22.23.4-win-x64.zip",
+          "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt",
+          "subject": "node-v26.13.1-win-x64.zip",
           "signature": {
-            "url": "https://nodejs.org/dist/v22.23.4/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v22.23.4/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v22.23.4/node-v22.23.4-win-x64.zip"]
+        "backupUrls": ["https://nodejs.org/download/release/v26.13.1/node-v26.13.1-win-x64.zip"]
+      },
+      "linux-arm64": {
+        "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-linux-arm64.tar.gz",
+        "sha256": "80a330b35415382878df18d41afbd106ea89bfb3be0087d6608e289a14c5cc7d",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt",
+          "subject": "node-v26.13.1-linux-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
+            "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt.sig"]
+          },
+          "backupUrls": ["https://nodejs.org/download/release/v26.13.1/SHASUMS256.txt"]
+        },
+        "backupUrls": ["https://nodejs.org/download/release/v26.13.1/node-v26.13.1-linux-arm64.tar.gz"]
       }
     },
-    "26.13.0": {
+    "22.23.5": {
       "linux-x64": {
-        "url": "https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-x64.tar.gz",
-        "sha256": "5848553868b402d3fabb5b09270649977780a390f832155721025a08b5104455",
+        "url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-linux-x64.tar.gz",
+        "sha256": "c54118104acc524633b5abe106bbf44a53126ec8b4e5fa105cb92b5d7de8a1a1",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt",
-          "subject": "node-v26.13.0-linux-x64.tar.gz",
+          "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt",
+          "subject": "node-v22.23.5-linux-x64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
-            "signers": ["C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"],
-            "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt.sig"]
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
+            "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v26.13.0/node-v26.13.0-linux-x64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v22.23.5/node-v22.23.5-linux-x64.tar.gz"]
+      },
+      "linux-arm64": {
+        "url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-linux-arm64.tar.gz",
+        "sha256": "8bd3dc69eee8f3f226315a80d7d1d4faccf217a4c8fae500168ac2e38f3bdba3",
+        "format": "tar",
+        "strip": 1,
+        "bin": "bin",
+        "checksums": {
+          "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt",
+          "subject": "node-v22.23.5-linux-arm64.tar.gz",
+          "signature": {
+            "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt.sig",
+            "keys": "scripts/keys/node.asc",
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
+            "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt.sig"]
+          },
+          "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt"]
+        },
+        "backupUrls": ["https://nodejs.org/download/release/v22.23.5/node-v22.23.5-linux-arm64.tar.gz"]
       },
       "darwin-arm64": {
-        "url": "https://nodejs.org/dist/v26.13.0/node-v26.13.0-darwin-arm64.tar.gz",
-        "sha256": "d38bd5e5a2ddce6bbb5ce45e46e208337da4d51fffe611e567fd32073d6439f6",
+        "url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-darwin-arm64.tar.gz",
+        "sha256": "e7131995759b61a0170b646010d2ad35a5d37b4cb0d471f3e8317eac6f742f3d",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt",
-          "subject": "node-v26.13.0-darwin-arm64.tar.gz",
+          "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt",
+          "subject": "node-v22.23.5-darwin-arm64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
-            "signers": ["C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"],
-            "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt.sig"]
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
+            "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v26.13.0/node-v26.13.0-darwin-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v22.23.5/node-v22.23.5-darwin-arm64.tar.gz"]
       },
       "win32-x64": {
-        "url": "https://nodejs.org/dist/v26.13.0/node-v26.13.0-win-x64.zip",
-        "sha256": "dcc60d59a0746999f99064a01c020445d54d84228c691cdbf25b49ac3b59150a",
+        "url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-win-x64.zip",
+        "sha256": "4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3",
         "format": "zip",
         "strip": 1,
         "bin": ".",
         "checksums": {
-          "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt",
-          "subject": "node-v26.13.0-win-x64.zip",
+          "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt",
+          "subject": "node-v22.23.5-win-x64.zip",
           "signature": {
-            "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
-            "signers": ["C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"],
-            "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt.sig"]
+            "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
+            "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v22.23.5/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v26.13.0/node-v26.13.0-win-x64.zip"]
-      },
-      "linux-arm64": {
-        "url": "https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-arm64.tar.gz",
-        "sha256": "439e9c438acdf6a6ffe47418da709153d66c4bed812e30a473faacb107dd2791",
-        "format": "tar",
-        "strip": 1,
-        "bin": "bin",
-        "checksums": {
-          "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt",
-          "subject": "node-v26.13.0-linux-arm64.tar.gz",
-          "signature": {
-            "url": "https://nodejs.org/dist/v26.13.0/SHASUMS256.txt.sig",
-            "keys": "scripts/keys/node.asc",
-            "signers": ["C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"],
-            "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt.sig"]
-          },
-          "backupUrls": ["https://nodejs.org/download/release/v26.13.0/SHASUMS256.txt"]
-        },
-        "backupUrls": ["https://nodejs.org/download/release/v26.13.0/node-v26.13.0-linux-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v22.23.5/node-v22.23.5-win-x64.zip"]
       }
     },
-    "24.22.2": {
+    "24.22.3": {
       "linux-x64": {
-        "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-linux-x64.tar.gz",
-        "sha256": "361718c444e49af2ca5a110c83ba6a8901143f23ab285ebbef0341f391f482a9",
+        "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-x64.tar.gz",
+        "sha256": "061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt",
-          "subject": "node-v24.22.2-linux-x64.tar.gz",
+          "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt",
+          "subject": "node-v24.22.3-linux-x64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-x64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v24.22.3/node-v24.22.3-linux-x64.tar.gz"]
       },
       "darwin-arm64": {
-        "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-darwin-arm64.tar.gz",
-        "sha256": "aa9549349e47dffaa42dcf95d6e06ade8c4bdafc980979883b88767670df385a",
+        "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-arm64.tar.gz",
+        "sha256": "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt",
-          "subject": "node-v24.22.2-darwin-arm64.tar.gz",
+          "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt",
+          "subject": "node-v24.22.3-darwin-arm64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v24.22.2/node-v24.22.2-darwin-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v24.22.3/node-v24.22.3-darwin-arm64.tar.gz"]
       },
       "win32-x64": {
-        "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip",
-        "sha256": "ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2",
+        "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip",
+        "sha256": "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f",
         "format": "zip",
         "strip": 1,
         "bin": ".",
         "checksums": {
-          "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt",
-          "subject": "node-v24.22.2-win-x64.zip",
+          "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt",
+          "subject": "node-v24.22.3-win-x64.zip",
           "signature": {
-            "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v24.22.2/node-v24.22.2-win-x64.zip"]
+        "backupUrls": ["https://nodejs.org/download/release/v24.22.3/node-v24.22.3-win-x64.zip"]
       },
       "linux-arm64": {
-        "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-linux-arm64.tar.gz",
-        "sha256": "95c264150aceb7f3437a29fd6984924f5f8d1511ea3cbd6c508b83f6c555dae2",
+        "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-arm64.tar.gz",
+        "sha256": "261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt",
-          "subject": "node-v24.22.2-linux-arm64.tar.gz",
+          "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt",
+          "subject": "node-v24.22.3-linux-arm64.tar.gz",
           "signature": {
-            "url": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt.sig",
+            "url": "https://nodejs.org/dist/v24.22.3/SHASUMS256.txt.sig",
             "keys": "scripts/keys/node.asc",
             "signers": ["5BE8A3F6C8A5C01D106C0AD820B1A390B168D356"],
-            "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt.sig"]
+            "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt.sig"]
           },
-          "backupUrls": ["https://nodejs.org/download/release/v24.22.2/SHASUMS256.txt"]
+          "backupUrls": ["https://nodejs.org/download/release/v24.22.3/SHASUMS256.txt"]
         },
-        "backupUrls": ["https://nodejs.org/download/release/v24.22.2/node-v24.22.2-linux-arm64.tar.gz"]
+        "backupUrls": ["https://nodejs.org/download/release/v24.22.3/node-v24.22.3-linux-arm64.tar.gz"]
       }
     }
   },
@@ -295,66 +295,66 @@
     }
   },
   "cmake": {
-    "4.4.5": {
+    "4.5.1": {
       "linux-x64": {
-        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-linux-x86_64.tar.gz",
-        "sha256": "ed85135c5a5135b45e50423cb406dea04ca3338da0b8ef3c9ede963559680be0",
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-linux-x86_64.tar.gz",
+        "sha256": "83b71181fb62b4fe8f26067a9321448572e7a43bd04ff6c7f54a24c33698f16d",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt",
-          "subject": "cmake-4.4.5-linux-x86_64.tar.gz",
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt",
+          "subject": "cmake-4.5.1-linux-x86_64.tar.gz",
           "signature": {
-            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt.asc",
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt.asc",
             "keys": "scripts/keys/cmake.asc",
             "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
           }
         }
       },
       "darwin-arm64": {
-        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-macos-universal.tar.gz",
-        "sha256": "679e77a96b9ef9484cc6c1445255fc4f84206b48a65420efbedf16bdab55fbff",
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-macos-universal.tar.gz",
+        "sha256": "e1fb288543e4eb2a410e385ecebc64323bda51f0205782f2b094ccd5d572ca2d",
         "format": "tar",
         "strip": 1,
         "bin": "CMake.app/Contents/bin",
         "checksums": {
-          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt",
-          "subject": "cmake-4.4.5-macos-universal.tar.gz",
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt",
+          "subject": "cmake-4.5.1-macos-universal.tar.gz",
           "signature": {
-            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt.asc",
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt.asc",
             "keys": "scripts/keys/cmake.asc",
             "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
           }
         }
       },
       "win32-x64": {
-        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-windows-x86_64.zip",
-        "sha256": "326c826486d46a23cf9d5a1c9ee3a567d427bdd02c4a34071937a2a675cff004",
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-windows-x86_64.zip",
+        "sha256": "bfe6eadb245dc8213e0d3feea316b520cb2aae92f5667ffd76059ba6b05c430c",
         "format": "zip",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt",
-          "subject": "cmake-4.4.5-windows-x86_64.zip",
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt",
+          "subject": "cmake-4.5.1-windows-x86_64.zip",
           "signature": {
-            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt.asc",
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt.asc",
             "keys": "scripts/keys/cmake.asc",
             "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
           }
         }
       },
       "linux-arm64": {
-        "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-linux-aarch64.tar.gz",
-        "sha256": "301d5063ab259577c1b57ce5490b1aab9ea5c56dc4c822f73499553dab94925f",
+        "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-linux-aarch64.tar.gz",
+        "sha256": "3bec208f11ed96c173032eeaf97937c54dd246acefee22acd7794a6b4e70d536",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "checksums": {
-          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt",
-          "subject": "cmake-4.4.5-linux-aarch64.tar.gz",
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt",
+          "subject": "cmake-4.5.1-linux-aarch64.tar.gz",
           "signature": {
-            "url": "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-SHA-256.txt.asc",
+            "url": "https://github.com/Kitware/CMake/releases/download/v4.5.1/cmake-4.5.1-SHA-256.txt.asc",
             "keys": "scripts/keys/cmake.asc",
             "signers": ["C6C265324BBEBDC350B513D02D2CEF1034921684"]
           }
@@ -415,54 +415,54 @@
     }
   },
   "uv": {
-    "0.13.6": {
+    "0.13.9": {
       "linux-x64": {
-        "url": "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "5d61f26b6c7213779eda90edc6971ea6b0b796bfb8d49a574c8ad69b59838548",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.9/uv-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "58ccf5f1792b8a5a88d01bc910ea131a8b3db4a319a17ad5fad75e0845a3e271",
         "format": "tar",
         "strip": 1,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:5d61f26b6c7213779eda90edc6971ea6b0b796bfb8d49a574c8ad69b59838548",
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:58ccf5f1792b8a5a88d01bc910ea131a8b3db4a319a17ad5fad75e0845a3e271",
           "subject": "uv-x86_64-unknown-linux-musl.tar.gz",
           "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl"
         }
       },
       "darwin-arm64": {
-        "url": "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-aarch64-apple-darwin.tar.gz",
-        "sha256": "60fbd5c8a1ed681845eea28d9d622fcde03c51e91a43465b64a1e17db1ed3472",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.9/uv-aarch64-apple-darwin.tar.gz",
+        "sha256": "5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca",
         "format": "tar",
         "strip": 1,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:60fbd5c8a1ed681845eea28d9d622fcde03c51e91a43465b64a1e17db1ed3472",
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca",
           "subject": "uv-aarch64-apple-darwin.tar.gz",
           "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl"
         }
       },
       "win32-x64": {
-        "url": "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip",
-        "sha256": "a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.9/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "edd61f7f5728a56cc62455386661860bdfc7bab65872f39b0c25bdcc1d8e1beb",
         "format": "zip",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f",
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:edd61f7f5728a56cc62455386661860bdfc7bab65872f39b0c25bdcc1d8e1beb",
           "subject": "uv-x86_64-pc-windows-msvc.zip",
           "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl"
         }
       },
       "linux-arm64": {
-        "url": "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "819692e404d23e5aae6bc44c0e260f1f5492fd1910ab4693b2c650f926dbe800",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.13.9/uv-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "37fbb7c5bc66cf99c12aa881949d216181e201dec449772c4329e56487d61179",
         "format": "tar",
         "strip": 1,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:819692e404d23e5aae6bc44c0e260f1f5492fd1910ab4693b2c650f926dbe800",
+          "url": "https://api.github.com/repos/astral-sh/uv/attestations/sha256:37fbb7c5bc66cf99c12aa881949d216181e201dec449772c4329e56487d61179",
           "subject": "uv-aarch64-unknown-linux-musl.tar.gz",
           "signer": "https://github.com/astral-sh/uv/.github/workflows/release.yml@refs/heads/main",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl"
@@ -643,121 +643,121 @@
     }
   },
   "cargo-nextest": {
-    "0.9.150": {
+    "0.9.152": {
       "linux-x64": {
-        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.150/cargo-nextest-0.9.150-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "84f0f9ba75d0b6fa117bc418d49747ba78e20e4583057f6fa628f1b17c17234d",
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "521c5f790ed07ee69d0a88403d9d86a8c8ab27977f12fc73f22aa4e7e14a0f71",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:84f0f9ba75d0b6fa117bc418d49747ba78e20e4583057f6fa628f1b17c17234d",
-          "subject": "cargo-nextest-0.9.150-x86_64-unknown-linux-musl.tar.gz",
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:521c5f790ed07ee69d0a88403d9d86a8c8ab27977f12fc73f22aa4e7e14a0f71",
+          "subject": "cargo-nextest-0.9.152-x86_64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.150" }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "darwin-arm64": {
-        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.150/cargo-nextest-0.9.150-universal-apple-darwin.tar.gz",
-        "sha256": "82a759b4d218d38359424196ab244c470e8f7c7d149c814fbbeef4d67c3c301a",
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-universal-apple-darwin.tar.gz",
+        "sha256": "2fadf57df4243e691f088ee3bff4f4ab9af16da0c95a1db84b5cb1685e098a76",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:82a759b4d218d38359424196ab244c470e8f7c7d149c814fbbeef4d67c3c301a",
-          "subject": "cargo-nextest-0.9.150-universal-apple-darwin.tar.gz",
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:2fadf57df4243e691f088ee3bff4f4ab9af16da0c95a1db84b5cb1685e098a76",
+          "subject": "cargo-nextest-0.9.152-universal-apple-darwin.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.150" }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "win32-x64": {
-        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.150/cargo-nextest-0.9.150-x86_64-pc-windows-msvc.zip",
-        "sha256": "6fd8f9ba48c946a79a5bcdd35bf4f922447b149f7ca6c3ff7f39e12f32ef78db",
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-pc-windows-msvc.zip",
+        "sha256": "cc6bf4b6a7ac18e462cd6c9bae67e26921b888249c2988c6acabf3df387ed9d6",
         "format": "zip",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:6fd8f9ba48c946a79a5bcdd35bf4f922447b149f7ca6c3ff7f39e12f32ef78db",
-          "subject": "cargo-nextest-0.9.150-x86_64-pc-windows-msvc.zip",
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:cc6bf4b6a7ac18e462cd6c9bae67e26921b888249c2988c6acabf3df387ed9d6",
+          "subject": "cargo-nextest-0.9.152-x86_64-pc-windows-msvc.zip",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.150" }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       },
       "linux-arm64": {
-        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.150/cargo-nextest-0.9.150-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "5a7fe62b64a9006e1e47422021df7b1d308cc76c528c9eaf4649a488615ed6fb",
+        "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "f168dbfe9c9c3a4b247cf10d9c260f3dac90a1373f5c4b1bfd3b0b8ac8d77095",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:5a7fe62b64a9006e1e47422021df7b1d308cc76c528c9eaf4649a488615ed6fb",
-          "subject": "cargo-nextest-0.9.150-aarch64-unknown-linux-musl.tar.gz",
+          "url": "https://api.github.com/repos/nextest-rs/nextest/attestations/sha256:f168dbfe9c9c3a4b247cf10d9c260f3dac90a1373f5c4b1bfd3b0b8ac8d77095",
+          "subject": "cargo-nextest-0.9.152-aarch64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.150" }
+          "release": { "repository": "nextest-rs/nextest", "tag": "cargo-nextest-0.9.152" }
         }
       }
     }
   },
   "cargo-llvm-cov": {
-    "0.9.1": {
+    "0.9.2": {
       "linux-x64": {
-        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.1/cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "3fca950394a3c49457657c158b1619cec8dfd2647ae5b48746734c0ab969a522",
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.2/cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "8d863ab2df1fb53d4f41052b3fa4627ac003d00c46a6388ce037d17472c504ef",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:3fca950394a3c49457657c158b1619cec8dfd2647ae5b48746734c0ab969a522",
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:8d863ab2df1fb53d4f41052b3fa4627ac003d00c46a6388ce037d17472c504ef",
           "subject": "cargo-llvm-cov-x86_64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.1" }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "darwin-arm64": {
-        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.1/cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
-        "sha256": "7e821a6c90c0884f79f759f5d9be50799ade67bb82515186d922f26032ef43b8",
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.2/cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
+        "sha256": "5cd0bf7da3ccedd8cfbd7bf4eaad9083d3f1d47e6633e0c5fab2aeae3d1b2d2e",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:7e821a6c90c0884f79f759f5d9be50799ade67bb82515186d922f26032ef43b8",
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:5cd0bf7da3ccedd8cfbd7bf4eaad9083d3f1d47e6633e0c5fab2aeae3d1b2d2e",
           "subject": "cargo-llvm-cov-aarch64-apple-darwin.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.1" }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "win32-x64": {
-        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.1/cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
-        "sha256": "656590cfa13bb7478595bbfdd3bc6bc075a4f7f3f0df5a439c1856cb03c5a4d2",
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.2/cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
+        "sha256": "cba914b8099201f4133706856fb155926b1dbbb54fb4e309c7af85cd3a3ef8b6",
         "format": "zip",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:656590cfa13bb7478595bbfdd3bc6bc075a4f7f3f0df5a439c1856cb03c5a4d2",
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:cba914b8099201f4133706856fb155926b1dbbb54fb4e309c7af85cd3a3ef8b6",
           "subject": "cargo-llvm-cov-x86_64-pc-windows-msvc.zip",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.1" }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       },
       "linux-arm64": {
-        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.1/cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "49c0085628392a8d727c4464d91ec417c613c5015f5197cd16d5c05aa3fb5ad1",
+        "url": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.2/cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "dab1bfd1f25f7fcd3d6fc6abf9d71b40217a7a103e1da88c1a23111960aa4a40",
         "format": "tar",
         "strip": 0,
         "bin": ".",
         "attestation": {
-          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:49c0085628392a8d727c4464d91ec417c613c5015f5197cd16d5c05aa3fb5ad1",
+          "url": "https://api.github.com/repos/taiki-e/cargo-llvm-cov/attestations/sha256:dab1bfd1f25f7fcd3d6fc6abf9d71b40217a7a103e1da88c1a23111960aa4a40",
           "subject": "cargo-llvm-cov-aarch64-unknown-linux-musl.tar.gz",
           "signer": "https://dotcom.releases.github.com",
           "roots": "scripts/keys/sigstore-trusted-root.jsonl",
-          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.1" }
+          "release": { "repository": "taiki-e/cargo-llvm-cov", "tag": "v0.9.2" }
         }
       }
     }
@@ -1143,139 +1143,123 @@
   "maven": {
     "3.10.0": {
       "linux-x64": {
-        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz",
         "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "signature": {
-          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz.asc",
           "keys": "scripts/keys/maven.asc",
           "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"],
           "backupUrls": [
-            "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
             "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc"
           ]
         },
-        "backupUrls": [
-          "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
-          "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"
-        ]
+        "backupUrls": ["https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"]
       },
       "linux-arm64": {
-        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz",
         "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "signature": {
-          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz.asc",
           "keys": "scripts/keys/maven.asc",
           "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"],
           "backupUrls": [
-            "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
             "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc"
           ]
         },
-        "backupUrls": [
-          "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
-          "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"
-        ]
+        "backupUrls": ["https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"]
       },
       "darwin-arm64": {
-        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz",
         "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "signature": {
-          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz.asc",
           "keys": "scripts/keys/maven.asc",
           "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"],
           "backupUrls": [
-            "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
             "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc"
           ]
         },
-        "backupUrls": [
-          "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
-          "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"
-        ]
+        "backupUrls": ["https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"]
       },
       "win32-x64": {
-        "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz",
         "sha256": "a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "signature": {
-          "url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
+          "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.tar.gz.asc",
           "keys": "scripts/keys/maven.asc",
           "signers": ["88BE34F94BDB2B5357044E2E3A387D43964143E3"],
           "backupUrls": [
-            "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc",
             "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz.asc"
           ]
         },
-        "backupUrls": [
-          "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz",
-          "https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"
-        ]
+        "backupUrls": ["https://archive.apache.org/dist/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz"]
       }
     }
   },
   "ruby": {
-    "4.0.9": {
+    "4.0.10": {
       "linux-x64": {
-        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz",
-        "sha256": "c35350682ff050b79702d57ade4516e7336063f510155d19fb2fb5b3f3909511",
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz",
+        "sha256": "b53eef3371fa5d3e3b74340edcd015f06d5d8853968d4e539a5264fce41ed9f1",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "build": "ruby",
         "authenticationUnavailable": {
           "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
-          "source": "https://www.ruby-lang.org/en/news/2026/10/23/ruby-4-0-9-released/",
-          "checked": "2026-10-29"
+          "source": "https://www.ruby-lang.org/en/news/2026/11/18/ruby-4-0-10-released/",
+          "checked": "2026-11-21"
         },
-        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz"]
+        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz"]
       },
       "linux-arm64": {
-        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz",
-        "sha256": "c35350682ff050b79702d57ade4516e7336063f510155d19fb2fb5b3f3909511",
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz",
+        "sha256": "b53eef3371fa5d3e3b74340edcd015f06d5d8853968d4e539a5264fce41ed9f1",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "build": "ruby",
         "authenticationUnavailable": {
           "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
-          "source": "https://www.ruby-lang.org/en/news/2026/10/23/ruby-4-0-9-released/",
-          "checked": "2026-10-29"
+          "source": "https://www.ruby-lang.org/en/news/2026/11/18/ruby-4-0-10-released/",
+          "checked": "2026-11-21"
         },
-        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz"]
+        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz"]
       },
       "darwin-arm64": {
-        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz",
-        "sha256": "c35350682ff050b79702d57ade4516e7336063f510155d19fb2fb5b3f3909511",
+        "url": "https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz",
+        "sha256": "b53eef3371fa5d3e3b74340edcd015f06d5d8853968d4e539a5264fce41ed9f1",
         "format": "tar",
         "strip": 1,
         "bin": "bin",
         "build": "ruby",
         "authenticationUnavailable": {
           "reason": "Ruby source release announcement publishes strong digests but no detached signature or attestation for this archive. Windows RubyInstaller signatures are verified separately.",
-          "source": "https://www.ruby-lang.org/en/news/2026/10/23/ruby-4-0-9-released/",
-          "checked": "2026-10-29"
+          "source": "https://www.ruby-lang.org/en/news/2026/11/18/ruby-4-0-10-released/",
+          "checked": "2026-11-21"
         },
-        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz"]
+        "backupUrls": ["https://ftp.ruby-lang.org/pub/ruby/4.0/ruby-4.0.10.tar.gz"]
       },
       "win32-x64": {
-        "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.9-1/rubyinstaller-4.0.9-1-x64.7z",
-        "sha256": "1dc0715916251a13c4f6a550a3da1f2c726bff869371fd573a65234c008f47b4",
+        "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.10-1/rubyinstaller-4.0.10-1-x64.7z",
+        "sha256": "0d8f693bb4027378d2c92c285c0bb405f9825623bfbf2caad0d52acabbd4978c",
         "format": "7z",
         "strip": 1,
         "bin": "bin",
         "signature": {
-          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.9-1/rubyinstaller-4.0.9-1-x64.7z.asc",
+          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.10-1/rubyinstaller-4.0.10-1-x64.7z.asc",
           "keys": "scripts/keys/rubyinstaller.asc",
           "signers": ["79D1D4E12FF93365DEAA8DCEF98B8484BE8BF1C5"]
         }
@@ -1411,55 +1395,55 @@
     }
   },
   "composer": {
-    "2.11.0": {
+    "2.11.2": {
       "linux-x64": {
-        "url": "https://getcomposer.org/download/2.11.0/composer.phar",
-        "sha256": "9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b",
+        "url": "https://getcomposer.org/download/2.11.2/composer.phar",
+        "sha256": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
         "format": "binary",
         "strip": 0,
         "bin": ".",
         "executable": "composer.phar",
         "signature": {
-          "url": "https://getcomposer.org/download/2.11.0/composer.phar.asc",
+          "url": "https://getcomposer.org/download/2.11.2/composer.phar.asc",
           "keys": "scripts/keys/composer.asc",
           "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
         }
       },
       "linux-arm64": {
-        "url": "https://getcomposer.org/download/2.11.0/composer.phar",
-        "sha256": "9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b",
+        "url": "https://getcomposer.org/download/2.11.2/composer.phar",
+        "sha256": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
         "format": "binary",
         "strip": 0,
         "bin": ".",
         "executable": "composer.phar",
         "signature": {
-          "url": "https://getcomposer.org/download/2.11.0/composer.phar.asc",
+          "url": "https://getcomposer.org/download/2.11.2/composer.phar.asc",
           "keys": "scripts/keys/composer.asc",
           "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
         }
       },
       "darwin-arm64": {
-        "url": "https://getcomposer.org/download/2.11.0/composer.phar",
-        "sha256": "9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b",
+        "url": "https://getcomposer.org/download/2.11.2/composer.phar",
+        "sha256": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
         "format": "binary",
         "strip": 0,
         "bin": ".",
         "executable": "composer.phar",
         "signature": {
-          "url": "https://getcomposer.org/download/2.11.0/composer.phar.asc",
+          "url": "https://getcomposer.org/download/2.11.2/composer.phar.asc",
           "keys": "scripts/keys/composer.asc",
           "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
         }
       },
       "win32-x64": {
-        "url": "https://getcomposer.org/download/2.11.0/composer.phar",
-        "sha256": "9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b",
+        "url": "https://getcomposer.org/download/2.11.2/composer.phar",
+        "sha256": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
         "format": "binary",
         "strip": 0,
         "bin": ".",
         "executable": "composer.phar",
         "signature": {
-          "url": "https://getcomposer.org/download/2.11.0/composer.phar.asc",
+          "url": "https://getcomposer.org/download/2.11.2/composer.phar.asc",
           "keys": "scripts/keys/composer.asc",
           "signers": ["161DFBE342889F01DDAC4E61CBB3D576F2A0946F"]
         }

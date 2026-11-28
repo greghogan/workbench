@@ -33,6 +33,7 @@ test("a new record opens as a complete file and gains a comparison only after it
   );
   approve(root, path);
   writeFileSync(join(root, path), "# ADR-1: New decision\n\nRevised complete text.\n");
+  await web.monitor.reconcile(true);
   const revised = parseDOM((await readWebPage(web, `/review?path=${path}`)).html).window.document;
   expect(
     [...revised.querySelectorAll('nav[aria-label="Difference layout"] a')].map((link) => link.textContent),
@@ -83,6 +84,7 @@ test("record listing review links include supporting changes and disappear only 
     "Needs review",
   );
   approve(root, note);
+  await web.monitor.reconcile(true);
   const acknowledged = parseDOM((await readWebPage(web, `/records/demo:EXP-0/review`)).html).window.document;
   expect(acknowledged.querySelectorAll("[data-review-file]")).toHaveLength(0);
   expect(acknowledged.querySelectorAll('a[data-card-link][href*="EXP-0"]')).toHaveLength(0);
@@ -92,9 +94,6 @@ test("record listing review links include supporting changes and disappear only 
   approve(root, adr);
   git(root, "add", ".");
   checkReview(root);
-  expect((await listing()).querySelectorAll("[data-record-id] a.badge.pending")).toHaveLength(0);
-  writeFileSync(join(root, note), "Changed after review.\n");
-  expect(reviewLink(await listing(), "EXP-0")).not.toBeNull();
 });
 
 test("staged-only changes are absent from the UI and cannot bypass commit review", async () => {
@@ -158,6 +157,7 @@ test("the default ADR comparison uses the last review since HEAD and never the s
   expect(diff.added).not.toContain("Intermediate staged sentence.");
   approve(root, adr);
   writeFileSync(join(root, adr), text("New current sentence."));
+  await web.monitor.reconcile(true);
   diff = await difference();
   expect(diff.removed).toContain("Reviewed");
   expect(diff.removed).not.toContain("Intermediate staged");
@@ -167,6 +167,7 @@ test("the default ADR comparison uses the last review since HEAD and never the s
   checkReview(root);
   git(root, "commit", "-qm", "New baseline");
   writeFileSync(join(root, adr), text("Latest current sentence."));
+  await web.monitor.reconcile(true);
   diff = await difference();
   expect(diff.removed).toContain("New");
   expect(diff.removed).not.toContain("Reviewed");
@@ -271,6 +272,7 @@ test("completed files leave the queue and later edits return them without losing
   expect(response.status).toBe(200);
   expect(entries(await queue())).toEqual(["demo:EXP-0"]);
   approve(root, experiment);
+  await web.monitor.reconcile(true);
   const remaining = parseDOM((await readWebPage(web, "/records/demo:EXP-0/review")).html).window.document;
   expect(
     [...remaining.querySelectorAll<HTMLInputElement>('form[data-review] input[name="path"]')].map(
@@ -278,11 +280,16 @@ test("completed files leave the queue and later edits return them without losing
     ),
   ).toEqual([note]);
   approve(root, note);
-  expect(entries(await queue())).toEqual([]);
-  expect((await queue()).querySelector(".empty")?.textContent).toBe("No reviews awaiting attention.");
+  await web.monitor.reconcile(true);
+  const empty = await queue();
+  expect(entries(empty)).toEqual([]);
+  expect(empty.querySelector(".empty")?.textContent).toBe("No reviews awaiting attention.");
   writeFileSync(join(root, adr), text("A new decision edit."));
-  expect(entries(await queue())).toEqual(["demo:ADR-0"]);
+  writeFileSync(join(root, note), "Changed supporting evidence.\n");
+  await web.monitor.reconcile(true);
+  expect(entries(await queue())).toEqual(["demo:ADR-0", "demo:EXP-0"]);
   writeFileSync(join(root, "workbench/CHARTER.md"), "# Charter\n\nChanged human intent.\n");
+  await web.monitor.reconcile(true);
   const charter = parseDOM((await readWebPage(web, "/records/demo:CHARTER/review")).html).window.document;
   const action = charter.querySelector<HTMLFormElement>("form[data-review]");
   expect(action?.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);

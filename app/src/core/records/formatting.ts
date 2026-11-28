@@ -8,6 +8,7 @@ import { rootOf } from "../projects/project-context.js";
 import { scan } from "./record-files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { acquisitionPath } from "../citations/citation-record.js";
+import { readObservedRecordText } from "./record-observation.js";
 
 /** Formatting dependencies load only when a formatting operation requests them. */
 export async function formatDocument(contents: string, path: string, width: number): Promise<string> {
@@ -37,7 +38,7 @@ export async function formattingErrors(paths: string[], width: number): Promise<
   const errors: string[] = [];
   for (const path of paths) {
     try {
-      const original = readText(path);
+      const original = readObservedRecordText(path);
       if (original !== (await formatDocument(original, path, width)))
         errors.push(`${path}: formatting differs; run 'workbench format PATH --write'`);
     } catch (error) {

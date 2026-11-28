@@ -93,13 +93,7 @@ export async function runConsumerIntegration(options: ConsumerIntegrationOptions
             mkdirSync(temporary, { recursive: true });
             const fixture = { ...installed, temporary };
             if (!options.hostingOnly) {
-              await exerciseConsumerInstallations(
-                fixture,
-                consumerEnvironment(fixture, cache),
-                commands,
-                scenarios,
-                manifest.contents,
-              );
+              await exerciseConsumerInstallations(fixture, consumerEnvironment(fixture, cache), commands, scenarios);
               await exerciseSourceCheckout({
                 source,
                 temporary,

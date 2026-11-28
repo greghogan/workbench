@@ -132,12 +132,14 @@ function assertCIWorkerRequest(value: unknown): asserts value is CIWorkerRequest
     fail("target.phases", "the selected target's execution phases");
   if (!Array.isArray(target.checks)) fail("target.checks", "an array");
   for (const check of target.checks) {
-    object(check, "target.checks[]", ["name", "role", "command", "source"]);
+    object(check, "target.checks[]", ["name", "role", "command", "source", "ciNetwork"]);
     text(check.name, "check.name");
     text(check.role, "check.role");
     strings(check.command, "check.command");
     if (!check.command.length) fail("check.command", "a command");
     if (check.source !== undefined) text(check.source, "check.source");
+    if (check.ciNetwork !== undefined && check.ciNetwork !== "offline" && check.ciNetwork !== "online")
+      fail("check.ciNetwork", "offline or online");
   }
   if (
     value.operation !== undefined &&

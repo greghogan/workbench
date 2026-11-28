@@ -77,7 +77,6 @@ export async function exerciseConsumerInstallations(
   base: NodeJS.ProcessEnv,
   commands: ConsumerCommands,
   scenarios: ConsumerScenarios,
-  sourceManifest: string,
 ): Promise<void> {
   const root = join(installed.temporary, "installation space 雪");
   mkdirSync(root, { recursive: true });
@@ -152,8 +151,7 @@ export async function exerciseConsumerInstallations(
   };
   const fixture = await scenarios.run("installation-user-launcher", async () => {
     cpSync(installed.directory, source, { recursive: true });
-    // Git acquisition must exercise the source manifest, including its development dependencies/lifecycle scripts.
-    writeFileSync(join(source, "package.json"), sourceManifest);
+    // Keep the packaged manifest for the offline launcher fixture. Source setup tests the development graph separately.
     // A local Git fixture has its own immutable identity, independent of the release candidate's provenance.
     rmSync(join(source, distributionSourceFile), { force: true });
     await git("install-git-init", ["init", "--quiet"], source);
@@ -190,7 +188,7 @@ export async function exerciseConsumerInstallations(
         "--user",
       ],
       root,
-      { ...userEnv, npm_config_ignore_scripts: undefined },
+      { ...userEnv, npm_config_ignore_scripts: undefined, npm_config_fetch_retries: "0" },
     );
     assert.ok(
       existsSync(join(userBin, process.platform === "win32" ? "workbench.cmd" : "workbench")),

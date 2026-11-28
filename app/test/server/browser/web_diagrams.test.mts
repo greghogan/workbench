@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { webServers, readWebPage } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 
@@ -16,7 +16,7 @@ test("Mermaid source stays escaped and the renderer is served separately with is
   const unsafe = source + '  C["</code><script>alert(1)</script>"]\n';
   writeFileSync(join(root, "workbench/decisions/ADR-00.md"), document(unsafe));
   const web = await fixture.start(root);
-  const page = parseDOM((await readWebPage(web, "/records/demo:ADR-0")).html).window.document;
+  const page = parseDOM((await readReconciledWebPage(web, "/records/demo:ADR-0")).html).window.document;
   const diagram = page.querySelector<HTMLElement>("[data-diagram-comparison]");
   expect(diagram?.querySelector("[data-diagram-source] code")?.textContent).toBe(unsafe);
   expect(diagram?.querySelector("script,iframe,img")).toBeNull();
@@ -49,7 +49,8 @@ test.each(["unified", "split"])(
     git(root, "commit", "-qm", "Diagram baseline");
     writeFileSync(join(root, path), document(source.replace("Toolchain", "Prepared toolchain")));
     const web = await fixture.start(root);
-    const page = parseDOM((await readWebPage(web, "/records/demo:ADR-0/review?layout=" + layout)).html).window.document;
+    const page = parseDOM((await readReconciledWebPage(web, "/records/demo:ADR-0/review?layout=" + layout)).html).window
+      .document;
     expect(page.querySelector(".document-diff")?.textContent).toContain("Prepared toolchain");
     expect(page.querySelector(".document-diff del")?.textContent).toContain("Toolchain");
     const diagrams = [...page.querySelectorAll<HTMLTemplateElement>(".document-diff template")].map(
@@ -70,7 +71,8 @@ test.each([true, false])("one-sided diagrams preserve exact source without an em
   git(root, "commit", "-qm", "Diagram baseline");
   writeFileSync(join(root, path), added ? document(source) : without);
   const web = await fixture.start(root);
-  const page = parseDOM((await readWebPage(web, "/records/demo:ADR-0/review?layout=split")).html).window.document;
+  const page = parseDOM((await readReconciledWebPage(web, "/records/demo:ADR-0/review?layout=split")).html).window
+    .document;
   const cells = page.querySelectorAll(".document-diff td");
   expect(page.querySelectorAll("[data-diagram-frame]")).toHaveLength(1);
   expect(page.querySelector<HTMLTemplateElement>(".document-diff template")?.content.textContent).toBe(source);

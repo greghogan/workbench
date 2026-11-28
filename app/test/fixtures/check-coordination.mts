@@ -11,15 +11,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { afterEach, expect, vi } from "vitest";
 import { stringify } from "smol-toml";
 import { setupProject } from "../../src/cli/project-setup.js";
 import { synchronize } from "../../src/core/records/sync.ts";
 import { waitForCondition } from "./coordination.mjs";
 import { processFailure } from "../../src/core/runtime/process-outcome.mjs";
-
-const distribution = resolve(import.meta.dirname, "../../..");
+import { checkDistribution } from "./check-distribution.mjs";
 
 /** Identify the original Windows process, even if its numeric PID is subsequently reused. */
 export function processInstance(pid: number): string | undefined {
@@ -65,8 +64,9 @@ export function coordinationFixtures() {
       control = join(base, "control");
     mkdirSync(root);
     mkdirSync(control);
+    const runtime = checkDistribution(base);
     for (const [name, value] of Object.entries({
-      WORKBENCH_DISTRIBUTION_ROOT: distribution,
+      WORKBENCH_DISTRIBUTION_ROOT: runtime,
       WORKBENCH_PROJECT_ROOT: root,
       WORKBENCH_CONFIG_HOME: join(base, "config"),
       WORKBENCH_CACHE_HOME: join(base, "cache"),
@@ -139,7 +139,7 @@ if(role==='test') {
         process.execPath,
         [
           ...(options.cpus === undefined ? [] : ["--require", discovery]),
-          join(distribution, "bin/workbench.mjs"),
+          join(runtime, "bin/workbench.mjs"),
           "--plain",
           "pre-commit",
           ...args,

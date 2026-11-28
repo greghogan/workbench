@@ -33,7 +33,11 @@ test.skipIf(process.platform === "win32").each(["", "gcc-current"])(
     else if (args.includes('release')) {
       mkdirSync(output, { recursive: true });
       writeFileSync(join(output, 'application.txt'), 'verified external artifact');
-    } else if (!args.includes('release-verify') || readFileSync(join(output, 'application.txt'), 'utf8') !== 'verified external artifact') process.exit(7);
+    } else {
+      const extracted = process.env.WORKBENCH_RELEASE_ARTIFACT;
+      if (!args.includes('release-verify') || !extracted || extracted === output ||
+          readFileSync(join(extracted, 'application.txt'), 'utf8') !== 'verified external artifact') process.exit(7);
+    }
   `,
     );
     const result = spawnSync(process.execPath, [join(repository, "scripts/ci-run.mjs"), "release"], {
@@ -50,8 +54,12 @@ test.skipIf(process.platform === "win32").each(["", "gcc-current"])(
       encoding: "utf8",
     });
     expect(result.status, result.stdout + result.stderr).toBe(0);
-    const archive = join(reports, "release-artifacts/0.tar.gz");
-    const extracted = spawnSync("tar", ["-xOf", archive, "./application.txt"], { encoding: "utf8" });
+    const [format, member] =
+      process.platform === "linux"
+        ? ["tar.gz", "release/application.txt"]
+        : ["zip", "external artifacts/application.txt"];
+    const archive = join(reports, `release-artifacts/0.${format}`);
+    const extracted = spawnSync("tar", ["-xOf", archive, member], { encoding: "utf8" });
     expect(extracted.status, extracted.stderr).toBe(0);
     expect(extracted.stdout).toBe("verified external artifact");
     expect(readFileSync(join(project, "app/dist/old.txt"), "utf8")).toBe("previous local artifact");

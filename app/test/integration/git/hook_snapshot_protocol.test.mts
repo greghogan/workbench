@@ -9,48 +9,61 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test.each(["pre-commit", "commit-msg", "post-commit"])(
-  "%s prepares captured source without tracked bundles or checkout leakage",
-  (name) => {
-    const root = mkdtempSync(join(tmpdir(), "workbench-source-hook-"));
-    roots.push(root);
-    const git = (args: string[]) => gitBytes(root, args).toString().trim();
-    git(["init"]);
-    git(["config", "user.name", "Test"]);
-    git(["config", "user.email", "test@example.invalid"]);
-    for (const directory of ["bin", ".githooks", "workbench", "scripts"]) mkdirSync(join(root, directory));
-    const hook = join(root, ".githooks", name);
-    writeFileSync(hook, readFileSync(join(import.meta.dirname, "../../../../.githooks", name)));
-    writeFileSync(join(root, "workbench/config.toml"), "schema_version=1\n");
-    writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="fixture"\npath="."\n');
-    writeFileSync(join(root, "source-version"), "captured source\n");
-    writeFileSync(join(root, "scripts/setup-development.mjs"), "// Source preparation entry point\n");
-    writeFileSync(
-      join(root, ".githooks/prepare-source"),
-      '#!/usr/bin/env bash\nset -eu\nmkdir "$2/bundle"\ncp "$2/source-version" "$2/bundle/value"\n',
-    );
-    writeFileSync(
-      join(root, "bin/workbench.mjs"),
-      'import {readFileSync} from "node:fs"; process.stdout.write(readFileSync(new URL("../bundle/value", import.meta.url)));\n',
-    );
-    git(["add", "."]);
-    git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "baseline"]);
-    writeFileSync(join(root, "source-version"), "unstaged checkout\n");
-    const message = join(root, ".git/COMMIT_EDITMSG");
-    writeFileSync(message, "chore: verify source hooks\n");
-    const tree = git(["write-tree"]);
-    const result = spawnSync("bash", [hook, ...(name === "commit-msg" ? [message] : [])], {
-      cwd: root,
-      encoding: "utf8",
-    });
-    expect(result.status, result.stdout + result.stderr).toBe(0);
-    expect(result.stdout).toContain("captured source");
-    expect(result.stdout).not.toContain("unstaged checkout");
-    expect(git(["write-tree"])).toBe(tree);
-    expect(readFileSync(join(root, "source-version"), "utf8")).toBe("unstaged checkout\n");
-    expect(git(["ls-files", "bundle"])).toBe("");
-  },
-);
+test.each([
+  ["pre-commit", "unchanged"],
+  ["commit-msg", "unchanged"],
+  ["post-commit", "unchanged"],
+  ["pre-commit", "changed during preparation"],
+  ["commit-msg", "changed during preparation"],
+  ["pre-commit", "removed during checks"],
+] as const)("%s checks captured source without checkout leakage (%s)", (name, change) => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-source-hook-"));
+  roots.push(root);
+  const git = (args: string[]) => gitBytes(root, args).toString().trim();
+  git(["init"]);
+  git(["config", "user.name", "Test"]);
+  git(["config", "user.email", "test@example.invalid"]);
+  for (const directory of ["bin", ".githooks", "workbench", "scripts"]) mkdirSync(join(root, directory));
+  const hook = join(root, ".githooks", name);
+  writeFileSync(hook, readFileSync(join(import.meta.dirname, "../../../../.githooks", name)));
+  writeFileSync(
+    join(root, ".githooks/verify-staged.mjs"),
+    readFileSync(join(import.meta.dirname, "../../../../.githooks/verify-staged.mjs")),
+  );
+  writeFileSync(join(root, "workbench/config.toml"), "schema_version=1\n");
+  writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="fixture"\npath="."\n');
+  writeFileSync(join(root, "source-version"), "captured source\n");
+  writeFileSync(join(root, "scripts/setup-development.mjs"), "// Source preparation entry point\n");
+  writeFileSync(
+    join(root, ".githooks/prepare-source"),
+    '#!/usr/bin/env bash\nset -eu\nmkdir "$2/bundle"\ncp "$2/source-version" "$2/bundle/value"\n' +
+      (change === "changed during preparation" ? 'printf changed > "$2/source-version"\n' : ""),
+  );
+  writeFileSync(
+    join(root, "bin/workbench.mjs"),
+    'import {readFileSync, unlinkSync} from "node:fs"; process.stdout.write(readFileSync(new URL("../bundle/value", import.meta.url)));\n' +
+      (change === "removed during checks" ? 'unlinkSync(new URL("../source-version", import.meta.url));\n' : ""),
+  );
+  git(["add", "."]);
+  git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "baseline"]);
+  writeFileSync(join(root, "source-version"), "unstaged checkout\n");
+  const message = join(root, ".git/COMMIT_EDITMSG");
+  writeFileSync(message, "chore: verify source hooks\n");
+  const tree = git(["write-tree"]);
+  const result = spawnSync("bash", [hook, ...(name === "commit-msg" ? [message] : [])], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const success = change === "unchanged";
+  expect(result.status, result.stdout + result.stderr).toBe(success ? 0 : 1);
+  if (!success) expect(result.stderr).toContain("Tracked staged source changed");
+  if (change === "changed during preparation") expect(result.stdout).toBe("");
+  else expect(result.stdout).toContain("captured source");
+  expect(result.stdout).not.toContain("unstaged checkout");
+  expect(git(["write-tree"])).toBe(tree);
+  expect(readFileSync(join(root, "source-version"), "utf8")).toBe("unstaged checkout\n");
+  expect(git(["ls-files", "bundle"])).toBe("");
+});
 test.each([
   { hook: "pre-commit", status: 0 },
   { hook: "pre-commit", status: 7 },
@@ -130,6 +143,11 @@ test.each(["pre-commit", "pre-push"])("%s runs an identical captured hook using 
   for (const directory of ["bin", ".githooks", "workbench"]) mkdirSync(join(root, directory));
   const hook = join(root, ".githooks", name);
   writeFileSync(hook, readFileSync(join(import.meta.dirname, "../../../../.githooks", name)));
+  if (name === "pre-commit")
+    writeFileSync(
+      join(root, ".githooks/verify-staged.mjs"),
+      readFileSync(join(import.meta.dirname, "../../../../.githooks/verify-staged.mjs")),
+    );
   writeFileSync(join(root, "workbench/config.toml"), "schema_version=1\n");
   writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="fixture"\npath="."\n');
   writeFileSync(join(root, "bin/workbench.mjs"), "console.log('Checked captured tree');\n");

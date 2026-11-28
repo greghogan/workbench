@@ -24,7 +24,16 @@ export function serveWorkspaceWorker(root: string): void {
         port.close();
         return;
       }
-      if (request !== WorkspaceRequest.Refresh && request !== WorkspaceRequest.Fresh) {
+      const changed =
+        request &&
+        typeof request === "object" &&
+        "changed" in request &&
+        Array.isArray(request.changed) &&
+        request.changed.length <= 256 &&
+        request.changed.every((path: unknown) => typeof path === "string")
+          ? request.changed
+          : undefined;
+      if (request !== WorkspaceRequest.Refresh && request !== WorkspaceRequest.Fresh && changed === undefined) {
         port.postMessage({
           ok: false,
           status: 500,
@@ -34,7 +43,7 @@ export function serveWorkspaceWorker(root: string): void {
       }
       try {
         const started = performance.now();
-        const next = collector.collect(request === WorkspaceRequest.Fresh);
+        const next = collector.collect(request === WorkspaceRequest.Fresh, changed);
         const captureReused = next === capture;
         const collected = performance.now();
         const snapshot =

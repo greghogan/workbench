@@ -150,6 +150,10 @@ test("native metadata is exact and root-local, and command arguments remain lite
         "--frozen-lockfile",
       ]);
     }
+    assert.equal(
+      resolveCheckCommand(root, ["{packageManager}", "run", "test"], root, true)[1],
+      join(root, "bin", "workbench.mjs"),
+    );
     writeFileSync(packageFile, JSON.stringify({ packageManager: "pnpm@latest" }));
     assert.throws(() => resolveCheckCommand(root, ["{packageManager}"], root), /exact version/);
   });

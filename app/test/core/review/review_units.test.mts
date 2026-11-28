@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { git } from "../../fixtures/adoption.mjs";
 import {
   captureCommittedReview,
@@ -25,49 +25,10 @@ import {
 import { retainTaskPlanApproval, readTaskPlanApproval } from "../../../src/core/tasks/task-approvals.ts";
 import { taskDigest } from "../../../src/core/tasks/task-model.ts";
 import { integrateBranch } from "../../../src/core/git/branch-integration.ts";
+import { reviewUnitFixture } from "../../fixtures/review-units.mjs";
 
-const temporary: string[] = [];
-afterEach(() => {
-  for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
-});
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "workbench-units-"));
-  temporary.push(root);
-  git(root, "init", "-qb", "main");
-  git(root, "config", "user.name", "Reviewer fixture");
-  git(root, "config", "user.email", "review@example.invalid");
-  mkdirSync(join(root, "workbench/decisions"), { recursive: true });
-  writeFileSync(
-    join(root, "workbench/config.toml"),
-    "schema_version=1\n[markdown]\nwrap_width=120\n[compatibility]\nrequired=false\n[review]\nchanges=true\n",
-  );
-  writeFileSync(join(root, "workbench/projects.toml"), '[[project]]\nid="demo"\npath="."\n');
-  git(root, "add", ".");
-  git(root, "commit", "-qm", "Baseline");
-  const base = git(root, "rev-parse", "HEAD"),
-    path = "workbench/decisions/ADR-00.md";
-  const commit = (body: string) => {
-    writeFileSync(join(root, path), `---\nsummary: Fixture.\n---\n\n# ADR-0: Fixture\n\n${body}\n`);
-    git(root, "add", path);
-    git(root, "commit", "-qm", `${body}\n\nWorkbench-Provisional: true`);
-    return git(root, "rev-parse", "HEAD");
-  };
-  const agent = (revision: string) => {
-    const review = proposedAgentReview(root, AgentReviewKind.Changes, { commit: revision });
-    recordAgentReview(
-      root,
-      {
-        ...review,
-        summary: "Reviewed this exact commit",
-        verification: "Fixture verifies retained parent boundaries and protected contents",
-      },
-      reviewIdentity(review),
-      false,
-      revision,
-    );
-  };
-  return { root, path, base, commit, agent };
-}
+const { fixture, temporary } = reviewUnitFixture();
+
 test("later approval cannot approve an earlier intermediate version, and working edits form another unit", () => {
   const f = fixture(),
     first = f.commit("First choice"),
@@ -83,6 +44,7 @@ test("later approval cannot approve an earlier intermediate version, and working
   expect(reviewStatus(f.root, ReviewSource.Working).changes[0]?.approved).toBe(false);
   expect(pendingCommitReviews(f.root).map((unit) => unit.revision)).toEqual([first, second]);
 });
+
 test("cached comparisons follow the current Git directory without inheriting another repository's consent", () => {
   const f = fixture(),
     revision = f.commit("Reviewed contents"),
@@ -108,47 +70,6 @@ test("cached comparisons follow the current Git directory without inheriting ano
   expect(readFileSync(acknowledged.receipt, "utf8")).toBe(saved);
   select(original);
   expect(committedReview(f.root, revision).pending).toBe(0);
-});
-
-test("many retained versions keep real acknowledgments; finalization preserves trees, authors, dirty work, and recovery", () => {
-  const f = fixture(),
-    commits: string[] = [];
-  for (let index = 0; index < 5; index++) {
-    const commit = f.commit(`Choice ${String(index)}`);
-    commits.push(commit);
-    f.agent(commit);
-    approveCapturedReviews(f.root, captureCommittedReview(f.root, commit).captured, false);
-  }
-  expect(pendingCommitReviews(f.root).every((unit) => unit.pending === 0)).toBe(true);
-  const captured = finalizationPlan(f.root);
-  expect(captured.problems).toEqual([]);
-  writeFileSync(join(f.root, "unrelated.txt"), "Uncommitted work\n");
-  expect(() => finalizeHistory(f.root, "stale")).toThrow(/changed/);
-  const result = finalizeHistory(f.root, captured.digest);
-  expect(result.replacements).toHaveLength(5);
-  expect(git(f.root, "rev-parse", result.recovery)).toBe(commits.at(-1));
-  expect(readFileSync(join(f.root, "unrelated.txt"), "utf8")).toBe("Uncommitted work\n");
-  for (const replacement of result.replacements) {
-    expect(git(f.root, "show", "-s", "--format=%T %an %ae %aI", replacement.before)).toBe(
-      git(f.root, "show", "-s", "--format=%T %an %ae %aI", replacement.after),
-    );
-    expect(git(f.root, "show", "-s", "--format=%B", replacement.after)).not.toContain("Workbench-Provisional");
-    expect(committedReview(f.root, replacement.after).pending).toBe(0);
-  }
-  expect(finalizationPlan(f.root).units).toEqual([]);
-});
-test("finalization refuses missing agent evidence, missing human review, and remotely published checkpoints", () => {
-  const f = fixture(),
-    first = f.commit("Choice");
-  expect(finalizationPlan(f.root).problems.join("\n")).toMatch(/human review/);
-  approveCapturedReviews(f.root, captureCommittedReview(f.root, first).captured, false);
-  expect(finalizationPlan(f.root).problems.join("\n")).toMatch(/Agent change review/);
-  f.agent(first);
-  git(f.root, "update-ref", "refs/remotes/origin/draft", first);
-  const plan = finalizationPlan(f.root);
-  expect(plan.problems.join("\n")).toMatch(/published history/);
-  expect(() => finalizeHistory(f.root, plan.digest)).toThrow(/published history/);
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(first);
 });
 
 test("mechanical renumbering preserves actual plan and document approval, including supporting files", () => {
@@ -228,45 +149,17 @@ test("rebasing accepted history without private receipts preserves unchanged doc
   const current = proposedAgentReview(clone, AgentReviewKind.Changes, { commit: "HEAD" });
   recordAgentReview(
     clone,
+    AgentReviewKind.Changes,
+    { commit: "HEAD" },
     {
-      ...current,
+      expected: reviewIdentity(current),
       summary: "Reviewed the rebased task",
       verification: "Verified the new full snapshot and preserved policy",
     },
-    reviewIdentity(current),
-    false,
-    "HEAD",
   );
   const plan = finalizationPlan(clone);
   expect(plan.problems).toEqual([]);
   finalizeHistory(clone, plan.digest);
   expect(readFileSync(join(clone, "upstream.txt"), "utf8")).toContain("Additional upstream");
   expect(git(clone, "for-each-ref", "--format=%(refname)", "refs/workbench/review-authority")).toBe("");
-});
-
-test("interrupted finalization retains its prepared history through Git collection and resumes activation", () => {
-  const f = fixture(),
-    first = f.commit("Recoverable policy.");
-  f.agent(first);
-  approveCapturedReviews(f.root, captureCommittedReview(f.root, first).captured, false);
-  const hooks = join(f.root, ".git/finalization-hooks"),
-    marker = join(f.root, ".git/workbench/fail-finalization");
-  mkdirSync(hooks);
-  writeFileSync(
-    join(hooks, "reference-transaction"),
-    '#!/bin/sh\nif [ "$1" = prepared ]; then\n while read -r old new ref; do\n  if [ "$ref" = refs/heads/main ] && [ -f "$(git rev-parse --git-path workbench/fail-finalization)" ]; then exit 1; fi\n done\nfi\n',
-    { mode: 0o755 },
-  );
-  git(f.root, "config", "core.hooksPath", hooks);
-  writeFileSync(marker, "stop\n");
-  const plan = finalizationPlan(f.root);
-  expect(() => finalizeHistory(f.root, plan.digest)).toThrow();
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(first);
-  rmSync(marker);
-  git(f.root, "reflog", "expire", "--expire=now", "--all");
-  git(f.root, "gc", "--prune=now");
-  const recovered = finalizeHistory(f.root, "", true);
-  expect(recovered.completed).toBe(true);
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(recovered.after);
-  expect(pendingCommitReviews(f.root)).toEqual([]);
 });

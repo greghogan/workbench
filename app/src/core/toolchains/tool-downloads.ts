@@ -9,12 +9,14 @@ import { formatByteCount } from "../runtime/byte-size.js";
 import { redact } from "../diagnostics/diagnostics.mjs";
 import {
   chmodSync,
+  closeSync,
   createReadStream,
   createWriteStream,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -72,6 +74,10 @@ export interface ToolAsset extends ArtifactSource {
   zipLinks?: Record<string, string>;
 }
 
+export function toolDownloadPath(asset: Pick<ToolAsset, "sha256" | "url">): string {
+  return join(userDirectory("cache"), "downloads", `${asset.sha256}-${basename(new URL(asset.url).pathname)}`);
+}
+
 /** Redirects never downgrade transport. Content is verified before extraction or execution. */
 export async function download(
   asset: Pick<ToolAsset, "url" | "backupUrls" | "sha256" | "attestation" | "signature" | "checksums" | "repository">,
@@ -79,10 +85,8 @@ export async function download(
 ): Promise<string> {
   if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("tool artifact requires a recorded SHA-256 digest");
   artifactSourceUrls(asset.url, asset.backupUrls);
-  const url = new URL(asset.url);
-  const folder = join(userDirectory("cache"), "downloads");
-  mkdirSync(folder, { recursive: true, mode: 0o700 });
-  const target = join(folder, `${asset.sha256}-${basename(url.pathname)}`);
+  const target = toolDownloadPath(asset);
+  mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
   const temporary = `${target}.${randomUUID()}.partial`;
   const deadline = AbortSignal.timeout(artifactLimits.milliseconds);
   const signal = options.signal ? AbortSignal.any([deadline, options.signal]) : deadline;
@@ -157,16 +161,24 @@ export async function extractArchive(
   if (asset.format === "zip") return extractZipArchive(archive, destination, asset.strip, limits, asset.zipLinks);
   if (asset.format === "7z") return extractSevenZip(archive, destination, asset.strip, limits);
   await boundTarArchive(archive, limits);
-  if (process.platform === "win32" && !process.env.SystemRoot)
-    throw new Error("SystemRoot is required to locate Windows tar.exe");
-  const tar =
-    process.platform === "win32"
-      ? join(required(process.env.SystemRoot, "expected process.env.SystemRoot"), "System32/tar.exe")
-      : "tar";
+  const windows = process.platform === "win32";
+  if (windows && !process.env.SystemRoot) throw new Error("SystemRoot is required to locate Windows tar.exe");
+  const tar = windows
+    ? join(required(process.env.SystemRoot, "expected process.env.SystemRoot"), "System32/tar.exe")
+    : "tar";
   // bsdtar otherwise interprets UTF-8 ustar names using the Windows ANSI code page.
-  const charset = process.platform === "win32" ? ["--options=hdrcharset=UTF-8"] : [];
+  const runTar = (mode: string, args: string[], options: Parameters<typeof execute>[2]) => {
+    if (!windows) return execute(tar, [mode, resolve(archive), ...args], options);
+    // Windows tar interprets archive filename arguments using the active code page. Open the path in Node.
+    const input = openSync(archive, "r");
+    try {
+      return execute(tar, [mode, "-", "--options=hdrcharset=UTF-8", ...args], { ...options, stdin: input });
+    } finally {
+      closeSync(input);
+    }
+  };
   const members = archiveListing(
-    execute(tar, ["-tf", archive, ...charset], {
+    runTar("-tf", [], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -180,7 +192,7 @@ export async function extractArchive(
   if (new Set(names.map(key)).size !== names.length) throw new Error("tool archive contains duplicate paths");
   const links = new Set<string>();
   const listing = archiveListing(
-    execute(tar, ["-tvf", archive, ...charset], {
+    runTar("-tvf", [], {
       timeout: limits.milliseconds,
       capture: true,
       maxBuffer: 128 * 1024 * 1024,
@@ -217,17 +229,14 @@ export async function extractArchive(
   try {
     const list = selection ? join(selection, "paths") : undefined;
     if (list) writeFileSync(list, members.filter((member) => include?.(archivePath(member))).join("\0") + "\0");
-    execute(
-      tar,
+    runTar(
+      "-xf",
       [
-        "-xf",
-        resolve(archive),
-        ...charset,
         "--no-same-owner",
         "-C",
         ".",
         // --null also makes GNU tar's names literal; BSD tar does not support --verbatim-files-from.
-        ...(list ? ["--no-recursion", "--null", "--files-from", resolve(list)] : []),
+        ...(list ? ["--no-recursion", "--null", "--files-from", relative(destination, list)] : []),
       ],
       { timeout: limits.milliseconds, cwd: destination },
     );

@@ -11,19 +11,85 @@ import {
   checkLogDirectory,
   checkFailureExcerpt,
   checkDetailLines,
+  parallelCheckOutput,
 } from "../../../../src/core/execution/checks/check-output.ts";
+import { CheckControl } from "../../../../src/core/execution/checks/check-control.ts";
 afterEach(() => vi.unstubAllEnvs());
 
 const shellModes = ["command", "file"] as const;
 type ShellMode = (typeof shellModes)[number];
-function runScript(root: string, script: string, mode: ShellMode) {
+function runScript(root: string, script: string, mode: ShellMode, timeout?: number) {
   const path = join(root, "checks.sh");
   if (mode === "file") writeFileSync(path, script);
   return spawnSync("sh", ["-eu", ...(mode === "file" ? [path] : ["-c", script])], {
     env: { ...process.env, WORKBENCH_BUILD_DIR: root },
     encoding: "utf8",
+    ...(timeout === undefined ? {} : { timeout }),
   });
 }
+
+test.each([0, 23])("parallel checks drain the whole batch before advancing (status=%i)", (status) => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-parallel-checks-"));
+  try {
+    const token = "a".repeat(32);
+    const script = [
+      `cd "$WORKBENCH_BUILD_DIR"`,
+      ...checkOutputPrelude(3, false, "parallel", token),
+      ...parallelCheckOutput([
+        checkOutput(
+          [
+            "attempt=0",
+            'while [ ! -f peer ]; do attempt=$((attempt+1)); [ "$attempt" -lt 500 ]; sleep 0.02; done',
+            "touch drained",
+          ],
+          "first",
+          1,
+          false,
+        ),
+        checkOutput(["touch peer", ...(status ? [`exit ${String(status)}`] : [])], "second", 2, false),
+      ]),
+      ...checkOutput(["test -f drained", "touch following"], "following", 3, false),
+    ].join("\n");
+    const result = runScript(root, script, "file", 25000);
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(status);
+    expect(readdirSync(root)).toContain("drained");
+    expect(readdirSync(root).includes("following")).toBe(status === 0);
+    const control = new CheckControl(token, 3, [2, 1]);
+    for (const line of result.stdout.split(/\r?\n/)) control.accept(line);
+    expect(control.complete).toBe(status === 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a finished peer admits the next independent check while the first is active", () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-check-refill-"));
+  try {
+    const token = "a".repeat(32);
+    const script = [
+      'cd "$WORKBENCH_BUILD_DIR"',
+      ...checkOutputPrelude(4, false, "parallel", token),
+      ...parallelCheckOutput(
+        [
+          checkOutput(["while [ ! -f released ]; do sleep 0.02; done", "touch first-finished"], "first", 1, false),
+          checkOutput([":"], "second", 2, false),
+          checkOutput(["test ! -f first-finished", "touch released"], "third", 3, false),
+        ],
+        2,
+      ),
+      ...checkOutput(["test -f first-finished"], "barrier", 4, false),
+    ].join("\n");
+    const result = runScript(root, script, "file", 10000);
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    const control = new CheckControl(token, 4, [3, 1], 2);
+    for (const line of result.stdout.split(/\r?\n/)) control.accept(line);
+    expect(control.complete).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("completion details present compact coverage deltas and sanitize warning text", () => {
   const metric = (pct: number) => ({ total: 100, covered: pct, skipped: 0, pct });

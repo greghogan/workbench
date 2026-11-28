@@ -1,0 +1,48 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -246,12 +246,16 @@
+ 	#t;
+ 	#n;
+ 	#r = new Map();
++	#sourceIndexes;
++	#sourceLines = new Map();
+ 	constructor(e, t, n) {
+ 		for (let t = 0; t < e.length; t++) e.charCodeAt(t) === 10 && this.#e.push(t + 1);
+ 		this.#t = t, this.#n = n;
+ 	}
+ 	reset() {
+ 		this.#r.clear(), this.#e = [0];
++		this.#sourceIndexes = undefined;
++		this.#sourceLines.clear();
+ 	}
+ 	offsetToNeedle(e) {
+ 		let t = 0, n = this.#e.length - 1;
+@@ -302,9 +306,24 @@
+ 		return f || (f = getIgnoredLines(c(this.#t, d) ?? tryReadFileSync(d)), this.#r.set(d, f)), f.has(l.start.line) ? null : l;
+ 	}
+ 	getSourceLines(e, t) {
+-		let r = this.#t.resolvedSources.findIndex((e) => e === t || n(this.#n, e) === t), i = this.#t.sourcesContent?.[r];
+-		if (i == null) return null;
+-		let a = i.split("\n").slice(e.start.line - 1, e.end.line);
++		if (!this.#sourceIndexes) {
++			this.#sourceIndexes = new Map();
++			// Preserve the first match across resolved source names and filesystem aliases.
++			for (const [index, source] of this.#t.resolvedSources.entries()) {
++				for (const name of [source, n(this.#n, source)]) {
++					if (!this.#sourceIndexes.has(name)) this.#sourceIndexes.set(name, index);
++				}
++			}
++		}
++		const index = this.#sourceIndexes.get(t);
++		const contents = this.#t.sourcesContent?.[index];
++		if (contents == null) return null;
++		let lines = this.#sourceLines.get(index);
++		if (!lines) {
++			lines = contents.split("\n");
++			this.#sourceLines.set(index, lines);
++		}
++		let a = lines.slice(e.start.line - 1, e.end.line);
+ 		return a[0] = a[0].slice(e.start.column), a[a.length - 1] = a[a.length - 1].slice(0, e.end.column), a.join("\n");
+ 	}
+ };

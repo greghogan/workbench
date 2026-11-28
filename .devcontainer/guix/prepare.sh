@@ -10,4 +10,7 @@ if [ -z "${WORKBENCH_GUIX_PROFILES_FILE:-}" ]; then
     WORKBENCH_GUIX_PROFILES_FILE=$output/guix-profiles.json
     export WORKBENCH_GUIX_PROFILES_FILE
 fi
+if [ "${WORKBENCH_MANAGED_PROFILE_EXPORT:-}" = 1 ]; then
+    exit 0
+fi
 node "${WORKBENCH_PREPARATION_DISTRIBUTION:-.}/scripts/pack-guix-image.mjs"

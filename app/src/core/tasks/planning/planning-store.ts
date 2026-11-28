@@ -60,16 +60,19 @@ export function savedPlanTrees(root: string): ReadonlyMap<string, SavedPlan> {
   return indexPlanningRevision(root, tip);
 }
 export function draftPlanIdentities(root: string, prefix: string = planningPaths.drafts): PlanIdentity[] {
-  return gitBytes(root, ["for-each-ref", "--format=%(refname)", prefix])
-    .toString()
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((ref) => {
-      const [scope, name, ...extra] = ref.slice(prefix.length).split("/");
-      if (!scope || !name || extra.length) throw new InvalidInput("Invalid plan draft reference");
-      return planIdentity(scope, name);
-    });
+  const refs = gitBytes(root, ["for-each-ref", "--format=%(refname)", prefix]).toString().trimEnd().split("\n");
+  return planRefIdentities(refs, prefix);
+}
+
+export function planRefIdentities(refs: Iterable<string>, prefix: string): PlanIdentity[] {
+  const identities: PlanIdentity[] = [];
+  for (const ref of refs) {
+    if (!ref.startsWith(prefix)) continue;
+    const [scope, name, ...extra] = ref.slice(prefix.length).split("/");
+    if (!scope || !name || extra.length) throw new InvalidInput(`Invalid planning reference: ${ref}`);
+    identities.push(planIdentity(scope, name));
+  }
+  return identities;
 }
 interface PlanRead {
   identity: PlanIdentity;
@@ -83,18 +86,14 @@ function planRead(
   root: string,
   identity: PlanIdentity,
   saved: ReadonlyMap<string, SavedPlan>,
-  refs?: ReadonlyMap<string, string>,
+  refs: ReadonlyMap<string, string>,
 ): PlanRead {
-  if (refs ? refs.has(planRemovalRef(identity)) : gitRevision(root, planRemovalRef(identity)))
+  if (refs.has(planRemovalRef(identity)))
     throw new MissingResource(`Plan removed locally: ${identity.reference}; checkpoint the pending changes`);
   const branch = saved.get(identity.reference),
     branchTree = branch?.tree,
-    draftTree = refs ? refs.get(planDraftRef(identity)) : gitRevision(root, planDraftRef(identity)),
-    baseTree = draftTree
-      ? refs
-        ? refs.get(planBaseRef(identity))
-        : gitRevision(root, planBaseRef(identity))
-      : undefined,
+    draftTree = refs.get(planDraftRef(identity)),
+    baseTree = draftTree ? refs.get(planBaseRef(identity)) : undefined,
     tree = draftTree ?? branchTree;
   if (!tree) throw new MissingResource(`Plan not found: ${identity.reference}`);
   const entries = draftTree ? planTreeEntries(root, draftTree) : branch?.entries;
@@ -166,46 +165,68 @@ function planView(input: PlanRead, objects: ReadonlyMap<string, Buffer | undefin
     ...(approval ? { approval } : {}),
   };
 }
-export function readPlan(root: string, identity: PlanIdentity, saved = savedPlanTrees(root)): PlanView {
-  const input = planRead(root, identity, saved);
+export function readPlan(root: string, identity: PlanIdentity, saved?: ReadonlyMap<string, SavedPlan>): PlanView {
+  const branch = saved ? undefined : planningSettings(root).branch;
+  const branchRef = branch ? `refs/heads/${branch}` : undefined;
+  const refs = planningRefs(root, [
+    planDraftRef(identity),
+    planBaseRef(identity),
+    planRemovalRef(identity),
+    ...(branchRef ? [branchRef] : []),
+  ]);
+  const tip = branchRef ? refs.get(branchRef) : undefined;
+  const input = planRead(root, identity, saved ?? (tip ? indexPlanningRevision(root, tip) : new Map()), refs);
   return planView(input, readGitObjects(root, planRequests(input)));
 }
-export function readPlans(root: string): PlanView[] {
-  const saved = savedPlanTrees(root),
-    refs = new Map(
-      gitBytes(root, [
-        "for-each-ref",
-        "--format=%(refname) %(objectname)",
-        planningPaths.drafts,
-        planningPaths.bases,
-        planningPaths.removals,
-      ])
-        .toString()
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((row) => {
-          const pair = row.split(" ");
-          return [pair[0] ?? "", pair[1] ?? ""] as const;
-        }),
-    );
-  const identities = new Map([...saved].map(([reference, item]) => [reference, item.identity]));
-  for (const ref of refs.keys())
-    if (ref.startsWith(planningPaths.drafts)) {
-      const [scope, name, ...rest] = ref.slice(planningPaths.drafts.length).split("/");
-      if (!scope || !name || rest.length) throw new InvalidInput("Invalid plan draft reference");
-      const identity = planIdentity(scope, name);
-      identities.set(identity.reference, identity);
-    }
-  for (const ref of refs.keys())
-    if (ref.startsWith(planningPaths.removals)) {
-      const [scope, name, ...rest] = ref.slice(planningPaths.removals.length).split("/");
-      if (!scope || !name || rest.length) throw new InvalidInput("Invalid removed plan reference");
-      identities.delete(planIdentity(scope, name).reference);
-    }
-  const inputs = [...identities.values()].map((identity) => planRead(root, identity, saved, refs)),
-    objects = readGitObjects(root, inputs.flatMap(planRequests), 2 * 1024 * 1024, { retainedBytes: 64 * 1024 * 1024 });
-  return inputs
-    .map((input) => planView(input, objects))
-    .sort((a, b) => a.scope.localeCompare(b.scope) || a.name.localeCompare(b.name));
+
+function planningRefs(root: string, names: readonly string[]): ReadonlyMap<string, string> {
+  const refs = new Map<string, string>();
+  const rows = gitBytes(root, ["for-each-ref", "--format=%(refname) %(objectname)", ...names]).toString();
+  for (const row of rows.trimEnd().split("\n")) {
+    if (!row) continue;
+    const [ref, oid] = row.split(" ");
+    if (!ref || !oid) throw new InvalidInput("Invalid planning ref inventory");
+    refs.set(ref, oid);
+  }
+  return refs;
+}
+
+/** Bind the checkpoint base and the plan inventory to the same observed refs. */
+export function capturePlanning(root: string, branch = planningSettings(root).branch) {
+  const branchRef = branch ? `refs/heads/${branch}` : undefined;
+  const refs = planningRefs(root, [
+    ...(branchRef ? [branchRef] : []),
+    planningPaths.drafts,
+    planningPaths.bases,
+    planningPaths.removals,
+  ]);
+  const tip = branchRef ? refs.get(branchRef) : undefined;
+  return { tip, saved: tip ? indexPlanningRevision(root, tip) : new Map<string, SavedPlan>(), refs };
+}
+
+export function readPlans(
+  root: string,
+  selected?: Iterable<PlanIdentity>,
+  captured = capturePlanning(root),
+): PlanView[] {
+  const { saved, refs } = captured;
+  const batchSize = selected ? 10 : undefined;
+  if (!selected) {
+    const identities = new Map([...saved].map(([reference, item]) => [reference, item.identity]));
+    for (const draft of planRefIdentities(refs.keys(), planningPaths.drafts)) identities.set(draft.reference, draft);
+    for (const removed of planRefIdentities(refs.keys(), planningPaths.removals)) identities.delete(removed.reference);
+    selected = [...identities.values()].sort((a, b) => a.scope.localeCompare(b.scope) || a.name.localeCompare(b.name));
+  }
+  const inputs = [...selected].map((identity) => planRead(root, identity, saved, refs));
+  const views: PlanView[] = [];
+  const stride = batchSize ?? inputs.length;
+  for (let index = 0; index < inputs.length; index += stride) {
+    // Each selected plan can request three blobs of up to 2 MiB each.
+    const batch = inputs.slice(index, index + stride);
+    const objects = readGitObjects(root, batch.flatMap(planRequests), 2 * 1024 * 1024, {
+      retainedBytes: 64 * 1024 * 1024,
+    });
+    for (const input of batch) views.push(planView(input, objects));
+  }
+  return views;
 }

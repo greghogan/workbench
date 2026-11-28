@@ -4,8 +4,13 @@ summary: Local browser access, typed server rendering, coherent updates, and sco
 
 # ADR-5: Local browser interface
 
-The browser interface is a local, single-user view of the same application services used by the CLI. Bind listeners to
-loopback; users arrange remote access. Project files remain authoritative; shared application authority follows ADR-0.
+The browser interface uses the same application services as the CLI. Bind listeners to loopback and authenticate browser
+access. Project files remain authoritative and shared application authority follows ADR-0.
+
+A private listener serves its OS account and issues credentials for its own lifetime. An administrator-installed shared
+listener uses a protected endpoint and routes each authenticated account's requests to a worker running as that account.
+Workers own project access and execution. Retain revocable browser credentials across shared listener restarts only
+while the browser origin remains protected.
 
 Use TypeScript JSX and pinned Preact for server-rendered HTML. Escape ordinary text and confine raw HTML to safe
 document rendering. Core navigation and forms remain usable without JavaScript; browser scripts enhance interaction.
@@ -24,5 +29,6 @@ Keep the selected scope when changing between record and workflow views. Workflo
 descendants; the root provides a project-wide view. Counts and continuation follow the displayed selection without
 changing project-wide review or publication requirements.
 
-Rationale: Typed server rendering supports checked markup and automatic escaping. Local assets and coherent updates keep
-the interface usable during refresh and without external services; preserving unsaved input protects work.
+Rationale: Account workers preserve each user's project authority under a shared listener. Typed server rendering
+supports checked markup and automatic escaping. Local assets and coherent updates keep the interface usable during
+refresh and without external services. Preserving unsaved input protects work.

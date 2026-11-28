@@ -1,5 +1,5 @@
 import { expect, test, afterEach, beforeEach, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,8 @@ import {
   publishArchive,
 } from "../../../src/core/records/archive-workflow.ts";
 import { readArchivedFile } from "../../../src/core/records/archive-store.ts";
+import { repositoryStatePath, withRepositoryOperation } from "../../../src/core/git/repository-state.ts";
+import { withCacheLockSync } from "../../../src/core/storage/cache-lock.ts";
 
 beforeEach(() => {
   vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
@@ -41,6 +43,10 @@ function fixture() {
   writeFileSync(join(root, "source.txt"), "original\n");
   git(root, "add", ".");
   git(root, "commit", "-qm", "Baseline");
+  return root;
+}
+function archiveFixture() {
+  const root = fixture();
   enableArchive(root, { branch: "records", groupSize: 1 });
   git(root, "add", "workbench/config.toml");
   git(root, "commit", "-qm", "Configure archival");
@@ -52,10 +58,45 @@ function commit(root: string, path: string, body: string, message: string) {
   git(root, "commit", "-qm", message);
 }
 
+test("repository admission reports a live history operation and recovers an exited owner without skipping a pending operation", () => {
+  const root = fixture();
+  const lock = repositoryStatePath(root, "record-operation");
+  withCacheLockSync(lock, () => {
+    expect(() => {
+      withRepositoryOperation(root, () => undefined, "planning");
+    }).toThrow(/Another Workbench history operation is running/);
+    expect(existsSync(`${lock}.lock/owner.json`)).toBe(true);
+  });
+
+  const child = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      `const { mkdirSync, writeFileSync } = require("node:fs");
+const { hostname } = require("node:os");
+const { randomUUID } = require("node:crypto");
+const path = process.argv[1];
+mkdirSync(path);
+writeFileSync(path + "/owner.json", JSON.stringify({ host: hostname(), pid: process.pid, token: randomUUID() }));`,
+      `${lock}.lock`,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(child.status, child.stderr).toBe(0);
+  const pending = repositoryStatePath(root, "finalization-operation.json");
+  const receipt = JSON.stringify({ version: 1, completed: false, checkout: root });
+  writeFileSync(pending, receipt);
+  expect(() => {
+    withRepositoryOperation(root, () => undefined, "planning");
+  }).toThrow(/finalization operation requires recovery/);
+  expect(existsSync(`${lock}.lock`)).toBe(false);
+  expect(readFileSync(pending, "utf8")).toBe(receipt);
+});
+
 test.each(["rebase", "merge"] as const)(
   "%s preserves logical records when the target archived a formerly live record",
   (kind) => {
-    const root = fixture();
+    const root = archiveFixture();
     git(root, "checkout", "-qb", "feature");
     commit(root, "feature.txt", "feature\n", "Feature work");
     const original = git(root, "rev-parse", "HEAD");
@@ -76,7 +117,7 @@ test.each(["rebase", "merge"] as const)(
 test.each(["rebase", "merge"] as const)(
   "%s resolves staged conflicts through explicit continuation and can abort safely",
   (kind) => {
-    const root = fixture();
+    const root = archiveFixture();
     git(root, "checkout", "-qb", "feature");
     commit(root, "source.txt", "feature\n", "Feature change");
     const original = git(root, "rev-parse", "HEAD");
@@ -102,7 +143,7 @@ test.each(["rebase", "merge"] as const)(
 );
 
 test("a resolved textual conflict cannot hide a conflicting live copy of an archived record", () => {
-  const root = fixture(),
+  const root = archiveFixture(),
     path = "workbench/tasks/TSK-00.md";
   git(root, "checkout", "-qb", "feature");
   commit(root, path, readFileSync(join(root, path), "utf8") + "\nEdited accepted account.\n", "Edit retained account");
@@ -129,7 +170,7 @@ test("dirty checkouts are refused before refs or fetch state change", () => {
 });
 
 test("an old feature acquires a target's archive explicitly without activating its configuration", () => {
-  const provider = fixture(),
+  const provider = archiveFixture(),
     remote = mkdtempSync(join(tmpdir(), "workbench-integration-remote-"));
   roots.push(remote);
   const original = git(provider, "rev-parse", "HEAD~1");
@@ -161,7 +202,7 @@ test("an old feature acquires a target's archive explicitly without activating i
 });
 
 test("continuation repairs a stale archive pin while preserving resolved allocation counters", () => {
-  const root = fixture();
+  const root = archiveFixture();
   transferArchive(root);
   const state = readFileSync(join(root, "workbench/state.toml"), "utf8");
   git(root, "checkout", "-qb", "feature");

@@ -3,16 +3,68 @@ import { filePreviewByteLimit } from "../../../src/server/review/file-comparison
 import { expect, test } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
+import { webServers, readWebPage, readReconciledWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { breadcrumbLinks, parseDOM } from "../../fixtures/dom.mjs";
 import { git } from "../../fixtures/adoption.mjs";
-import { committedReview } from "../../../src/core/review/review-units.ts";
+import { commitVersion, committedReview } from "../../../src/core/review/review-units.ts";
 import { updatedReviewTree, writeReviewBlobs } from "../../../src/core/git/git-snapshot.ts";
 import { ReviewInventory } from "../../../src/server/projects/review-inventory.ts";
 import { taskCommits } from "../../../src/core/git/history.ts";
 import { changeTaskQueue } from "../../../src/core/tasks/task-queue.ts";
+import { pendingFinalizationStatus } from "../../../src/core/git/finalization-requests.ts";
 
 const fixtures = webServers();
+
+test("a browser merge review shows both parents and finalizes once an unrelated merge ends", async () => {
+  const root = fixtures.project(),
+    path = "workbench/decisions/ADR-00.md",
+    base = git(root, "rev-parse", "HEAD"),
+    branch = git(root, "branch", "--show-current");
+  git(root, "switch", "-qc", "side");
+  writeFileSync(join(root, path), "# Side recommendation\n");
+  git(root, "commit", "-qam", "Propose another decision");
+  const side = git(root, "rev-parse", "HEAD");
+  git(root, "switch", "-q", branch);
+  const merge = git(
+    root,
+    "commit-tree",
+    `${base}^{tree}`,
+    "-p",
+    base,
+    "-p",
+    side,
+    "-m",
+    "Keep the baseline decision\n\nWorkbench-Provisional: true",
+  );
+  git(root, "update-ref", `refs/heads/${branch}`, merge, base);
+  git(root, "switch", "-qc", "upcoming", base);
+  git(root, "commit", "--allow-empty", "-qm", "A separate branch with the same files");
+  git(root, "switch", "-q", branch);
+  git(root, "merge", "--no-commit", "--no-ff", "upcoming");
+
+  const web = await fixtures.start(root, { backgroundFinalization: true });
+  const page = await readWebPage(web, `/history?commit=${merge}&path=${encodeURIComponent(path)}`);
+  expect(page.response.status).toBe(200);
+  const document = parseDOM(page.html).window.document;
+  const headings = [...document.querySelectorAll(".record-pane h2")].map((element) => element.textContent);
+  expect(headings).toEqual(expect.arrayContaining([`Parent 1 ${base.slice(0, 12)}`, `Parent 2 ${side.slice(0, 12)}`]));
+  expect(document.querySelector(".record-pane")?.textContent).toContain("Matches the merge result");
+  expect(document.querySelector(".record-pane")?.textContent).toContain("Side recommendation");
+  const response = await postWebForm(web, "/actions/approve", {
+    csrf: hiddenValue(page.html, "csrf"),
+    digest: hiddenValue(page.html, "digest"),
+    path,
+    review_commit: merge,
+    reviewed: "yes",
+  });
+  expect(response.status).toBe(200);
+  expect(committedReview(root, merge).pending).toBe(0);
+  await expect.poll(() => pendingFinalizationStatus(root), { timeout: 15000 }).toMatch(/active Git operation/);
+  expect(git(root, "rev-parse", "HEAD")).toBe(merge);
+  git(root, "merge", "--abort");
+  await expect.poll(() => git(root, "rev-parse", "HEAD"), { timeout: 15000 }).not.toBe(merge);
+  expect(commitVersion(root, "HEAD")).toMatchObject({ provisional: false, tree: commitVersion(root, merge).tree });
+});
 
 test("task acceptance links only its deliveries, preserving scope, literal diffs and immutable inspection", async () => {
   const root = fixtures.project(),
@@ -303,7 +355,7 @@ test("browser reviews immutable commit versions independently and advances throu
       "Encoded document\n\nWorkbench-Provisional: true",
     );
   git(root, "update-ref", "refs/heads/feature/encoded", binaryCommit);
-  const encoded = parseDOM((await readWebPage(web, `/history?commit=${binaryCommit}`)).html).window.document;
+  const encoded = parseDOM((await readReconciledWebPage(web, `/history?commit=${binaryCommit}`)).html).window.document;
   expect(encoded.querySelector("main")?.textContent).toContain("download and inspect");
   const download = [...encoded.querySelectorAll<HTMLAnchorElement>("a")].find(
       (link) => link.textContent === "Download current file",
@@ -344,8 +396,9 @@ test("feature source inspection preserves literal Markdown and immutable support
     branch = git(root, "commit-tree", tree, "-p", head, "-m", "Feature history"),
     web = await fixtures.start(root);
   git(root, "update-ref", "refs/heads/feature/history", branch);
-  const rendered = parseDOM((await readWebPage(web, `/history?commit=${branch}&path=${encodeURIComponent(path)}`)).html)
-      .window.document,
+  const rendered = parseDOM(
+      (await readReconciledWebPage(web, `/history?commit=${branch}&path=${encodeURIComponent(path)}`)).html,
+    ).window.document,
     links = [...rendered.querySelectorAll<HTMLAnchorElement>(".commit-navigation a")];
   expect(rendered.querySelector("form[data-review]")).toBeNull();
   expect(rendered.querySelector(".document a")).toBeNull();

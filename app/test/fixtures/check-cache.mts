@@ -91,9 +91,10 @@ export function checkCacheFixtures() {
         root,
         options,
         plan,
-        async (selected) => {
+        async (selected, cache) => {
           await execute(selected);
           const result = report(selected);
+          result.cache = cache;
           record?.(result);
           return result;
         },

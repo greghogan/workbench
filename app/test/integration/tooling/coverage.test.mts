@@ -19,21 +19,72 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { test } from "vitest";
-import { runCoverage, subprocessCoverage, type CoverageTimings } from "../../../../scripts/test-coverage.mjs";
-import type { NodeCoverageReport } from "../../../../scripts/node-coverage-reports.mjs";
+import { test, vi } from "vitest";
+import {
+  coverageWorkspace,
+  runCoverage,
+  subprocessCoverage,
+  type CoverageTimings,
+} from "../../../../scripts/test-coverage.mjs";
+import {
+  collectNodeCoverageBatch,
+  drainNodeCoverageReports,
+  type NodeCoverageReport,
+} from "../../../../scripts/node-coverage-reports.mjs";
 import { bundleOptions } from "../../../../scripts/bundle-options.mjs";
 import { buildTooling } from "../../../../scripts/build-tooling.mts";
 import { linkDependencies } from "../../../../scripts/link-dependencies.mjs";
 import { captureOwnedChild } from "../../../src/core/runtime/owned-child.mjs";
+import { checkTestTimings } from "../../../src/core/execution/checks/check-test-timings.ts";
 
-test("Vitest writes transformed modules into selected build storage instead of the dependency directory", async ({
-  signal,
-}) => {
+const repository = resolve(import.meta.dirname, "../../../..");
+const vitest = [join(repository, "node_modules/vitest/vitest.mjs"), "run", "--configLoader", "native"];
+const vitestConfig = JSON.stringify(pathToFileURL(join(repository, "vitest.config.mts")).href);
+
+test("coverage retires complete reports during tests and waits for unfinished writes", async () => {
+  const raw = mkdtempSync(join(tmpdir(), "workbench-coverage-drain-"));
+  const first = join(raw, "coverage-112-1000-0.json");
+  const second = join(raw, "coverage-113-1000-0.json");
+  const reports: NodeCoverageReport[] = [];
+  const report = { result: [{ url: "file:///fixture.mjs", functions: [] }] };
+  const drain = drainNodeCoverageReports(raw, [
+    (batch) =>
+      Promise.resolve(
+        collectNodeCoverageBatch(raw, batch, (data) => {
+          reports.push(data);
+        }),
+      ),
+  ]);
+  try {
+    writeFileSync(first, JSON.stringify(report));
+    writeFileSync(second, '{"result":');
+    writeFileSync(join(raw, "notes.txt"), "not coverage");
+    for (let i = 0; i < 24; i++) writeFileSync(join(raw, `partial-${String(i)}.json`), '{"result":');
+    await vi.waitFor(() => {
+      assert.deepEqual(reports, [report]);
+    });
+    assert.equal(existsSync(first), false);
+    assert.equal(existsSync(second), true);
+    for (let i = 0; i < 24; i++) rmSync(join(raw, `partial-${String(i)}.json`));
+    writeFileSync(second, JSON.stringify({ result: [] }));
+    const collection = await drain.finish();
+    assert.equal(collection.count, 2);
+    assert.equal(
+      collection.bytes,
+      Buffer.byteLength(JSON.stringify(report)) + Buffer.byteLength(JSON.stringify({ result: [] })),
+    );
+    assert.deepEqual(reports, [report, { result: [] }]);
+    assert.deepEqual(readdirSync(raw), ["notes.txt"]);
+  } finally {
+    await drain.stop();
+    rmSync(raw, { recursive: true, force: true });
+  }
+});
+
+test("Vitest uses owned build storage and seeds scheduling in a fresh scoped test run", async ({ signal }) => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-vitest-cache-"))),
-    repository = resolve(import.meta.dirname, "../../../.."),
     builds = join(root, "owned-build");
-  let preserve = false;
+  const scratch = { preserve: false };
   try {
     writeFileSync(join(root, "package.json"), '{"type":"module"}');
     linkDependencies(join(repository, "node_modules"), join(root, "node_modules"), ["vitest"]);
@@ -42,31 +93,53 @@ test("Vitest writes transformed modules into selected build storage instead of t
       'import { test, expect } from "vitest"; test("result", () => expect(6 * 7).toBe(42));\n',
     );
     writeFileSync(
+      join(root, "extra.test.mjs"),
+      'import { test, expect } from "vitest"; test("longer source file", () => expect(6 * 7).toBe(42));\n',
+    );
+    writeFileSync(
       join(root, "vitest.config.mjs"),
-      `import base from ${JSON.stringify(pathToFileURL(join(repository, "vitest.config.mjs")).href)};
+      `import base from ${vitestConfig};
 export default context => {
   const config = base(context);
   return { ...config, root: ${JSON.stringify(root)}, test: { ...config.test,
-    include: ["sample.test.mjs"], setupFiles: [], maxWorkers: 1, reporters: ["dot"]
+    include: ["*.test.mjs"], setupFiles: [], maxWorkers: 1, outputFile: "report.json"
   }};
 };\n`,
     );
-    const result = await captureOwnedChild(
-      process.execPath,
-      [join(repository, "node_modules/vitest/vitest.mjs"), "run"],
-      {
+    const run = async () => {
+      const result = await captureOwnedChild(process.execPath, vitest, {
         cwd: root,
-        env: { ...process.env, WORKBENCH_BUILD_DIR: builds, WORKBENCH_STORAGE_EXTERNAL: "true" },
+        env: {
+          ...process.env,
+          WORKBENCH_BUILD_DIR: builds,
+          WORKBENCH_CHECK_SCOPED: "1",
+          WORKBENCH_SUBPROCESS_COVERAGE: undefined,
+        },
         signal,
-      },
-    );
-    preserve = result.descendantsActive === true;
-    assert.equal(preserve, false, `Uncertain test descendants; preserving ${root}`);
-    assert.equal(result.status, 0, result.stdout + result.stderr);
+      });
+      scratch.preserve = result.descendantsActive === true;
+      assert.equal(scratch.preserve, false, `Uncertain test descendants; preserving ${root}`);
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      return result.stdout
+        .split("\n")
+        .filter((line) => line.includes("✓"))
+        .map((line) => /(?:extra|sample)\.test\.mjs/.exec(line)?.[0]);
+    };
+    assert.deepEqual(await run(), ["extra.test.mjs", "sample.test.mjs"]);
     assert.ok(readdirSync(join(builds, "vitest-modules")).length > 0);
     assert.equal(existsSync(join(root, "node_modules/.vitest-cache")), false);
+    const history = checkTestTimings(builds, false);
+    const timings = JSON.parse(readFileSync(history, "utf8")) as {
+      projects: Record<string, { files: Record<string, { duration: number }> }>;
+    };
+    const files = required(timings.projects[""], "Unlabelled test project").files;
+    required(files["sample.test.mjs"], "Sample timing").duration = 60_000;
+    required(files["extra.test.mjs"], "Extra timing").duration = 1;
+    writeFileSync(history, JSON.stringify(timings));
+    rmSync(join(builds, "vite"), { recursive: true });
+    assert.deepEqual(await run(), ["sample.test.mjs", "extra.test.mjs"]);
   } finally {
-    if (!preserve) rmSync(root, { recursive: true, force: true });
+    if (!scratch.preserve) rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -97,7 +170,7 @@ test("project coverage attributes directly imported emitted helpers to authored 
     );
     writeFileSync(
       join(root, "vitest.config.mjs"),
-      `import base from ${JSON.stringify(pathToFileURL(resolve(import.meta.dirname, "../../../../vitest.config.mjs")).href)};
+      `import base from ${vitestConfig};
 export default async (context) => {
   const config = typeof base === "function" ? await base(context) : await base;
   return { ...config, root: ${JSON.stringify(root)}, cacheDir: ${JSON.stringify(join(root, "cache/vite"))}, test: { ...config.test,
@@ -107,11 +180,11 @@ export default async (context) => {
   }};
 };`,
     );
-    const result = spawnSync(
-      process.execPath,
-      [resolve(import.meta.dirname, "../../../../node_modules/vitest/vitest.mjs"), "run", "--coverage"],
-      { cwd: root, env: { ...process.env, NODE_V8_COVERAGE: "" }, encoding: "utf8" },
-    );
+    const result = spawnSync(process.execPath, [...vitest, "--coverage"], {
+      cwd: root,
+      env: { ...process.env, NODE_V8_COVERAGE: "" },
+      encoding: "utf8",
+    });
     assertProcessSuccess("Direct helper coverage", result);
     const measured = JSON.parse(readFileSync(join(root, "coverage/coverage-final.json"), "utf8")) as Record<
       string,
@@ -166,7 +239,7 @@ test("coverage keeps final evidence and cleans selected scratch storage after su
     }
     writeFileSync(
       join(root, "vitest.config.mjs"),
-      `import base from ${JSON.stringify(pathToFileURL(resolve(import.meta.dirname, "../../../../vitest.config.mjs")).href)};
+      `import base from ${vitestConfig};
 export default async (context) => {
   const config = typeof base === "function" ? await base(context) : await base;
   return { cacheDir: ${JSON.stringify(join(root, "cache/vite"))}, test: {
@@ -181,7 +254,7 @@ export default async (context) => {
       join(root, "app/test/setup.mjs"),
       "process.env.NODE_V8_COVERAGE = process.env.WORKBENCH_SUBPROCESS_COVERAGE;\n",
     );
-    for (const outcome of ["pass", "test failure", "coverage failure", "invalid report"]) {
+    for (const outcome of ["pass", "test failure", "coverage failure", "invalid report", "write failure"]) {
       const summaryPath = join(root, "coverage/coverage-summary.json");
       const previousSummary = existsSync(summaryPath) ? readFileSync(summaryPath, "utf8") : undefined;
       writeFileSync(
@@ -199,6 +272,7 @@ export default async (context) => {
           expect(cli.status).toBe(0); expect(cli.stdout.trim()).toBe("42");
           expect(value()).toBe(${outcome === "test failure" ? "0" : "42"});
           ${outcome === "invalid report" ? `writeFileSync(process.env.NODE_V8_COVERAGE + "/coverage-123-456-7.json", '{"PRIVATE SOURCE');` : ""}
+          ${outcome === "write failure" ? `process.stderr.write("ENOSPC: Failed to write file " + process.env.NODE_V8_COVERAGE + "/coverage-123-456-7.json\\n");` : ""}
         });`,
       );
       writeFileSync(
@@ -217,7 +291,9 @@ export default async (context) => {
             ? /Failed tests:\n- value: AssertionError/
             : outcome === "invalid report"
               ? /Invalid Node coverage report/
-              : /functions coverage .* below 100/,
+              : outcome === "write failure"
+                ? /write-failed: ENOSPC/
+                : /functions coverage .* below 100/,
         );
       assert.deepEqual(readdirSync(external), ["keep"]);
       if (outcome === "test failure") assert.deepEqual(readdirSync(join(root, "build")), []);
@@ -243,16 +319,16 @@ export default async (context) => {
       assert.ok(assertion.duration >= 0);
       if (outcome === "test failure") assert.ok(assertion.failureMessages.length > 0);
       assert.equal(existsSync(summaryPath), true);
-      if (["test failure", "invalid report"].includes(outcome))
-        assert.equal(readFileSync(summaryPath, "utf8"), previousSummary);
-      if (outcome === "invalid report") {
+      if (outcome !== "pass") assert.equal(readFileSync(summaryPath, "utf8"), previousSummary);
+      const collectionFailed = outcome === "invalid report" || outcome === "write failure";
+      if (collectionFailed) {
         const diagnostics = readFileSync(join(root, "coverage/collection-error.json"), "utf8");
         assert.deepEqual(JSON.parse(diagnostics), {
           file: "coverage-123-456-7.json",
-          bytes: 16,
+          bytes: outcome === "invalid report" ? 16 : null,
           pid: 123,
           thread: 7,
-          reason: "invalid-json",
+          reason: outcome === "invalid report" ? "invalid-json" : "write-failed: ENOSPC",
         });
         assert.ok(!diagnostics.includes("PRIVATE SOURCE"));
       }
@@ -263,7 +339,7 @@ export default async (context) => {
             "coverage-summary.json",
             "tests.json",
             "timings.json",
-            ...(outcome === "invalid report" ? ["collection-error.json"] : []),
+            ...(collectionFailed ? ["collection-error.json"] : []),
           ].includes(name),
         ),
       );
@@ -291,7 +367,7 @@ export default async (context) => {
       }
       for (const [name, contents] of shipped)
         assert.equal(readFileSync(join(root, `bundle/${name}.cjs`), "utf8"), contents);
-      if (!["test failure", "invalid report"].includes(outcome)) {
+      if (outcome !== "test failure" && !collectionFailed) {
         const measured = JSON.parse(readFileSync(join(root, "coverage/coverage-final.json"), "utf8")) as Record<
           string,
           { path: string }
@@ -368,20 +444,16 @@ test("coverage merges direct imports and disposable CLI copies without crediting
       join(root, "vitest.config.mjs"),
       `export default { cacheDir: ${JSON.stringify(join(root, "cache/vite"))}, test: { fsModuleCachePath: ${JSON.stringify(join(root, "cache/modules"))}, include: ["direct.test.mjs"], coverage: { provider: "v8", include: ["src/*.js"], reporter: ["json"], reportsDirectory: "coverage/unit", clean: false } } };`,
     );
-    run([resolve(import.meta.dirname, "../../../../node_modules/vitest/vitest.mjs"), "run", "--coverage"]);
+    run([...vitest, "--coverage"]);
     const temporary = join(root, "coverage/tmp");
     for (const name of ["copied", "changed"]) run([join(copy, `bundle/${name}.cjs`)], { NODE_V8_COVERAGE: temporary });
     // The source trees are gone by reporting time, as in update/setup integration tests.
     rmSync(copy, { recursive: true, force: true });
-    writeFileSync(join(root, "coverage/cli.json"), JSON.stringify(await subprocessCoverage(temporary, root)));
-    const map = mergeCoverage(
-      [join(root, "coverage/unit/coverage-final.json"), join(root, "coverage/cli.json")],
-      join(root, "coverage"),
-      {},
-    );
+    const cli = await subprocessCoverage(temporary, root);
+    const map = mergeCoverage([join(root, "coverage/unit/coverage-final.json"), cli], join(root, "coverage"), {});
     for (const name of ["direct", "copied"]) {
       const file = map.fileCoverageFor(join(root, `src/${name}.js`));
-      assert.equal(file.toSummary().functions.total, 2);
+      assert.equal(file.toSummary().functions.total, 2, name);
       const counts = Object.entries(file.fnMap).map(([id, fn]) => [fn.name, file.f[id]] as const);
       assert.ok(
         counts.some(([fn, count]) => fn === name && required(count, "Fixture value count") > 0),
@@ -444,6 +516,56 @@ test("subprocess coverage measures standalone ESM helpers and CommonJS launchers
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("compact subprocess coverage matches a full source map after the copied bundle is deleted", async () => {
+  const temporary = realpathSync(mkdtempSync(join(tmpdir(), "workbench-compact-coverage-")));
+  try {
+    const root = join(temporary, "source");
+    const buildRoot = join(temporary, "capture");
+    for (const directory of ["app/src/cli", "app/src/core/skills", "node_modules"])
+      mkdirSync(join(root, directory), { recursive: true });
+    mkdirSync(buildRoot);
+    writeFileSync(join(root, "app/src/core/skills/skills.ts"), "export const skill = 42;\n");
+    writeFileSync(
+      join(root, "app/src/cli/main.ts"),
+      'function choose(value: string) { if (value === "yes") return 42; return 0; }\n' +
+        'console.log(choose(process.argv[2] ?? "no"));\n',
+    );
+    const captured = await coverageWorkspace(root, buildRoot);
+    const executable = join(captured.root, "bundle/main.cjs");
+    const copied = join(temporary, "moved.cjs");
+    const source = join(captured.root, "app/src/cli/main.ts");
+    const collect = async (kind: string, workspace: Parameters<typeof subprocessCoverage>[1]) => {
+      const raw = join(temporary, kind);
+      mkdirSync(raw);
+      cpSync(executable, copied);
+      for (const argument of ["yes", "no"]) {
+        const result = spawnSync(process.execPath, ["--enable-source-maps", copied, argument], {
+          env: { ...process.env, NODE_V8_COVERAGE: raw },
+          encoding: "utf8",
+        });
+        assertProcessSuccess("Copied coverage bundle", result);
+        assert.equal(result.stdout.trim(), argument === "yes" ? "42" : "0");
+      }
+      rmSync(copied);
+      const measured = await subprocessCoverage(raw, workspace);
+      assert.deepEqual(measured.files(), [source]);
+      const report = JSON.parse(readFileSync(join(raw, readdirSync(raw)[0] ?? ""), "utf8")) as NodeCoverageReport;
+      const map = required(report["source-map-cache"]?.[pathToFileURL(copied).href]?.data, "Captured map");
+      return { measured: measured.fileCoverageFor(source).data, map };
+    };
+    const compact = await collect("compact", captured);
+    assert.deepEqual(compact.map.sources, []);
+    assert.equal(compact.map.mappings, "");
+    assert.equal(compact.map.sourcesContent, undefined);
+    await build(bundleOptions(captured.root, "main", true));
+    const full = await collect("full", captured);
+    assert.ok(full.map.sourcesContent?.length);
+    assert.deepEqual(compact.measured, full.measured);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
   }
 });
 

@@ -52,6 +52,25 @@ const canonical = (root: string) => (existsSync(root) ? realpathSync.native(root
 function namespace(root: string) {
   return join(evidenceRoot(), createHash("sha256").update(canonical(root)).digest("hex").slice(0, 24));
 }
+
+export function browserEvidenceRetentionState(root: string) {
+  const folder = namespace(root);
+  if (!existsSync(folder)) return [];
+  const names = readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[a-f0-9-]{36}$/.test(entry.name))
+    .map(({ name }) => name)
+    .sort();
+  if (!names.length) return [];
+  return [
+    logRetention(root, true),
+    names.map((name) => {
+      const directory = ownedPath(folder, name);
+      const { dev, ino, mtimeMs, ctimeMs } = lstatSync(directory);
+      const owner = join(directory, "owner");
+      return [name, dev, ino, mtimeMs, ctimeMs, existsSync(owner) ? inspectProcessLock(owner) : null];
+    }),
+  ];
+}
 function readRun(directory: string): BrowserRun {
   const value: unknown = JSON.parse(
     readBoundedFile(ownedPath(directory, browserEvidenceMarker), 256 * 1024, "browser evidence").toString(),
@@ -152,7 +171,7 @@ function storedBytes(directory: string): number {
   scan(directory);
   return bytes;
 }
-export function inspectBrowserEvidence(root?: string, now = Date.now(), maintenance?: string): BrowserEvidencePlan {
+function planBrowserEvidence(root?: string, now = Date.now(), maintenance?: string) {
   const base = evidenceRoot();
   const namespaces = root
     ? [namespace(root)]
@@ -169,6 +188,7 @@ export function inspectBrowserEvidence(root?: string, now = Date.now(), maintena
     issues: [],
   };
   const kept = keptCacheAssets();
+  let nextScan = Infinity;
   for (const folder of namespaces) {
     if (!existsSync(folder)) continue;
     const entries: BrowserEvidenceEntry[] = [];
@@ -218,23 +238,26 @@ export function inspectBrowserEvidence(root?: string, now = Date.now(), maintena
         plan.entries.push(...entries);
         continue;
       }
-      const selected = new Set(
-        selectLogRetention(
-          entries.map((entry) => ({
-            directory: entry.directory,
-            completed: Date.parse(entry.completed ?? entry.started),
-            eligible: !entry.blockedBy,
-            bytes: entry.bytes,
-          })),
-          policy,
-          now,
-        ).remove,
+      const selection = selectLogRetention(
+        entries.map((entry) => ({
+          directory: entry.directory,
+          completed: Date.parse(entry.completed ?? entry.started),
+          eligible: !entry.blockedBy,
+          bytes: entry.bytes,
+        })),
+        policy,
+        now,
       );
+      const selected = new Set(selection.remove);
+      nextScan = Math.min(nextScan, selection.nextScan);
       for (const entry of entries) entry.selected = selected.has(entry.directory);
     }
     plan.entries.push(...entries);
   }
-  return plan;
+  return { plan, nextScan };
+}
+export function inspectBrowserEvidence(root?: string, now = Date.now(), maintenance?: string): BrowserEvidencePlan {
+  return planBrowserEvidence(root, now, maintenance).plan;
 }
 export async function applyBrowserEvidencePlan(
   plan: BrowserEvidencePlan,
@@ -292,8 +315,8 @@ export async function applyBrowserEvidencePlan(
     })),
   };
 }
-export async function pruneBrowserEvidence(root?: string): Promise<string[]> {
-  const plan = inspectBrowserEvidence(root);
+export async function pruneBrowserEvidence(root?: string, now = Date.now()): Promise<number> {
+  const { plan, nextScan } = planBrowserEvidence(root, now);
   await applyBrowserEvidencePlan(plan);
-  return plan.entries.filter((entry) => entry.selected).map((entry) => entry.directory);
+  return nextScan;
 }

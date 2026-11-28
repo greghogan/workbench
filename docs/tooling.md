@@ -242,6 +242,10 @@ regenerable generations and installations superseded by a verified working patch
 compatibility profiles, last working selections, active work, retained results, and explicit keeps protect assets.
 Missing or unreadable registered projects prevent uncertain shared-tool cleanup. Automatic cleanup preserves records,
 experiment evidence, and retained logs; a maintenance failure reports separately from successful checks.
+After a completed filesystem scan, successful gates reuse its retention decision until the earliest time an entry can
+age out. If no entry can age out, reuse continues while the evidence stays the same. Pending operations, changed
+evidence, and low free space trigger a fresh pass. Prepared images and managed stores also use their managers' live
+state for cleanup.
 
 Build fingerprints can also become obsolete without a toolchain update, for example after lockfile or build-option
 changes. Automatic retention normally keeps two generations for each root, environment, CI target and tool selection:
@@ -252,6 +256,9 @@ active work, explicit keeps, the latest verified replacement and latest attempt 
 generation receipts and revalidates deletion under locks; it does not remove unmanaged Cargo targets or other legacy
 directories. Host platforms retain independent generations. Older receipts without platform provenance remain available
 for explicit reviewed pruning; new activity records that provenance for automatic retention.
+
+Successful check results age out under `cache.max_age_days`, measured from the last fresh verification. This limit
+is independent of check logs and human review receipts. Export reports to keep them beyond the cache lifetime.
 
 Rust outputs can also accumulate inside a retained generation. Automatic pruning inspects verified, Workbench-owned
 Cargo output and removes complete obsolete build units and completed incremental sessions. Both the unit-based layout
@@ -516,7 +523,7 @@ selected build storage. Workbench removes its raw V8 dumps and merge inputs afte
 Prepared release artifacts are regenerable products, including after their publication elsewhere. External storage
 selection applies to them alongside other build products; `workbench cache` includes their size under builds.
 `make clean` and cache pruning remove them, while `make distclean` additionally removes project dependencies.
-Preparation is explicit through `make release` or `workbench release prepare`; full CI also runs configured release
+Preparation is explicit through `make release` or `workbench artifact build PROFILE --kind release`. Full CI runs configured release
 preparation and verification without publishing. Ordinary commit gates do not prepare releases.
 
 Cache inspection groups check logs and successful gate results with their owning checkout under `CHECKS`. Normal pruning
@@ -524,8 +531,8 @@ removes both along with build products; `--dependencies` additionally removes in
 active runs and preserves directories whose ownership cannot be established.
 
 `workbench paths` reports the selected root's `WORKBENCH_DIST_DIR`; pass `--toolchain NAME` when inspecting a named
-compiler/runtime profile. Named release profiles use the checkout root's generation and report their exact artifact
-paths through `workbench release prepare --json`. Recipes may use `WORKBENCH_RELEASE_OUTPUT` to select a specific
+compiler/runtime profile. `workbench artifact build PROFILE --kind release --json` reports the retained artifact and
+the generation that owns it. Recipes may use `WORKBENCH_RELEASE_OUTPUT` to select a specific
 staging directory; otherwise adapters use `WORKBENCH_DIST_DIR`, then fall back to project-local `dist/` when running
 independently. Changing storage preference leaves existing artifacts in their previous locations; regeneration and
 cleanup are explicit.
@@ -577,6 +584,10 @@ location for builds, dependency installations, and the shared pnpm package store
 caches are separate. The root must be outside the checkout. Ignored local storage overrides take precedence over global
 settings. Separate namespaces identify canonical checkouts (including worktrees), language roots, environments,
 toolchain/lock inputs, and build modes.
+
+Workbench's own Vitest configuration uses the selected build directory for its transform caches, including when
+invoked directly outside a Workbench shell. Coverage keeps its modules in run-owned scratch. Source setup uses a
+temporary installation of the locked package manager to prepare the regular dependency cache.
 
 `workbench paths --path examples/languages/rust` prints the selected locations without creating them. `--shell` prepares
 storage and prints shell exports; `--direnv` also prints watches for personal/project settings and the tool inputs used

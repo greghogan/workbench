@@ -27,9 +27,9 @@ human review is optional at the discretion of the agent.
   ADRs relevant to your task.
 
 - [workbench:ADR-7](workbench/decisions/ADR-07.md): Obtain human approval of a concrete plan before implementing a major
-  feature or materially expanding its approved scope. Record significant implementation decisions and their reasons,
-  distinguishing agent choices from human direction. Update the owning task records in every retained commit delivering
-  task work.
+  feature or materially expanding its approved scope. Use the local task queue to record when tracked work starts,
+  pauses, and is verified. Record significant implementation decisions and their reasons, distinguishing agent choices
+  from human direction. Update the owning task records in every retained commit delivering task work.
 
 - [workbench:ADR-8](workbench/decisions/ADR-08.md): Obtain human review of completed experiments, environment records,
   and their supporting files before commit. Before recommending rejection, evaluate plausible improvements to the
@@ -79,6 +79,138 @@ Decision map: [workbench-app](app/workbench/decision-map.md).
 
 Record, collection, and development-workflow management for humans and agents. The command-line and web interfaces
 provide record review, task approval and acceptance, and management of the planned work queue.
+
+## workbench-c
+
+Applies to: `examples/languages/c/` and descendants.
+
+Decision map: [workbench-c](examples/languages/c/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example C application.
+
+## workbench-cpp
+
+Applies to: `examples/languages/cpp/` and descendants.
+
+Decision map: [workbench-cpp](examples/languages/cpp/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example C++ application.
+
+## workbench-go
+
+Applies to: `examples/languages/go/` and descendants.
+
+Decision map: [workbench-go](examples/languages/go/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example Go application.
+
+## workbench-java
+
+Applies to: `examples/languages/java/` and descendants.
+
+Decision map: [workbench-java](examples/languages/java/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example Java application.
+
+## workbench-javascript
+
+Applies to: `examples/languages/javascript/` and descendants.
+
+Decision map: [workbench-javascript](examples/languages/javascript/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example JavaScript application.
+
+## workbench-php
+
+Applies to: `examples/languages/php/` and descendants.
+
+Decision map: [workbench-php](examples/languages/php/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example PHP application.
+
+## workbench-python
+
+Applies to: `examples/languages/python/` and descendants.
+
+Decision map: [workbench-python](examples/languages/python/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example Python application.
+
+## workbench-react
+
+Applies to: `examples/frameworks/react/` and descendants.
+
+Decision map: [workbench-react](examples/frameworks/react/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example React application.
+
+## workbench-ruby
+
+Applies to: `examples/languages/ruby/` and descendants.
+
+Decision map: [workbench-ruby](examples/languages/ruby/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example Ruby application.
+
+## workbench-rust
+
+Applies to: `examples/languages/rust/` and descendants.
+
+Decision map: [workbench-rust](examples/languages/rust/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example Rust application.
+
+## workbench-typescript
+
+Applies to: `examples/languages/typescript/` and descendants.
+
+Decision map: [workbench-typescript](examples/languages/typescript/workbench/decision-map.md).
+
+### Charter
+
+# Charter
+
+Example TypeScript application.
 
 ## Local collections
 

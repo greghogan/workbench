@@ -59,7 +59,7 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>4.1.0</version>
+            <version>4.2.0</version>
           </dependency>
         </dependencies>
       </plugin>
@@ -113,7 +113,7 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>4.1.0</version>
+            <version>4.2.0</version>
           </dependency>
           <dependency>
             <groupId>org.apache.maven.reporting</groupId>
@@ -162,7 +162,7 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>3.6.2</version>
+            <version>3.6.4</version>
           </dependency>
         </dependencies>
       </plugin>
@@ -211,12 +211,12 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>3.6.2</version>
+            <version>3.6.4</version>
           </dependency>
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-archiver</artifactId>
-            <version>4.15.0</version>
+            <version>4.16.0</version>
           </dependency>
         </dependencies>
         <configuration>
@@ -249,12 +249,12 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>3.6.2</version>
+            <version>3.6.4</version>
           </dependency>
           <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
-            <version>3.21.0</version>
+            <version>3.22.0</version>
           </dependency>
         </dependencies>
       </plugin>
@@ -267,12 +267,12 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>4.1.0</version>
+            <version>4.2.0</version>
           </dependency>
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-archiver</artifactId>
-            <version>4.15.0</version>
+            <version>4.16.0</version>
           </dependency>
         </dependencies>
         <configuration>
@@ -291,12 +291,12 @@
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-utils</artifactId>
-            <version>3.6.2</version>
+            <version>3.6.4</version>
           </dependency>
           <dependency>
             <groupId>org.codehaus.plexus</groupId>
             <artifactId>plexus-archiver</artifactId>
-            <version>4.15.0</version>
+            <version>4.16.0</version>
           </dependency>
         </dependencies>
         <configuration>

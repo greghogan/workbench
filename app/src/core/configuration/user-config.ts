@@ -6,13 +6,59 @@ import { readToml, readText } from "../runtime/files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
 import { userDirectory } from "../storage/storage.js";
 import { validateCollectionDirectories } from "../collections/collection-schema.js";
+import { PreparationStore } from "../execution/environments/managed/managed-contract.mjs";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 
 export const userOptions = {
+  "daemon.private_port": {
+    type: "integer",
+    local: false,
+    description: "Starting port for the private browser listener (default: 8080)",
+  },
+  "daemon.system_port": {
+    type: "integer",
+    local: false,
+    description: "Fixed port for the installed system browser listener (default: 80)",
+  },
+  "daemon.worker_idle_seconds": {
+    type: "integer",
+    local: false,
+    description: "System account worker idle interval; zero disables idle shutdown (default: 3600)",
+  },
+  "daemon.session_seconds": {
+    type: "integer",
+    local: false,
+    description: "System browser sign-in lifetime (default: 2592000)",
+  },
+  "daemon.job_limit": {
+    type: "integer",
+    local: false,
+    description: "Maximum active jobs in the installed service (default: logical CPU count)",
+  },
+  "daemon.worker_slots": {
+    type: "integer",
+    local: false,
+    description: "Worker slots in the installed service (default: logical CPU count)",
+  },
+  "daemon.memory_reserve_bytes": {
+    type: "integer",
+    local: false,
+    description: "Minimum available memory for job admission (default: 5% of RAM, capped at 1 GiB)",
+  },
   "server.project_idle_seconds": {
     type: "integer",
     local: false,
     description: "Keep project monitoring after its last browser connection closes (default: 1800)",
+  },
+  "preparation.nix_store": {
+    type: "preparation-store",
+    local: false,
+    description: "Store for local Nix image preparation: disabled, system, or managed (default: disabled)",
+  },
+  "preparation.guix_store": {
+    type: "preparation-store",
+    local: false,
+    description: "Store for local Guix image preparation: disabled, system, or managed (default: disabled)",
   },
   "cache.auto_prune": {
     type: "boolean",
@@ -176,20 +222,24 @@ export const userConfigPath = (): string => join(userDirectory("config"), "confi
 
 export function validateUserOption(key: string, value: unknown): asserts key is UserOption {
   if (!Object.hasOwn(userOptions, key)) throw new Error(`unknown global option: ${key}`);
-  if (key.startsWith("execution.")) {
+  if (key.startsWith("execution.") || key === "daemon.job_limit" || key === "daemon.worker_slots") {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
       throw new Error(`${key} requires a positive integer`);
     return;
   }
-  if (
-    (key.startsWith("logs.") && userOptions[key as UserOption].type === "integer") ||
-    key === "cache.max_generations" ||
-    key === "cache.max_age_days" ||
-    key === "cache.max_image_generations" ||
-    key === "cache.buildkit_max_bytes" ||
-    key === "cache.rust_max_bytes" ||
-    key === "cache.rust_max_age_days"
-  ) {
+  if (key === "daemon.private_port" || key === "daemon.system_port") {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 65535)
+      throw new Error(`${key} requires an integer from 1 to 65535`);
+    return;
+  }
+  if (key === "daemon.session_seconds" || key === "daemon.worker_idle_seconds") {
+    const minimum = key === "daemon.session_seconds" ? 1 : 0;
+    const maximum = key === "daemon.session_seconds" ? Math.floor(Number.MAX_SAFE_INTEGER / 2000) : 2_147_483;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum)
+      throw new Error(`${key} requires an integer from ${String(minimum)} to ${String(maximum)}`);
+    return;
+  }
+  if (userOptions[key as UserOption].type === "integer") {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
       throw new Error(`${key} requires a nonnegative integer`);
     return;
@@ -202,6 +252,11 @@ export function validateUserOption(key: string, value: unknown): asserts key is 
   }
   if (key === "logs.compression") {
     if (!hasEnumValue(LogCompressionPreference, value)) throw new Error(`${key} requires auto, zstd, gzip, or none`);
+    return;
+  }
+  if (userOptions[key as UserOption].type === "preparation-store") {
+    if (!hasEnumValue(PreparationStore, value))
+      throw new Error(`${key} requires ${Object.values(PreparationStore).join(", ")}`);
     return;
   }
   if (key === "skills.enabled") {
@@ -243,7 +298,16 @@ export function readUserConfig(): Values {
 
 export function userConfigValues(preferences = readUserConfig()): Record<UserOption, UserValue | undefined> {
   return {
+    "daemon.private_port": 8080,
+    "daemon.system_port": 80,
+    "daemon.worker_idle_seconds": 3600,
+    "daemon.session_seconds": 2592000,
+    "daemon.job_limit": undefined,
+    "daemon.worker_slots": undefined,
+    "daemon.memory_reserve_bytes": undefined,
     "server.project_idle_seconds": 1800,
+    "preparation.nix_store": PreparationStore.Disabled,
+    "preparation.guix_store": PreparationStore.Disabled,
     "cache.auto_prune": true,
     "cache.max_generations": 2,
     "cache.max_image_generations": 1,

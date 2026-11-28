@@ -1,4 +1,4 @@
-FROM nixos/nix@sha256:f159a58f390677f41e8e900a74b6e2f9c7f27b364122ae6acf7a652ce6c551c0 AS base
+FROM nixos/nix@sha256:746280551ddc1c72177d1a597c05eacac86dfaa18d5d649bf86411278bcd5470 AS base
 COPY flake.nix flake.lock /tmp/bootstrap/
 RUN nix --extra-experimental-features 'nix-command flakes' build --no-update-lock-file \
     --out-link /opt/workbench-bootstrap path:/tmp/bootstrap#bootstrap \

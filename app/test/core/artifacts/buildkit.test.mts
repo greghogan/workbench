@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test as baseTest, vi } from "vitest";
 import { withProjectBuilder, inspectBuildkitCache, buildProjectImage } from "../../../src/core/artifacts/buildkit.ts";
-import { pruneBuilderCache } from "../../../src/core/storage/builder-cache.ts";
+import { inspectBuilderCache, pruneBuilderCache } from "../../../src/core/storage/builder-cache.ts";
 import { keepCacheAsset } from "../../../src/core/projects/project-registry.ts";
 
 const test = baseTest.skipIf(process.platform === "win32");
@@ -29,6 +29,7 @@ const state = vi.hoisted(() => ({
   engine: "engine-one",
   fail: false,
   failRemove: false,
+  usageScans: 0,
 }));
 vi.mock("../../../src/core/execution/ci/support/ci-lifecycle.mjs", () => ({
   executeCI: vi.fn<typeof import("../../../src/core/execution/ci/support/ci-lifecycle.mjs").executeCI>(
@@ -91,8 +92,10 @@ vi.mock("node:child_process", async (original) => ({
     let result;
     if (command === "sh") result = "/usr/bin/docker";
     else if (args[0] === "info") result = state.engine;
-    else if (args[0] === "system") result = state.volumes.map(({ Name }) => ({ Name, Size: "1.5GB" }));
-    else if (args[0] === "ps")
+    else if (args[0] === "system") {
+      state.usageScans++;
+      result = state.volumes.map(({ Name }) => ({ Name, Size: "1.5GB", Links: 0 }));
+    } else if (args[0] === "ps")
       result = args.includes("--no-trunc")
         ? state.containers.map(({ Id }) => Id).join("\n")
         : (state.containers[0]?.Id ?? "");
@@ -113,7 +116,8 @@ vi.mock("node:child_process", async (original) => ({
       ];
       result = args.at(-1);
     } else if (args[0] === "volume" && args[1] === "ls") result = state.volumes.map(({ Name }) => Name).join("\n");
-    else if (args[0] === "volume" && args[1] === "inspect") result = state.volumes;
+    else if (args[0] === "volume" && args[1] === "inspect")
+      result = args.slice(2).map((name) => state.volumes.find(({ Name }) => Name === name));
     else if (args[0] === "container" && args[1] === "inspect") result = state.containers;
     else throw new Error(`Unexpected Docker operation: ${args.join(" ")}`);
     return { status: 0, stdout: typeof result === "string" ? result : JSON.stringify(result), stderr: "" };
@@ -128,6 +132,7 @@ afterEach(() => {
   state.engine = "engine-one";
   state.fail = false;
   state.failRemove = false;
+  state.usageScans = 0;
   for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function fixture() {
@@ -142,6 +147,27 @@ function fixture() {
   vi.stubEnv("WORKBENCH_CONTAINER_CHECKOUT", root);
   return root;
 }
+
+test("builder inventory measures BuildKit separately from shared stores without Docker volume registrations", async () => {
+  const root = fixture();
+  await withProjectBuilder(root, () => Promise.resolve());
+  const cache = join(root, "cache", "managed-stores", "nix", "a".repeat(24), "store");
+  mkdirSync(cache, { recursive: true });
+  writeFileSync(join(cache, "profile"), Buffer.alloc(8192));
+  state.volumes.push({ Name: "unrelated", CreatedAt: "created-volume", Labels: {} });
+
+  const scansBeforeInspection = state.usageScans;
+  const report = await inspectBuilderCache();
+  expect(report.issues).toEqual([]);
+  expect(report.entries.map(({ builder, bytes }) => [builder, bytes])).toEqual([
+    ["buildkit", 1_500_000_000],
+    ["nix", 8192],
+  ]);
+  const shared = required(report.entries[1], "Shared store");
+  await expect(pruneBuilderCache({ ...report, entries: [shared] })).rejects.toThrow(/not removable/);
+  expect(state.volumes).toHaveLength(2);
+  expect(state.usageScans - scansBeforeInspection).toBe(1);
+});
 
 test("project builds reuse an owned volume and leave the default builder unchanged", async () => {
   const root = fixture();

@@ -52,6 +52,10 @@ function store(path: string) {
 }
 
 export function readTaskDecisions(root: string): TaskDecision[] {
+  return readTaskDecisionHistory(root).filter((decision) => !decision.comparisonOnly);
+}
+
+export function readTaskDecisionHistory(root: string): TaskDecision[] {
   return store(taskDecisionPath(root))
     .read()
     .tasks.flatMap((task) => task.decisions);

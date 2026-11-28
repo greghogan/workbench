@@ -25,11 +25,12 @@ import { configurePresentation } from "../core/diagnostics/presentation.js";
 import { terminalColumns } from "../core/diagnostics/terminal-text.js";
 import { executableIdentity } from "../core/distribution/executable-identity.js";
 import { prepareUpdate } from "../core/distribution/update-prepare.js";
-import { updateWorkbench } from "../core/distribution/update.js";
 import { checkAdvisories } from "../core/execution/checks/advisories.js";
 import { ChecksCancelled } from "../core/execution/checks/check-cancellation.js";
 import { observeCommand } from "../core/execution/checks/test-timing.js";
-import { inspectCICache, type CacheInspectionRequest } from "../core/execution/ci/ci-cache-inspection.js";
+import { finalizationCommand, resumeFinalization, wakeFinalization } from "../core/git/finalization-requests.js";
+import type { CacheInspectionRequest } from "../core/execution/ci/ci-cache-inspection.js";
+import { planCICache } from "../core/execution/ci/ci-cache-plan.js";
 import { readConfig } from "../core/projects/project-configuration.js";
 import { distributionRoot, projectRoot } from "../core/projects/project-context.js";
 import { registrationRoot } from "../core/projects/project-registration.js";
@@ -61,6 +62,7 @@ import { registerCommitCommands } from "./commits.js";
 import { completionCandidates, completionScript, installCompletion } from "./completion.js";
 import { registerConfigurationCommands } from "./configuration.js";
 import { registerDevelopmentCommands } from "./development.js";
+import { registerArtifactCommands } from "./artifacts.js";
 import { registerEnvironmentInternals } from "./environment-internals.js";
 import { registerExperimentCommands } from "./experiments.js";
 import { registerFeedbackCommands } from "./feedback-commands.js";
@@ -116,12 +118,27 @@ export function createCLI(root: string = projectRoot()) {
     // The final diagnostic presenter reports parse errors once, including structured causes.
     outputError: () => undefined,
   });
-  registerCommand(program, "ci-cache-inspect", { hidden: true })
+  registerCommand(program, "ci-cache-plan", { hidden: true })
     .argument("<request>")
     .action((request: string) => {
-      console.log(JSON.stringify(inspectCICache(root, JSON.parse(request) as CacheInspectionRequest)));
+      const { target, cache, compressionLevel } = JSON.parse(request) as {
+        target: CacheInspectionRequest["target"];
+        cache: string;
+        compressionLevel?: string;
+      };
+      console.log(JSON.stringify(planCICache(root, target, cache, compressionLevel)));
     });
   program.name("workbench").description("Shared agentic software-development context and workflows");
+  registerCommand(program, finalizationCommand, { hidden: true }).action(async () => {
+    if (process.connected && process.send)
+      await new Promise<void>((ready, reject) => {
+        process.send?.(finalizationCommand, (error) => {
+          if (error) reject(error);
+          else ready();
+        });
+      });
+    resumeFinalization(root);
+  });
   program.helpCommand(false).enablePositionalOptions();
   function isGateCommand(command: Command): boolean {
     return command.parent === program && ["check", "pre-commit", "pre-push"].includes(command.name());
@@ -173,11 +190,12 @@ export function createCLI(root: string = projectRoot()) {
       action.getOptionValue("plain") as boolean | undefined,
       preferences["terminal.plain"] === true,
     );
+    const serverLogs = ["serve", "web-account", "web-windows-account", "web-windows-system"].includes(action.name());
     const { level, fileLevel, format, persist } = resolveDiagnosticOptions(
       cli,
       process.env,
       preferences,
-      action.name() === "serve" ? "server" : "cli",
+      serverLogs ? "server" : "cli",
     );
     configureDiagnostics({ level, format });
     process.env.WORKBENCH_LOG_LEVEL = persist ? minimumLogLevel(level, fileLevel) : level;
@@ -186,13 +204,15 @@ export function createCLI(root: string = projectRoot()) {
     if (
       persist &&
       !diagnosticSession &&
-      !commandAdmission(commandPath(action)).internal &&
+      (serverLogs || activeCommand === finalizationCommand || !commandAdmission(commandPath(action)).internal) &&
       !["completion", "help"].includes(commandPath(action).split(" ")[0] ?? "")
     )
       diagnosticSession = await startDiagnosticSession(
         fileLevel,
-        action.name() === "serve" ? LogScope.Server : LogScope.Cli,
+        serverLogs ? LogScope.Server : LogScope.Cli,
         userConfigValues(preferences),
+        // The SCM coordinator sends one-use credentials over its private stdout pipe.
+        action.name() === "web-windows-system" ? { transcript: ["stderr"] } : undefined,
       ).catch((error: unknown) => {
         diagnostic(
           LogLevel.Warn,
@@ -204,7 +224,6 @@ export function createCLI(root: string = projectRoot()) {
         );
         return undefined;
       });
-    if (diagnosticSession && action.name() === "serve") console.log(`Server logs: ${diagnosticSession.directory}`);
     recordCommand(DiagnosticOutcome.Started);
     if (
       !suppliedRoot &&
@@ -212,6 +231,11 @@ export function createCLI(root: string = projectRoot()) {
       !["workbench", "help", "update", "update-prepare"].includes(action.name())
     )
       readConfig(root);
+  });
+  program.hook("postAction", (_program, action) => {
+    const path = commandPath(action);
+    if (["rebase", "merge", "task show", "queue", "queue implemented", "queue release", "queue block"].includes(path))
+      void wakeFinalization(root);
   });
   registerProjectCommands(program);
   registerCommand(program, "registration-check", { hidden: true }).action(() => {
@@ -257,9 +281,7 @@ export function createCLI(root: string = projectRoot()) {
   registerConfigurationCommands(program, root);
   registerCommand(program, "secrets [path]")
     .description("Check project source files for recognized credentials")
-    .action((path?: string) => {
-      checkSecrets(resolve(path ?? root));
-    });
+    .action((path?: string) => checkSecrets(resolve(path ?? root)));
   registerCommand(program, "advisories <language>")
     .description("Check this language root's locked dependencies against OSV (network required)")
     .action(async (language: string) => {
@@ -276,7 +298,7 @@ export function createCLI(root: string = projectRoot()) {
   registerExperimentCommands(program, root);
   registerReleaseCommands(program, root);
   registerFeedbackCommands(program, root);
-  registerServerCommands(program, root);
+  registerServerCommands(program, root, () => diagnosticSession?.directory);
   const review = registerCommand(program, "review")
     .description("Review protected records or record agent change and task review")
     .option("--commit <revision>", "Review protected files in one retained commit")
@@ -289,12 +311,6 @@ export function createCLI(root: string = projectRoot()) {
       checkRecordRetention(resolve(repository));
       checkReview(resolve(repository));
       checkAgentCommit(resolve(repository), process.env.WORKBENCH_REVIEW_TREE);
-    });
-  registerCommand(program, "update")
-    .description("Prepare and validate an executable-pin update; collection updates are separate")
-    .argument("<revision>", "Full Git commit for the executable; collection updates are separate")
-    .action((revision?: string) => {
-      return updateWorkbench(root, revision);
     });
   registerCommand(program, "update-prepare", { hidden: true }).action(async () => {
     if (!process.env.WORKBENCH_UPDATE_PREPARATION || realpathSync(process.env.WORKBENCH_UPDATE_PREPARATION) !== root)
@@ -323,6 +339,7 @@ export function createCLI(root: string = projectRoot()) {
     .action((requested?: string) => validate(requested ? resolve(requested) : root));
   registerEnvironmentInternals(program, root);
   registerDevelopmentCommands(program, root);
+  registerArtifactCommands(program, root);
   registerToolCommands(program, root);
   registerToolInternals(program, root);
   registerCheckCommands(program, root);
@@ -391,8 +408,8 @@ export function createCLI(root: string = projectRoot()) {
       showFullHelp = false;
     }
   }
-  function sync(): number {
-    return synchronize(root);
+  function sync(report?: (message: string) => void): number {
+    return synchronize(root, true, report);
   }
   // Inspection and reconciliation remain available while compatibility review is stale.
   program.hook("preAction", async (_program, action) => {

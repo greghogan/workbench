@@ -157,6 +157,7 @@ export function inspectCollectionContents(
   directory: string,
   read: (name: string) => Buffer,
   expected?: CollectionIdentity,
+  readInventory?: (names: string[]) => ReadonlyMap<string, Buffer>,
 ): VerifiedCollection {
   const bytes = read(manifestPath);
   const manifest = collectionTable(
@@ -216,9 +217,11 @@ export function inspectCollectionContents(
       `${directory}: inventory must contain the collection charter, exported ADRs and map, with only their supporting files`,
     );
   const files = new Map<string, Buffer>([[manifestPath, bytes]]);
+  const inventory = readInventory?.(entries.map(([name]) => name));
   let total = 0;
   for (const [name, digest] of entries) {
-    const content = read(name);
+    const content = inventory ? inventory.get(name) : read(name);
+    if (!content) throw new InvalidInput(`${directory}: exported collection file is missing: ${name}`);
     total += content.length;
     if (total > collectionByteLimit || sha256(content) !== digest)
       throw new InvalidInput(`${directory}: exported collection content failed verification`);

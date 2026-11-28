@@ -1,3 +1,4 @@
+import { syntheticChildEnvironment } from "../../fixtures/process.mjs";
 import {
   existsSync,
   mkdirSync,
@@ -104,8 +105,8 @@ test("cancelled children drain before scratch release; ambiguous launches retain
 test("output setup failure drains the child before releasing its scratch", async () => {
   const scratch = createOwnedScratch(parent(), "coverage");
   const result = await runOwnedChild(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+    env: syntheticChildEnvironment(),
     cwd: scratch.directory,
-    env: process.env,
     signal: new AbortController().signal,
     owner: scratch.owner,
     output: () => {
@@ -122,8 +123,8 @@ test("owned streamed stdin preserves bytes and releases its source on completion
   const input = Readable.from([Buffer.from("first 🧪"), Buffer.from(" second")]);
   const chunks: Buffer[] = [];
   const outcome = await runOwnedChild(process.execPath, ["-e", "process.stdin.pipe(process.stdout)"], {
+    env: syntheticChildEnvironment(),
     cwd: scratch.directory,
-    env: process.env,
     signal: new AbortController().signal,
     owner: scratch.owner,
     input,
@@ -137,8 +138,8 @@ test("owned streamed stdin preserves bytes and releases its source on completion
   expect(input.destroyed).toBe(true);
   const failing = new PassThrough();
   const running = runOwnedChild(process.execPath, ["-e", "process.stdin.resume()"], {
+    env: syntheticChildEnvironment(),
     cwd: scratch.directory,
-    env: process.env,
     signal: new AbortController().signal,
     owner: scratch.owner,
     input: failing,
@@ -169,8 +170,8 @@ test("owned input closure finishes and reports asynchronous cleanup errors befor
     },
   });
   const outcome = await runOwnedChild(process.execPath, ["-e", "process.exit(0)"], {
+    env: syntheticChildEnvironment(),
     cwd: scratch.directory,
-    env: process.env,
     signal: new AbortController().signal,
     owner: scratch.owner,
     input,

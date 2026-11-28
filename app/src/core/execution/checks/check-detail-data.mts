@@ -1,4 +1,4 @@
-import type { FileSummary } from "./coverage-summary.mjs";
+import type { CoverageDetailMetrics } from "./coverage-summary.mjs";
 import { isRecord } from "../../runtime/values.mjs";
 
 export const checkDetailPrefix = "WORKBENCH_CHECK_DETAIL\t";
@@ -9,8 +9,8 @@ export type CheckDetail =
       kind: "coverage";
       root: string;
       revision: string;
-      current: FileSummary;
-      baseline?: FileSummary;
+      current: CoverageDetailMetrics;
+      baseline?: CoverageDetailMetrics;
       notice?: string;
     }
   | {
@@ -22,7 +22,7 @@ export type CheckDetail =
       thresholdSeconds: number;
     };
 
-function metrics(value: unknown): value is FileSummary {
+function metrics(value: unknown): value is CoverageDetailMetrics {
   return (
     isRecord(value) &&
     Object.keys(value).length > 0 &&

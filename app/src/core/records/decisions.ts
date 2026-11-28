@@ -20,6 +20,7 @@ import {
   type CollectionSelection,
 } from "../collections/collections.js";
 import type { CollectionIdentity } from "../collections/collection-schema.js";
+import { observeRecord } from "./record-observation.js";
 
 export interface DecisionScope {
   project: Project;
@@ -36,6 +37,20 @@ export interface DecisionScope {
 
 /** Read project-owned copies, never the upstream snapshot or the executable's policies. */
 export function decisionScopes(root: string, includeLocal = true, selection?: CollectionSelection): DecisionScope[] {
+  if (selection) return inspectDecisionScopes(root, includeLocal, selection);
+  return observeRecord(
+    `decisions:${String(includeLocal)}:${root}`,
+    () => inspectDecisionScopes(root, includeLocal),
+    (scopes) =>
+      scopes.reduce(
+        (size, scope) =>
+          size + 256 + scope.decisions.reduce((bytes, decision) => bytes + decision.contents.length * 2 + 256, 0),
+        0,
+      ),
+  );
+}
+
+function inspectDecisionScopes(root: string, includeLocal: boolean, selection?: CollectionSelection): DecisionScope[] {
   const scopes: DecisionScope[] = [];
   if (hasCollectionProject(root)) {
     for (const project of readProjects(root)) {

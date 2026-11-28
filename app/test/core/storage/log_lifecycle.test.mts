@@ -1,3 +1,4 @@
+import { syntheticChildEnvironment } from "../../fixtures/process.mjs";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, hostname } from "node:os";
@@ -37,7 +38,7 @@ function fixture(abandoned = false) {
   if (abandoned) {
     const path = join(directory, ".workbench-log-run.json"),
       value = JSON.parse(readFileSync(path, "utf8")) as { owner: { pid: number; host: string } };
-    const exited = spawnSync(process.execPath, ["-e", ""], { encoding: "utf8" });
+    const exited = spawnSync(process.execPath, ["-e", ""], { env: syntheticChildEnvironment(), encoding: "utf8" });
     if (exited.status !== 0) throw new Error("fixture process did not exit");
     value.owner = { pid: exited.pid, host: hostname() };
     writeFileSync(path, JSON.stringify(value));
@@ -59,7 +60,15 @@ test("retention planning preserves protected runs without mutating the inventory
     { directory: "active", completed: 1, bytes: 50, eligible: false },
     { directory: "newest", completed: 2, bytes: 100, eligible: true },
   ];
-  expect(selectLogRetention(runs, { ...policy, maxBytes: 1 }, 3)).toEqual({ remove: ["old"], retainedBytes: 150 });
+  expect(selectLogRetention(runs, { ...policy, maxBytes: 1 }, 3)).toEqual({
+    remove: ["old"],
+    retainedBytes: 150,
+    nextScan: Infinity,
+  });
+  expect(selectLogRetention(runs, { ...policy, maxAgeDays: 1 }, 86_400_000)).toMatchObject({
+    remove: [],
+    nextScan: 86_400_001,
+  });
   expect(runs.map((run) => run.directory)).toEqual(["old", "active", "newest"]);
 });
 test("recovery refuses active owners, missing confirmation, locks and stale inspections", async () => {

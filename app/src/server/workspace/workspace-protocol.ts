@@ -1,7 +1,7 @@
 import type { DiagnosticError } from "../../core/diagnostics/diagnostics.mjs";
 import type { WorkspaceSnapshot } from "./workspace-service.js";
 export const WorkspaceRequest = { Refresh: "refresh", Fresh: "fresh", Close: "close" } as const;
-export type WorkspaceRequest = (typeof WorkspaceRequest)[keyof typeof WorkspaceRequest];
+export type WorkspaceRequest = (typeof WorkspaceRequest)[keyof typeof WorkspaceRequest] | { changed: string[] };
 export type WorkspaceResponse = (
   | { ok: true; snapshot: WorkspaceSnapshot }
   | { ok: true; unchanged: { revision: string; collectedAt: string } }

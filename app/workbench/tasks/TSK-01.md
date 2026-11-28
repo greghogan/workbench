@@ -100,27 +100,36 @@ separation before deletion.
 - [x] Add per-commit review and finalization, extending rebase and merge coordination for plan and review continuity.
 - [x] Validate planning pushes and provide unpublished-history inspection and cancel/delete/revert workflows.
 - [x] Record and display Added at metadata, preserving it across plan and task transitions.
+- [x] Show commit messages and inline file diffs from task outcomes.
 
 ## Implementation account
 
 Saving a named plan keeps its draft in the local Git repository without creating a commit. A checkpoint puts selected
 drafts together in one ordinary commit on the planning branch. Approval also commits the approved version when that
-branch is configured. Workbench stops a checkpoint if the branch or a draft changes during preparation, or if the
-planning checkout has uncommitted edits. Only the configured destination accepts planning-only pushes. Cleanup preserves
-work in progress and commits still awaiting a push.
+branch is configured. Plan reads group related refs, and unchanged settings reuse branch validation. Planning operations
+share recovery reads under the repository lock. Checkpoints and transfers recheck the affected refs before applying
+changes. Workbench stops a checkpoint if the branch or a draft changes during preparation, or if the planning checkout
+has uncommitted edits. Only the configured destination accepts planning-only pushes. Cleanup preserves work in progress
+and commits still awaiting a push.
+
+Recording agent review captures the selected tree once. The receipt preserves that version, and the commit gate compares
+it with the actual staged tree.
 
 Plans appear in order of when they were added. Approval adds a plan to the queue and saves the exact plan and supporting
 files. Reapproval keeps its place and progress. Starting work assigns a task ID and carries over the plan's approval,
-date, relationships, and files. Workbench removes the planning copy after verifying the first implementation commit. The
-browser shows readiness and progress. The CLI claims work and records verification. Canceling saves the reason, deleting
-previews the unpublished work it removes, and reverting prepares an inverse change for review. In recovery tests, an
-interrupted transfer resumed without allocating a second task ID.
+date, relationships, and files. Workbench removes the planning copy after matching it to the first implementation
+commit, including after a history rewrite. An unresolved handoff preserves its saved plan while other verified plans can
+retire. The browser shows readiness and progress. The CLI claims work and records verification. Canceling saves the
+reason, deleting previews the unpublished work it removes, and reverting prepares an inverse change for review. In
+recovery tests, an interrupted transfer resumed without allocating a second task ID.
 
-Each retained commit is reviewed against its parent. Finalizing preserves the source and authorship and keeps the old
-history recoverable. Rebase and merge can carry a document review forward from finalized history when both sides of the
-comparison still match. This works in a fresh clone without the original local receipt. Confirmed ID renumbering can
-preserve approval when the task's identity and meaning stay the same. A changed project tree still needs agent review
-and checks.
+Each retained commit is reviewed against its parent. Review batches immutable commit reads, and task ownership reuses
+the same changed paths for linear history. Staged reviews use a private copy of the active index. Receipt cleanup builds
+additional trees only when an older receipt needs them. Refs and acknowledgments are read fresh. Finalizing preserves
+the source and authorship and keeps the old history recoverable. Rebase and merge can carry a document review forward
+from finalized history when both sides of the comparison still match. This works in a fresh clone without the original
+local receipt. Confirmed ID renumbering can preserve approval when the task's identity and meaning stay the same. An
+explicitly scoped task review attests only to its selected tasks. Publication checks evidence for every associated task.
 
 Plan and task diffs compare against the saved approval and show delivery progress. Formatting preserves that approval.
 Task outcomes link to their commits, with messages and unified or side-by-side source diffs. The searchable file list
@@ -129,10 +138,15 @@ pointer. Small diffs load automatically. Large diffs load on request. Workbench 
 and reuses recent file contents and syntax highlighting. Protected record reviews use full-document comparisons,
 including diagrams.
 
+Named plan reviews display sandboxed SVG attachments from their exact Git versions. The browser suites verify plan
+decisions independently of backlog discovery and ordering.
+
 Selecting a filename scrolls the full list to that comparison. Reloading or sharing the resulting link restores the
 commit, layout, and selected file.
 
 ![Commit viewer wireframe showing the selected file in the sidebar and full diff, with a URL anchor.](../../../docs/images/commit-viewer-wireframe.svg)
+
+Plan approval checks that referenced work is still available before saving the decision.
 
 ## Implementing-agent detail
 

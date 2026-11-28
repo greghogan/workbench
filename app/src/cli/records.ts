@@ -1,4 +1,5 @@
 import { safeText } from "../core/diagnostics/diagnostic-text.mjs";
+import { writeDiagnosticText } from "../core/diagnostics/diagnostics.mjs";
 import { listCitationStatus } from "./citation-output.js";
 import { Argument, Command } from "commander";
 import { readFileSync } from "node:fs";
@@ -38,7 +39,11 @@ function scope(command: Command): Command {
   return command.option("--project <id>", "Project scope (default: scope containing the current directory)");
 }
 
-export function registerRecordCommands(program: Command, root: string, sync: () => void): void {
+export function registerRecordCommands(
+  program: Command,
+  root: string,
+  sync: (report?: (message: string) => void) => void,
+): void {
   const records = registerCommand(program, "record").description(
     "Create records with allocated IDs and canonical metadata",
   );
@@ -151,6 +156,7 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
     .addArgument(new Argument("<type>", "Record type").choices(Object.keys(recordNames)))
     .argument("<title-or-specification>", "Title, or a YAML specification for a release")
     .option("--project <id>", "Project scope (default: scope containing the current directory)")
+    .option("--json", "Print the record path for automation")
     .option("--from <path>", "Task body from a Markdown file; use - for stdin")
     .option("--parent <reference>", "Parent task ID or scoped reference (for example TSK-0 or project:TSK-0)")
     .option(
@@ -164,7 +170,14 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
       async (
         type: keyof typeof recordNames,
         title: string,
-        options: { project?: string; from?: string; parent?: string; dependsOn: string[]; protocol?: string },
+        options: {
+          project?: string;
+          from?: string;
+          parent?: string;
+          dependsOn: string[];
+          protocol?: string;
+          json?: boolean;
+        },
       ) => {
         const kind = recordNames[type];
         if (kind !== "TSK" && (options.from !== undefined || options.parent !== undefined || options.dependsOn.length))
@@ -195,8 +208,13 @@ export function registerRecordCommands(program: Command, root: string, sync: () 
             body,
           );
         }
-        reportCreatedRecord({ id: project }, kind, created);
-        sync();
+        if (options.json) {
+          sync(writeDiagnosticText);
+          console.log(JSON.stringify({ path: created }));
+        } else {
+          reportCreatedRecord({ id: project }, kind, created);
+          sync();
+        }
       },
     );
   registerCommand(program, "release").description("Inspect release profiles and prepare verified artifacts");

@@ -5,6 +5,7 @@ import { validateBranch } from "../../git/refs.js";
 import { readBoundedFile } from "../../runtime/file-reads.js";
 import { InvalidInput } from "../../runtime/input-errors.js";
 import { record } from "../../runtime/values.mjs";
+import { WeightedCache } from "../../storage/weighted-cache.js";
 import { planningPaths } from "./plan-model.js";
 
 export interface PlanningSettings {
@@ -14,14 +15,17 @@ export interface PlanningSettings {
   auto_prune: boolean;
 }
 
+const validatedSettings = new WeightedCache<PlanningSettings>(256 * 1024);
+
 /** Settings remain available to Git hooks without loading plan documents or presentation dependencies. */
 export function planningSettings(root: string): PlanningSettings {
   const path = repositoryStatePath(root, planningPaths.settings);
   if (!existsSync(path)) return { auto_prune: true };
-  const input = record(
-    parse(readBoundedFile(path, 64 * 1024, "planning settings").toString()),
-    "Invalid planning settings",
-  );
+  const text = readBoundedFile(path, 64 * 1024, "planning settings").toString();
+  const key = JSON.stringify([path, process.env.PATH, process.env.Path, text]);
+  const known = validatedSettings.get(key);
+  if (known) return { ...known };
+  const input = record(parse(text), "Invalid planning settings");
   if (Object.keys(input).some((key) => !["branch", "remote", "remote_branch", "auto_prune"].includes(key)))
     throw new InvalidInput("Unknown planning setting");
   for (const key of ["branch", "remote", "remote_branch"] as const)
@@ -36,5 +40,7 @@ export function planningSettings(root: string): PlanningSettings {
     throw new InvalidInput("Select both the planning remote and its destination branch");
   if (typeof input.branch === "string") validateBranch(root, input.branch);
   if (typeof input.remote_branch === "string") validateBranch(root, input.remote_branch);
-  return { ...input, auto_prune: input.auto_prune !== false };
+  const settings = { ...input, auto_prune: input.auto_prune !== false };
+  validatedSettings.set(key, settings, key.length * 2 + text.length * 2 + 128);
+  return { ...settings };
 }

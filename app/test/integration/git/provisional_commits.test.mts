@@ -3,19 +3,10 @@ import {
   committedReview,
   pendingCommitReviews,
 } from "../../../src/core/review/review-units.ts";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
-import { afterEach, expect, test, vi } from "vitest";
-import { consumer, distribution, git } from "../../fixtures/adoption.mjs";
-import { configureGitHooks } from "../../../src/core/projects/projects.ts";
-import {
-  AgentReviewKind,
-  proposedAgentReview,
-  recordAgentReview,
-  reviewIdentity,
-} from "../../../src/core/review/agent-review.ts";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, test, vi } from "vitest";
+import { git } from "../../fixtures/adoption.mjs";
 import {
   approveReviewFiles,
   approveCapturedReviews,
@@ -32,100 +23,17 @@ import {
   reviewedCommit,
 } from "../../../src/core/git/commit-history.ts";
 import { checkCommitReview } from "../../../src/cli/commit-workflow.ts";
+import { provisionalFixtures } from "../../fixtures/provisional-commits.mjs";
 
-const temporary: string[] = [];
-afterEach(() => {
-  vi.unstubAllEnvs();
-  for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
-});
+const { fixture, project } = provisionalFixtures();
 
-async function fixture() {
-  const state = mkdtempSync(join(tmpdir(), "workbench-provisional-state-"));
-  temporary.push(state);
-  for (const kind of ["DATA", "CONFIG", "STATE", "CACHE"]) vi.stubEnv(`WORKBENCH_${kind}_HOME`, join(state, kind));
-  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
-  const root = await consumer("demo");
-  temporary.push(root);
-  git(root, "config", "user.name", "Fixture");
-  git(root, "config", "user.email", "fixture@example.invalid");
-  const env = {
-    ...process.env,
-    PATH: join(distribution, "bin") + delimiter + (process.env.PATH ?? ""),
-    WORKBENCH_PROJECT_ROOT: root,
-  };
-  const invoke = (command: string, args: string[], input?: string) =>
-    spawnSync(command, args, { cwd: root, env, encoding: "utf8", input });
-  const cli = (...args: string[]) => invoke(process.execPath, [join(distribution, "bin/workbench.mjs"), ...args]);
-  const run = (...args: string[]) => {
-    const result = cli(...args);
-    expect(result.status, result.stdout + result.stderr).toBe(0);
-    return result.stdout;
-  };
-  const review = () => {
-    const proposed = proposedAgentReview(root, AgentReviewKind.Changes, { staged: true });
-    recordAgentReview(
-      root,
-      {
-        ...proposed,
-        summary: "Reviewed the test-owned changes",
-        verification: "Fixture checks exercise the selected source",
-      },
-      reviewIdentity(proposed),
-      true,
-    );
-  };
-  return { root, state, invoke, cli, run, review };
-}
-
-test("provisional commits retain checks and review baselines, cannot be pushed after fast-forwarding, and consolidate into a reviewed commit", async () => {
-  const f = await fixture();
-  const config = join(f.root, "workbench/config.toml");
-  writeFileSync(
-    config,
-    readFileSync(config, "utf8") +
-      '\n[review]\nchanges=true\n\n[[check]]\nname="Source quality"\nrole="lint"\ncommand=["node","quality.cjs"]\n',
-  );
-  writeFileSync(join(f.root, "source.txt"), "good");
-  writeFileSync(
-    join(f.root, "quality.cjs"),
-    "if(require('node:fs').readFileSync('source.txt','utf8')==='bad')process.exit(7);\n",
-  );
-  f.run("sync");
-  configureGitHooks(f.root, distribution);
-  git(f.root, "add", ".");
-  git(f.root, "commit", "-qm", "baseline");
-  const base = git(f.root, "rev-parse", "HEAD");
+test("provisional commits retain review baselines and stay local until reviewed publication", async () => {
+  const { f, base, path, stage } = await project();
   git(f.root, "branch", "-M", "feature");
   const remote = join(f.state, "remote.git");
   git(f.root, "init", "--bare", "--quiet", remote);
   git(f.root, "remote", "add", "origin", remote);
-  git(f.root, "push", "origin", `${base}:refs/heads/main`);
-  git(f.root, "config", "trailer.separators", "=");
-  const path = "workbench/decisions/ADR-00.md";
-  mkdirSync(join(f.root, "workbench/decisions"), { recursive: true });
-  const decision = (version: string) =>
-    `---\nsummary: Fixture decision.\n---\n\n# ADR-0: Fixture policy\n\n${version}.\n`;
-  const stage = (version: string) => {
-    writeFileSync(join(f.root, path), decision(version));
-    f.run("sync");
-    git(f.root, "add", ".");
-  };
-  stage("First draft");
-  const ordinary = f.cli("commit", "-m", "feat: record draft");
-  expect(ordinary.status).not.toBe(0);
-  expect(ordinary.stderr).toContain("human review");
-  const unreviewed = f.cli("commit", "--provisional", "-m", "feat: record draft");
-  expect(unreviewed.status).not.toBe(0);
-  expect(unreviewed.stderr).toContain("Change review is required");
-  writeFileSync(join(f.root, "source.txt"), "bad");
-  git(f.root, "add", ".");
-  f.review();
-  const failed = f.cli("commit", "--provisional", "-m", "feat: record draft");
-  expect(failed.status).not.toBe(0);
-  expect(failed.stdout + failed.stderr).toContain("Source quality");
-  expect(git(f.root, "rev-parse", "HEAD")).toBe(base);
-  writeFileSync(join(f.root, "source.txt"), "good");
-  git(f.root, "add", ".");
+  git(remote, "fetch", "--quiet", f.root, `${base}:refs/heads/main`);
   f.review();
   f.run("commit", "--provisional", "-m", "feat: record draft");
   expect(git(f.root, "log", "-1", "--format=%B")).toContain("Workbench-Provisional: true");
@@ -137,7 +45,7 @@ test("provisional commits retain checks and review baselines, cannot be pushed a
   f.review();
   const piped = f.invoke(
     process.execPath,
-    [join(distribution, "bin/workbench.mjs"), "commit", "--provisional", "--file", "-"],
+    [join(f.runtime, "bin/workbench.mjs"), "commit", "--provisional", "--file", "-"],
     "refactor: refine draft\n",
   );
   expect(piped.status, piped.stdout + piped.stderr).toBe(0);
@@ -156,7 +64,7 @@ test("provisional commits retain checks and review baselines, cannot be pushed a
   const pushed = f.invoke("git", ["push", "origin", "HEAD:main"]);
   expect(pushed.status).not.toBe(0);
   expect(pushed.stderr).toContain("provisional commits");
-  expect(git(f.root, "ls-remote", "origin", "refs/heads/main").split("\t")[0]).toBe(base);
+  expect(git(remote, "rev-parse", "refs/heads/main")).toBe(base);
   git(f.root, "reset", "--soft", base);
   const final = reviewStatus(f.root, ReviewSource.Staged);
   approveReviewFiles(

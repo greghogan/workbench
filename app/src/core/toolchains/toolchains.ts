@@ -30,22 +30,32 @@ export function packageManagerPin(directory: string): { name: string; version: s
   return { name: required(match[1], "package-manager name"), version: required(match[2], "package-manager version") };
 }
 
-function packageManager(directory: string, distribution: string): string[] {
-  packageManagerPin(directory);
-  return ["node", relative(directory, join(distribution, "bin/workbench.mjs")), "package-manager-exec", "--"];
-}
-
 /** Resolve the package-manager pin from its native authority, not copied command strings. */
-export function resolveCheckCommand(directory: string, command: string[], distribution?: string): string[] {
-  command = command.map((part) => {
+export function resolveCheckCommand(
+  directory: string,
+  command: string[],
+  distribution?: string,
+  anchorDistribution = false,
+): string[] {
+  const fromDistribution = (part: string) => {
     if (part !== "{workbench}" && !part.startsWith("{workbench}/")) return part;
     if (!distribution) throw new Error("a Workbench distribution is required to resolve {workbench}");
-    if (part === "{workbench}") return relative(directory, distribution).split(sep).join("/") || ".";
-    return `${relative(directory, distribution).split(sep).join("/") || "."}/${part.slice("{workbench}/".length)}`;
-  });
-  return command[0] === "{packageManager}"
-    ? [...packageManager(directory, distribution ?? distributionRoot(directory)), ...command.slice(1)]
-    : command;
+    const base = anchorDistribution ? distribution : relative(directory, distribution).split(sep).join("/") || ".";
+    return part === "{workbench}" ? base : `${base}/${part.slice("{workbench}/".length)}`;
+  };
+  if (command[0] === "{packageManager}") {
+    packageManagerPin(directory);
+    distribution ??= distributionRoot(directory);
+    const launcher = join(distribution, "bin/workbench.mjs");
+    return [
+      "node",
+      anchorDistribution ? launcher : relative(directory, launcher),
+      "package-manager-exec",
+      "--",
+      ...command.slice(1).map(fromDistribution),
+    ];
+  }
+  return command.map(fromDistribution);
 }
 
 /** Standalone tool pins are shared by local enforcement and CI installation. */

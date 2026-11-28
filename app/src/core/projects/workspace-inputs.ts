@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { reviewAuthorityPath } from "../review/review-authority.js";
-import { gitReferenceInputs } from "../git/refs.js";
+import { gitOperationMarkers, gitReferenceInputs } from "../git/refs.js";
 export { inputStamp } from "../runtime/file-identity.js";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -12,13 +12,14 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
   let indexPath = "";
   const names = [
     "HEAD",
-    "packed-refs",
     "shallow",
     "index",
     "config",
     "config.worktree",
     "info/exclude",
+    "info/attributes",
     "workbench/review.json",
+    ...gitOperationMarkers,
   ];
   const paths = reviewGit(root, ["rev-parse", ...names.flatMap((name) => ["--git-path", name])])
     .trimEnd()
@@ -44,7 +45,7 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
     const origin = values[index];
     if (origin?.startsWith("file:")) observe(resolve(root, origin.slice(5)));
   }
-  // Missing included files and the default global ignore file must also invalidate a capture when created.
+  // Missing included files and default global rule files also invalidate a capture when created.
   const includes = spawnSync(
     "git",
     ["-C", root, "config", "--path", "--show-origin", "--null", "--get-regexp", "^include.*\\.path$"],
@@ -76,6 +77,6 @@ export function observeGitInputs(root: string, observe: (path: string) => void):
       : join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "git/ignore"),
   );
   observe(reviewAuthorityPath(root));
-  for (const path of gitReferenceInputs(root, ["refs/heads/"])) observe(path);
+  for (const path of gitReferenceInputs(root, ["refs/heads/", "refs/remotes/"])) observe(path);
   return indexPath;
 }

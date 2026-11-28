@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import { gitBytes, GitSnapshot } from "../git/git-snapshot.js";
+import { repositoryStatePath } from "../git/repository-state.js";
 import { gitAncestor, gitRevision } from "../git/refs.js";
 import { provisionalMessage } from "../git/commit-history.js";
 import { proposedRecordTrees } from "../records/staged-records.js";
@@ -19,8 +19,7 @@ const oid = (value: unknown) => {
   return result;
 };
 function store(root: string) {
-  const common = gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).toString().trim(),
-    path = join(common, "workbench", "review-authority.json");
+  const path = repositoryStatePath(root, "review-authority.json");
   return {
     path,
     state: new BoundedState<{ version: 1; entries: HistoryAuthority[] }>(

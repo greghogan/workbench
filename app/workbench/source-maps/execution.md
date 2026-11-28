@@ -31,10 +31,14 @@
   fast regressions for its execution and CI selection.
 - `src/core/toolchains/tool-profiles.ts`: Resolves named compiler/runtime selections and the roots and platforms where
   they apply.
-- `src/core/execution/ci/ci.ts`: derives CI coverage and installation versions from configured language roots and native
-  pins.
+- `src/core/execution/ci/ci.ts`: derives CI targets and installation versions, then checks their prepared image recipes
+  against the artifact catalog.
 - `src/core/execution/ci/ci-targets.ts`: catalogs configured targets and groups shared hosted setup without dropping
   roots.
+- `src/core/execution/ci/ci-packages.ts`: plans distinct release packages and verifies them on the target host.
+
+- `src/core/execution/ci/ci-release.ts`: packages release files on each selected target and verifies complete
+  transfers before tagged publication.
 - `src/core/execution/ci/ci-runtime.ts`: selects verified compatibility runtimes independently of development pins.
 - `src/core/execution/ci/local-ci.ts`: selects Linux x64 targets and coordinates isolated jobs and combined rehearsal
   reports.
@@ -47,6 +51,15 @@
 - `src/core/storage/cache-lock.ts`: serializes cache writers, protects active check logs during pruning, and preserves
   uncertain locks.
 - `src/core/execution/checks/cpu-budget.mts`: supply language worker controls from one job allocation.
+- `src/core/execution/checks/machine-admission.ts`, `src/core/execution/checks/host-activity.ts`,
+  `test/core/execution/checks/machine_admission.test.mts`: schedule work across projects using shared limits, runnable
+  project rotation, and observed CPU and memory pressure.
+- `src/core/execution/checks/unix-jobserver-protocol.ts`, `src/core/execution/checks/unix-jobserver-client.ts`,
+  `src/server/http/unix-jobserver.ts`: authenticate local ownership, connect check execution to the installed service,
+  and retain leases until their command groups finish or recover.
+- `src/core/distribution/unix-system-authority.ts`: locate and verify protected Unix service paths.
+- `src/core/execution/checks/native-worker-tools.ts`, `src/server/http/unix-worker-pipe.ts`: bind compatible Linux
+  and macOS build commands to job-owned FIFOs backed by the shared worker pool.
 - `src/core/execution/ci/support/ci-worker-request.mts`: validate and type private worker requests.
 - `src/core/execution/ci/ci-workspace.ts`: owns snapshot isolation, workspace locking, disposable resources, and cleanup
   recovery.
@@ -101,10 +114,17 @@
   Container environments.
 - `src/core/execution/checks/check-gates.ts`: Coordinates commit, online, and combined local gates, including the
   optional connectivity probe.
+- `src/core/execution/checks/check-acquisition.ts`: Runs dependency preparation from the selected working or staged
+  snapshot with the check planner.
 - `src/core/execution/checks/check-plan.ts`: selects stages, scoped roots, setup sessions, and coverage variants.
 - `src/core/execution/checks/check-cache.ts`, `src/core/execution/checks/check-inputs.ts`,
-  `src/core/execution/checks/check-source-policy.ts`: classifies code inputs, fingerprints source/tool/environment
-  evidence, and refreshes security checks during local reuse.
+  `src/core/execution/checks/check-input-scope.ts`, `src/core/execution/checks/check-source-policy.ts`: Resolve declared
+  input groups and fingerprint source, tool, and environment evidence.
+- `src/core/execution/checks/check-cache-plan.ts`, `src/core/execution/checks/check-cache-groups.ts`,
+  `src/core/execution/checks/check-isolation.ts`, `src/core/execution/checks/check-macos-isolation.ts`,
+  `src/core/execution/checks/check-source-view.ts`,
+  `src/core/execution/checks/check-cache-store.ts`: Reuse independent check results, enforce source and offline network
+  boundaries, run required prerequisites and fresh security checks, and retain successful evidence for each group.
 - `src/core/execution/checks/check-environment.ts`: Constructs native tool environments from declared inputs, selected
   SDKs and root-specific budgets, and identifies external configuration inputs.
 - `src/core/execution/checks/check-runner.ts`, `src/core/execution/checks/check-progress.ts`: schedules independent
@@ -131,6 +151,8 @@
   the selected language definition.
 - `src/core/artifacts/offline-profiles.ts`: prepares, verifies, and explicitly publishes offline development images and
   tracks input identities in user-cache receipts.
+- `src/core/artifacts/native-archive.ts`: transfers native tool downloads and package caches, then verifies
+  restoration and installation with fresh paths and no network access.
 - `src/core/execution/ci/support/ci-image.mts`: share the authenticated native CI image recipe and platform checks.
 - `src/core/execution/environments/managed-inputs.ts`, `src/core/execution/environments/managed-input-environment.ts`,
   `src/core/execution/environments/managed-registry.ts`: Validate realized dependency sources and provide local
@@ -148,10 +170,12 @@
   shared BuildKit cache.
 - `src/core/artifacts/buildkit.ts`: Own pinned, project-scoped Docker builders, persistent BuildKit state, private
   client configuration, and verified cleanup.
-- `src/core/storage/builder-cache.ts`: Inventories Docker builder stores and revalidates ownership and active use before
-  explicit grouped volume removal.
-- `test/core/storage/builder_store_gc.test.mts`: Retain owned private-store roots and collect unreachable Nix/Guix
-  packages after successful container assembly.
+- `src/core/storage/builder-cache.ts`, `src/core/storage/managed-store-pins.ts`: Inventory shared stores and builder
+  caches, and revalidate ownership, active use, and verification evidence before cleanup.
+- `src/core/storage/managed-preparation.ts`: Records the project and managed store generation before assembly so an
+  interruption can be traced until the image catalog records its pins.
+- `test/core/storage/builder_store_gc.test.mts`: Exercise independent release of staging archives and superseded profile
+  roots, including interrupted cleanup.
 - `src/core/storage/cache-prune-progress.ts`: Reports completed cache deletions and elapsed time, animating terminal
   progress while asynchronous removal retains its ownership locks.
 - `src/core/execution/checks/check-coordination.ts`, `src/core/storage/process-lock.ts`: Serialize gates for one
@@ -178,7 +202,8 @@
 - `src/core/storage/logs/diagnostic-log.ts`, `src/core/storage/logs/log-reader.ts`,
   `test/core/storage/logs/diagnostic_log.test.mts`: Rotate server events and terminal output, read retained segments in
   order, and protect active sessions and interrupted evidence.
-- `src/core/diagnostics/terminal-transcript.ts`: Retain redacted service stdout and stderr while preserving console output.
+- `src/core/diagnostics/terminal-transcript.ts`: Retain redacted service stdout and stderr while preserving console
+  output.
 - `src/core/storage/logs/log-run.ts`, `src/core/storage/logs/log-codec.ts`, `src/core/storage/logs/log-retention.ts`:
   Define typed ownership receipts, single-pipeline codec lifetimes, complete asynchronous inventories, pure retention
   selection, and locked removal.
@@ -218,8 +243,7 @@
 - `src/core/toolchains/tool-adapters.ts`: Associate built-in tool verification probes, installation strategies,
   dependencies, and native environment contributions.
 - `src/core/execution/checks/work-admission.mts`, `test/integration/tooling/work_queue.test.mts`: Define dynamic work
-  queues with failure draining and admission leases that let processors join a future jobserver without owning its
-  transport.
+  queues with failure draining and admission leases. Coverage processing uses a local allocation within its check.
 - `src/core/configuration/runtime-parsers.mts`: Share one self-contained TOML/YAML parser runtime across copied
   managed-input helpers.
 - `test/core/artifacts/managed_image_import.test.mts`: Serialize managed archive imports and remove operation-owned

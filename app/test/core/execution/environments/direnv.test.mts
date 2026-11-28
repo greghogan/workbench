@@ -353,6 +353,23 @@ test.skipIf(!hasDirenv)("repository example hooks add the launcher directly with
   });
 });
 
+test.skipIf(process.platform === "win32")(
+  "direnv hook keeps project and personal settings with Workbench absent",
+  () => {
+    const { root, run } = fixture();
+    writeFileSync(join(root, ".envrc"), 'export PROJECT_SETTING="project"\n');
+    writeFileSync(join(root, ".envrc.local"), 'export PERSONAL_SETTING="personal"\n');
+    configureDirenv(root);
+    const result = run("bash", [
+      "-c",
+      'export PATH=; watch_file() { :; }; source_env_if_exists() { [[ ! -f "$1" ]] || source "./$1"; }; source ./.envrc; printf "%s %s\\n" "$PROJECT_SETTING" "$PERSONAL_SETTING"',
+    ]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe("project personal\n");
+    expect(result.stderr).toBe("");
+  },
+);
+
 test.skipIf(!hasDirenv)(
   "a failed Workbench export never evaluates partial output or executes the requested command",
   () => {

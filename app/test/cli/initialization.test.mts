@@ -20,6 +20,7 @@ import { checkCommit } from "../../src/core/git/commit.ts";
 import { readChecks } from "../../src/core/execution/checks/check-configuration.ts";
 import { acquisitionInputs } from "../../src/core/toolchains/maven/maven-policy.ts";
 import { mavenBootstrapPlugin } from "../../src/core/toolchains/maven/maven-bootstrap.ts";
+import { goStarterDistribution } from "../fixtures/go-starter.mjs";
 import * as fs from "node:fs";
 vi.mock("node:fs", async (original) => {
   const actual = await original<typeof import("node:fs")>();
@@ -28,8 +29,14 @@ vi.mock("node:fs", async (original) => {
 
 const distribution = resolve(import.meta.dirname, "../../..");
 // Starter and file-publication cases own no policy; collection adoption has separate end-to-end fixtures.
-const initializeProject = (root: string, options: InitOptions) => {
-  return initialize(root, { ...options, workbenchCollection: false });
+const initializeProject = async (root: string, options: InitOptions) => {
+  if (options.language !== "go" || options.adopt) return initialize(root, { ...options, workbenchCollection: false });
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", goStarterDistribution(distribution, base));
+  try {
+    await initialize(root, { ...options, workbenchCollection: false });
+  } finally {
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+  }
 };
 let base: string;
 beforeEach(() => {
@@ -73,6 +80,7 @@ test.each(["empty", "python"])(
     expect(result.stdout).toContain("Directory");
     expect(result.stdout).toContain("Next steps");
     expect(result.stdout).not.toContain("Language ID");
+    expect(existsSync(join(root, "Makefile"))).toBe(kind === "python");
     if (kind === "python") {
       expect(readFileSync(join(root, "pyproject.toml"), "utf8")).toBe(application);
       expect(readLanguageRoots(root)).toEqual([expect.objectContaining({ language: "python", path: "." })]);
@@ -101,10 +109,8 @@ test.each(["typescript", "javascript", "java", "rust", "python", "c", "cpp", "go
         .map((check) => check.role)
         .sort(),
     ).toEqual(["acquire", "build", "smoke"]);
-    const smoke = checks.find((check) => check.role === "smoke");
-    expect(checks.filter((check) => check.role === "docs").map((check) => check.command)).toContainEqual(
-      smoke?.command,
-    );
+    expect(checks.find((check) => check.role === "smoke")?.stages).toEqual([]);
+    expect(checks.find((check) => check.role === "docs")?.stages).toEqual(["commit", "ci"]);
     expect(readFileSync(join(root, "README.md"), "utf8")).toContain("```console");
     if (language === "ruby") expect(existsSync(join(root, "test/coverage_helper.rb"))).toBe(true);
     if (language === "java") {
@@ -112,10 +118,7 @@ test.each(["typescript", "javascript", "java", "rust", "python", "c", "cpp", "go
       expect(inputs.keys.size).toBeGreaterThan(0);
       expect(() => mavenBootstrapPlugin(readFileSync(join(root, "pom.xml")), inputs.config.resolver)).not.toThrow();
     }
-    if (["c", "cpp"].includes(language)) {
-      expect(readLanguageRoots(root)[0]?.compilers?.clang?.minimum).toBe("21.1.8");
-      expect(readFileSync(join(root, "README.md"), "utf8")).toContain("```console");
-    }
+    if (["c", "cpp"].includes(language)) expect(readLanguageRoots(root)[0]?.compilers?.clang?.minimum).toBe("21.1.8");
     const message = join(base, "message");
     writeFileSync(message, "Retain my existing commit conventions\n");
     expect(() => {
@@ -126,8 +129,10 @@ test.each(["typescript", "javascript", "java", "rust", "python", "c", "cpp", "go
 test("setup ignore additions compose with a root starter and a second independent language root", async () => {
   const root = join(base, "mixed");
   await initializeProject(root, { recordsOnly: true });
+  expect(existsSync(join(root, "Makefile"))).toBe(false);
   writeFileSync(join(root, ".gitignore"), "# User policy\n/private/\n");
   await initializeProject(root, { language: "typescript" });
+  expect(readFileSync(join(root, "Makefile"), "utf8")).toBe(readFileSync(join(distribution, "Makefile"), "utf8"));
   await initializeProject(root, { language: "go", root: "worker" });
   expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain("# User policy\n/private/\n");
   expect(readLanguageRoots(root).map((entry) => [entry.language, entry.path])).toEqual([

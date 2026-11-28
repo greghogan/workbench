@@ -37,6 +37,14 @@ const files = {
   ruby: ".ruby-version",
   php: ".php-version",
 };
+export const nativeToolVersionFiles = [
+  ...Object.values(files),
+  ".tool-versions",
+  ".gcc-version",
+  ".mvsc-version",
+  "rust-toolchain.toml",
+  miriToolchainFile,
+];
 
 /** Language contracts require effective native selections, independently of selector-file spelling. */
 export function assertNativeToolSelection(root: string, directory: string, selection: CompilerSelection = {}): void {

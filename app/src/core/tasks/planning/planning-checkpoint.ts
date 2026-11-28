@@ -34,7 +34,7 @@ import {
   safePlanFile,
   type PlanIdentity,
 } from "./plan-model.js";
-import { planningScopes, readPlan, savedPlanTrees, draftPlanIdentities } from "./planning-store.js";
+import { capturePlanning, planRefIdentities, planningScopes, readPlans } from "./planning-store.js";
 import { planningSettings } from "./planning-settings.js";
 
 import { oid, treeFromEntries, transaction } from "./plan-git.js";
@@ -236,14 +236,17 @@ export function checkpointPlans(
         throw new StateConflict(
           "The planning checkout has uncommitted editor changes; commit or reconcile them with Git before checkpointing CLI/browser drafts",
         );
-      const before = gitRevision(root, `refs/heads/${settings.branch}`),
-        saved = savedPlanTrees(root),
+      const captured = capturePlanning(root, settings.branch),
+        { tip: before, refs, saved } = captured,
+        drafts = planRefIdentities(refs.keys(), planningPaths.drafts),
+        draftIds = new Set(drafts.map((identity) => identity.reference)),
+        groupedPlans = readDraftGroups(root).groups.flat(),
         requested = references ?? [
           ...new Map(
             [
-              ...draftPlanIdentities(root),
-              ...draftPlanIdentities(root, planningPaths.removals),
-              ...readDraftGroups(root).groups.flat().map(parsePlanReference),
+              ...drafts,
+              ...planRefIdentities(refs.keys(), planningPaths.removals),
+              ...groupedPlans.map(parsePlanReference),
             ].map((identity) => [identity.reference, identity]),
           ).values(),
         ],
@@ -255,7 +258,7 @@ export function checkpointPlans(
           },
         ),
         removals = selected.flatMap((identity) => {
-          const tree = gitRevision(root, planRemovalRef(identity));
+          const tree = refs.get(planRemovalRef(identity));
           if (!tree) return [];
           if (saved.get(identity.reference)?.tree !== tree)
             throw new StateConflict(
@@ -264,17 +267,14 @@ export function checkpointPlans(
           return [{ reference: identity.reference, tree, identity }];
         }),
         removed = new Set(removals.map((item) => item.reference)),
-        draftIds = new Set(draftPlanIdentities(root).map((identity) => identity.reference)),
-        grouped = new Set(readDraftGroups(root).groups.flat()),
-        views = selected
-          .filter((identity) => {
-            if (removed.has(identity.reference)) return false;
-            if (saved.has(identity.reference) || draftIds.has(identity.reference)) return true;
-            if (!grouped.has(identity.reference)) throw new InvalidInput(`Plan not found: ${identity.reference}`);
-            return false;
-          })
-          .map((identity) => readPlan(root, identity, saved))
-          .filter((view) => view.draft);
+        grouped = new Set(groupedPlans),
+        present = selected.filter((identity) => {
+          if (removed.has(identity.reference)) return false;
+          if (saved.has(identity.reference) || draftIds.has(identity.reference)) return true;
+          if (!grouped.has(identity.reference)) throw new InvalidInput(`Plan not found: ${identity.reference}`);
+          return false;
+        }),
+        views = readPlans(root, present, captured).filter((view) => view.draft);
       if (new Set(requested.map((identity) => identity.reference)).size !== requested.length)
         throw new InvalidInput("Select each plan only once");
       if (!views.length && !removals.length) {

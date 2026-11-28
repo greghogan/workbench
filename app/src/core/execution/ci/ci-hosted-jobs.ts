@@ -9,6 +9,7 @@ import { acquireCIImage, restoreCIImage } from "./ci-images.js";
 import { executeHostedCISelection } from "./ci-hosted-target.js";
 import { CILifecycle, executeCI } from "./support/ci-lifecycle.mjs";
 import { targetEnvironment } from "./support/ci-contract.mjs";
+import { CIOperation } from "./support/ci-operations.mjs";
 
 import { writeAtomic } from "../../runtime/file-publication.mjs";
 import { record } from "../../runtime/values.mjs";
@@ -83,7 +84,7 @@ export async function runHostedCIJob(
     throw new Error("Native CI preparation unexpectedly contains an image");
   await executeHostedCISelection(root, job.targets, reports, {
     operation: job.operation,
-    ...(group.profile
+    ...(group.profile && job.operation !== CIOperation.Integration
       ? { profile: group.profile, image: await restoreCIImage(root, group.profile, receipt.image, destination) }
       : {}),
   });

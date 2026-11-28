@@ -23,6 +23,7 @@ export function runCommand(
   inspectTools = true,
   lockBuild = false,
   compilerSelection: CompilerSelection & { verbose?: boolean } = {},
+  execution: { output?: "stderr"; toolProbesOnly?: boolean } = {},
 ): void {
   withConfigurationSnapshot(() => {
     const execute = () => {
@@ -36,16 +37,17 @@ export function runCommand(
         inspectTools: inspectTools,
         lockBuild: lockBuild,
         compilerSelection: compilerSelection,
+        toolProbesOnly: execution.toolProbesOnly ?? false,
       });
       const run = () => {
         withCacheSizeChanges([prepared.builds?.directory, prepared.builds?.dependencies], () => {
           prepared.prepare();
-          executePreparedCommand(prepared);
+          executePreparedCommand(prepared, execution.output);
         });
       };
       const use = () => {
-        if (prepared.builds && prepared.profile && !inSelectedShell(directory, selected))
-          withCacheLockSync(prepared.builds.dependencies, run, 0);
+        if (prepared.profileDependencies && !inSelectedShell(directory, selected))
+          withCacheLockSync(prepared.profileDependencies, run, 0);
         else run();
       };
       if (prepared.builds && lockBuild) withBuildLock(prepared.builds, use);
@@ -97,8 +99,8 @@ export async function runCommandAsync(
           cancellation.checkpoint();
         });
       const use = (owner?: ProcessLock) =>
-        prepared.builds && prepared.profile && !inSelectedShell(directory, selected)
-          ? withCacheLock(prepared.builds.dependencies, () => run(owner), 0)
+        prepared.profileDependencies && !inSelectedShell(directory, selected)
+          ? withCacheLock(prepared.profileDependencies, () => run(owner), 0)
           : run(owner);
       if (prepared.builds) await withBuildUse(prepared.builds, use);
       else await use();
@@ -116,12 +118,12 @@ export async function runCommandAsync(
   });
 }
 
-function executePreparedCommand(prepared: ReturnType<typeof prepareCheckCommand>): void {
+function executePreparedCommand(prepared: ReturnType<typeof prepareCheckCommand>, output?: "stderr"): void {
   const { invocation, env, name, directory } = prepared;
   const result = spawnSync(required(invocation[0], "expected invocation[0]"), invocation.slice(1), {
     cwd: directory,
     env,
-    stdio: "inherit",
+    stdio: output === "stderr" ? ["inherit", 2, "inherit"] : "inherit",
   });
   if (result.error || result.status !== 0)
     throw new Error(`${name} failed with ${String(result.error ?? result.status)}`);

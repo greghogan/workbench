@@ -6,12 +6,12 @@ import type { WorkspaceView } from "../workspace/workspace-service.js";
 import { projectPath } from "../routes/project-paths.js";
 import { routeURL } from "../routes/locations.js";
 import { type SourceQuery, Route } from "../routes/routes.js";
-import type { TaskStatus } from "../../core/records/record-document.js";
+import type { TaskLifecycle } from "../../core/tasks/task-workflow.js";
 
 import type { PageKey } from "../workspace/view-context.js";
 
 /** Links select one declared scope; the filesystem determines ancestry, never the displayed labels. */
-export function sourceNavigation(context: WorkspaceView, active: PageKey, taskStatus?: TaskStatus): JSX.Element {
+export function sourceNavigation(context: WorkspaceView, active: PageKey, taskStatus?: TaskLifecycle): JSX.Element {
   const browsing = active !== "collections";
   const destination =
     active === "review"
@@ -20,9 +20,9 @@ export function sourceNavigation(context: WorkspaceView, active: PageKey, taskSt
         ? Route.Plans
         : active === "work"
           ? Route.Work
-          : active === "records" || recordTypes.some((type) => type === active)
+          : active !== "CHARTER" && (active === "records" || recordTypes.some((type) => type === active))
             ? Route.Records
-            : Route.Overview;
+            : Route.Charters;
   const href = (source: SourceQuery) => {
     const type = recordTypes.find((type) => type === active);
     if (destination === Route.Records)

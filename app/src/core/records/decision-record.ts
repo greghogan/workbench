@@ -1,6 +1,6 @@
 import { required } from "../runtime/invariants.js";
 import { normalizedNumber } from "./record-identity.js";
-import { readText } from "../runtime/files.js";
+import { readObservedRecordText } from "./record-observation.js";
 import { type Project } from "../projects/project-model.js";
 import { recordDocument } from "./record-document.js";
 import { resolve } from "node:path";
@@ -14,7 +14,12 @@ export interface Decision {
   instruction: string | undefined;
   contents: string;
 }
-export function readDecision(project: Project, number: string, path: string, contents = readText(path)): Decision {
+export function readDecision(
+  project: Project,
+  number: string,
+  path: string,
+  contents = readObservedRecordText(path),
+): Decision {
   const { metadata, body } = recordDocument("ADR", contents, path);
   const prefix = `# ADR-${normalizedNumber(number)}: `;
   const first = body.split(/\r?\n/, 1)[0] ?? "";

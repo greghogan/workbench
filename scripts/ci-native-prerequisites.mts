@@ -25,13 +25,17 @@ await runCIEntry("Host SDK prerequisites", async () => {
         appendFileSync(process.env.GITHUB_ENV, `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=${linker}\n`);
       }
     }
-    if (!requirements.packages.length) return;
+    const packages =
+      process.platform === "linux" && roots.length > 0 && !existsSync("/usr/bin/bwrap")
+        ? [...requirements.packages, "bubblewrap"]
+        : requirements.packages;
+    if (!packages.length) return;
     async function run(cmd: string, args: string[]) {
       await acquireCommand("Acquire host SDK prerequisite packages", cmd, args, { signal: cancellation.signal });
     }
     if (process.platform === "linux") {
       await run("sudo", ["apt-get", "update"]);
-      await run("sudo", ["apt-get", "install", "--no-install-recommends", "-y", ...requirements.packages]);
+      await run("sudo", ["apt-get", "install", "--no-install-recommends", "-y", ...packages]);
     } else if (process.platform === "darwin") {
       await run("brew", ["install", ...requirements.packages]);
       const { appendFileSync } = await import("node:fs");

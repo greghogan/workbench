@@ -1,5 +1,5 @@
 import { retainedBytes } from "../../../src/core/runtime/retained-bytes.js";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { WorkspaceCollector, WorkspaceIndex } from "../../../src/server/workspace/workspace-service.ts";
@@ -57,18 +57,25 @@ test("unchanged acquisition reuses bodies and Git state; directory changes and f
   const forced = collector.collect(true);
   expect(forced).not.toBe(first);
   expect(forced.revision).toBe(first.revision);
+  const charter = join(root, "workbench/CHARTER.md");
+  utimesSync(charter, 1, 1);
+  const touched = collector.collect();
+  expect(touched).not.toBe(forced);
+  expect(touched.revision).toBe(forced.revision);
   mkdirSync(join(root, "workbench/tasks"));
   writeFileSync(join(root, "workbench/tasks/TSK-00.md"), "# TSK-0: New work\n\nFind this body.\n");
   const added = collector.collect();
   expect(added.records.some((record) => record.id === "demo:TSK-0")).toBe(true);
   expect(added.revision).not.toBe(forced.revision);
-  mkdirSync(join(root, "workbench/tasks/TSK-00"));
+  mkdirSync(join(root, "workbench/tasks/TSK-00/nested"), { recursive: true });
   writeFileSync(join(root, "workbench/tasks/TSK-00/evidence.txt"), "first");
   const supported = collector.collect();
   expect(supported.documents.get("demo:TSK-0")?.files).toEqual([
     { path: "workbench/tasks/TSK-00/evidence.txt", size: 5 },
   ]);
-  writeFileSync(join(root, "workbench/tasks/TSK-00/next.txt"), "next");
+  writeFileSync(join(root, "workbench/tasks/TSK-00/evidence.txt"), "other");
+  expect(collector.collect().revision).not.toBe(supported.revision);
+  writeFileSync(join(root, "workbench/tasks/TSK-00/nested/next.txt"), "next");
   expect(collector.collect().documents.get("demo:TSK-0")?.files).toHaveLength(2);
 });
 test("snapshot accounting includes metadata, supporting paths, errors, maps, and shared objects", () => {
@@ -106,7 +113,7 @@ test("deleted canonical owners keep nested supporting changes in one indexed rev
   expect(group?.path).toBe(owner);
   expect(group?.pending).toBe(2);
   expect(group?.changes.map((change) => change.path)).toEqual(expect.arrayContaining([owner, note]));
-  for (const change of group?.changes ?? []) expect(index.reviews.byDigest.get(change.digest)).toBe(group);
+  for (const path of [owner, note]) expect(index.reviews.byOwner.get(index.reviewOwnerPath(path))).toBe(group);
   expect([...index.reviews.pendingPaths]).toEqual([owner]);
   expect(view.pendingReviews).toBe(1);
 });

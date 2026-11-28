@@ -5,36 +5,19 @@ import { readBoundedFile } from "../runtime/file-reads.js";
 import { userDirectory } from "../storage/storage.js";
 import { imageHash, imageDigest, type LocalImageReport } from "./image-contract.js";
 import { inspectPreparedImages, prunePreparedImages } from "./prepared-images.js";
+import { localImageReferences, preparedImageEvidence } from "./local-images.js";
 import { projectRegistrySnapshot, keptCacheAssets } from "../projects/project-registry.js";
-import { inspectBuilderCache, pruneBuilderCache } from "../storage/builder-cache.js";
+import { pruneBuilderCache } from "../storage/builder-cache.js";
+import { inspectBuildkitCache } from "./buildkit.js";
+import { inspectManagedStorePins } from "../storage/managed-store-pins.js";
 import { userConfigValues } from "../configuration/user-config.js";
 import { diagnostic, LogLevel, DiagnosticOperation, DiagnosticOutcome } from "../diagnostics/diagnostics.mjs";
-
-/** A private store may release older roots only when all configured profiles have accepted requirements. */
-export function retainedBuilderInputs(root: string, profiles: readonly string[]): string[] | undefined {
-  try {
-    const report = inspectPreparedImages(root);
-    if (report.issues.length) return undefined;
-    const accepted = acceptedProfiles(report, new Set([root]), new Set(profiles));
-    if (profiles.some((profile) => !accepted.profiles.has(profile))) return undefined;
-    const kept = keptCacheAssets();
-    return [
-      ...new Set([
-        ...accepted.inputs.values(),
-        ...report.entries.flatMap((entry) => (kept.has(entry.catalog) && entry.inputs ? [entry.inputs] : [])),
-      ]),
-    ];
-  } catch {
-    return undefined;
-  }
-}
 
 /** Current accepted profile receipts retain their images until a verified replacement is activated. */
 function acceptedProfiles(report: LocalImageReport, owners: Set<string>, selectedProfiles?: ReadonlySet<string>) {
   const required = new Set<string>();
   const builders = new Set<string>();
   const inputs = new Map<string, string>();
-  const profileNames = new Set<string>();
   let complete = true,
     found = false;
   const profiles = new Map(
@@ -72,28 +55,49 @@ function acceptedProfiles(report: LocalImageReport, owners: Set<string>, selecte
       throw new Error(`${path}: current prepared image requirements are unavailable`);
     required.add(value.image);
     inputs.set(`${entry.profile}/${value.platform}`, value.inputs);
-    profileNames.add(entry.profile);
     found = true;
-    if (value.builderCaches === undefined) complete = false;
-    else {
-      if (
-        !Array.isArray(value.builderCaches) ||
-        !value.builderCaches.every(
-          (key: unknown) => typeof key === "string" && /^(?:workbench-buildkit|guix|nix)-[a-f0-9]{24}$/.test(key),
-        )
+    if (
+      Array.isArray(value.builderCaches) &&
+      value.builderCaches.every(
+        (key: unknown) => typeof key === "string" && /^workbench-buildkit-[a-f0-9]{24}$/.test(key),
       )
-        throw new Error(`${path}: invalid builder cache requirements`);
+    ) {
       for (const key of value.builderCaches as string[]) builders.add(key);
-    }
+    } else complete = false;
   }
-  return { images: required, inputs, profiles: profileNames, builders: complete && found ? builders : undefined };
+  return { images: required, inputs, builders: complete && found ? builders : undefined };
 }
 
 // Assembly alone cannot prove that another platform's builder store has a working replacement.
 const pendingImages = (report: LocalImageReport, root: string) =>
   report.entries.some((entry) => entry.checkout === root && !entry.verified);
+const profileKey = ({ profile, platform }: { profile: string; platform?: string }) =>
+  JSON.stringify([profile, platform]);
 
-async function retireBuilderGenerations(
+function imagePruneInventory(root: string, limit: number): LocalImageReport {
+  const empty: LocalImageReport = { location: "local", entries: [], issues: [] };
+  if (limit === 0) return empty;
+  const owned = preparedImageEvidence(empty.issues, root);
+  if (empty.issues.length || owned.length <= limit) return empty;
+  let listed: ReadonlySet<string>;
+  try {
+    listed = localImageReferences();
+  } catch (error) {
+    empty.issues.push(error instanceof Error ? error.message : String(error));
+    return empty;
+  }
+  const counts = new Map<string, number>();
+  for (const { record } of owned) {
+    if (record.checkout !== root || !listed.has(record.reference)) continue;
+    const key = profileKey(record);
+    const count = (counts.get(key) ?? 0) + 1;
+    if (count > limit) return inspectPreparedImages(undefined, undefined, true, listed);
+    counts.set(key, count);
+  }
+  return empty;
+}
+
+async function retireBuildkitGenerations(
   root: string,
   report: LocalImageReport,
   definitions: (architecture?: string) => ReadonlyMap<string, string>,
@@ -127,7 +131,7 @@ async function retireBuilderGenerations(
     )
   )
     return;
-  const cache = await inspectBuilderCache(root, undefined, false);
+  const cache = await inspectBuildkitCache(root, undefined, false);
   if (cache.issues.length) throw new Error(`Builder ownership is unavailable: ${cache.issues.join("; ")}`);
   const kept = keptCacheAssets();
   const entries = cache.entries.filter(
@@ -172,7 +176,7 @@ export function supersededImages(
   const groups = new Map<string, LocalImageReport["entries"]>();
   for (const entry of report.entries) {
     if (entry.checkout !== root || !entry.platform) continue;
-    const key = JSON.stringify([entry.profile, entry.platform]);
+    const key = profileKey(entry);
     const group = groups.get(key) ?? [];
     group.push(entry);
     groups.set(key, group);
@@ -203,8 +207,10 @@ export function supersededImages(
 export async function autoPrunePreparedImages(
   root: string,
   definitions?: (architecture?: string) => ReadonlyMap<string, string>,
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
+    signal?.throwIfAborted();
     const config = userConfigValues();
     if (
       config["cache.auto_prune"] === false ||
@@ -214,13 +220,9 @@ export async function autoPrunePreparedImages(
     const projects = projectRegistrySnapshot().projects;
     if (projects.some((project) => !existsSync(join(project.path, projectPaths.projects)))) return;
     const owners = new Set([root, ...projects.map((project) => project.path)]);
-    const report = inspectPreparedImages();
-    const entries = supersededImages(
-      report,
-      root,
-      acceptedProfiles(report, owners).images,
-      config["cache.max_image_generations"] as number,
-    );
+    const limit = config["cache.max_image_generations"] as number;
+    const report = definitions ? inspectPreparedImages() : imagePruneInventory(root, limit);
+    const entries = supersededImages(report, root, acceptedProfiles(report, owners).images, limit);
     if (entries.length)
       await prunePreparedImages({ ...report, entries }, undefined, () => {
         const fresh = inspectPreparedImages();
@@ -247,9 +249,20 @@ export async function autoPrunePreparedImages(
         command: "automatic prepared image pruning",
         images: entries.length,
       });
+    signal?.throwIfAborted();
     if (definitions && userConfigValues()["cache.auto_prune"] !== false)
-      await retireBuilderGenerations(root, report, definitions);
+      await retireBuildkitGenerations(root, report, definitions);
+    if (userConfigValues()["cache.auto_prune"] !== false) {
+      const pins = await inspectManagedStorePins(root);
+      signal?.throwIfAborted();
+      const ready = pins.entries.filter((entry) => !entry.blockedBy);
+      if (pins.issues.length) throw new Error(`Managed store inspection failed: ${pins.issues.join("; ")}`);
+      await pruneBuilderCache({ ...pins, entries: ready }, undefined, () => {
+        if (userConfigValues()["cache.auto_prune"] === false) throw new Error("Automatic store cleanup was disabled");
+      });
+    }
   } catch (error) {
+    signal?.throwIfAborted();
     try {
       diagnostic(
         LogLevel.Warn,

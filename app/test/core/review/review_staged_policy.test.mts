@@ -169,6 +169,7 @@ test("commit message hooks use staged policy and configuration while preserving 
   const hook = join(fixture.root, ".githooks/commit-msg");
   mkdirSync(join(hook, ".."), { recursive: true });
   copyFileSync(join(distribution, ".githooks/commit-msg"), hook);
+  copyFileSync(join(distribution, ".githooks/verify-staged.mjs"), join(fixture.root, ".githooks/verify-staged.mjs"));
   chmodSync(hook, 0o755);
   fixture.git("config", "core.hooksPath", ".githooks");
   fixture.git("config", "core.commentChar", ";");

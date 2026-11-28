@@ -79,7 +79,8 @@ test.each([false, true])(
   async (packaged) => {
     const source = distribution(packaged),
       root = join(base, "consumer");
-    cli(root, "--yes");
+    if (packaged) cli(root, "--yes");
+    else await initializeProject(root, { recordsOnly: true, yes: true });
     const pin = readConfig(root).collections?.sources?.[0];
     expect(pin).toMatchObject({ id: "workbench", source: repository, commit: source.commit, scopes: ["."] });
     if (!pin) throw new Error("Missing initial collection");
@@ -118,7 +119,7 @@ test("preview is read-only; declining is preserved until adoption is explicitly 
   expect(readConfig(root).collections?.sources).toBeUndefined();
   await initializeProject(root, { recordsOnly: true });
   expect(readConfig(root).collections?.sources).toBeUndefined();
-  cli(root, "--workbench-collection");
+  await initializeProject(root, { recordsOnly: true, workbenchCollection: true });
   expect(readConfig(root).collections?.sources?.[0]?.id).toBe("workbench");
   const missingConfirmation = spawnSync(process.execPath, [launcher, "collection", "accept", "workbench"], {
     cwd: base,

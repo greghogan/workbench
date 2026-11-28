@@ -1,11 +1,11 @@
 import { expect, test } from "vitest";
-import { webServers, readWebPage } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage } from "../../fixtures/web.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { assetURL } from "../../../src/server/browser/asset-manifest.ts";
 const servers = webServers();
 test("versioned page assets are compressed, immutable, and revalidate their exact representation", async () => {
   const web = await servers.start(servers.project());
-  const document = parseDOM((await readWebPage(web, "/")).html).window.document;
+  const document = parseDOM((await readReconciledWebPage(web, "/")).html).window.document;
   for (const path of [
     document.querySelector('link[rel="stylesheet"]')?.getAttribute("href"),
     document.querySelector("script")?.getAttribute("src"),

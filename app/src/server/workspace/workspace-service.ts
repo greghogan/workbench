@@ -1,5 +1,7 @@
+import { withRepositoryReads } from "../../core/git/repository-reads.js";
 import { reviewTaskPaths, reviewTaskOwner, reviewTasksByPath } from "../review/task-review-groups.js";
-import { taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
+import { taskLifecycle, TaskLifecycle, taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
+import { observeTaskVerifications, treeTasks } from "../../core/tasks/task-snapshot.js";
 import { allCommitReviews, reviewRecordGroups } from "../../core/review/review-units.js";
 import { readPlanOperations } from "../../core/tasks/planning/plan-operation-store.js";
 import { workGraph } from "../../core/tasks/planning/work-plans.js";
@@ -11,14 +13,22 @@ import {
 } from "../../core/tasks/planning/planning-read-model.js";
 import { taskRecordState } from "./task-state.js";
 import { projectPaths } from "../../core/projects/project-paths.js";
-import { pendingRecordOutputs, reviewPreparationPath } from "../../core/review/review-preparation-state.js";
+import { pendingRecordOutputs } from "../../core/review/review-preparation-state.js";
+import { existingParentResolver } from "./input-watch.js";
 import type { ReviewPreparation } from "../review/review-state.js";
 import { retainedBytes } from "../../core/runtime/retained-bytes.js";
 import { workerFailure } from "../http/error-response.js";
 import { withConfigurationSnapshot } from "../../core/configuration/configuration-snapshot.js";
 import { taskImplementationPath } from "../../core/tasks/task-implementations.js";
 import { taskDecisionPath } from "../../core/tasks/task-decisions.js";
-import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
+import {
+  latestTaskReviews,
+  taskFileChanges,
+  taskPlanFiles,
+  taskReviewedVersion,
+  type TaskApprovalView,
+} from "../../core/tasks/task-approvals.js";
+import { terminalTask } from "../../core/records/record-document.js";
 import {
   policyCompatibility,
   policyCompatibilityReceipt,
@@ -34,11 +44,9 @@ import {
   TaskReadiness,
   type TaskQueue,
 } from "../../core/tasks/task-queue.js";
-import { GitSnapshot } from "../../core/git/git-snapshot.js";
-import { spawnSync } from "node:child_process";
+import { GitSnapshot, gitBytes } from "../../core/git/git-snapshot.js";
 import { inputStamp, observeGitInputs } from "../../core/projects/workspace-inputs.js";
-import { existsSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { citationDocumentSources, type CitationDocumentSource } from "../../core/citations/citations.js";
 import type { CollectionPin } from "../../core/collections/collection-schema.js";
 import {
@@ -54,6 +62,7 @@ import { MissingResource, StateConflict } from "../../core/runtime/input-errors.
 import { ProjectHierarchy, projectName } from "../../core/projects/project-hierarchy.js";
 import {
   contentDigest,
+  previewLimit,
   recordBytes,
   RecordCatalog,
   supportingFiles,
@@ -63,7 +72,6 @@ import { RecordLookup } from "../../core/records/record-lookup.js";
 import {
   reviewedBaselines,
   reviewFileContents,
-  reviewGit,
   ReviewSource,
   reviewStatus,
   presentedReviewDigest,
@@ -71,8 +79,9 @@ import {
 } from "../../core/review/review-service.js";
 import { CollectionComparisons, type CollectionComparison } from "../review/collection-comparison.js";
 import { acquireComparison, type ComparisonResult, type ReviewBaseline } from "../review/comparison-result.js";
-import { sourceDifference, type SourceDifference } from "../review/diff.js";
 import { ReviewQueue, reviewCollection, type ReviewSection } from "../review/review-queue.js";
+import { isSvg } from "../documents/document-image.js";
+import { ownedFileBytes } from "../../core/collections/collection-files.js";
 
 export interface RecordDocument {
   contents: string;
@@ -81,6 +90,11 @@ export interface RecordDocument {
   files: { path: string; size: number }[];
   reviewed: ComparisonResult;
   baseline: ReviewBaseline;
+  taskFiles?: TaskApprovalView["files"];
+  taskImages?: {
+    previous: Map<string, { digest: string; contents: string }>;
+    current: Map<string, string>;
+  };
   modeChange?: { before: string; after: string };
   citation?: { sources: CitationDocumentSource[]; error: string; failure?: ReturnType<typeof workerFailure> };
 }
@@ -115,7 +129,6 @@ export interface WorkspaceSnapshot {
   documents: Map<string, RecordDocument>;
   reviewDocuments: Map<string, ReviewDocument>;
   comparisons: Map<string, CollectionComparison>;
-  upstreamDiffs: Map<string, SourceDifference>;
   removedReviews: Map<string, ComparisonResult>;
   directories: string[];
   inputs: Map<string, string>;
@@ -383,9 +396,6 @@ export class WorkspaceView {
     if (this.selection) return collection === this.selection;
     return this.all || this.scope === this.projects[0]?.id || (!collection && this.workflowScopes.has(scope));
   }
-  get workflowTasks(): TaskRecord[] {
-    return this.index.taskGraph.tasks.filter((task) => this.includesWorkflow(task.reference.split(":")[0] ?? ""));
-  }
   get taskQueue() {
     const queue = this.index.taskQueue;
     if (!this.selection && (this.all || this.scope === this.projects[0]?.id)) return queue;
@@ -400,16 +410,29 @@ export class WorkspaceView {
       .filter((item) => item.decision === "plan")
       .map((item) => item.record)
       .sort(
+        (left, right) => (left.addedAt ?? "").localeCompare(right.addedAt ?? "") || left.id.localeCompare(right.id),
+      );
+  }
+  taskState(reference: string): TaskLifecycle | undefined {
+    const task = this.index.taskGraph.byReference.get(reference);
+    return task ? taskLifecycle(task, this.index.taskReadiness.entries.get(reference)) : undefined;
+  }
+  taskHasDelivery(reference: string): boolean {
+    return this.index.taskGraph.byReference.get(reference)?.committedDelivery === true;
+  }
+  get workflowApprovals() {
+    const started = (record: BrowserRecord) =>
+      taskStarted(this.index.taskReadiness.entries.get(record.id)) ||
+      !!this.index.taskGraph.byReference.get(record.id)?.implementation;
+    return this.taskReviews
+      .filter((item) => item.decision === "reapproval")
+      .map((item) => item.record)
+      .sort(
         (left, right) =>
-          Number(this.awaitingReapproval(right.id)) - Number(this.awaitingReapproval(left.id)) ||
+          Number(started(right)) - Number(started(left)) ||
           (left.addedAt ?? "").localeCompare(right.addedAt ?? "") ||
           left.id.localeCompare(right.id),
       );
-  }
-  awaitingReapproval(reference: string): boolean {
-    const task = this.index.taskGraph.byReference.get(reference),
-      entry = this.index.taskReadiness.entries.get(reference);
-    return !!task && taskPhase(task, entry) === TaskPhase.Plans && (taskStarted(entry) || !!task.implementation);
   }
   get workflowOutcomes() {
     const outcomes = this.taskReviews.filter((item) => item.decision === "outcome").map((item) => item.record);
@@ -418,18 +441,13 @@ export class WorkspaceView {
     return outcomes.sort((a, b) => (order.get(a.scope) ?? 0) - (order.get(b.scope) ?? 0));
   }
   get workflowWork() {
-    const entries = new Map(this.index.snapshot.tasks.queue.entries.map((entry) => [entry.reference, entry]));
-    return this.workflowTasks.filter(
-      (task) =>
-        taskPhase(task, entries.get(task.reference)) === TaskPhase.Work || this.awaitingReapproval(task.reference),
-    );
+    return this.taskQueue.entries.flatMap(({ reference }) => {
+      const task = this.index.taskGraph.byReference.get(reference);
+      return task && taskPhase(task, this.index.taskReadiness.entries.get(reference)) === TaskPhase.Work ? [task] : [];
+    });
   }
   get workCount(): number {
-    return (
-      this.workflowWork.length +
-      this.taskQueue.entries.filter((entry) => !this.index.taskGraph.byReference.has(entry.reference)).length +
-      this.experimentWorkflow.filter((item) => item.phase === "work").length
-    );
+    return this.workflowWork.length;
   }
 
   get compatibility() {
@@ -446,34 +464,19 @@ export class WorkspaceView {
       (!!this.compatibility.report.conflicts.length || this.pendingCompatibilityFindings.length > 0)
     );
   }
-  get experimentWorkflow() {
-    return this.index.snapshot.records.flatMap<{ record: BrowserRecord; phase: "work" | "outcome" }>((record) => {
-      if (record.type !== "EXP" || record.local || record.collection || !this.includesWorkflow(record.scope)) return [];
-      const document = this.index.snapshot.documents.get(record.id);
-      if (!document || document.error) return [];
-      if (experimentIsResult(record.status))
-        return this.hasPendingReview(record.path) ? [{ record, phase: "outcome" }] : [];
-      return [{ record, phase: "work" }];
-    });
-  }
   get taskReviews() {
     const prepared = this.index.snapshot.tasks;
-    const entries = new Map(prepared.queue.entries.map((entry) => [entry.reference, entry]));
-    const acceptedWithPendingDocuments = new Set(
-      [...this.index.reviewTaskOwners.values()]
-        .filter((task) => task.metadata.status === "Accepted")
-        .map((task) => task.reference),
-    );
     const tasks = (prepared.problem ? [] : this.index.taskGraph.tasks).flatMap<{
       record: BrowserRecord;
-      decision: "plan" | "outcome";
+      decision: "plan" | "reapproval" | "outcome";
     }>((task) => {
       const record = this.index.byId.get(task.reference);
-      if (!record || record.collection || record.local || !this.includesWorkflow(record.scope)) return [];
-      const phase = taskPhase(task, entries.get(task.reference));
-      if (phase === TaskPhase.Plans) return [{ record, decision: "plan" as const }];
-      if (phase === TaskPhase.Reviews || acceptedWithPendingDocuments.has(task.reference))
-        return [{ record, decision: "outcome" as const }];
+      if (!record || task.archived || record.collection || record.local || !this.includesWorkflow(record.scope))
+        return [];
+      const state = this.taskState(task.reference);
+      if (state === TaskLifecycle.Planned) return [{ record, decision: "plan" as const }];
+      if (state === TaskLifecycle.AwaitingApproval) return [{ record, decision: "reapproval" as const }];
+      if (state === TaskLifecycle.AwaitingAcceptance) return [{ record, decision: "outcome" as const }];
       return [];
     });
     return tasks;
@@ -498,7 +501,10 @@ export class WorkspaceView {
       }));
   }
   get standaloneCommitReviews() {
-    return this.commitReviews.filter((unit) => this.selection || !this.index.reviewTaskOwners.has(unit.revision));
+    const outcomes = new Set(this.workflowOutcomes.map((record) => record.id));
+    return this.commitReviews.filter(
+      (unit) => !outcomes.has(this.index.reviewTaskOwners.get(unit.revision)?.reference ?? ""),
+    );
   }
   taskDocumentReviews(reference: string) {
     return this.index.snapshot.commitReviews
@@ -520,6 +526,7 @@ export class WorkspaceView {
     return (
       this.standaloneCommitReviews.reduce((count, unit) => count + unit.groups.length, 0) +
       this.reviewQueue.length +
+      this.workflowApprovals.length +
       this.workflowOutcomes.length +
       (this.compatibilityNeedsHumanReview ? 1 : 0)
     );
@@ -552,44 +559,60 @@ export class WorkspaceView {
 export class WorkspaceCollector {
   private readonly catalog: RecordCatalog;
   private readonly comparisons = new CollectionComparisons();
-  private diffs = new Map<string, { key: string; diff: SourceDifference }>();
-  private previous: { snapshot: WorkspaceSnapshot; stamps: Map<string, string>; acquiredAt: number } | undefined;
+  private previous:
+    | {
+        snapshot: WorkspaceSnapshot;
+        stamps: Map<string, string>;
+        supportInputs: Map<string, ReadonlySet<string>>;
+        supportDigests: Map<string, string>;
+        hashes: Map<string, { algorithm: string; hash: string }>;
+        acquiredAt: number;
+      }
+    | undefined;
   private history:
     | {
         key: string;
         at: number;
         baselines: ReturnType<typeof reviewedBaselines>;
         units: WorkspaceSnapshot["commitReviews"];
+        onHead: ReadonlySet<string>;
       }
     | undefined;
   constructor(private readonly root: string) {
     this.catalog = new RecordCatalog(root);
   }
-  collect(fresh = false): WorkspaceSnapshot {
-    return withConfigurationSnapshot(() => this.acquire(fresh));
+  collect(fresh = false, changed: readonly string[] = []): WorkspaceSnapshot {
+    return withRepositoryReads(() => withConfigurationSnapshot(() => this.acquire(fresh, changed)));
   }
-  private acquire(fresh: boolean): WorkspaceSnapshot {
+  private acquire(fresh: boolean, changed: readonly string[]): WorkspaceSnapshot {
     const previous = this.previous;
+    const dirty = new Set(changed.filter((path) => previous?.stamps.has(path)));
     if (
       !fresh &&
+      !dirty.size &&
       previous &&
       Date.now() - previous.acquiredAt < 60_000 &&
       [...previous.stamps].every(([path, stamp]) => inputStamp(path) === stamp)
     )
       return previous.snapshot;
-    const paths = new Set<string>();
     const observed = new Map<string, string>();
+    const ignoreDirectories = new Set<string>();
     const observeOne = (path: string) => {
-      paths.add(path);
-      if (!observed.has(path)) observed.set(path, inputStamp(path));
+      let stamp = observed.get(path);
+      if (stamp === undefined) {
+        stamp = inputStamp(path);
+        observed.set(path, stamp);
+      }
+      return stamp;
     };
     const observe = (path: string) => {
       observeOne(path);
       for (
         let directory = dirname(path);
-        directory === this.root || directory.startsWith(this.root + sep);
+        (directory === this.root || directory.startsWith(this.root + sep)) && !ignoreDirectories.has(directory);
         directory = dirname(directory)
       ) {
+        ignoreDirectories.add(directory);
         observeOne(join(directory, ".gitignore"));
         if (directory === this.root) break;
       }
@@ -605,7 +628,6 @@ export class WorkspaceCollector {
         `Planning ${pendingPlan.operation.kind} requires recovery in ${pendingPlan.operation.checkout}; retaining the last complete workspace`,
       );
     observe(taskDecisionPath(this.root));
-    observe(reviewPreparationPath(this.root));
     const implementationPath = taskImplementationPath(this.root);
     if (implementationPath) observe(implementationPath);
     observe(join(this.root, projectPaths.config));
@@ -622,31 +644,59 @@ export class WorkspaceCollector {
       gitPaths.add(path);
     };
     const gitIndex = observeGitInputs(this.root, observeGitPath);
-    const selected = spawnSync("git", ["-C", this.root, "symbolic-ref", "--quiet", "HEAD"], { encoding: "utf8" });
-    if (selected.error || (selected.status !== 0 && selected.status !== 1))
-      throw new Error("cannot inspect the current Git branch");
-    if (selected.stdout.trim().startsWith("refs/"))
-      observeGitPath(
-        resolve(this.root, reviewGit(this.root, ["rev-parse", "--git-path", selected.stdout.trim()]).trim()),
-      );
     const projects = readProjects(this.root);
     const collections = resolveCollections(this.root);
     const git = new GitSnapshot(this.root, { staged: false });
     const committedRecords = new Set([...git.committed.keys()].map((path) => join(this.root, path)));
-    const records = this.catalog.records(collections, observe, committedRecords);
+    const oldRecords = new Map(previous?.snapshot.records.map((record) => [record.id, record]));
+    const oldDocument = (record: BrowserRecord) => {
+      const old = oldRecords.get(record.id);
+      if (
+        old?.directory !== record.directory ||
+        old.path !== record.path ||
+        old.archive?.revision !== record.archive?.revision ||
+        old.archive?.path !== record.archive?.path
+      )
+        return undefined;
+      const document = previous?.snapshot.documents.get(record.id);
+      return document?.error ? undefined : document;
+    };
+    const unchanged = (path: string) => !fresh && !dirty.has(path) && previous?.stamps.get(path) === observeOne(path);
+    const bodies = new Map<string, { contents: string; digest: string }>();
+    const captureBody = (record: BrowserRecord) => {
+      const saved = bodies.get(record.id);
+      if (saved) return saved;
+      const old = oldDocument(record);
+      const value =
+        old && !fresh && (record.archive || unchanged(join(record.directory, record.path)))
+          ? { contents: old.contents, digest: old.digest }
+          : (() => {
+              const bytes = recordBytes(record);
+              return { contents: bytes.toString("utf8"), digest: contentDigest(bytes) };
+            })();
+      bodies.set(record.id, value);
+      return value;
+    };
+    const records = this.catalog.records(
+      collections,
+      observe,
+      committedRecords,
+      (record) => captureBody(record).contents,
+    );
     const primaryReviewPaths = new Set(records.map((record) => record.path));
-    const status = reviewStatus(this.root, ReviewSource.Working, git);
+    const hashes = new Map<string, { algorithm: string; hash: string }>();
+    const status = reviewStatus(this.root, ReviewSource.Working, git, (path, algorithm, read) => {
+      observe(path);
+      const old = previous?.hashes.get(path);
+      const hash = old?.algorithm === algorithm && unchanged(path) ? old.hash : read();
+      hashes.set(path, { algorithm, hash });
+      return hash;
+    });
     const review = {
       ...status,
       changes: status.changes.map((change) => ({ ...change, digest: presentedReviewDigest(change, status.head) })),
     };
     git.prefetch([
-      ...records
-        .filter((record) => record.type === "ADR" && !record.local)
-        .flatMap((record) => {
-          const entry = git.committed.get(record.path);
-          return entry ? [entry.oid] : [];
-        }),
       ...review.changes.flatMap((change) =>
         [change.before]
           .filter((identity) => !identity.startsWith("000000:"))
@@ -655,8 +705,7 @@ export class WorkspaceCollector {
     ]);
     const documents = new Map<string, RecordDocument>(),
       reviewDocuments = new Map<string, ReviewDocument>();
-    const comparisons = new Map<string, CollectionComparison>(),
-      upstreamDiffs = new Map<string, SourceDifference>();
+    const comparisons = new Map<string, CollectionComparison>();
     const removedReviews = new Map<string, ComparisonResult>();
     let retained = 0;
     const charge = (...values: (string | null | undefined)[]) => {
@@ -674,31 +723,26 @@ export class WorkspaceCollector {
     const savedHistory =
       !fresh && this.history?.key === historyKey && Date.now() - this.history.at < 60_000 ? this.history : undefined;
     const baselines = savedHistory?.baselines ?? reviewedBaselines(this.root, head);
-    const nextDiffs = new Map<string, { key: string; diff: SourceDifference }>();
-    const cachedDiff = (id: string, key: string, read: () => SourceDifference) => {
-      const saved = nextDiffs.get(id) ?? this.diffs.get(id);
-      if (saved?.key === key) {
-        nextDiffs.set(id, saved);
-        return saved.diff;
-      }
-      const diff = read();
-      nextDiffs.set(id, { key, diff });
-      return diff;
-    };
     const baselineFor = (path: string): ReviewBaseline => {
       const saved = baselines.get(path);
       return saved
         ? { kind: "review", approvedAt: saved.approvedAt }
         : { kind: git.committed.has(path) ? "commit" : "new" };
     };
-    const compareCurrent = (path: string, contents: string): ComparisonResult =>
-      acquireComparison(() => {
-        const before = baselines.get(path)?.contents ?? git.committedBytes(path)?.toString("utf8") ?? "";
-        return cachedDiff(`current:${path}`, contentDigest(JSON.stringify([before, contents])), () =>
-          sourceDifference(before, contents, path),
-        );
-      });
+    const recordComparisons = new Map<string, { contents: string; comparison: ComparisonResult }>();
+    const compareCurrent = (path: string, contents: string): ComparisonResult => {
+      const existing = recordComparisons.get(path);
+      if (existing?.contents === contents) return existing.comparison;
+      const comparison = acquireComparison(() => ({
+        before: baselines.get(path)?.contents ?? git.committedBytes(path)?.toString("utf8") ?? "",
+        after: contents,
+      }));
+      recordComparisons.set(path, { contents, comparison });
+      return comparison;
+    };
     const currentModes = new Map(review.changes.map((change) => [change.path, change.after.split(":")[0]]));
+    const supportInputs = new Map<string, ReadonlySet<string>>();
+    const supportDigests = new Map<string, string>();
     for (const record of records) {
       if (!record.archive) observe(join(record.directory, record.path));
       let contents = "",
@@ -708,24 +752,37 @@ export class WorkspaceCollector {
         baseline: ReviewBaseline = { kind: "new" },
         files: RecordDocument["files"] = [];
       try {
-        const bytes = recordBytes(record);
-        contents = bytes.toString("utf8");
-        digest = contentDigest(bytes);
-        files = supportingFiles(record);
-        const support = join(record.directory, record.path.replace(/\.[^.]+$/, ""));
-        if (!record.archive) observe(support);
-        for (const file of record.archive ? [] : files) {
-          const absolute = join(record.directory, file.path);
-          observe(absolute);
-          for (let directory = dirname(absolute); directory.startsWith(support); directory = dirname(directory))
-            observe(directory);
+        ({ contents, digest } = captureBody(record));
+        const old = oldDocument(record);
+        const tracked = previous?.supportInputs.get(record.id);
+        if (!fresh && old && tracked && [...tracked].every(unchanged)) {
+          files = old.files;
+          supportInputs.set(record.id, tracked);
+          for (const path of tracked) observe(path);
+        } else {
+          const tracked = new Set<string>();
+          files = supportingFiles(record, (path) => {
+            observe(path);
+            tracked.add(path);
+          });
+          supportInputs.set(record.id, tracked);
+        }
+        // The browser previews bounded files. Compare their bytes when an input stamp changes.
+        for (const file of files) {
+          if (record.archive || file.size > previewLimit) continue;
+          const path = join(record.directory, file.path);
+          const saved = unchanged(path) ? previous?.supportDigests.get(path) : undefined;
+          supportDigests.set(path, saved ?? contentDigest(ownedFileBytes(record.directory, file.path, previewLimit)));
         }
       } catch (cause) {
         error = String(cause);
       }
       if (!error && record.type === "ADR" && !record.local) {
         baseline = baselineFor(record.path);
-        reviewedComparison = compareCurrent(record.path, contents);
+        reviewedComparison =
+          baseline.kind === "commit" && !currentModes.has(record.path)
+            ? acquireComparison(() => ({ before: contents, after: contents }))
+            : compareCurrent(record.path, contents);
       }
       const beforeMode = baselines.get(record.path)?.mode ?? git.committed.get(record.path)?.mode;
       const afterMode = currentModes.get(record.path) ?? git.committed.get(record.path)?.mode;
@@ -770,15 +827,6 @@ export class WorkspaceCollector {
       if (comparison.state === "compared")
         for (const decision of comparison.decisions) {
           charge(decision.before, decision.after);
-          upstreamDiffs.set(
-            decision.id,
-            cachedDiff(
-              `upstream:${decision.id}`,
-              contentDigest(JSON.stringify([decision.before, decision.after])),
-              () => sourceDifference(decision.before ?? "", decision.after ?? "", decision.path),
-            ),
-          );
-          charge(JSON.stringify(upstreamDiffs.get(decision.id)));
           if (decision.status === "removed") {
             const path = `workbench/collections/${collection.pin.id}/${decision.path}`;
             const comparison = compareCurrent(path, "");
@@ -790,8 +838,19 @@ export class WorkspaceCollector {
     for (const change of review.changes) {
       observe(join(this.root, change.path));
       try {
-        const before = reviewFileContents(this.root, change.before, git),
-          after = workingReviewContents(this.root, change);
+        const old = !fresh ? previous?.snapshot.reviewDocuments.get(change.digest) : undefined;
+        const before =
+          old && !old.error
+            ? old.before === null
+              ? undefined
+              : Buffer.from(old.before, "base64")
+            : reviewFileContents(this.root, change.before, git);
+        const after =
+          old && !old.error
+            ? old.after === null
+              ? undefined
+              : Buffer.from(old.after, "base64")
+            : workingReviewContents(this.root, change);
         const readableMarkdown =
           primaryReviewPaths.has(change.path) &&
           change.path.endsWith(".md") &&
@@ -824,14 +883,12 @@ export class WorkspaceCollector {
         });
       }
     }
-    for (const base of localCollectionDirectories(this.root)) paths.add(join(base, "index.toml"));
     let compatibility: WorkspaceSnapshot["compatibility"];
     try {
       compatibility = { report: policyCompatibility(this.root), error: "" };
     } catch (error) {
       compatibility = { report: null, error: error instanceof Error ? error.message : String(error) };
     }
-    this.diffs = nextDiffs;
     const plans = readPlanningRecords(this.root);
     for (const plan of plans) charge(plan.contents, plan.approval?.contents);
     const tasks: WorkspaceTasks = {
@@ -854,39 +911,105 @@ export class WorkspaceCollector {
       decisionsRequired: readConfig(this.root).review?.task_approvals === true,
       queue: readTaskQueue(this.root),
     };
+    observeTaskVerifications(this.root, tasks.records, tasks.queue.entries, observe);
+    const taskReviews = tasks.problem ? undefined : latestTaskReviews(this.root);
     for (const task of tasks.records) {
-      if (!task.approval) continue;
+      charge(task.approval?.contents);
+      if (task.archived || (terminalTask.has(task.metadata.status) && !task.acceptanceNeedsReview)) continue;
       const document = documents.get(task.reference);
       if (!document) continue;
-      charge(task.approval.contents);
-      document.reviewed = acquireComparison(() =>
-        cachedDiff(
-          `plan:${task.reference}`,
-          contentDigest(JSON.stringify([task.approval?.contents, task.contents])),
-          () => sourceDifference(task.approval?.contents ?? "", task.contents, task.path),
-        ),
-      );
-      document.baseline = { kind: "review", approvedAt: task.approval.at };
+      const decision = taskReviews?.get(task.reference),
+        path = relative(this.root, task.path).replaceAll("\\", "/");
+      if (!decision) {
+        document.baseline = baselineFor(path);
+        if (document.baseline.kind !== "new") document.reviewed = compareCurrent(path, task.contents);
+        continue;
+      }
+      document.baseline = { kind: "review", approvedAt: decision.updated };
+      document.reviewed = acquireComparison(() => {
+        const prior = taskReviewedVersion(this.root, task, decision);
+        if (!prior) throw new Error("The previous task review is recorded, but its contents are unavailable.");
+        const files = taskPlanFiles(this.root, task);
+        document.taskFiles = taskFileChanges(prior.files, files);
+        const base = path.slice(0, -3) + "/";
+        const imageFiles = (files: typeof prior.files) =>
+          files.filter(({ name, contents }) => isSvg(name) && Buffer.byteLength(contents, "base64") <= previewLimit);
+        const previous = new Map(
+          imageFiles(prior.files).map(
+            ({ name, contents }) =>
+              [base + name, { digest: contentDigest(Buffer.from(contents, "base64")), contents }] as const,
+          ),
+        );
+        const current = new Map(
+          imageFiles(files).map(
+            ({ name, contents }) => [base + name, contentDigest(Buffer.from(contents, "base64"))] as const,
+          ),
+        );
+        if (previous.size || current.size) document.taskImages = { previous, current };
+        return { before: prior.contents, after: task.contents };
+      });
+      charge(JSON.stringify(document.reviewed), JSON.stringify(document.taskFiles));
+      for (const image of document.taskImages?.previous.values() ?? []) charge(image.contents);
     }
+    const onHead = new Set(savedHistory?.onHead);
     const commitReviews =
       savedHistory?.units ??
-      allCommitReviews(this.root).map((unit) => ({
-        revision: unit.revision,
-        subject: unit.message.split("\n")[0] ?? "",
-        paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
-        files: unit.changes.length,
-        taskPaths: unit.pending ? reviewTaskPaths(this.root, unit.revision, unit.parents[0]) : [],
-      }));
+      allCommitReviews(this.root, head).map((unit) => {
+        if (unit.onHead) onHead.add(unit.revision);
+        return {
+          revision: unit.revision,
+          subject: unit.message.split("\n")[0] ?? "",
+          paths: unit.changes.filter((change) => !change.approved).map((change) => change.path),
+          files: unit.changes.length,
+          taskPaths: reviewTaskPaths(this.root, unit),
+        };
+      });
+    if (head && tasks.records.length) {
+      try {
+        const retained = treeTasks(this.root, head);
+        const completeHistory =
+          gitBytes(this.root, ["rev-parse", "--is-shallow-repository"]).toString().trim() === "false";
+        const pending = new Set(commitReviews.flatMap((unit) => (onHead.has(unit.revision) ? unit.taskPaths : [])));
+        for (const task of tasks.records) {
+          const record = retained.get(task.reference);
+          if (!record) continue;
+          if (record.status === "Approved" || record.status === "Accepted") {
+            task.previouslyApproved = true;
+            task.committedDelivery = true;
+          }
+          if (
+            record.status === "Accepted" &&
+            task.metadata.status === "Accepted" &&
+            record.digest === task.digest &&
+            completeHistory &&
+            !pending.has(record.path) &&
+            (task.archived || record.outcome() === task.reviewDigest)
+          ) {
+            task.finalized = true;
+          }
+        }
+      } catch {
+        // A missing or unreadable retained version leaves the outcome accepted without confirmation of finalization.
+      }
+    }
+    const reviewPreparation = {
+      width: readConfig(this.root).markdown?.wrap_width ?? 120,
+      pendingOutputs: [...pendingRecordOutputs(this.root, observe)],
+      files: new Map(),
+    };
+    const existingParent = existingParentResolver();
+    const directories = new Set<string>([join(this.root, "workbench")]);
+    for (const path of observed.keys()) directories.add(existingParent(path));
     for (const [path, before] of observed)
       if (inputStamp(path) !== before)
         throw new StateConflict(`workspace changed during refresh (${path}); retaining the last complete snapshot`);
-    const stamps = [...paths].sort().map((path) => [path, inputStamp(path)] as const);
-    const directories = new Set<string>([join(this.root, "workbench")]);
-    for (const path of paths) {
-      let parent = dirname(path);
-      while (!existsSync(parent) && dirname(parent) !== parent) parent = dirname(parent);
-      directories.add(parent);
-    }
+    const stamps = [...observed].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const collectionViews = collections.map(({ pin, local, directory }) => ({
+      pin,
+      local,
+      directory,
+      ...(local ? { localScope: localCollectionScope(this.root, directory) } : {}),
+    }));
     const snapshot: WorkspaceSnapshot = {
       retainedSize: 0,
       commitReviews,
@@ -896,12 +1019,11 @@ export class WorkspaceCollector {
       projects,
       revision: contentDigest(
         JSON.stringify({
-          // The index invalidates discovery; only its derived visible outcomes identify the publication.
-          stamps: stamps.filter(([path]) => path !== gitIndex),
           compatibility,
           head,
           commitReviews,
           projects,
+          collections: collectionViews,
           review: review.changes.map((change) => [change.digest, change.approved]),
           records,
           documents: [...documents].map(([id, document]) => [
@@ -910,8 +1032,11 @@ export class WorkspaceCollector {
             document.error,
             document.baseline,
             document.modeChange,
+            document.taskFiles,
+            document.files,
+            document.citation,
             document.reviewed.state === "available"
-              ? ["available", contentDigest(document.reviewed.difference?.patch ?? "")]
+              ? ["available", contentDigest(document.reviewed.difference?.before ?? "")]
               : ["unavailable", document.reviewed.problem],
           ]),
           comparisons: [...comparisons].map(([id, comparison]) => [
@@ -927,37 +1052,51 @@ export class WorkspaceCollector {
                 ])
               : comparison.message,
           ]),
-          tasks: [tasks.queue, [...tasks.errors], tasks.problem, plans],
+          support: [...supportDigests],
+          tasks: [
+            tasks.queue,
+            [...tasks.errors],
+            tasks.problem,
+            tasks.decisionsRequired,
+            tasks.records.map((task) => ({
+              ...task,
+              contents: task.digest,
+              approval: task.approval && { ...task.approval, contents: contentDigest(task.approval.contents) },
+            })),
+            plans.map((plan) => ({
+              ...plan,
+              contents: plan.digest,
+              approval: plan.approval && { ...plan.approval, contents: contentDigest(plan.approval.contents) },
+            })),
+          ],
+          reviewPreparation: [reviewPreparation.width, reviewPreparation.pendingOutputs],
           removed: [...removedReviews].map(([id, comparison]) => [id, comparison]),
         }),
       ),
       collectedAt: new Date().toISOString(),
       records,
-      collections: collections.map(({ pin, local, directory }) => ({
-        pin,
-        local,
-        directory,
-        ...(local ? { localScope: localCollectionScope(this.root, directory) } : {}),
-      })),
+      collections: collectionViews,
       review,
       documents,
       reviewDocuments,
       comparisons,
-      upstreamDiffs,
       removedReviews,
       directories: [...directories],
       inputs: new Map(stamps),
-      reviewPreparation: {
-        width: readConfig(this.root).markdown?.wrap_width ?? 120,
-        pendingOutputs: [...pendingRecordOutputs(this.root)],
-        files: new Map(),
-      },
+      reviewPreparation,
     };
     snapshot.retainedSize = retainedBytes(snapshot, 64 * 1024 * 1024);
     if (snapshot.retainedSize > 64 * 1024 * 1024)
       throw new Error("workspace browser snapshot exceeds 64 MiB; use the CLI for this workspace");
-    this.history = savedHistory ?? { key: historyKey, at: Date.now(), baselines, units: commitReviews };
-    this.previous = { snapshot, stamps: new Map(stamps), acquiredAt: Date.now() };
+    this.history = savedHistory ?? { key: historyKey, at: Date.now(), baselines, units: commitReviews, onHead };
+    this.previous = {
+      snapshot,
+      stamps: snapshot.inputs,
+      supportInputs,
+      supportDigests,
+      hashes,
+      acquiredAt: Date.now(),
+    };
     return snapshot;
   }
 }

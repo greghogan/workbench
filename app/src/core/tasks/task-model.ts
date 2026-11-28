@@ -1,3 +1,5 @@
+import { withRepositoryReads } from "../git/repository-reads.js";
+import { observeRecord } from "../records/record-observation.js";
 import { taskPlanDigest } from "./task-plan.js";
 import { attachTaskDecisions, type TaskApprovalView } from "./task-approvals.js";
 import { recordInventory, readInventoryRecords } from "../records/archive-store.js";
@@ -22,6 +24,10 @@ export interface TaskRecord {
   digest: string;
   reviewDigest?: string;
   approval?: TaskApprovalView;
+  previouslyApproved?: true;
+  finalized?: true;
+  committedDelivery?: true;
+  verificationStale?: true;
   acceptanceNeedsReview?: true;
   planning?: { name: string; approved: boolean; problem?: string };
   planDigest: string;
@@ -122,22 +128,32 @@ export class TaskGraph {
 }
 
 export function readTaskGraph(root: string): TaskGraph {
-  const tasks = readProjects(root).flatMap((project) => {
-    const files = recordInventory(root, project.path, "TSK");
-    const bodies = readInventoryRecords(root, files);
-    return files.map((file) => {
-      const contents = bodies.get(file.path)?.toString("utf8");
-      if (contents === undefined) throw new MissingResource(`Missing task: ${file.path}`);
-      return {
-        ...parseTask(root, `${project.id}:TSK-${file.number}`, file.path, contents),
-        ...(file.archive ? { archived: true } : {}),
-      };
+  return observeRecord(
+    "task-graph:" + root,
+    () => inspectTaskGraph(root),
+    ({ tasks }) => tasks.reduce((size, task) => size + 1024 + task.contents.length * 2, 0),
+  );
+}
+
+function inspectTaskGraph(root: string): TaskGraph {
+  return withRepositoryReads(() => {
+    const tasks = readProjects(root).flatMap((project) => {
+      const files = recordInventory(root, project.path, "TSK");
+      const bodies = readInventoryRecords(root, files);
+      return files.map((file) => {
+        const contents = bodies.get(file.path)?.toString("utf8");
+        if (contents === undefined) throw new MissingResource(`Missing task: ${file.path}`);
+        return {
+          ...parseTask(root, `${project.id}:TSK-${file.number}`, file.path, contents),
+          ...(file.archive ? { archived: true } : {}),
+        };
+      });
     });
+    attachTaskDecisions(root, tasks);
+    const graph = new TaskGraph(tasks).validate();
+    attachTaskImplementations(root, tasks);
+    return graph;
   });
-  attachTaskDecisions(root, tasks);
-  const graph = new TaskGraph(tasks).validate();
-  attachTaskImplementations(root, tasks);
-  return graph;
 }
 export interface TaskNode {
   task: TaskRecord;

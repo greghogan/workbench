@@ -19,7 +19,7 @@ import { ProjectEdits } from "../core/projects/project-edits.js";
 import { projectName } from "../core/projects/project-hierarchy.js";
 import { defaultId } from "../core/projects/project-identity.js";
 import { registerConsumingProject } from "../core/projects/project-registration.js";
-import { configureGitHooks, gitHookNames, planProject, preflightGitHooks } from "../core/projects/projects.js";
+import { configureGitHooks, gitHookFiles, planProject, preflightGitHooks } from "../core/projects/projects.js";
 import { synchronize } from "../core/records/sync.js";
 import { detail, kinds } from "../core/records/record-identity.js";
 import { readText } from "../core/runtime/files.js";
@@ -107,7 +107,7 @@ export async function initializeProject(requested: string, options: InitOptions)
   }
   if (hasGit && options.hooks) preflightGitHooks(root, distribution);
   if (!hasGit && options.hooks) {
-    for (const name of gitHookNames) {
+    for (const name of gitHookFiles) {
       const target = edits.read(`.githooks/${name}`);
       if (target !== undefined && target !== readText(join(distribution, ".githooks", name)))
         throw new Error(`.githooks/${name} already exists; retain your hooks by omitting --hooks`);

@@ -23,7 +23,15 @@ export interface DevelopmentProfile {
   workspace: Workspace;
   container_config?: string;
   toolchain?: string;
-  offline?: { paths?: string[]; inputs: string[]; verify?: string[]; prepare?: string[]; registry?: string };
+  offline?: {
+    kind?: "toolchain";
+    paths?: string[];
+    managed_profiles?: string[];
+    inputs: string[];
+    verify?: string[];
+    prepare?: string[];
+    registry?: string;
+  };
 }
 
 export function validateToolProfiles(value: unknown, context: string): void {
@@ -136,16 +144,18 @@ export function validateDevelopmentProfiles(value: unknown, context: string): vo
       if (!profile.offline || typeof profile.offline !== "object" || Array.isArray(profile.offline))
         throw new InvalidInput(`${context}: offline must be a table`);
       const offline = profile.offline as Record<string, unknown>;
-      fields(offline, ["paths", "inputs", "verify", "prepare", "registry"], context);
-      if (offline.paths !== undefined) {
-        if (
-          !Array.isArray(offline.paths) ||
-          !offline.paths.length ||
-          new Set(offline.paths).size !== offline.paths.length
-        )
-          throw new InvalidInput(`${context}: offline.paths must select distinct roots`);
-        for (const path of offline.paths) {
-          if (typeof path !== "string") throw new InvalidInput(`${context}: offline.paths must contain strings`);
+      fields(offline, ["kind", "paths", "managed_profiles", "inputs", "verify", "prepare", "registry"], context);
+      if (offline.kind !== undefined && offline.kind !== "toolchain")
+        throw new InvalidInput(`${context}: offline.kind must be toolchain when specified`);
+      if (offline.managed_profiles !== undefined && (profile.builder === "native" || offline.kind !== "toolchain"))
+        throw new InvalidInput(`${context}: offline.managed_profiles requires a Nix or Guix toolchain image`);
+      for (const key of ["paths", "managed_profiles"] as const) {
+        const paths = offline[key];
+        if (paths === undefined) continue;
+        if (!Array.isArray(paths) || !paths.length || new Set(paths).size !== paths.length)
+          throw new InvalidInput(`${context}: offline.${key} must select distinct roots`);
+        for (const path of paths) {
+          if (typeof path !== "string") throw new InvalidInput(`${context}: offline.${key} must contain strings`);
           relativePath(path, context, true);
         }
       }

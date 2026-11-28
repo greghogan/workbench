@@ -15,8 +15,10 @@ For local execution, environment selection follows this order: explicit command,
 preference, then shared check default. Preferences cannot redefine commands, CI coverage, or generated shared context.
 Staged checks retain local selection while reading commands and definitions from the proposed tree.
 
-Provide scoped configuration editing and show effective values with their sources. Keep automation declarations
-separate. Help, completion, and local configuration inspection work without project initialization or network access.
+Provide scoped configuration editing and show effective values with their sources. Each option declares what happens
+when omitted. Show literal defaults, inheritance, automatic selection, and requirements in configuration inspection.
+Keep automation declarations separate. Help, completion, and local configuration inspection work without project
+initialization or network access.
 
 Rationale: Explicit authority and inspectable commands let personal choices vary without changing shared policy or the
 work being verified.

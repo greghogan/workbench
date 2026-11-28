@@ -77,7 +77,7 @@ export function planProject(
     }
     edits.write(configPath, editToml(configText, value));
   }
-  if (edits.read("Makefile") === undefined)
+  if (!options.recordsOnly && edits.read("Makefile") === undefined)
     edits.create("Makefile", readText(join(distributionRoot(root), "Makefile")));
   const ignore = edits.read(".gitignore") ?? "";
   if (!ignore.split(/\r?\n/).includes(".workbench-cache-operations/"))
@@ -92,6 +92,7 @@ function git(root: string, args: string[]): string {
 }
 
 export const gitHookNames = ["pre-commit", "pre-push", "commit-msg", "post-commit"] as const;
+export const gitHookFiles = [...gitHookNames, "verify-staged.mjs"] as const;
 
 export function preflightGitHooks(root: string, distribution: string): void {
   const top = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
@@ -116,7 +117,7 @@ export function preflightGitHooks(root: string, distribution: string): void {
         );
     }
   }
-  for (const name of gitHookNames) {
+  for (const name of gitHookFiles) {
     const source = ownedPath(distribution, `.githooks/${name}`);
     if (!existsSync(source)) throw new Error(`missing Workbench ${name} hook`);
     const target = ownedPath(root, `.githooks/${name}`);
@@ -142,16 +143,16 @@ export function configureGitHooks(
   if (current && current !== expected && current !== join(distribution, ".githooks")) {
     throw new Error(`core.hooksPath already points to '${current}'; integrate the Workbench hook without replacing it`);
   }
-  for (const name of gitHookNames) {
+  for (const name of gitHookFiles) {
     if (!existsSync(join(distribution, ".githooks", name))) throw new Error(`missing Workbench ${name} hook`);
   }
   if (distribution !== root) {
-    for (const name of gitHookNames) {
+    for (const name of gitHookFiles) {
       const output = join(root, ".githooks", name);
       const contents = readText(join(distribution, ".githooks", name));
       if (existsSync(output) && readText(output) !== contents)
         throw new Error(`${output}: preserve existing hook and integrate explicitly`);
-      if (!existsSync(output)) writeNew(output, contents, 0o755);
+      if (!existsSync(output)) writeNew(output, contents, name === "verify-staged.mjs" ? 0o644 : 0o755);
     }
   }
   if (!current) git(root, ["config", "--local", "core.hooksPath", expected]);

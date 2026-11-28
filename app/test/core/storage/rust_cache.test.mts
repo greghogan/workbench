@@ -10,7 +10,7 @@ import { keepCacheAsset, updateProjectRequirements } from "../../../src/core/pro
 import { inspectBuildCache, pruneBuildCache } from "../../../src/core/storage/build-cache.ts";
 import { recordResultTools } from "../../../src/core/toolchains/tool-references.ts";
 import { pruneRustCommand } from "../../../src/cli/rust-cache-command.ts";
-import { autoPrune } from "../../../src/core/storage/auto-prune.ts";
+import { autoPrune, pruneAfterGate } from "../../../src/core/storage/auto-prune.ts";
 import { runCommandAsync } from "../../../src/core/execution/checks/check-command.ts";
 import { CheckCancellation, ChecksCancelled } from "../../../src/core/execution/checks/check-cancellation.ts";
 import { waitForCondition } from "../../fixtures/coordination.mts";
@@ -18,6 +18,7 @@ import { waitForCondition } from "../../fixtures/coordination.mts";
 const fixtures: ReturnType<typeof cacheProjectFixture>[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   for (const fixture of fixtures.splice(0)) fixture.close();
 });
 const day = 86_400_000;
@@ -385,7 +386,8 @@ test("manual Rust cleanup previews fresh metadata and applies the reviewed selec
 
 test("successful registered Rust results participate in automatic pruning, with the user preference taking precedence", async () => {
   const f = fixture(),
-    old = f.artifact("1111111111111111", 20);
+    old = f.artifact("1111111111111111", 20),
+    recent = f.artifact("2222222222222222", 0);
   recordResultTools(f.reference);
   const tool = { tool: "rust", version: "1.99.1", root: ".", profile: "" };
   updateProjectRequirements(f.root, [tool], "", [tool]);
@@ -394,6 +396,13 @@ test("successful registered Rust results participate in automatic pruning, with 
   expect(await autoPrune(f.root)).toBe("skipped");
   expect(old.names.every(existsSync)).toBe(true);
   writeFileSync(join(f.base, "config/config.toml"), "[cache]\nauto_prune=true\n");
-  expect(await autoPrune(f.root)).toBe("finished");
+  expect(await pruneAfterGate(f.root)).toBe("finished");
   expect(old.names.some(existsSync)).toBe(false);
+  expect(recent.names.every(existsSync)).toBe(true);
+  expect(await pruneAfterGate(f.root)).toBe("finished");
+  expect(await pruneAfterGate(f.root)).toBe("skipped");
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + 8 * day);
+  expect(await pruneAfterGate(f.root)).toBe("finished");
+  expect(recent.names.some(existsSync)).toBe(false);
 });

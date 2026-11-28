@@ -1,7 +1,7 @@
 import { isMainScript } from "./script-entry.mjs";
 import { required, strings } from "../app/src/core/runtime/values.mjs";
 import { type ManagedProcessScope, withManagedProcesses } from "./managed-process.mjs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -9,6 +9,7 @@ import {
   validateManagedPlan,
 } from "../app/src/core/execution/environments/managed/managed-contract.mjs";
 import { managedSystem, writeGuixSystemFile } from "../app/src/core/execution/environments/managed/managed-system.mjs";
+import { exportManagedProfiles } from "../app/src/core/execution/environments/managed/profile-transfer.mjs";
 
 function link(target: string, path: string) {
   const temporary = `${path}.${randomUUID()}.partial`;
@@ -21,7 +22,11 @@ function link(target: string, path: string) {
 }
 
 /** Evaluate each group with its pinned Guix; only realized store profiles cross into final image assembly. */
-export async function prepareGuixProfiles(value: unknown, scope: ManagedProcessScope) {
+export async function prepareGuixProfiles(
+  value: unknown,
+  scope: ManagedProcessScope,
+  bootstrapManager?: { profile: string; channels: string },
+) {
   const plan = validateManagedPlan(value);
   if (plan.builder !== "guix") throw new Error("Expected Guix preparation plan");
   const groups = required(plan.guix, "Missing Guix channel groups");
@@ -37,7 +42,11 @@ export async function prepareGuixProfiles(value: unknown, scope: ManagedProcessS
     const results = await Promise.allSettled(
       groups.slice(offset, offset + plan.maxJobs).map(async (group, position: number) => {
         const index = offset + position;
-        const manager = await scope.run("guix", ["time-machine", "-C", group.channels, ...options], { capture: true });
+        const manager =
+          bootstrapManager?.channels &&
+          createHash("sha256").update(readFileSync(group.channels)).digest("hex") === bootstrapManager.channels
+            ? bootstrapManager.profile
+            : await scope.run("guix", ["time-machine", "-C", group.channels, ...options], { capture: true });
         link(manager, group.manager);
         const guix = join(group.manager, "bin/guix");
         await scope.run(guix, ["repl", bootstrap, "register-roots", group.manager]);
@@ -97,6 +106,7 @@ export async function prepareGuixProfiles(value: unknown, scope: ManagedProcessS
   writeFileSync(file, JSON.stringify(profiles));
   writeFileSync(join(plan.output, "guix-runtime"), realpathSync(runtimeProfile));
   writeFileSync(join(plan.output, "guix-manager"), realpathSync(required(groups[0], "Missing Guix group").manager));
+  if (process.env.WORKBENCH_MANAGED_PROFILE_EXPORT === "1") await exportManagedProfiles("guix", profiles, plan.output);
   return {
     ...process.env,
     GUIX_BUILD_OPTIONS: undefined,
@@ -136,7 +146,9 @@ if (isMainScript(import.meta.url)) {
     runtime: guix[0]?.runtime,
     imageRoot: join(output, "image-root"),
   });
+  const manager = process.env.WORKBENCH_GUIX_TIME_MACHINE_PROFILE;
+  const channels = process.env.WORKBENCH_GUIX_BOOTSTRAP_CHANNELS;
   await withManagedProcesses(async (scope) => {
-    await prepareGuixProfiles(plan, scope);
+    await prepareGuixProfiles(plan, scope, manager && channels ? { profile: manager, channels } : undefined);
   });
 }

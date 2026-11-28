@@ -18,7 +18,6 @@ import { WorkerGeneration } from "../workspace/worker-generation.js";
 import { reviewPreparationPage, taskReviewPreparationPage } from "../views/review-page.js";
 import { prepareReviewPage, resolveReviewPage } from "../review/review-model.js";
 import { plansPage, workPage } from "../views/workflow-pages.js";
-import { workflowRecordURL } from "../views/workflow-navigation.js";
 import { reviewsPage } from "../views/review-list.js";
 import {
   routeContracts,
@@ -39,18 +38,18 @@ import {
   settleCleanup,
 } from "../../core/diagnostics/diagnostics.mjs";
 import { WorkspaceView } from "../workspace/workspace-service.js";
-import { reviewLocation, taskReviewFiles, taskReviewLocation } from "../review/review-navigation.js";
+import { reviewLocation, taskReviewFiles, taskReviewLocation, workflowRecordURL } from "../review/review-navigation.js";
 import { randomBytes } from "node:crypto";
 import { type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, extname } from "node:path";
 import { CacheBusy } from "../../core/storage/cache-lock.js";
 import { InvalidInput, MissingResource, StateConflict } from "../../core/runtime/input-errors.js";
-import { recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
+import { contentDigest, recordBytes, supportingFiles, previewLimit } from "../../core/records/record-service.js";
 import { WebActions } from "../projects/actions.js";
 import { serveAsset } from "./asset-response.js";
 import { citationInputsCurrent } from "../documents/citation-freshness.js";
 import { CitationDocuments } from "../documents/citation-documents.js";
-import { isDocumentationSvg } from "../documents/document-image.js";
+import { isDocumentationSvg, isSvg, sendSandboxedSvg } from "../documents/document-image.js";
 import type { runCollectionWorker } from "../projects/collection-runner.js";
 import { sendDownload, sendArchivedDownload, sendGitDownload } from "./downloads.js";
 import { WebError } from "./errors.js";
@@ -60,7 +59,7 @@ import {
   collectionProposalPage,
   collectionsPage,
   newCharterPage,
-  overview,
+  chartersPage,
   recordPage,
   supportingFilePage,
   supportingDirectoryPage,
@@ -85,6 +84,7 @@ interface WebOptions {
   port?: number;
   pollInterval?: number;
   collectionRunner?: typeof runCollectionWorker;
+  authorizeListener?: (authorization: string | undefined) => boolean;
 }
 export async function startWebServer(root: string, options: WebOptions = {}) {
   const { host, port } = localEndpoint(options);
@@ -138,7 +138,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
     return Object.assign(monitor.index.select(sourceSelection(parameters)), {
       csrf,
       workflow: "workflow" in parameters,
-      requestLocation: requestLocation ?? Route.Overview,
+      requestLocation: requestLocation ?? Route.Charters,
       reviewTarget: {
         ...("id" in reviewParameters && reviewParameters.id ? { id: reviewParameters.id } : {}),
         ...("path" in reviewParameters && reviewParameters.path ? { path: reviewParameters.path } : {}),
@@ -165,7 +165,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         return;
       }
       const origin = requestOrigin(request);
-      url = new URL(request.url ?? Route.Overview, origin);
+      url = new URL(request.url ?? Route.Charters, origin);
       if (url.origin !== origin) throw new WebError(400, "request URL is outside this service");
       const decoded = decodeRequest(url.pathname, url.searchParams);
       if (!decoded) {
@@ -278,12 +278,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
               throw new WebError(404, "Documentation image not found", { cause });
             throw cause;
           }
-          response.setHeader(
-            "content-security-policy",
-            "sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
-          );
-          response.setHeader("cross-origin-resource-policy", "same-origin");
-          send(response, 200, "image/svg+xml", bytes);
+          sendSandboxedSvg(response, bytes);
           return;
         }
         if (route === Route.ReviewFile) {
@@ -301,9 +296,35 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           return;
         }
         if (route === Route.File) {
-          const record = monitor.index?.byId.get(query.id ?? ""),
+          const index = monitor.index;
+          const record = index?.byId.get(query.id ?? ""),
             path = query.path ?? "";
           if (!record) throw new WebError(404, "record not found");
+          const file = {
+            directory: record.directory,
+            path,
+            ...(record.archive ? { archive: { ...record.archive, path } } : {}),
+          };
+          if (query.image) {
+            const document = index?.snapshot.documents.get(record.id);
+            if (query.download === "1" || !isSvg(path) || !document)
+              throw new WebError(404, "supporting image not found");
+            const previous = document.taskImages?.previous.get(path);
+            if (previous?.digest === query.image) {
+              sendSandboxedSvg(response, Buffer.from(previous.contents, "base64"));
+              return;
+            }
+            if (
+              !document.files.some((entry) => entry.path === path && entry.size <= previewLimit) ||
+              (query.image !== "1" && document.taskImages?.current.get(path) !== query.image)
+            )
+              throw new WebError(404, "supporting image not found");
+            const bytes = recordBytes(file);
+            if (query.image !== "1" && contentDigest(bytes) !== query.image)
+              throw new WebError(404, "supporting image changed");
+            sendSandboxedSvg(response, bytes);
+            return;
+          }
           const files = supportingFiles(record);
           const base = record.path.slice(0, -extname(record.path).length);
           const directory =
@@ -326,15 +347,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             else sendDownload(response, record.directory, path);
             return;
           }
-          const size = files.find((file) => file.path === path)?.size ?? Infinity;
-          const bytes =
-            size <= 2 * 1024 * 1024
-              ? recordBytes({
-                  ...record,
-                  path,
-                  ...(record.archive ? { archive: { ...record.archive, path } } : {}),
-                })
-              : undefined;
+          const size = files.find((entry) => entry.path === path)?.size ?? Infinity;
+          const bytes = size <= previewLimit ? recordBytes(file) : undefined;
           send(
             response,
             200,
@@ -376,7 +390,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
         let page: string;
         switch (route) {
           case Route.TaskOperation:
-            page = taskOperationPage(selected, query);
+            page = await taskOperationPage(selected, query);
             break;
           case Route.HistoryFile: {
             const file = historyFile(root, query.commit ?? "", query.path ?? ""),
@@ -394,8 +408,8 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
           case Route.NewCharter:
             page = newCharterPage(selected, query.project ?? "");
             break;
-          case Route.Overview:
-            page = overview(selected);
+          case Route.Charters:
+            page = chartersPage(selected);
             break;
           case Route.PlanFile: {
             const filePath = query.path ?? "",
@@ -404,6 +418,14 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
               planningPaths.files + filePath,
             );
             if (!entry) throw new WebError(404, "Plan supporting file not found");
+            if (query.image !== undefined && query.download !== "1") {
+              if (!isSvg(filePath) || entry.oid !== query.image)
+                throw new WebError(404, "This version of the plan image is unavailable");
+              const bytes = readGitObjects(root, [entry.oid], previewLimit).get(entry.oid);
+              if (!bytes) throw new WebError(404, "Plan image is unavailable for preview");
+              sendSandboxedSvg(response, bytes);
+              return;
+            }
             if (
               query.download === "1" ||
               ![".md", ".markdown", ".txt", ".json", ".toml", ".yaml", ".yml"].includes(extname(filePath).toLowerCase())
@@ -421,7 +443,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
             break;
           }
           case Route.Plan:
-            page = taskReviewPreparationPage(selected, query.id ?? "", query) ?? planPage(selected, query);
+            page = planPage(selected, query);
             break;
           case Route.Plans:
             page = plansPage(selected, query);
@@ -550,7 +572,7 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       if (form.get("csrf") !== csrf) throw new WebError(403, "invalid browser review session; refresh this page");
       if (route === Route.WorkspaceRetry) {
         await monitor.retry();
-        const redirect = projectPath(Route.Overview);
+        const redirect = projectPath(Route.Charters);
         if (request.headers.accept?.includes("application/json"))
           send(response, 200, "application/json", JSON.stringify({ redirect }));
         else {
@@ -816,7 +838,21 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
       send(response, status, "text/html; charset=utf-8", requestUnavailablePage(publicMessage, recovery));
     }
   };
-  const server = createLocalServer(handle, metrics);
+  const authorizeListener = options.authorizeListener;
+  const server = createLocalServer(
+    authorizeListener
+      ? (request, response) => {
+          if (!authorizeListener(request.headers.authorization)) {
+            secureResponse(response);
+            send(response, 403, "text/plain", "This listener is private to the Workbench service.\n");
+            return;
+          }
+          Reflect.deleteProperty(request.headers, "authorization");
+          return handle(request, response);
+        }
+      : handle,
+    metrics,
+  );
   const slowClient = (response: ServerResponse): boolean => {
     if (response.writableLength <= 64 * 1024) return false;
     metrics.count("slowClientDisconnects");
@@ -884,6 +920,13 @@ export async function startWebServer(root: string, options: WebOptions = {}) {
   const address = server.address();
   if (options.listen !== false && (!address || typeof address === "string"))
     throw new Error("listener did not publish a local TCP address");
+  if (!options.demonstration) {
+    const resume = () => {
+      void actions.resumeFinalization();
+    };
+    monitor.on("change", resume);
+    resume();
+  }
   let closed: Promise<void> | undefined;
   const close = (): Promise<void> => {
     closed ??= (async () => {

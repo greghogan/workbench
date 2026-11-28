@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
@@ -7,6 +7,7 @@ import { preparedDependenciesMatch, setupDevelopment } from "../../../../scripts
 
 const temporary: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 function fixture() {
@@ -77,6 +78,51 @@ test("source snapshots reject a stale dependency provider before linking or exec
   expect(existsSync(join(target, "node_modules"))).toBe(false);
 });
 
+test("a portable bundle does not replace missing offline source dependencies", async () => {
+  vi.stubEnv("WORKBENCH_OFFLINE", "1");
+  vi.stubEnv("WORKBENCH_CHECK_INPUTS", undefined);
+  vi.stubEnv("WORKBENCH_CI_MANAGED_INPUTS", undefined);
+  vi.stubEnv("WORKBENCH_CHECK_SCOPED", undefined);
+  const { root, write } = fixture();
+  rmSync(join(root, "node_modules"), { recursive: true });
+  write("bundle/main.cjs", "");
+  await expect(setupDevelopment(root, ["--reuse-prepared"])).rejects.toThrow(/Source dependencies are not prepared/);
+  expect(existsSync(join(root, "node_modules"))).toBe(false);
+});
+
+test("prepared native CI restores its frozen graph offline through the selected distribution", async () => {
+  const { root } = fixture();
+  const { root: distribution, write } = fixture();
+  rmSync(join(root, "node_modules"), { recursive: true });
+  write("bundle/main.cjs", "");
+  write(
+    "bin/workbench.mjs",
+    `import { writeFileSync } from 'node:fs';
+writeFileSync('restore.json', JSON.stringify({ args: process.argv.slice(2), offline: process.env.WORKBENCH_OFFLINE }));`,
+  );
+  const cache = join(root, "cache");
+  mkdirSync(join(cache, "downloads/pnpm"), { recursive: true });
+  vi.stubEnv("WORKBENCH_CACHE_HOME", cache);
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+  vi.stubEnv("WORKBENCH_OFFLINE", "1");
+  await expect(setupDevelopment(root, ["--reuse-prepared"])).rejects.toThrow(
+    /Prepared source dependencies do not match the declared pins/,
+  );
+  expect(JSON.parse(readFileSync(join(root, "restore.json"), "utf8"))).toEqual({
+    args: [
+      "package-manager-exec",
+      "--",
+      "install",
+      "--frozen-lockfile",
+      "--ignore-scripts",
+      "--offline",
+      "--store-dir",
+      join(cache, "downloads/pnpm"),
+    ],
+    offline: "1",
+  });
+});
+
 test("a relocated source snapshot resolves relative store metadata at its physical provider and never installs into it", async () => {
   const { root: provider, write, manifest } = fixture();
   write(
@@ -90,7 +136,10 @@ test("a relocated source snapshot resolves relative store metadata at its physic
   rmSync(join(target, "node_modules"), { recursive: true });
   symlinkSync(join(provider, "node_modules"), join(target, "node_modules"), "junction");
   expect(preparedDependenciesMatch(target)).toBe(true);
+  await setupDevelopment(target, ["--reuse-prepared", "--verify-prepared"]);
+  expect(existsSync(join(target, "bundle"))).toBe(false);
   write("external-store/lock.yaml", "{}");
+  await expect(setupDevelopment(target, ["--verify-prepared"])).rejects.toThrow(/Prepare the locked dependencies/);
   await expect(setupDevelopment(target, ["--build-only"])).rejects.toThrow(/linked dependency provider/);
   expect(readFileSync(join(provider, "external-store/lock.yaml"), "utf8")).toBe("{}");
 });

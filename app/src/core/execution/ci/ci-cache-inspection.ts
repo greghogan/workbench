@@ -20,12 +20,18 @@ export interface CacheInspectionRequest {
   sources: string[];
 }
 
+export function classifyCICacheTarget(target: CacheInspectionRequest["target"]) {
+  return {
+    runtimeOnly: ["node", "go", "java", "ruby", "php"].includes(target.runtime ?? ""),
+    managed: !!target.environment && target.environment !== "devcontainer",
+  };
+}
+
 /** Resolve hosted cache inputs once, using the same read-only planners as installation. */
 export function inspectCICache(root: string, { target, sources }: CacheInspectionRequest) {
   const distribution = distributionRoot(root);
   const paths = target.paths ?? ["."];
-  const runtimeOnly = ["node", "go", "java", "ruby", "php"].includes(target.runtime ?? "");
-  const managed = target.environment && target.environment !== "devcontainer";
+  const { runtimeOnly, managed } = classifyCICacheTarget(target);
   const selections: { path: string; toolchain?: string }[] =
     runtimeOnly || managed ? [] : (target.selections ?? paths.map((path) => ({ path })));
   const compiler: NativeToolSelection = isCompilerFamily(target.runtime)

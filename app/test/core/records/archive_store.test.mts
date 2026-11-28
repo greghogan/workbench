@@ -90,6 +90,22 @@ test("one inventory deduplicates identical copies but refuses different content 
   }
 });
 
+test("an archived record and a Git-converted working copy share one inventory entry", () => {
+  const root = repository();
+  const body = "---\nstatus: Accepted\n---\n\n# TSK-0: Existing\n";
+  const revision = archive(root, { [task]: { body } });
+  updateProjectState(root, (state) => {
+    state.archive = { revision };
+  });
+  writeFileSync(join(root, ".gitattributes"), "*.md text eol=crlf\n");
+  mkdirSync(join(root, "workbench/tasks"));
+  writeFileSync(join(root, task), body.replaceAll("\n", "\r\n"));
+
+  const inventory = recordInventory(root, ".", "TSK");
+  expect(inventory).toHaveLength(1);
+  expect(readInventoryRecords(root, inventory).get(join(root, task))?.toString()).toBe(body);
+});
+
 test("unavailable archives and configuration removal never become empty inventories", () => {
   const root = repository();
   updateProjectState(root, (state) => {

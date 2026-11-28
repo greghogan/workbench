@@ -21,6 +21,8 @@ export class WorkspaceMonitor extends EventEmitter {
   private workerStarted = 0;
   private readonly timer: ReturnType<typeof setInterval>;
   private debounce: ReturnType<typeof setTimeout> | undefined;
+  private readonly changedPaths = new Set<string>();
+  private watchOverflow = false;
   private pending: Promise<void> | undefined;
   private queuedFresh: Promise<void> | undefined;
   private settle: { resolve: () => void; reject: (error: Error) => void } | undefined;
@@ -263,7 +265,15 @@ export class WorkspaceMonitor extends EventEmitter {
         return;
       }
       this.settle = { resolve, reject };
-      this.worker?.postMessage(fresh ? WorkspaceRequest.Fresh : WorkspaceRequest.Refresh);
+      const request =
+        fresh || this.watchOverflow
+          ? WorkspaceRequest.Fresh
+          : this.changedPaths.size
+            ? { changed: [...this.changedPaths] }
+            : WorkspaceRequest.Refresh;
+      this.changedPaths.clear();
+      this.watchOverflow = false;
+      this.worker?.postMessage(request);
     })
       .catch((error: unknown) => {
         this.metrics.count("refreshFailures");
@@ -298,6 +308,7 @@ export class WorkspaceMonitor extends EventEmitter {
           },
         );
         this.pending = undefined;
+        if (this.changedPaths.size || this.watchOverflow) this.schedule(0);
         this.emit("freshness");
       });
     this.emit("freshness");
@@ -314,7 +325,10 @@ export class WorkspaceMonitor extends EventEmitter {
     for (const directory of directories)
       if (!this.watchers.has(directory))
         try {
-          const watcher = watch(directory, () => {
+          const watcher = watch(directory, (_event, name) => {
+            if (name && this.changedPaths.size < 256 && !this.watchOverflow)
+              this.changedPaths.add(join(directory, name));
+            else if (name) this.watchOverflow = true;
             this.schedule(120);
           });
           watcher.on("error", (error) => {

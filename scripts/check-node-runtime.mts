@@ -27,7 +27,11 @@ try {
 require("node:net").Socket.prototype.connect = function () { throw new Error("startup attempted network access"); };
 `,
   );
-  const env: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: `--require ${JSON.stringify(preload)}` };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_OPTIONS: `--require ${JSON.stringify(preload)}`,
+    NODE_COMPILE_CACHE: join(temporary, "compile"),
+  };
   for (const kind of ["CACHE", "CONFIG", "DATA", "STATE"])
     env[`WORKBENCH_${kind}_HOME`] = join(temporary, kind.toLowerCase());
   for (const name of [

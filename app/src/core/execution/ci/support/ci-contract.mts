@@ -114,12 +114,17 @@ export function readCITargets(value: unknown): CITarget[] {
       architecture: string(entry.architecture, context),
       environment: string(entry.environment, context),
       phases,
-      checks: records(entry.checks, context).map((check) => ({
-        name: string(check.name, context),
-        role: string(check.role, context),
-        command: strings(check.command, context),
-        source: check.source === undefined ? undefined : string(check.source, context),
-      })),
+      checks: records(entry.checks, context).map((check) => {
+        const network = check.ciNetwork;
+        if (network !== undefined && network !== "offline" && network !== "online") throw new Error(context);
+        return {
+          name: string(check.name, context),
+          role: string(check.role, context),
+          command: strings(check.command, context),
+          source: check.source === undefined ? undefined : string(check.source, context),
+          ...(network === undefined ? {} : { ciNetwork: network }),
+        };
+      }),
     };
   });
 }

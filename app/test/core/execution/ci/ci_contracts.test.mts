@@ -49,7 +49,7 @@ test("release proofs bind exact attempts, source versions and candidate bytes be
     repository = "owner/project",
     id = "123";
   const raw = {
-    version: 1,
+    version: 2,
     run: id,
     attempt: "2",
     repository,
@@ -57,8 +57,10 @@ test("release proofs bind exact attempts, source versions and candidate bytes be
     artifact: "workbench-candidate-123-1",
     sha256: "b".repeat(64),
     release: "1.2.3",
+    zips: { "macos-arm64": "c".repeat(64), "windows-x64": "d".repeat(64) },
   };
   const proof = readReleaseProof(raw, repository, id, selected);
+  expect(Object.fromEntries(proof.zipDigests)).toEqual(raw.zips);
   const candidate = {
     version: 1 as const,
     repository,
@@ -72,7 +74,7 @@ test("release proofs bind exact attempts, source versions and candidate bytes be
     { repository: "fork/project" },
     { run: "124" },
     { artifact: "workbench-candidate-124-1" },
-    { version: 2 },
+    { version: 1 },
   ])
     expect(() => readReleaseProof({ ...raw, ...changed }, repository, id, selected)).toThrow(/another run or revision/);
   expect(() => {

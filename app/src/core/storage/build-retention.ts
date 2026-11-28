@@ -6,7 +6,7 @@ export function supersededBuilds(
   current: Set<string>,
   policy: { maxGenerations: number; maxAgeDays: number },
   now: number,
-): Set<string> {
+) {
   const groups = new Map<string, { directory: string; used: number; verified: number }[]>();
   for (const reference of references.results) {
     if (reference.kind !== "builds" && reference.kind !== "dependencies") continue;
@@ -33,6 +33,7 @@ export function supersededBuilds(
     groups.set(key, group);
   }
   const selected = new Set<string>();
+  let nextScan = Infinity;
   for (const group of groups.values()) {
     const working = group.filter((entry) => Number.isFinite(entry.verified)).sort((a, b) => b.verified - a.verified)[0];
     if (!working) continue;
@@ -51,9 +52,26 @@ export function supersededBuilds(
       )
         continue;
       const excess = policy.maxGenerations > 0 && !recent.has(entry.directory);
-      const expired = policy.maxAgeDays > 0 && now - entry.used >= policy.maxAgeDays * 86_400_000;
-      if (excess || expired) selected.add(entry.directory);
+      const deadline = policy.maxAgeDays > 0 ? entry.used + policy.maxAgeDays * 86_400_000 : Infinity;
+      if (excess || deadline <= now) selected.add(entry.directory);
+      else nextScan = Math.min(nextScan, deadline);
     }
   }
-  return selected;
+  return { selected, nextScan };
+}
+
+/** Cached successes are independently disposable. Their age does not govern retained logs or human evidence. */
+export function expiredCheckResults(references: ToolReferences, maxAgeDays: number, now: number) {
+  const selected = new Set<string>();
+  let nextScan = Infinity;
+  if (maxAgeDays > 0) {
+    for (const reference of references.results) {
+      if (reference.kind !== "checks") continue;
+      const deadline = Date.parse(reference.lastUsed ?? "") + maxAgeDays * 86_400_000;
+      if (!Number.isFinite(deadline)) continue;
+      if (deadline <= now) selected.add(reference.directory);
+      else nextScan = Math.min(nextScan, deadline);
+    }
+  }
+  return { selected, nextScan };
 }

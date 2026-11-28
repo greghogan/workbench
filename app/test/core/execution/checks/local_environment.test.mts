@@ -1,3 +1,4 @@
+import { localConfiguration } from "../../../../src/core/execution/environments/environments.ts";
 import {
   chmodSync,
   copyFileSync,
@@ -183,6 +184,7 @@ test("local selection is narrow, explicit commands override it, and setup ignore
   expect(readFileSync(join(web, "result"), "utf8")).toBe("host");
   expect(spawnSync("git", ["init", "-q"], { cwd: root }).status).toBe(0);
   expect(spawnSync("git", ["check-ignore", "workbench/local.toml"], { cwd: root }).status).toBe(0);
+  rmSync(join(web, "result"));
   for (const text of [
     '[checks]\nenvironment="none"\n',
     '[checks]\nenvironment="nix-docker"\n',
@@ -190,14 +192,12 @@ test("local selection is narrow, explicit commands override it, and setup ignore
     "[ci]\nenvironments=[]\n",
   ]) {
     local(text);
-    rmSync(join(web, "result"));
-    expect(invoke("check", "--role", "test").status).not.toBe(0);
-    expect(existsSync(join(web, "result"))).toBe(false);
-    expect(invoke("check", "--role", "test", "--environment", "native").status).not.toBe(0);
-    expect(existsSync(join(web, "result"))).toBe(false);
-    local('[checks]\nenvironment="guix"\n');
-    ok("check", "--role", "test", "--environment", "native");
+    expect(() => localConfiguration(root)).toThrow();
   }
+  expect(invoke("check", "--role", "test", "--environment", "native").status).not.toBe(0);
+  expect(existsSync(join(web, "result"))).toBe(false);
+  local('[checks]\nenvironment="guix"\n');
+  ok("check", "--role", "test", "--environment", "native");
 });
 
 test("native shell commands retain literal arguments, working files, and the selected context", () => {

@@ -1,0 +1,3 @@
+# Charter
+
+Example PHP application.

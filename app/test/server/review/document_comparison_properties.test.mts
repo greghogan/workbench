@@ -207,10 +207,8 @@ test("metadata fields share the body's allowance and preserve complete values af
   });
   const before = "---\na: several old words\nb: several old words\nc: several old words\n---\nUnchanged body.\n";
   const after = before.replaceAll("old", "new");
-  const result = prepareDocumentComparison({ before, after, patch: "" }, undefined, undefined, {
-    now: () => now,
-    milliseconds: 60,
-    maxEdits: 2048,
+  const result = prepareDocumentComparison({ before, after, patch: "" }, undefined, {
+    budget: { now: () => now, milliseconds: 60, maxEdits: 2048 },
   });
   expect(result.rows[0]?.parts).toContainEqual({ change: "removed", text: "old" });
   for (const row of result.rows.slice(1))
@@ -219,10 +217,8 @@ test("metadata fields share the body's allowance and preserve complete values af
       { change: "added", text: "several new words" },
     ]);
   expect(result.compared.changed).toBe(false);
-  const exhausted = prepareDocumentComparison({ before, after, patch: "" }, undefined, undefined, {
-    now: () => 0,
-    milliseconds: 0,
-    maxEdits: 2048,
+  const exhausted = prepareDocumentComparison({ before, after, patch: "" }, undefined, {
+    budget: { now: () => 0, milliseconds: 0, maxEdits: 2048 },
   });
   expect(exhausted.compared.changed).toBe(false);
   for (const row of exhausted.rows)

@@ -1,7 +1,19 @@
 # Python reference project
 
-This standalone project is Workbench's executable reference for Python configuration. It is not a registered Workbench
-scope and has no example charter.
+## Native build and run
+
+Install uv and use the Python version in `.python-version`. uv reads the committed lockfile before running the
+example.
+
+```sh
+uv run --locked --no-dev python -c 'from workbench_python_reference.arithmetic import count_byte; print(count_byte(b"banana", 97))'
+```
+
+The result is `3`.
+
+## Workbench workflow
+
+This project is Workbench's executable reference for Python configuration and owns its example profiles.
 
 Ruff selects all stable rules. The configuration documents the exclusions: formatter conflicts, one docstring style,
 project-owned copyright policy, and unittest conventions. Strict mypy also checks unreachable code, exhaustive matches,
@@ -33,7 +45,7 @@ system's `nix-ld` configuration.
 The gate verifies this console example (after building where required):
 
 ```console
-$ uv run --locked python -c 'from workbench_python_reference.arithmetic import count_byte; print(count_byte(b"banana", 97))'
+$ uv run --quiet --locked python -c 'from workbench_python_reference.arithmetic import count_byte; print(count_byte(b"banana", 97))'
 3
 ```
 

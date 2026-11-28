@@ -1,5 +1,18 @@
 # Ruby reference
 
+## Native build and run
+
+Use the Ruby version in `.ruby-version`. Run the CLI from source or build the gem using RubyGems:
+
+```sh
+ruby -Ilib bin/count 97 banana
+gem build workbench-ruby-reference.gemspec
+```
+
+The CLI prints `3`.
+
+## Workbench workflow
+
 A standalone Ruby gem and byte-counting executable. `.ruby-version` pins development Ruby; the gemspec declares the
 application minimum.
 RuboCop targets Ruby 3.3 syntax; Steep checks explicit RBS signatures. CI uses selected development runtimes rather than

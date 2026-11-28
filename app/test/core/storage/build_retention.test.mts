@@ -1,11 +1,11 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { supersededBuilds } from "../../../src/core/storage/build-retention.ts";
+import { expiredCheckResults, supersededBuilds } from "../../../src/core/storage/build-retention.ts";
 import { verifyBuildResults, inspectToolReferences } from "../../../src/core/toolchains/tool-references.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { inspectToolCache } from "../../../src/core/toolchains/tool-cache.ts";
-import { autoPrune } from "../../../src/core/storage/auto-prune.ts";
+import { autoPrune, pruneAfterGate } from "../../../src/core/storage/auto-prune.ts";
 import { withBuildLock } from "../../../src/core/artifacts/builds.ts";
 import { keepCacheAsset } from "../../../src/core/projects/project-registry.ts";
 import { cacheProjectFixture } from "../../fixtures/cache-project.mjs";
@@ -35,8 +35,8 @@ function evidence() {
     return directory;
   };
   const select = (current = new Set<string>(), maxGenerations = 2, maxAgeDays = 0) =>
-    supersededBuilds(references, current, { maxGenerations, maxAgeDays }, 20 * 86_400_000);
-  return { add, select };
+    supersededBuilds(references, current, { maxGenerations, maxAgeDays }, 20 * 86_400_000).selected;
+  return { add, select, references };
 }
 
 test("count retention requires a working replacement and preserves newer unverified attempts and current variants", () => {
@@ -73,6 +73,49 @@ test("superseded failed attempts do not accumulate while the working and latest 
   const failed = Array.from({ length: 8 }, (_, index) => e.add(`failed-${String(index)}`, 200 + index));
   expect(e.select()).toEqual(new Set(failed.slice(0, -1)));
   expect(e.select()).not.toContain(working);
+});
+
+test("check results expire without a replacement build and schedule the next expiry", () => {
+  const { add, references } = evidence();
+  const day = 86_400_000;
+  const old = add("old-result", 2 * day);
+  add("recent-result", 8 * day);
+  add("old-build", 2 * day);
+  for (const reference of references.results) {
+    if (reference.directory.endsWith("-result")) reference.kind = "checks";
+  }
+  expect(expiredCheckResults(references, 7, 10 * day)).toEqual({ selected: new Set([old]), nextScan: 15 * day });
+  expect(expiredCheckResults(references, 0, 10 * day)).toEqual({ selected: new Set(), nextScan: Infinity });
+});
+
+test("a successful gate skips retention until a superseded build becomes eligible by age", async () => {
+  const f = cacheProjectFixture();
+  try {
+    const tool = f.install("4.0.1");
+    const root = f.project("deadline");
+    f.working(root, tool);
+    const config = join(f.base, "config");
+    mkdirSync(config, { recursive: true });
+    writeFileSync(join(config, "config.toml"), "[cache]\nmax_generations=0\nmax_age_days=2\n");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 0, 1));
+    const old = f.result(root, tool);
+    vi.setSystemTime(Date.UTC(2026, 0, 2));
+    writeFileSync(join(root, ".tool-versions"), "# new generation\n");
+    const working = f.result(root, tool);
+    verifyBuildResults([working.directory]);
+    expect(await pruneAfterGate(root)).toBe("finished");
+    vi.setSystemTime(Date.UTC(2026, 0, 3) - 1);
+    expect(await pruneAfterGate(root)).toBe("skipped");
+    expect(existsSync(old.directory)).toBe(true);
+    vi.setSystemTime(Date.UTC(2026, 0, 3));
+    expect(await pruneAfterGate(root)).toBe("finished");
+    expect(existsSync(old.directory)).toBe(false);
+    expect(existsSync(working.directory)).toBe(true);
+    expect(await pruneAfterGate(root)).toBe("skipped");
+  } finally {
+    f.close();
+  }
 });
 
 test("real automatic pruning retires unchanged-tool generations while preserving active, kept and other-project outputs", async () => {

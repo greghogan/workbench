@@ -1,5 +1,11 @@
 import { bundleSource, lazyBundles } from "../../../src/core/distribution/bundle-artifacts.mts";
-import { bundleInputDigest, reuseBundles, bundleCacheFile } from "../../../../scripts/bundle-cache.mts";
+import {
+  bundleInputDigest,
+  reuseBundles,
+  bundleCacheFile,
+  developmentToolingReceipt,
+} from "../../../../scripts/bundle-cache.mts";
+import { buildTooling } from "../../../../scripts/build-tooling.mts";
 import { afterEach, expect, test } from "vitest";
 import {
   cpSync,
@@ -9,6 +15,8 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
   symlinkSync,
 } from "node:fs";
@@ -58,6 +66,28 @@ function fixture() {
   return root;
 }
 
+test("development setup reuses intact helpers and repairs damaged output", async () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-development-tooling-"));
+  temporary.push(root);
+  mkdirSync(join(root, "scripts"));
+  const authored = join(root, "scripts/fixture.mts");
+  const emitted = join(root, "scripts/fixture.mjs");
+  const receipt = join(root, developmentToolingReceipt);
+  const prepare = () => buildTooling({ root, operation: "prepare-development" });
+  writeFileSync(authored, "export const value: number = 42;\n");
+  await prepare();
+  const expected = readFileSync(emitted, "utf8");
+  utimesSync(receipt, new Date(0), new Date(0));
+  await prepare();
+  expect(statSync(receipt).mtimeMs).toBe(0);
+  writeFileSync(emitted, "damaged output\n");
+  await prepare();
+  expect(readFileSync(emitted, "utf8")).toBe(expected);
+  writeFileSync(authored, "export const value: number = 84;\n");
+  await prepare();
+  expect(readFileSync(emitted, "utf8")).toContain("value = 84");
+});
+
 test("bundle candidates are read-only, ordered for publication, executable, and verified by the same construction", async () => {
   const root = fixture();
   writeFileSync(join(root, "bundle/formatter.cjs"), "old loader");
@@ -97,6 +127,13 @@ test("source snapshots reuse intact bundles only for matching canonical build in
   expect(reuseBundles(root, target)).toBe(true);
   writeFileSync(join(target, "workbench/notes.md"), "Unrelated record content\n");
   expect(reuseBundles(root, target)).toBe(true);
+  writeFileSync(join(target, "app/test/only.test.mts"), "export const testFixture = true;\n");
+  expect(reuseBundles(root, target)).toBe(true);
+  const consumer = join(target, bundleSource("consumer"));
+  const originalConsumer = readFileSync(consumer, "utf8");
+  writeFileSync(consumer, "export const changedConsumer = true;\n");
+  expect(reuseBundles(root, target)).toBe(false);
+  writeFileSync(consumer, originalConsumer);
   const source = join(target, bundleSource("main"));
   writeFileSync(source, "export const value: number = 43;\n");
   expect(reuseBundles(root, target)).toBe(false);
@@ -307,7 +344,7 @@ test("a staging failure leaves active bundles untouched and removes already stag
     references: [],
     outputs: [
       { path: "bundle/main.cjs", contents: Buffer.from("replacement"), kind: "loader" },
-      { path: "blocked/payload", contents: Buffer.from("payload"), kind: "payload" },
+      { path: "blocked/payload", contents: Buffer.from("payload"), kind: "payload", compression: "brotli" },
     ],
   };
   expect(() => {
@@ -426,7 +463,7 @@ test("coverage builds use authored helpers even when emitted ESM would be invali
   mkdirSync(capture);
   const workspace = await coverageWorkspace(root, capture);
   const result = spawnSync(process.execPath, ["-e", 'console.log(require("./bundle/main.cjs").value)'], {
-    cwd: workspace,
+    cwd: workspace.root,
     encoding: "utf8",
   });
   expect(result.status, result.stderr).toBe(0);

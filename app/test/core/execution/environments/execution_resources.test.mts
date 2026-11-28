@@ -62,6 +62,7 @@ test("validated user and checkout CPU budgets bound concurrency and propagate on
   vi.stubEnv("WORKBENCH_CPUS", "1");
   expect(executionResources(root, 49).cpusPerJob).toBe(1);
   expect(cpuBudget({ WORKBENCH_CPUS: "4" })).toBe(cpus);
+  vi.stubEnv("WORKBENCH_BUILD_DIR", join(root, "build"));
   const vitestConfig = (await import("../../../../../vitest.config.mjs")).default;
   for (const budget of [1, 4, 8, 16, 64]) {
     vi.stubEnv("WORKBENCH_CPUS", String(budget));

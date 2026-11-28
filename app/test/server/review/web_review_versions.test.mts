@@ -2,7 +2,7 @@ import { parseDOM } from "../../fixtures/dom.mjs";
 import { expect, test } from "vitest";
 import { writeFileSync, readFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { webServers, readWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import {
   approvePresentedReview,
@@ -40,7 +40,7 @@ test("a displayed version can be acknowledged after disk changes; the new diff s
     "---\nsummary: Another pending decision.\n---\n\n# ADR-1: Another review\n\nReview this afterward.\n",
   );
   const web = await fixture.start(root),
-    page = await readWebPage(web, "/records/demo:ADR-0/review?layout=split");
+    page = await readReconciledWebPage(web, "/records/demo:ADR-0/review?layout=split");
   const form = {
     csrf: hiddenValue(page.html, "csrf"),
     path,
@@ -61,13 +61,13 @@ test("a displayed version can be acknowledged after disk changes; the new diff s
   expect(readFileSync(join(root, path), "utf8")).toBe(latest);
   expect(reviewStatus(root, ReviewSource.Working).changes.find((change) => change.path === path)?.approved).toBe(false);
   expect(reviewedBaselines(root).get(path)?.contents).toBe(shown);
-  const next = await readWebPage(web, location.pathname + location.search);
+  const next = await readReconciledWebPage(web, location.pathname + location.search);
   expect(next.html).toContain("Presented");
   expect(next.html).toContain("Newer");
   const unknown = await postWebForm(web, "/actions/approve", { ...form, digest: "0".repeat(64) });
   expect(unknown.status).toBe(409);
   const failure = (await unknown.json()) as { recovery: { href: string; label: string } };
-  const refreshed = parseDOM((await readWebPage(web, failure.recovery.href)).html).window.document;
+  const refreshed = parseDOM((await readReconciledWebPage(web, failure.recovery.href)).html).window.document;
   expect(refreshed.querySelector('input[name="path"]')?.getAttribute("value")).toBe(path);
   expect(refreshed.querySelector('nav[aria-label="Difference layout"] [aria-current="page"]')?.textContent).toBe(
     "Side-by-side",
@@ -116,7 +116,7 @@ test("acknowledging a displayed deletion does not approve a subsequently restore
   const root = fixture.project();
   rmSync(join(root, path));
   const web = await fixture.start(root),
-    page = await readWebPage(web, "/records/demo:ADR-0/review");
+    page = await readReconciledWebPage(web, "/records/demo:ADR-0/review");
   const restored = record("Restored after the displayed deletion.");
   writeFileSync(join(root, path), restored);
   const response = await postWebForm(web, "/actions/approve", {
@@ -138,7 +138,7 @@ test("binary supporting-file downloads and acknowledgment remain bound to their 
   mkdirSync(join(root, "workbench/decisions/ADR-00"));
   writeFileSync(join(root, support), original);
   const web = await fixture.start(root),
-    page = await readWebPage(web, "/records/demo:ADR-0/review"),
+    page = await readReconciledWebPage(web, "/records/demo:ADR-0/review"),
     digest = hiddenValue(page.html, "digest");
   writeFileSync(join(root, support), Buffer.from([0, 3, 4]));
   const download = await fetch(

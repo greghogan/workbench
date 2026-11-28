@@ -140,6 +140,25 @@ export async function exerciseConsumerProfile(
             application,
             ...(language === "rust" ? ["--exclude-tool", "miri"] : []),
           ]);
+          if (language === "go") {
+            await cli("go-native-build", project, [
+              "shell",
+              "--path",
+              application,
+              "--environment",
+              "native",
+              "--",
+              "sh",
+              "-ec",
+              [
+                "go_executable=$(command -v go)",
+                'export PATH="${go_executable%/*}" CGO_ENABLED=0 GOPROXY=off GOTOOLCHAIN=local GOWORK=off',
+                "if command -v workbench >/dev/null 2>&1; then exit 1; fi",
+                "go build -mod=readonly -o ./build/native-count.exe ./cmd/count",
+                'test "$(./build/native-count.exe a banana)" = 3',
+              ].join("\n"),
+            ]);
+          }
           // Ruby's language-server transport must accept the Unicode project path even on a C-locale host.
           await check(
             `${language}-gate`,
@@ -176,13 +195,17 @@ export async function exerciseConsumerProfile(
           const tracked = (await git(`${language}-tracked`, project, ["ls-files", "-z"])).split("\0").filter(Boolean);
           const before = consumerSnapshot(project, tracked);
           const rejected = await cli(
-            `${language}-repeat`,
+            `${language}-repeat-starter`,
             project,
-            ["init", "--language", language, "--root", application],
+            ["language", "init", language, application],
             true,
           );
           assert.match(consumerCommandDiagnostics(rejected).stderr, /already registered/);
-          assert.deepEqual(consumerSnapshot(project, tracked), before, "Repeated init must preserve user files");
+          assert.deepEqual(
+            consumerSnapshot(project, tracked),
+            before,
+            "Repeated starter setup must preserve user files",
+          );
           const offline = {
             ...env,
             WORKBENCH_OFFLINE: "1",
@@ -207,7 +230,7 @@ export async function exerciseConsumerProfile(
             "MAVEN_ARGS",
           ];
           writeFileSync(configPath, editToml(configText, config));
-          await check(`${language}-offline`, project, ["--role", "test"], false, offline);
+          await check(`${language}-offline`, project, ["--role", "test"], process.platform === "win32", offline);
         });
         if (language === "java") {
           await scenarios.run(

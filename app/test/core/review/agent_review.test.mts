@@ -58,13 +58,13 @@ function fixture() {
     const proposed = proposedAgentReview(root, kind, { ...options, staged: true });
     recordAgentReview(
       root,
+      kind,
+      { ...options, staged: true },
       {
-        ...proposed,
+        expected: reviewIdentity(proposed),
         summary: "Reviewed behavior and interactions; no unresolved findings",
         verification: "Focused regression tests passed",
       },
-      reviewIdentity(proposed),
-      true,
     );
     return proposed;
   };
@@ -88,8 +88,17 @@ test("change receipts bind the complete staged tree while preserving unstaged wo
   }).toThrow(/Change review is required/);
   expect(readFileSync(join(f.root, "source.ts"), "utf8")).toBe("export const value=3;\n");
   expect(() => {
-    recordAgentReview(f.root, { ...reviewed, summary: "old", verification: "old" }, reviewIdentity(reviewed), true);
-  }).toThrow(/Review contents changed/);
+    recordAgentReview(
+      f.root,
+      AgentReviewKind.Changes,
+      { staged: true },
+      {
+        expected: reviewIdentity(reviewed),
+        summary: "old",
+        verification: "old",
+      },
+    );
+  }).toThrow(/Review snapshot changed/);
 });
 
 test("staged review preserves partial staging and another writer's index lock", () => {
@@ -123,16 +132,24 @@ test("reviewing retained history preserves current staged and working review evi
   const working = proposedAgentReview(f.root, AgentReviewKind.Changes);
   recordAgentReview(
     f.root,
-    { ...working, summary: "Reviewed current working changes", verification: "Fixture assertions" },
-    reviewIdentity(working),
+    AgentReviewKind.Changes,
+    {},
+    {
+      expected: reviewIdentity(working),
+      summary: "Reviewed current working changes",
+      verification: "Fixture assertions",
+    },
   );
   const historical = proposedAgentReview(f.root, AgentReviewKind.Task, { commit: f.base, base: f.base });
   recordAgentReview(
     f.root,
-    { ...historical, summary: "Reviewed retained history", verification: "Fixture assertions" },
-    reviewIdentity(historical),
-    false,
-    f.base,
+    AgentReviewKind.Task,
+    { commit: f.base, base: f.base },
+    {
+      expected: reviewIdentity(historical),
+      summary: "Reviewed retained history",
+      verification: "Fixture assertions",
+    },
   );
   checkAgentCommit(f.root);
   checkAgentCommit(f.root, workingReviewTree(f.root));
@@ -238,8 +255,13 @@ test("working review includes new files without modifying the user's index", () 
   expect(proposed.tree).not.toBe(index);
   recordAgentReview(
     f.root,
-    { ...proposed, summary: "Reviewed all current files", verification: "Checks passed" },
-    reviewIdentity(proposed),
+    AgentReviewKind.Changes,
+    {},
+    {
+      expected: reviewIdentity(proposed),
+      summary: "Reviewed all current files",
+      verification: "Checks passed",
+    },
   );
   expect(f.git(["write-tree"])).toBe(index);
   f.git(["add", "."]);
@@ -416,16 +438,16 @@ test("delegated work can use uncommitted project approval without inheriting exe
   writeFileSync(join(checkout, "source.ts"), "export const value=2;\n");
   const command = (args: string[]) => gitBytes(checkout, args).toString().trim();
   const review = (kind = AgentReviewKind.Changes) => {
-    const proposed = proposedAgentReview(checkout, kind, {
+    const options = {
       staged: true,
       ...(kind === AgentReviewKind.Task ? { base: baseline } : {}),
+    };
+    const proposed = proposedAgentReview(checkout, kind, options);
+    recordAgentReview(checkout, kind, options, {
+      expected: reviewIdentity(proposed),
+      summary: "Reviewed delegated work",
+      verification: "Behavior verified",
     });
-    recordAgentReview(
-      checkout,
-      { ...proposed, summary: "Reviewed delegated work", verification: "Behavior verified" },
-      reviewIdentity(proposed),
-      true,
-    );
   };
   expect(taskDecisionPath(checkout)).toBe(taskDecisionPath(f.root));
   expect(existsSync(taskQueuePath(checkout))).toBe(false);
@@ -534,4 +556,31 @@ test("explicit task associations survive consumed receipts and branch rebases un
   checkAgentPush(f.root, "HEAD", "HEAD");
   expect(f.review(AgentReviewKind.Task, { base: "HEAD" }).tasks).not.toContain("demo:TSK-0");
   expect(upstream).not.toBe(f.git(["rev-parse", "HEAD"]));
+});
+
+test("reviewing one task on the outgoing tree does not attest to another task's work", () => {
+  const f = fixture();
+  const references = ["demo:TSK-0", "demo:TSK-1"];
+  for (const [index, reference] of references.entries()) {
+    writeFileSync(
+      join(f.root, `workbench/tasks/TSK-0${String(index)}.md`),
+      `---\nstatus: Planned\n---\n\n# TSK-${String(index)}: Task ${String(index)}\n\nReview this delivery.\n`,
+    );
+    changeTaskStatus(f.root, reference, "Approved", undefined, true);
+  }
+  f.git(["add", "workbench"]);
+  f.review(AgentReviewKind.Changes, { tasks: references });
+  f.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", "implement two tasks"]);
+  finishAgentCommit(f.root);
+
+  const first = f.review(AgentReviewKind.Task, { base: f.base, tasks: ["demo:TSK-0"] });
+  expect(first.tasks).toEqual(["demo:TSK-0"]);
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/Accumulated work review is required for demo:TSK-1/);
+
+  f.review(AgentReviewKind.Task, { base: f.base, tasks: ["demo:TSK-1"] });
+  expect(() => {
+    checkAgentPush(f.root, "HEAD", f.base);
+  }).toThrow(/human acceptance/i);
 });

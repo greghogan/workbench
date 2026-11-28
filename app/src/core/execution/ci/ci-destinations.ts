@@ -42,7 +42,12 @@ export function ciDestination(root: string, name: string): CIDestination {
   return selected;
 }
 
-export function pairedRegistries(provider: CIProvider, repository: string, builders: string[], registry?: string) {
+export function pairedRegistries(
+  provider: CIProvider,
+  repository: string,
+  images: readonly (readonly [string, "development" | "toolchain"])[],
+  registry?: string,
+) {
   const url = new URL(repository);
   const base =
     registry ??
@@ -51,10 +56,10 @@ export function pairedRegistries(provider: CIProvider, repository: string, build
       : provider === CIProvider.GitLab && url.hostname === "gitlab.com"
         ? `registry.gitlab.com${url.pathname}`
         : undefined);
-  if (!base && builders.length)
+  if (!base && images.length)
     throw new Error("Self-hosted CI requires --registry HOST/NAMESPACE when prepared images are configured");
   if (!base) return {};
   return Object.fromEntries(
-    builders.map((builder) => [builder, `${base}/development-${builder}`.toLowerCase()]),
+    images.map(([builder, kind]) => [builder, `${base}/${kind}-${builder}`.toLowerCase()]),
   ) as Partial<Record<ImageBuilder, string>>;
 }

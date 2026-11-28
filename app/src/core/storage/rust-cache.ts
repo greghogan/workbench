@@ -137,26 +137,30 @@ async function inspect(directory: string, policy: RustCachePolicy, now: number, 
   const groups: RustArtifactGroup[] = [];
   const usage = new Map<string, Usage>();
   const nodes = new Map<string, TreeEntry[]>();
+  let nextScan = Infinity;
+  const deadline = (group: RustArtifactGroup) =>
+    policy.maxAgeDays > 0 ? group.lastUsed + policy.maxAgeDays * 86_400_000 : Infinity;
   const add = (id: string, kind: ArtifactKind, items: TreeEntry[]): RustArtifactGroup => {
     const stamp = hash(items.map((entry) => entry.path + ":" + entry.stamp).join("\n"));
     const old = previous.get(id);
     const activity = items.reduce((latest, entry) => Math.max(latest, entry.activity), 0);
     const lastUsed = Math.max(activity, old?.lastUsed ?? 0, old && old.stamp !== stamp ? now : 0);
     usage.set(id, { stamp, lastUsed });
+    const safe = items.every((entry) => entry.safe);
+    if (safe && lastUsed > now) nextScan = Math.min(nextScan, lastUsed);
     const group = {
       id,
       kind,
       paths: items.map((entry) => entry.path),
       bytes: items.reduce((sum, entry) => sum + entry.bytes, 0),
       lastUsed,
-      protected: !items.every((entry) => entry.safe) || lastUsed > now,
+      protected: !safe || lastUsed > now,
     };
     groups.push(group);
     nodes.set(id, items);
     return group;
   };
-  const expired = (group: RustArtifactGroup) =>
-    policy.maxAgeDays > 0 && now - group.lastUsed >= policy.maxAgeDays * 86_400_000;
+  const expired = (group: RustArtifactGroup) => deadline(group) <= now;
   const profiles = new Set<string>();
   const unitContainers = new Set<string>();
   for (const fingerprint of entries.values()) {
@@ -223,7 +227,10 @@ async function inspect(directory: string, policy: RustCachePolicy, now: number, 
       for (const group of sessions) if (group.paths.some((path) => (claims.get(path) ?? 0) > 1)) group.protected = true;
       sessions.sort((a, b) => b.lastUsed - a.lastUsed || b.id.localeCompare(a.id));
       const newest = sessions[0];
-      if (newest && !expired(newest)) newest.protected = true;
+      if (newest && !expired(newest) && !newest.protected) {
+        nextScan = Math.min(nextScan, deadline(newest));
+        newest.protected = true;
+      }
     }
   }
   const oldest = groups
@@ -255,6 +262,8 @@ async function inspect(directory: string, policy: RustCachePolicy, now: number, 
       selected,
       remainingBytes,
     } satisfies RustCachePlan,
+    nextScan: oldest.reduce((next, group) => (chosen.has(group.id) ? next : Math.min(next, deadline(group))), nextScan),
+    previous,
     usage,
     nodes,
   };
@@ -280,7 +289,14 @@ async function unchanged(directory: string, entry: TreeEntry, signal?: AbortSign
 export async function pruneRustCache(
   reference: ResultToolReference,
   policy: RustCachePolicy,
-  options: { apply?: boolean; now?: number; validate?: () => void; expected?: string; signal?: AbortSignal } = {},
+  options: {
+    apply?: boolean;
+    now?: number;
+    validate?: () => void;
+    expected?: string;
+    signal?: AbortSignal;
+    observeDeadline?: (nextScan: number) => void;
+  } = {},
 ): Promise<RustCachePlan> {
   if (reference.kind !== "builds" || !reference.tools.some((tool) => tool.tool === "rust"))
     throw new Error("Expected an owned Rust build generation");
@@ -298,11 +314,26 @@ export async function pruneRustCache(
         };
         validate();
         const directory = ownedPath(reference.directory, "cargo");
-        const { plan, usage, nodes } = await inspect(directory, policy, options.now ?? Date.now(), options.signal);
+        const { plan, previous, usage, nodes, nextScan } = await inspect(
+          directory,
+          policy,
+          options.now ?? Date.now(),
+          options.signal,
+        );
         if (options.expected && options.expected !== plan.digest)
           throw new Error("Rust cache changed; inspect a fresh cleanup preview");
+        options.observeDeadline?.(nextScan);
         if (!options.apply) return plan;
         validate();
+        if (
+          plan.selected.length === 0 &&
+          usage.size === previous.size &&
+          [...usage].every(([id, { stamp, lastUsed }]) => {
+            const recorded = previous.get(id);
+            return recorded?.stamp === stamp && recorded.lastUsed === lastUsed;
+          })
+        )
+          return plan;
         for (const group of plan.selected)
           for (const entry of nodes.get(group.id) ?? []) await unchanged(directory, entry, options.signal);
         return withCacheSizeChanges([reference.directory, directory], async () => {

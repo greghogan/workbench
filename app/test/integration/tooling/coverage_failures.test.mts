@@ -79,7 +79,6 @@ function successfulCollection(): string {
     JSON.stringify({ coverage: { lines: 0, statements: 0, functions: 0, branches: 0 } }),
   );
   childResult(completedProcess(), (scratch) => {
-    actual.mkdirSync(join(scratch, "raw"));
     actual.mkdirSync(join(scratch, "unit"));
     const loc = { start: { line: 1, column: 0 }, end: { line: 1, column: 36 } };
     actual.writeFileSync(
@@ -130,7 +129,6 @@ test("failed result retention preserves an earlier child failure", async () => {
 
 test("diagnostic, cleanup and timing failures preserve the primary collection error and attempt all finalization", async () => {
   childResult(completedProcess(), (scratch) => {
-    actual.mkdirSync(join(scratch, "raw"));
     actual.writeFileSync(join(scratch, "raw/coverage-123-456-7.json"), '{"PRIVATE SOURCE');
   });
   for (const key of ["diagnostics", "cleanup", "timings"] as const) faults.add(key);
@@ -149,6 +147,20 @@ test("diagnostic, cleanup and timing failures preserve the primary collection er
   ).toEqual([secondary.diagnostics, secondary.cleanup, secondary.timings]);
   expect(failure.message).not.toContain("PRIVATE SOURCE");
   expect(warning).toHaveBeenCalledWith("Coverage timings could not be written.");
+});
+
+test("a failed test run still checks its final coverage reports", async () => {
+  childResult(completedProcess({ status: 7 }), (scratch) => {
+    actual.writeFileSync(join(scratch, "raw/coverage-123-456-7.json"), '{"result":');
+  });
+  const failure: unknown = await runCoverage(root).catch((error: unknown) => error);
+  if (!(failure instanceof AggregateError)) throw new Error("Expected combined failure");
+  const errors: unknown[] = failure.errors;
+  const [tests, collection] = errors;
+  expect(tests).toMatchObject({ processOutcome: { status: 7 } });
+  expect(collection).toBeInstanceOf(InvalidNodeCoverageReport);
+  expect(actual.existsSync(join(root, "coverage/collection-error.json"))).toBe(true);
+  expect(actual.readdirSync(join(root, "build"))).toEqual([]);
 });
 
 test("scratch cleanup failure is reported even after successful collection", async () => {

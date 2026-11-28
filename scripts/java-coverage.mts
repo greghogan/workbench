@@ -1,6 +1,7 @@
 import type { FileSummary, Summary, MetricName } from "../app/src/core/execution/checks/coverage-summary.mjs";
 import { required } from "../app/src/core/runtime/values.mjs";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { join } from "node:path";
 
 const names: Record<string, MetricName> = { LINE: "lines", BRANCH: "branches", METHOD: "functions" };
@@ -12,7 +13,7 @@ function counters(xml: string) {
     const covered = Number(match[3]);
     const total = covered + Number(match[2]);
     if (result[name] || !Number.isSafeInteger(total)) throw new Error("Invalid JaCoCo counters");
-    result[name] = { total, covered, skipped: 0, pct: total ? Math.floor((covered / total) * 10000) / 100 : 100 };
+    result[name] = { total, covered };
   }
   if (!result.lines) throw new Error("JaCoCo report has no line counters");
   return result;
@@ -33,11 +34,10 @@ export function javaCoverageSummary(xml: string): Summary {
     }
   }
   if (!Object.keys(summary).length) throw new Error("JaCoCo report has no source files");
-  const total = counters(xml.replace(/<package\b[\s\S]*?<\/package>/g, ""));
-  return { total, ...Object.fromEntries(Object.entries(summary).sort(([a], [b]) => a.localeCompare(b))) };
+  return Object.fromEntries(Object.entries(summary).sort(([a], [b]) => a.localeCompare(b)));
 }
 export function writeJavaCoverage(xml: string, root: string) {
   const summary = javaCoverageSummary(xml);
   mkdirSync(join(root, "coverage"), { recursive: true });
-  writeFileSync(join(root, "coverage/coverage-summary.json"), JSON.stringify(summary, null, 2) + "\n");
+  writeAtomic(join(root, "coverage/coverage-summary.json"), JSON.stringify(summary, null, 2) + "\n");
 }

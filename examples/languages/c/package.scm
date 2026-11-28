@@ -5,6 +5,14 @@
              (gnu packages))
 (include "guix-toolchain.scm")
 
+(define yyjson-reference
+  (let ((base (latest "yyjson")))
+    (package/inherit base
+      (arguments
+       (substitute-keyword-arguments (package-arguments base)
+         ;; CTest's parallel launch gate measures the host, including unrelated jobs.
+         ((#:parallel-tests? _ #t) #f))))))
+
 (define reference-package
   (with-selected-gcc
    (package
@@ -20,7 +28,7 @@
      (build-system cmake-build-system)
      (arguments
       (list #:generator "Ninja"
-            #:cmake (specification->package "cmake-minimal@4.3.3")
+            #:cmake selected-cmake
             #:phases
             #~(modify-phases %standard-phases
                 (replace 'check
@@ -32,8 +40,8 @@
             #~(list "-DWORKBENCH_COMPILER_FAMILY=gcc"
                     "-DCMAKE_C_COMPILER=gcc" "-DCMAKE_CXX_COMPILER=g++"
                     "-DWORKBENCH_LTO=full")))
-     (native-inputs (list (specification->package "ninja")))
-     (inputs (list (with-selected-gcc (latest "yyjson"))))
+     (native-inputs (list selected-ninja))
+     (inputs (list (with-selected-gcc yyjson-reference)))
      (synopsis "Workbench C byte-counting reference")
      (description "A C example with independently selectable managed packaging.")
      (home-page "https://github.com/greghogan/workbench")

@@ -6,7 +6,12 @@ import { projectPaths } from "../../core/projects/project-paths.js";
 import { taskDecisionPath } from "../../core/tasks/task-decisions.js";
 import { taskImplementationPath } from "../../core/tasks/task-implementations.js";
 import { readTaskQueue, taskQueuePath } from "../../core/tasks/task-queue.js";
-import { taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
+import { taskLifecycle, TaskLifecycle } from "../../core/tasks/task-workflow.js";
+import { observeTaskVerifications, treeTasks } from "../../core/tasks/task-snapshot.js";
+import { gitRevision } from "../../core/git/refs.js";
+import { planningInputs } from "../../core/tasks/planning/planning-inputs.js";
+import { readPlanningRecords } from "../../core/tasks/planning/planning-read-model.js";
+import { workGraph } from "../../core/tasks/planning/work-plans.js";
 import { readBoundedFile } from "../../core/runtime/file-reads.js";
 import { taskRecordState } from "../workspace/task-state.js";
 import { reviewTasksByPath } from "../review/task-review-groups.js";
@@ -32,6 +37,7 @@ export function taskReviewInventory(root: string, observe: (path: string) => voi
     });
   observe(taskDecisionPath(root));
   observe(taskQueuePath(root));
+  for (const path of planningInputs(root)) observe(path);
   const implementations = taskImplementationPath(root);
   if (implementations) observe(implementations);
   const archived = readInventoryRecords(
@@ -48,13 +54,21 @@ export function taskReviewInventory(root: string, observe: (path: string) => voi
       })),
     ),
     entries = new Map(readTaskQueue(root).entries.map((entry) => [entry.reference, entry]));
-  const records = prepared.problem ? [] : prepared.records;
+  const records = prepared.problem ? [] : workGraph(prepared.records, readPlanningRecords(root)).tasks;
+  observeTaskVerifications(root, records, [...entries.values()], observe);
+  const awaiting = records.filter((task) => !task.archived);
+  if (awaiting.some((task) => task.metadata.status === "Planned" && !task.previouslyApproved)) {
+    const head = gitRevision(root, "HEAD");
+    const retained = head ? treeTasks(root, head) : new Map<string, undefined>();
+    for (const task of awaiting) {
+      const status = retained.get(task.reference)?.status;
+      if (status === "Approved" || status === "Accepted") task.previouslyApproved = true;
+    }
+  }
+  const decisions = awaiting.map((task) => [task.reference, taskLifecycle(task, entries.get(task.reference))] as const);
   return {
     byPath: reviewTasksByPath(root, records),
-    outcomes: new Set(
-      records
-        .filter((task) => taskPhase(task, entries.get(task.reference)) === TaskPhase.Reviews)
-        .map((task) => task.reference),
-    ),
+    approvals: decisions.filter(([, state]) => state === TaskLifecycle.AwaitingApproval).length,
+    outcomes: new Set(decisions.filter(([, state]) => state === TaskLifecycle.AwaitingAcceptance).map(([id]) => id)),
   };
 }

@@ -17,7 +17,7 @@ import { relocateMarkdownLinks, markdownHeadingId } from "../../records/markdown
 import { rewrittenPlanEntries } from "./plan-updates.js";
 import { readBoundedFile } from "../../runtime/file-reads.js";
 import { ownedPath } from "../../runtime/paths.js";
-import { InvalidInput, StateConflict } from "../../runtime/input-errors.js";
+import { InvalidInput, MissingResource, StateConflict } from "../../runtime/input-errors.js";
 import { gitRevision } from "../../git/refs.js";
 import { readGitTree, readGitObjects, writeReviewBlobs, type GitEntry } from "../../git/git-snapshot.js";
 import { withRepositoryOperation } from "../../git/repository-state.js";
@@ -37,9 +37,15 @@ import {
   type TaskQueue,
 } from "../task-queue.js";
 import { planningPaths, parsePlanReference } from "./plan-model.js";
-import { planningScopes, readPlan, type PlanView } from "./planning-store.js";
-import { readWorkGraph, workReference } from "./work-plans.js";
-import { planClaim, readPlanOperations, writePlanOperation, type StoredPlanOperation } from "./plan-operation-store.js";
+import { planningScopes, readPlan, readPlans, type PlanView } from "./planning-store.js";
+import { planningRecord } from "./planning-read-model.js";
+import { workGraph, workReference } from "./work-plans.js";
+import {
+  planClaims,
+  readPlanOperations,
+  writePlanOperation,
+  type StoredPlanOperation,
+} from "./plan-operation-store.js";
 import { taskPlanDigest } from "../task-plan.js";
 
 export type { TransferPlan, TransferData } from "./plan-operation-data.js";
@@ -63,12 +69,14 @@ export function decodeTransfer(root: string, stored: StoredPlanOperation): Trans
 function exclusive<T>(root: string, action: () => T): T {
   return withRepositoryOperation(root, () => withTaskLock(root, action), "plan-operation");
 }
-function requireNoPending(root: string): void {
-  const pending = readPlanOperations(root).find((entry) => !entry.operation.completed);
+function requireNoPending(root: string): readonly StoredPlanOperation[] {
+  const operations = readPlanOperations(root);
+  const pending = operations.find((entry) => !entry.operation.completed);
   if (pending)
     throw new StateConflict(
       `Recover the planning ${pending.operation.kind} in ${pending.operation.checkout} before starting another`,
     );
+  return operations;
 }
 function sourceContents(view: PlanView, number: string, mapping: ReadonlyMap<string, string>): string {
   if (!view.document) throw new InvalidInput("The captured plan is incomplete");
@@ -95,14 +103,20 @@ export async function startPlan(
   options: { onRecorded?: () => void } = {},
 ): Promise<string> {
   const prepared = exclusive(root, () => {
-    requireNoPending(root);
-    const claim = planClaim(root, reference);
+    const operations = requireNoPending(root);
+    parsePlanReference(reference);
+    const claims = new Map(planClaims(root, operations).map((claim) => [claim.reference, claim]));
+    const claim = claims.get(reference);
     if (claim)
       throw new StateConflict(
         `Implementation already started as ${claim.task} in ${claim.operation.operation.checkout}`,
       );
     const queue = readTaskQueue(root),
-      graph = readWorkGraph(root),
+      plansByReference = new Map(readPlans(root).map((view) => [view.reference, view])),
+      graph = workGraph(
+        readTaskGraph(root).tasks,
+        [...plansByReference.values()].map((view) => planningRecord(view, claims.get(view.reference))),
+      ),
       selected = graph.require(reference);
     if (expectedQueue !== undefined && expectedQueue !== queueDigest(queue))
       throw new StateConflict("Task queue changed; refresh and retry");
@@ -111,19 +125,17 @@ export async function startPlan(
     const blockers = new TaskReadiness(graph, queue).blockers(selected);
     if (blockers.length) throw new StateConflict(blockers.map((blocker) => blocker.message).join("; "));
     const views: PlanView[] = [],
-      mapping = new Map<string, string>();
-    for (const operation of readPlanOperations(root))
-      if (operation.operation.kind === "transfer")
-        for (const plan of operation.operation.payload.plans) {
-          const name = plan.reference,
-            task = plan.task;
-          if (graph.byReference.has(task)) mapping.set(name, task);
-        }
+      mapping = new Map(
+        [...claims.values()]
+          .filter(({ task }) => graph.byReference.has(task))
+          .map(({ reference, task }) => [reference, task]),
+      );
     let next: string | undefined = reference;
     while (next?.includes(":plan/") && !mapping.has(next)) {
       if (views.some((view) => view.reference === next) || views.length >= 128)
         throw new InvalidInput("Plan parent cycle or excessive depth");
-      const view = readPlan(root, parsePlanReference(next));
+      const view = plansByReference.get(next);
+      if (!view) throw new MissingResource(`Plan not found: ${next}`);
       if (view.problem || view.conflict) throw new StateConflict(view.problem ?? "Resolve concurrent plan changes");
       if (view.document?.metadata.status === "Canceled")
         throw new StateConflict(`Reopen canceled parent ${view.reference} before starting its child`);
@@ -224,14 +236,17 @@ export async function startPlan(
     }),
   );
   const stored = exclusive(root, () => {
-    requireNoPending(root);
+    const operations = requireNoPending(root);
     const queue = readTaskQueue(root);
     if (queueDigest(queue) !== queueDigest(prepared.queue))
       throw new StateConflict("Task queue changed while preparing implementation; retry without overwriting it");
-    for (const plan of documents) {
-      if (planClaim(root, plan.view.reference) || readPlan(root, plan.view).digest !== plan.view.digest)
-        throw new StateConflict("A plan changed or was claimed while preparing implementation");
-    }
+    const claimed = new Set(planClaims(root, operations).map(({ reference }) => reference));
+    const current = readPlans(
+      root,
+      documents.map(({ view }) => view),
+    );
+    if (documents.some(({ view }, index) => claimed.has(view.reference) || current[index]?.digest !== view.digest))
+      throw new StateConflict("A plan changed or was claimed while preparing implementation");
     const blobs = writeReviewBlobs(
         root,
         documents.map((plan) => Buffer.from(plan.contents)),

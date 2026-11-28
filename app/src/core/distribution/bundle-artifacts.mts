@@ -29,8 +29,13 @@ export function bundleCompression(root: string) {
   return selected;
 }
 
-export function bundleArtifacts(name: string, contents: Buffer<ArrayBuffer> | zlib.InputType, compression: unknown) {
-  if (!isCompression(compression)) throw new Error(`Unknown bundle.compression: ${String(compression)}`);
+export function bundleLoader(compression: BundleCompression): Buffer {
+  return Buffer.from(
+    `require("../bin/bundle-runtime.cjs")(module, __filename, ${JSON.stringify(compression)}, require);\n`,
+  );
+}
+
+export function encodeBundle(contents: zlib.InputType, compression: BundleCompression): Buffer {
   const compress = {
     brotli: () => zlib.brotliCompressSync(contents),
     zlib: () => {
@@ -44,14 +49,14 @@ export function bundleArtifacts(name: string, contents: Buffer<ArrayBuffer> | zl
       return zlib.zstdCompressSync(contents, { params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 } });
     },
   }[compression];
+  return compress();
+}
+
+export function bundleArtifacts(name: string, contents: zlib.InputType, compression: unknown) {
+  if (!isCompression(compression)) throw new Error(`Unknown bundle.compression: ${String(compression)}`);
   return new Map([
-    [
-      `${name}.cjs`,
-      Buffer.from(
-        `require("../bin/bundle-runtime.cjs")(module, __filename, ${JSON.stringify(compression)}, require);\n`,
-      ),
-    ],
-    [`${name}.cjs.${bundleFormats[compression]}`, compress()],
+    [`${name}.cjs`, bundleLoader(compression)],
+    [`${name}.cjs.${bundleFormats[compression]}`, encodeBundle(contents, compression)],
   ]);
 }
 export * from "./bundle-layout.mts";

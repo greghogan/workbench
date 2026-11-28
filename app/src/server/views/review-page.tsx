@@ -9,7 +9,7 @@ import { markdown } from "./markdown-view.js";
 import { shell } from "./page-frame.js";
 import { type ViewContext, type PageKey } from "../workspace/view-context.js";
 import { prepareReviewPage, reviewPageModel, resolveReviewPage } from "../review/review-model.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { pendingReviewNeighbors } from "../review/review-navigation.js";
 import { sourceURL } from "../routes/sources.js";
 import { recordPane } from "./record-pane.js";
 import { basename } from "node:path";
@@ -17,13 +17,38 @@ import { DifferenceLayout, differenceLayout } from "../routes/navigation-state.j
 import { PreparationState } from "../review/review-state.js";
 import { taskWorkflowNavigation, tasksParent, workflowParent } from "./workflow-navigation.js";
 import type { Breadcrumb } from "./breadcrumbs.js";
+
+type PreparationForm = Pick<NonNullable<ReturnType<typeof resolveReviewPage>>, "owner" | "layout"> & {
+  task?: { reference: string; expected: string };
+  workflow?: "1";
+  recordView?: "read" | "changes";
+};
+
+export function reviewPreparationForm(
+  context: ViewContext,
+  prepared: PreparationForm,
+  label: string,
+  view?: RouteQuery<typeof Route.Review>["view"],
+): JSX.Element {
+  return mutationForm({
+    action: Route.ReviewPrepare,
+    context,
+    csrf: context.csrf,
+    fields: {
+      path: prepared.owner,
+      review_layout: prepared.layout,
+      ...(view ? { review_view: view } : {}),
+      expected: prepared.task?.expected ?? context.index.reviewChange(prepared.owner)?.digest ?? context.revision,
+      ...(prepared.workflow ? { workflow: prepared.workflow } : {}),
+      ...(prepared.recordView ? { record_view: prepared.recordView } : {}),
+    },
+    children: () => submitButton(label),
+  });
+}
+
 export function reviewPreparationPage(
   context: ViewContext,
-  prepared: Pick<NonNullable<ReturnType<typeof resolveReviewPage>>, "heading" | "owner" | "layout"> & {
-    task?: { reference: string; expected: string };
-    workflow?: "1";
-    recordView?: "read" | "changes";
-  },
+  prepared: PreparationForm & { heading: string },
   view?: RouteQuery<typeof Route.Review>["view"],
   active: PageKey = "review",
   parents: Breadcrumb[] = [workflowParent(context, Route.Reviews)],
@@ -33,21 +58,12 @@ export function reviewPreparationPage(
     prepared.heading,
     active,
     panel(
-      mutationForm({
-        action: Route.ReviewPrepare,
+      reviewPreparationForm(
         context,
-        csrf: context.csrf,
-        fields: {
-          path: prepared.owner,
-          review_layout: prepared.layout,
-          ...(view ? { review_view: view } : {}),
-          expected: prepared.task?.expected ?? context.index.reviewChange(prepared.owner)?.digest ?? context.revision,
-          ...(prepared.workflow ? { workflow: prepared.workflow } : {}),
-          ...(prepared.recordView ? { record_view: prepared.recordView } : {}),
-        },
-        children: () =>
-          submitButton(prepared.task ? (active === "review" ? "Review outcome" : "Review plan") : "Review file"),
-      }),
+        prepared,
+        prepared.task ? (active === "review" ? "Review outcome" : "Review plan") : "Review file",
+        view,
+      ),
     ),
     { parents },
   );
@@ -69,11 +85,10 @@ export function taskReviewPreparationPage(
     context.index.snapshot.reviewPreparation.files.get(record.path)?.state !== PreparationState.Required
   )
     return;
-  const plan = context.index.snapshot.tasks.plans.find((plan) => plan.reference === id),
-    task = context.index.taskGraph.byReference.get(id),
-    expected = plan?.digest ?? task?.reviewDigest ?? task?.digest;
+  const task = context.index.taskGraph.byReference.get(id),
+    expected = task?.reviewDigest ?? task?.digest;
   if (!expected) return;
-  const navigation = plan !== undefined || query.workflow === "1" ? taskWorkflowNavigation(context, id) : undefined;
+  const navigation = query.workflow === "1" ? taskWorkflowNavigation(context, id) : undefined;
   return reviewPreparationPage(
     context,
     {
@@ -85,8 +100,8 @@ export function taskReviewPreparationPage(
       ...(query.view === "read" || query.view === "changes" ? { recordView: query.view } : {}),
     },
     undefined,
-    navigation?.active ?? (plan ? "plans" : "TSK"),
-    navigation?.phase ? navigation.parents : [plan ? workflowParent(context, Route.Plans) : tasksParent(context)],
+    navigation?.active ?? "TSK",
+    navigation?.phase ? navigation.parents : [tasksParent(context)],
   );
 }
 export function reviewPage(
@@ -104,12 +119,8 @@ export function reviewPage(
       </p>,
       { parents: [workflowParent(context, Route.Reviews)] },
     );
-  const { primary, supporting, unchanged, heading, owner, navigation, layout } = prepared;
-  const steps = {
-    previous: navigation.previous ? { href: reviewLocation(context, navigation.previous, layout) } : undefined,
-    next: navigation.next ? { href: reviewLocation(context, navigation.next, layout) } : undefined,
-    label: "review",
-  };
+  const { primary, supporting, unchanged, heading, owner, layout } = prepared;
+  const steps = pendingReviewNeighbors(context, `working:${owner}`, layout);
   return shell(
     context,
     heading,
@@ -279,7 +290,7 @@ function fileReview(
     },
   );
   return (
-    <section data-review-file={path} aria-label={path}>
+    <section class="review-document" data-review-file={path} aria-label={path}>
       <p class="file-path">
         {path}{" "}
         {model.operation === "deletion"

@@ -8,6 +8,7 @@ import {
   reviewIdentity,
 } from "../core/review/agent-review.js";
 import { taskReference } from "../core/tasks/task-model.js";
+import { wakeFinalization } from "../core/git/finalization-requests.js";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../core/diagnostics/diagnostics.mjs";
 
 export function registerAgentReviewCommands(review: Command, root: string): void {
@@ -45,28 +46,36 @@ export function registerAgentReviewCommands(review: Command, root: string): void
           summary?: string;
           verification?: string;
         }) => {
-          const pending = proposedAgentReview(root, kind, {
-            ...options,
-            tasks: options.task.map((value) => taskReference(root, value)),
-          });
-          const digest = reviewIdentity(pending);
+          const selection = { ...options, tasks: options.task.map((value) => taskReference(root, value)) };
           if (options.record) {
             if (!options.expected || !options.summary?.trim() || !options.verification?.trim())
               throw new Error(
                 "Recording review requires --expected, --summary, and --verification after inspecting the snapshot",
               );
-            recordAgentReview(
-              root,
-              { ...pending, summary: options.summary, verification: options.verification },
-              options.expected,
-              options.staged,
-              options.commit,
-            );
+            const pending = recordAgentReview(root, kind, selection, {
+              expected: options.expected,
+              summary: options.summary,
+              verification: options.verification,
+            });
             console.log(`Recorded ${kind} review for ${pending.tree}.`);
-          } else
+            void wakeFinalization(root);
+          } else {
+            const pending = proposedAgentReview(root, kind, selection);
             console.log(
-              JSON.stringify({ kind, base: pending.base, tree: pending.tree, tasks: pending.tasks, digest }, null, 2),
+              JSON.stringify(
+                {
+                  kind,
+                  base: pending.base,
+                  tree: pending.tree,
+                  parentTrees: pending.parentTrees,
+                  tasks: pending.tasks,
+                  digest: reviewIdentity(pending),
+                },
+                null,
+                2,
+              ),
             );
+          }
         },
       );
   review.command("finish-commit", { hidden: true }).action(async () => {
@@ -84,6 +93,7 @@ export function registerAgentReviewCommands(review: Command, root: string): void
         "Commit saved; finish the planning handoff with workbench task plan recover",
       );
     }
+    await wakeFinalization(root);
   });
   review
     .command("check-push", { hidden: true })

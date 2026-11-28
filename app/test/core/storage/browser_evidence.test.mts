@@ -1,3 +1,4 @@
+import { syntheticChildEnvironment } from "../../fixtures/process.mjs";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
@@ -117,8 +118,8 @@ test("all-project pruning uses individual policy overrides and protects unavaila
 
 test("proven abandoned producers recover as interrupted; uncertainty preserves their artifacts", async () => {
   const retired = await runOwnedChild(process.execPath, ["-e", ""], {
+    env: syntheticChildEnvironment(),
     cwd: root,
-    env: process.env,
     signal: AbortSignal.timeout(120000),
   });
   expect(retired.status).toBe(0);

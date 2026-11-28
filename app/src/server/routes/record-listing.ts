@@ -3,12 +3,6 @@ import { recordTypes } from "../../core/records/record-metadata.js";
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import { WebError } from "../http/errors.js";
 import { recordBatchSize, recordWindowLimit } from "./record-window.js";
-export const RecordOrder = {
-  Identity: "identity",
-  TaskAscending: "task-ascending",
-  TaskDescending: "task-descending",
-} as const;
-export type RecordOrder = (typeof RecordOrder)[keyof typeof RecordOrder];
 export function recordKey(id: string) {
   if (id.includes(":plan/")) {
     const plan = parsePlanReference(id);
@@ -23,15 +17,16 @@ export function recordKey(id: string) {
     planning: false,
   };
 }
-function compareValue(left: ReturnType<typeof recordKey>, right: ReturnType<typeof recordKey>): number {
-  return (
-    Number(left.planning) - Number(right.planning) ||
-    (!left.planning ? left.value.length - right.value.length : 0) ||
-    left.value.localeCompare(right.value)
-  );
-}
+/** IDs are sequential within a scope and record type. Named plans follow numbered records. */
 export function compareRecordKeys(left: ReturnType<typeof recordKey>, right: ReturnType<typeof recordKey>): number {
-  return left.scope.localeCompare(right.scope) || left.type - right.type || compareValue(left, right);
+  return (
+    left.scope.localeCompare(right.scope) ||
+    left.type - right.type ||
+    Number(left.planning) - Number(right.planning) ||
+    (left.planning
+      ? left.value.localeCompare(right.value)
+      : right.value.length - left.value.length || right.value.localeCompare(left.value))
+  );
 }
 /** Parse each identity once per query, including removed cursor identities. */
 export function recordBatch(
@@ -39,27 +34,22 @@ export function recordBatch(
   after: string | null,
   through: string | null,
   before: string | null = null,
-  order: RecordOrder = RecordOrder.Identity,
 ): { visible: BrowserRecord[]; more: boolean; previous: boolean; startAfter: string } {
   if (before && (after || through)) throw new WebError(400, "select either a previous or a forward record window");
-  const ordered = (a: ReturnType<typeof recordKey>, b: ReturnType<typeof recordKey>) => {
-    const value =
-      order === RecordOrder.Identity
-        ? compareRecordKeys(a, b)
-        : compareValue(a, b) || a.scope.localeCompare(b.scope) || a.type - b.type;
-    return order === RecordOrder.TaskDescending ? -value : value;
-  };
-  const sorted = records.map((record) => ({ record, key: recordKey(record.id) })).sort((a, b) => ordered(a.key, b.key));
+  const sorted = records
+    .map((record) => ({ record, key: recordKey(record.id) }))
+    .sort((a, b) => compareRecordKeys(a.key, b.key));
   const start = after ? recordKey(after) : undefined,
     end = through ? recordKey(through) : undefined,
     previous = before ? recordKey(before) : undefined;
   const remaining = sorted.filter(
-    (entry) => (!start || ordered(entry.key, start) > 0) && (!previous || ordered(entry.key, previous) < 0),
+    (entry) =>
+      (!start || compareRecordKeys(entry.key, start) > 0) && (!previous || compareRecordKeys(entry.key, previous) < 0),
   );
   const count = end
     ? Math.min(
         recordWindowLimit,
-        Math.max(recordBatchSize, remaining.filter((entry) => ordered(entry.key, end) <= 0).length),
+        Math.max(recordBatchSize, remaining.filter((entry) => compareRecordKeys(entry.key, end) <= 0).length),
       )
     : recordBatchSize;
   const visible = (previous ? remaining.slice(-recordBatchSize) : remaining.slice(0, count)).map(

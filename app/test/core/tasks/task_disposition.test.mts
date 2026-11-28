@@ -6,7 +6,7 @@ import {
   AgentReviewKind,
 } from "../../../src/core/review/agent-review.ts";
 import { readTaskGraph } from "../../../src/core/tasks/task-model.ts";
-import { readTaskQueue } from "../../../src/core/tasks/task-queue.ts";
+import { changeTaskQueue, readTaskQueue } from "../../../src/core/tasks/task-queue.ts";
 import { afterEach, expect, test, vi } from "vitest";
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync } from "node:fs";
 import { join } from "node:path";
@@ -54,9 +54,16 @@ test("task deletion previews its whole unpublished suffix and preserves original
   expect(plan.commits).toEqual([head, first]);
   expect(plan.updates.some((file) => file.path === "source-0.txt")).toBe(true);
   const reviewed = proposedAgentReview(root, AgentReviewKind.Changes, { tasks: ["demo:TSK-0"] });
-  reviewed.summary = "Fixture delivery reviewed";
-  reviewed.verification = "Fixture assertions";
-  recordAgentReview(root, reviewed, reviewIdentity(reviewed));
+  recordAgentReview(
+    root,
+    AgentReviewKind.Changes,
+    { tasks: ["demo:TSK-0"] },
+    {
+      expected: reviewIdentity(reviewed),
+      summary: "Fixture delivery reviewed",
+      verification: "Fixture assertions",
+    },
+  );
   finishAgentCommit(root);
   const hooks = join(root, ".git/fault-hooks"),
     selectedBranch = git(root, "symbolic-ref", "HEAD");
@@ -99,7 +106,8 @@ test("reversion retains task history and an outcome awaiting verification while 
   expect(task).toContain("status: Approved");
   expect(task).toContain("The feature is no longer wanted.");
   expect(readTaskGraph(root).require("demo:TSK-0").planDigest).toBe(originalPlan);
-  expect(readTaskQueue(root).entries[0]?.state).toBe("Blocked");
+  expect(readTaskQueue(root).entries[0]?.state).toBe("Queued");
+  expect(changeTaskQueue(root, { action: "start", reference: "demo:TSK-0" }).entries[0]?.state).toBe("Active");
   expect(readFileSync(join(root, "independent.txt"), "utf8")).toBe("Keep later work.\n");
   expect(git(root, "show", ":workbench/tasks/TSK-00.md")).toContain("The feature is no longer wanted.");
 });

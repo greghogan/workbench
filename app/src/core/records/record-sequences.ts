@@ -32,8 +32,7 @@ function readSequences(directory: string): Sequences {
   return { ...document, next };
 }
 
-function currentSequences(directory: string, root = directory): Sequences {
-  const document = readSequences(directory);
+function currentSequences(directory: string, root: string, document = readSequences(directory)): Sequences {
   for (const kind of kinds) {
     const records = recordInventory(root, relative(root, directory).replaceAll("\\", "/") || ".", kind);
     const floor = records.length ? nextNumber(required(records.at(-1), "expected records.at(-1)").number) : "0";
@@ -61,7 +60,7 @@ export function syncRecordSequences(root: string, checkOnly = false): string[] {
     const path = join(directory, projectPaths.state);
     const synchronize = () => {
       const actual = readSequences(directory);
-      const expected = currentSequences(directory, root);
+      const expected = currentSequences(directory, root, { ...actual, next: { ...actual.next } });
       if (kinds.every((kind) => actual.next[kind] === expected.next[kind])) return;
       if (checkOnly) throw new Error(`${path}: missing or stale record sequences; run 'workbench sync'`);
       writeAtomic(path, editToml(existsSync(path) ? readText(path) : "", expected));

@@ -1,9 +1,12 @@
+import { writeAtomic } from "../../runtime/file-publication.mjs";
 import { emitCheckDetail } from "./check-detail-data.mjs";
 import type { CoverageMap, CoverageSummary, Totals as IstanbulTotals } from "istanbul-lib-coverage";
 // Empty Istanbul summaries use "Unknown" before any coverage is merged.
 export type Totals = Omit<IstanbulTotals, "pct"> & { pct: number | "Unknown" };
 export type MetricName = "lines" | "statements" | "functions" | "branches";
-export type FileSummary = Partial<Record<MetricName, Totals>>;
+export type MetricCounts = Pick<Totals, "covered" | "total"> & { skipped?: number };
+export type FileSummary = Partial<Record<MetricName, MetricCounts>>;
+export type CoverageDetailMetrics = Partial<Record<MetricName, Totals>>;
 export type Summary = Record<string, FileSummary>;
 export interface SummaryOptions {
   revision?: string;
@@ -13,17 +16,44 @@ export interface SummaryOptions {
   notice?: string | undefined;
 }
 import { spawnSync } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { isRecord } from "../../runtime/values.mjs";
 
 export const coverageMetrics = ["lines", "statements", "functions", "branches"] as const;
 export const coverageSummaryPath = "coverage/coverage-summary.json";
 
+export function coveragePercentage({ covered, total }: MetricCounts): number {
+  return total ? Math.floor((covered * 10000) / total) / 100 : 100;
+}
+
+function coverageCounts({ total, covered, skipped }: MetricCounts): MetricCounts {
+  return { total, covered, ...(skipped ? { skipped } : {}) };
+}
+
+export function coverageTotals(summary: Summary): FileSummary {
+  const totals: FileSummary = {};
+  for (const file of Object.values(summary)) {
+    for (const name of coverageMetrics) {
+      const counts = file[name];
+      if (!counts) continue;
+      const previous = totals[name];
+      totals[name] = coverageCounts({
+        covered: (previous?.covered ?? 0) + counts.covered,
+        total: (previous?.total ?? 0) + counts.total,
+        skipped: (previous?.skipped ?? 0) + (counts.skipped ?? 0),
+      });
+    }
+  }
+  return totals;
+}
+
 export function readCoverageSummary(value: unknown): Summary {
-  if (!isRecord(value) || !isRecord(value.total)) throw new Error("invalid coverage summary");
-  const summary: Summary = {};
+  if (!isRecord(value)) throw new Error("invalid coverage summary");
+  const files: [string, FileSummary][] = [];
   for (const [file, data] of Object.entries(value)) {
+    // Existing committed baselines and tool reports may carry their own aggregates and percentages.
+    if (file === "total") continue;
     if (!isRecord(data)) throw new Error(`invalid coverage summary for ${file}`);
     const metrics: FileSummary = {};
     for (const name of coverageMetrics) {
@@ -32,21 +62,30 @@ export function readCoverageSummary(value: unknown): Summary {
       if (
         !isRecord(metric) ||
         typeof metric.total !== "number" ||
+        !Number.isSafeInteger(metric.total) ||
+        metric.total < 0 ||
         typeof metric.covered !== "number" ||
-        typeof metric.skipped !== "number" ||
-        (typeof metric.pct !== "number" && metric.pct !== "Unknown")
+        !Number.isSafeInteger(metric.covered) ||
+        metric.covered < 0 ||
+        metric.covered > metric.total ||
+        (metric.skipped !== undefined &&
+          (typeof metric.skipped !== "number" || !Number.isSafeInteger(metric.skipped) || metric.skipped < 0))
       )
         throw new Error(`invalid ${name} coverage summary for ${file}`);
-      metrics[name] = { total: metric.total, covered: metric.covered, skipped: metric.skipped, pct: metric.pct };
+      metrics[name] = coverageCounts({
+        covered: metric.covered,
+        total: metric.total,
+        ...(typeof metric.skipped === "number" ? { skipped: metric.skipped } : {}),
+      });
     }
-    summary[file] = metrics;
+    files.push([file, metrics]);
   }
-  return summary;
+  return Object.fromEntries(files);
 }
 
 export function normalizedSummary(map: CoverageMap, root: string) {
   const metrics = (summary: CoverageSummary): FileSummary =>
-    Object.fromEntries(coverageMetrics.map((name) => [name, summary[name]]));
+    Object.fromEntries(coverageMetrics.map((name) => [name, coverageCounts(summary[name])]));
   const files = map
     .files()
     .map((file: string): [string, FileSummary] => [
@@ -56,10 +95,12 @@ export function normalizedSummary(map: CoverageMap, root: string) {
   files.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
   if (files.some(([file]) => file === ".." || file.startsWith("../")))
     throw new Error("coverage source outside report root");
-  return { total: metrics(map.getCoverageSummary()), ...Object.fromEntries(files) };
+  return Object.fromEntries(files);
 }
 
 export function coverageChange(current: Summary, baseline: Summary | undefined, revision: string) {
+  const currentTotals = coverageTotals(current);
+  const baselineTotals = baseline && coverageTotals(baseline);
   const rows = [
     "## Coverage change",
     "",
@@ -68,13 +109,12 @@ export function coverageChange(current: Summary, baseline: Summary | undefined, 
     "| Source | Metric | Baseline | Current | Change |",
     "| --- | --- | --- | --- | --- |",
   ];
-  const display = (metric: Totals | undefined) =>
-    metric ? `${String(metric.pct)}% (${String(metric.covered)}/${String(metric.total)})` : "—";
-  const changes = (before: Totals | undefined, after: Totals | undefined) => {
+  const display = (metric: MetricCounts | undefined) =>
+    metric ? `${String(coveragePercentage(metric))}% (${String(metric.covered)}/${String(metric.total)})` : "—";
+  const changes = (before: MetricCounts | undefined, after: MetricCounts | undefined) => {
     if (!before) return "added";
     if (!after) return "removed";
-    if (typeof before.pct !== "number" || typeof after.pct !== "number") return "unmeasured";
-    const delta = Math.round((after.pct - before.pct) * 100) / 100;
+    const delta = Math.round((coveragePercentage(after) - coveragePercentage(before)) * 100) / 100;
     return `${delta > 0 ? "+" : ""}${delta.toFixed(2)} pp`;
   };
   const files = (baseline ? [...new Set([...Object.keys(current), ...Object.keys(baseline)])] : [])
@@ -82,14 +122,14 @@ export function coverageChange(current: Summary, baseline: Summary | undefined, 
     .sort();
   for (const file of ["total", ...files])
     for (const name of coverageMetrics) {
-      const before = baseline?.[file]?.[name];
-      const after = current[file]?.[name];
+      const before = (file === "total" ? baselineTotals : baseline?.[file])?.[name];
+      const after = (file === "total" ? currentTotals : current[file])?.[name];
       if (!before && !after) continue;
       if (
         file !== "total" &&
         before &&
         after &&
-        (["pct", "covered", "total", "skipped"] as const).every((key) => before[key] === after[key])
+        (["covered", "total", "skipped"] as const).every((key) => before[key] === after[key])
       )
         continue;
       const source = file.replaceAll("|", "\\|").replaceAll("\n", " ");
@@ -122,18 +162,25 @@ export function reportSummaryChange(current: Summary, root: string, output: stri
     throw new Error("invalid coverage baseline revision");
   const repository = options.repository ?? root;
   const path = relative(repository, output).split(sep).join("/");
-  const git = spawnSync("git", ["-C", coverageRepository(repository), "cat-file", "blob", `${revision}:${path}`], {
-    encoding: "utf8",
-    maxBuffer: 8 * 1024 * 1024,
-  });
+  const captured = process.env.WORKBENCH_CHECK_BASELINE;
+  let committed: string | undefined;
+  if (captured) committed = readFileSync(captured, "utf8");
+  else {
+    const git = spawnSync("git", ["-C", coverageRepository(repository), "cat-file", "blob", `${revision}:${path}`], {
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    if (!git.error && git.status === 0) committed = git.stdout;
+  }
   let baseline: Summary | undefined;
-  if (!git.error && git.status === 0) {
-    baseline = readCoverageSummary(JSON.parse(git.stdout));
-    const total = baseline.total;
-    if (!total || coverageMetrics.some((metric) => current.total?.[metric] && !total[metric]))
+  if (committed) {
+    baseline = readCoverageSummary(JSON.parse(committed));
+    const total = coverageTotals(baseline);
+    const actual = coverageTotals(current);
+    if (!Object.keys(total).length || coverageMetrics.some((metric) => actual[metric] && !total[metric]))
       throw new Error("invalid committed coverage summary");
   }
-  if (options.writeSummary !== false) writeFileSync(output, JSON.stringify(current, null, 2) + "\n");
+  if (options.writeSummary !== false) writeAtomic(output, JSON.stringify(current, null, 2) + "\n");
   const presentation =
     (options.notice ? options.notice + "\n\n" : "") +
     `Coverage root: ${relative(repository, root).split(sep).join("/") || "."}\n\n` +
@@ -143,12 +190,21 @@ export function reportSummaryChange(current: Summary, root: string, output: stri
     kind: "coverage",
     root: relative(repository, root).split(sep).join("/") || ".",
     revision,
-    current: current.total ?? {},
-    ...(baseline?.total ? { baseline: baseline.total } : {}),
+    current: detailMetrics(current),
+    ...(baseline ? { baseline: detailMetrics(baseline) } : {}),
     ...(options.notice ? { notice: options.notice } : {}),
   });
   console.log(presentation);
   const jobSummary = options.jobSummary ?? process.env.GITHUB_STEP_SUMMARY;
   if (jobSummary) appendFileSync(jobSummary, presentation + "\n");
   return current;
+}
+
+function detailMetrics(summary: Summary): CoverageDetailMetrics {
+  return Object.fromEntries(
+    Object.entries(coverageTotals(summary)).map(([name, counts]) => [
+      name,
+      { ...counts, skipped: counts.skipped ?? 0, pct: coveragePercentage(counts) },
+    ]),
+  );
 }

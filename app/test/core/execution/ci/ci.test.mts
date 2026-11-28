@@ -182,10 +182,11 @@ test("the React example covers all native platforms and both prepared managed en
     { os: "macos", architecture: "arm64" },
     { os: "windows", architecture: "x64" },
   ]);
-  expect(matrix.environments.include.filter((entry) => entry.path === path).map((entry) => entry.environment)).toEqual([
-    "guix",
-    "nix",
-  ]);
+  expect(
+    matrix.environments.include
+      .filter((entry) => entry.path === path)
+      .map(({ environment, architecture }) => `${environment}/${architecture}`),
+  ).toEqual(["guix/x64", "guix/arm64", "nix/x64", "nix/arm64"]);
   expect(matrix.devcontainer.paths).toEqual([]);
   expect(matrix.compatibility.include.filter((entry) => entry.path === path)).toEqual([]);
 });
@@ -208,7 +209,7 @@ test("invalid coverage and missing definitions fail instead of silently omitting
   expect(() => ciMatrix(root)).toThrow(/flake.lock/);
 });
 
-test("native CI selects explicit OS architectures and keeps managed environments independent", () => {
+test("CI selects native OS architectures and expands managed environments across Linux architectures", () => {
   const { root, config } = fixture();
   const path = join(root, "workbench/config.toml");
   const configure = (architectures: string | RegExp | undefined) => {
@@ -227,9 +228,18 @@ test("native CI selects explicit OS architectures and keeps managed environments
     { os: "windows", architecture: "x64", runner: "windows-2025" },
   ]);
   expect(matrix.native.include.filter(({ path }) => path === "service")).toHaveLength(4);
-  expect(matrix.environments.include.map(({ path, environment }) => [path, environment])).toEqual([
-    ["web", "guix"],
-    ["web", "nix-docker"],
+  expect(
+    matrix.environments.include.map(({ path, environment, architecture, runner }) => [
+      path,
+      environment,
+      architecture,
+      runner,
+    ]),
+  ).toEqual([
+    ["web", "guix", "x64", "ubuntu-26.04"],
+    ["web", "guix", "arm64", "ubuntu-26.04-arm"],
+    ["web", "nix-docker", "x64", "ubuntu-26.04"],
+    ["web", "nix-docker", "arm64", "ubuntu-26.04-arm"],
   ]);
   for (const [value, error] of [
     ["{linux = []}", /at least one/],

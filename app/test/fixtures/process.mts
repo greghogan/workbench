@@ -1,6 +1,7 @@
 import { describeError } from "../../src/core/diagnostics/diagnostics.mjs";
 import type { SpawnSyncReturns } from "node:child_process";
 import { processFailure } from "../../src/core/runtime/process-outcome.mjs";
+import { coverageWriteError } from "../../../scripts/node-coverage-reports.mjs";
 
 /** Complete successful child-process result, with per-test failure/output overrides. */
 export function completedProcess(overrides: Partial<SpawnSyncReturns<string>> = {}): SpawnSyncReturns<string> {
@@ -17,6 +18,9 @@ interface CapturedProcess extends Pick<SpawnSyncReturns<string>, "pid" | "status
 /** Require normal success and retain bounded child output when a fixture launch fails. */
 export function assertProcessSuccess(operation: string, result: CapturedProcess): void {
   const failure = processFailure(operation, result);
+  const raw = process.env.WORKBENCH_SUBPROCESS_COVERAGE;
+  const coverageFailure = raw && coverageWriteError(raw, result.stderr ?? "");
+  if (coverageFailure) throw coverageFailure;
   if (!failure) return;
   const output = Buffer.from((result.stdout ?? "") + (result.stderr ?? ""));
   const limit = 8192;
@@ -28,3 +32,6 @@ export function assertProcessSuccess(operation: string, result: CapturedProcess)
     },
   );
 }
+
+/** A synthetic child executes only the test's inline fixture, with no application modules. */
+export const syntheticChildEnvironment = () => ({ ...process.env, NODE_V8_COVERAGE: "" });

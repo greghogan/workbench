@@ -1,3 +1,4 @@
+import { syntheticChildEnvironment } from "../../fixtures/process.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,7 +21,10 @@ function fixture() {
   temporary.push(root);
   vi.stubEnv("WORKBENCH_CACHE_HOME", root);
   const lock = join(root, "locks", "checkout", "build");
-  const retired = spawnSync(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  const retired = spawnSync(process.execPath, ["-e", "process.exit(0)"], {
+    env: syntheticChildEnvironment(),
+    stdio: "ignore",
+  });
   expect(retired.status).toBe(0);
   const owner = {
     version: 1,
@@ -94,6 +98,7 @@ test.skipIf(process.platform === "win32")(
   async () => {
     const f = fixture();
     const child = spawn(process.execPath, ["-e", "process.send('ready');setInterval(()=>{},1000)"], {
+      env: syntheticChildEnvironment(),
       detached: true,
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
@@ -276,6 +281,7 @@ test.skipIf(process.platform === "win32")("a completion receipt preserves a surv
   const owner = required(acquireProcessLock(f.lock, true), "owner");
   owner.beforeSpawn();
   const child = spawn(process.execPath, ["-e", "process.send('ready');setInterval(()=>{},1000)"], {
+    env: syntheticChildEnvironment(),
     detached: true,
     stdio: ["ignore", "ignore", "ignore", "ipc"],
   });

@@ -13,6 +13,9 @@ if (args[0] === "paths") {
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, "payload"), "release fixture");
   console.log(JSON.stringify({ variables: { WORKBENCH_DIST_DIR: directory } }));
+} else if (args[0] === "prepare") {
+  if (readFileSync("draft", "utf8") !== "pending input")
+    throw new Error("preparation did not receive the pending snapshot");
 } else if (args[0] === "ci-checks" || args[0] === "check") {
   if (readFileSync("draft", "utf8") !== "pending input") throw new Error("check did not receive the pending snapshot");
   const coverage = join(process.cwd(), "coverage");

@@ -8,8 +8,24 @@ import { mutationForm } from "./action-forms.js";
 import { routeURL } from "../routes/locations.js";
 import { Route } from "../routes/routes.js";
 import { shell } from "./page-frame.js";
+import { recordList } from "./record-content.js";
 import { type ViewContext } from "../workspace/view-context.js";
-export function onboarding(context: ViewContext): JSX.Element | null {
+
+export function chartersPage(context: ViewContext): string {
+  const charters = context.selectedRecords.filter((record) => record.type === "CHARTER");
+  const setup = onboarding(context);
+  return shell(
+    context,
+    "Charters",
+    "CHARTER",
+    <>
+      {setup}
+      {charters.length ? recordList(charters, context) : setup ? null : <p class="empty">No charters.</p>}
+    </>,
+  );
+}
+
+function onboarding(context: ViewContext): JSX.Element | null {
   if (context.selection) return null;
   const missing = context.projects.filter(
     (project) => (context.all || project.id === context.scope) && !context.index.byId.has(project.id + ":CHARTER"),
@@ -82,7 +98,7 @@ export function newCharterPage(
     ),
     {
       scope: project.id,
-      parents: [{ label: "Charters", href: routeURL(Route.Records, { scope: project.id, type: "CHARTER" }) }],
+      parents: [{ label: "Charters", href: routeURL(Route.Charters, { scope: project.id }) }],
     },
   );
 }

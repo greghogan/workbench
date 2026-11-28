@@ -23,6 +23,7 @@ export interface WindowsProcessOptions {
   output?: "pipe" | "inherit";
   windowsVerbatimArguments?: boolean;
   stopDescendantsOnExit?: boolean;
+  machineJobId?: string;
 }
 export interface WindowsProcess {
   child: ChildProcessByStdio<Writable | null, Readable | null, Readable | null>;
@@ -247,17 +248,20 @@ export async function spawnWindowsProcess(
         token,
         result,
         stopOnExit: options.stopDescendantsOnExit === true,
+        machineJobId: options.machineJobId,
         hide,
       }),
       { flag: "wx", mode: 0o600 },
     );
     writeFileSync(script, windowsProcessLaunch, { flag: "wx", mode: 0o600 });
-    const system = environmentValue(options.env, "SYSTEMROOT") ?? environmentValue(process.env, "SYSTEMROOT");
+    const system = environmentValue(process.env, "SYSTEMROOT");
     if (!system) throw new Error("Windows process supervision requires SystemRoot");
     const powershell = win32.join(system, "System32/WindowsPowerShell/v1.0/powershell.exe");
     const settings = {
       cwd: options.cwd,
-      env: { ...options.env, WORKBENCH_PROCESS_REQUEST: request },
+      // PowerShell compiles and runs the host supervisor. The request supplies
+      // the selected, possibly restricted environment to the supervised command.
+      env: { ...process.env, WORKBENCH_PROCESS_REQUEST: request },
       windowsHide: hide,
     };
     const arguments_ = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script];

@@ -2,7 +2,6 @@ import type { ToolAsset } from "../../app/src/core/toolchains/tool-downloads.js"
 import { isDeepStrictEqual } from "node:util";
 import { basename, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { parse } from "yaml";
 import { JSDOM } from "jsdom";
 import { MaintenanceSources } from "./sources.mjs";
 import { type Release, NativeCatalog, MaintenanceProvider, type MaintenanceEntry } from "./contract.mjs";
@@ -187,11 +186,7 @@ export async function resolveNativeArtifacts(
           );
           checksum = string(archive.digest, "Missing RubyInstaller digest").replace(/^sha256:/, "");
         } else {
-          const url = "https://raw.githubusercontent.com/ruby/www.ruby-lang.org/master/_data/releases.yml";
-          const releases = records(
-            parse(await sources.request(url, "text/plain")) as unknown,
-            "Invalid Ruby source index",
-          );
+          const releases = await sources.rubyReleaseIndex();
           const ruby = required(
             releases.find((item) => item.version === release.version),
             "Missing Ruby source release",

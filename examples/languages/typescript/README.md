@@ -1,5 +1,19 @@
 # TypeScript reference
 
+## Native build and run
+
+Use the Node version in `.node-version` and the pnpm version declared in `package.json`.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run build
+node --input-type=module -e 'import { countByte } from "./build/src/arithmetic.js"; console.log(countByte(new TextEncoder().encode("banana"), 97));'
+```
+
+The result is `3`.
+
+## Workbench workflow
+
 This small Node project demonstrates the TypeScript 7 compiler, strict type checking, a committed pnpm lockfile,
 type-aware ESLint, Prettier, and Vitest. The `@typescript/native` alias selects TypeScript 7 for compilation and type
 checking. The `typescript` alias selects the TypeScript 6 compatibility package because the locked `typescript-eslint`

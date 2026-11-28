@@ -12,11 +12,12 @@ import {
   compatibilityFindingsPath,
 } from "../../core/collections/policy-compatibility.js";
 import { GitSnapshot } from "../../core/git/git-snapshot.js";
+import { withRepositoryReads } from "../../core/git/repository-reads.js";
 import { readConfig, readProjects } from "../../core/projects/project-configuration.js";
 import { observeGitInputs } from "../../core/projects/workspace-inputs.js";
 import { protectedRecordPaths, recordOwnerPath } from "../../core/records/staged-records.js";
 import { ReviewFormatter } from "../../core/review/review-formatting.js";
-import { pendingRecordOutputs, reviewPreparationPath } from "../../core/review/review-preparation-state.js";
+import { pendingRecordOutputs } from "../../core/review/review-preparation-state.js";
 import { reviewStatus, reviewGit, ReviewSource } from "../../core/review/review-service.js";
 import { reviewFileLimit } from "../../core/review/review-snapshot.js";
 import { inputStamp } from "../../core/runtime/file-identity.js";
@@ -48,7 +49,7 @@ export class ReviewInventory {
     )
       return Promise.resolve(previous.value);
     return withConfigurationSnapshot(async () => {
-      const value = await this.acquire();
+      const value = await withRepositoryReads(() => this.acquire());
       if (retainedBytes([value.inputs, this.hashes, this.preparation], 16 * 1024 * 1024) <= 16 * 1024 * 1024)
         this.previous = { value, at: Date.now() };
       else {
@@ -71,7 +72,7 @@ export class ReviewInventory {
     if (!this.git || ![...this.git.inputs].every(([path, stamp]) => inputStamp(path) === stamp)) {
       const paths = new Map<string, string>();
       observeGitInputs(this.root, (path) => {
-        if (!(basename(path) === "review.json" && basename(dirname(path)) === "workbench"))
+        if (!paths.has(path) && !(basename(path) === "review.json" && basename(dirname(path)) === "workbench"))
           paths.set(path, inputStamp(path));
       });
       const headPath = [...paths.keys()].find((path) => basename(path) === "HEAD");
@@ -102,9 +103,8 @@ export class ReviewInventory {
     });
     for (const path of this.hashes.keys()) if (!seen.has(path)) this.hashes.delete(path);
     observe(status.receipt);
-    observe(reviewPreparationPath(this.root));
     const preparation = new Map<string, ReviewPreparation>(
-      [...pendingRecordOutputs(this.root)].map((path) => [path, { state: PreparationState.Required }]),
+      [...pendingRecordOutputs(this.root, observe)].map((path) => [path, { state: PreparationState.Required }]),
     );
     for (const change of status.changes) {
       observe(join(this.root, change.path));
@@ -160,29 +160,32 @@ export class ReviewInventory {
     }
     const tasks = taskReviewInventory(this.root, observe);
     for (const path of protectedRecordPaths(scopes, sources)) observe(join(this.root, path));
+    const directories = new Set<string>(),
+      ignoreDirectories = new Set<string>();
     for (const path of [...inputs.keys()]) {
-      for (let directory = dirname(path); ; directory = dirname(directory)) {
+      for (let directory = dirname(path); !directories.has(directory); directory = dirname(directory)) {
+        directories.add(directory);
         observe(directory);
         if (existsSync(directory) && lstatSync(directory).isDirectory()) break;
         if (dirname(directory) === directory) break;
       }
       if (path.startsWith(this.root + sep)) {
-        for (let directory = dirname(path); ; directory = dirname(directory)) {
+        for (let directory = dirname(path); !ignoreDirectories.has(directory); directory = dirname(directory)) {
+          ignoreDirectories.add(directory);
           observe(join(directory, ".gitignore"));
           if (directory === this.root || dirname(directory) === directory) break;
         }
       }
     }
+    let standalone = 0;
+    for (const unit of allCommitReviews(this.root, status.head)) {
+      if (!unit.pending) continue;
+      const owner = reviewTaskOwner(reviewTaskPaths(this.root, unit), tasks.byPath);
+      if (!owner || !tasks.outcomes.has(owner.reference))
+        standalone += reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path));
+    }
     if (![...inputs].every(([path, stamp]) => inputStamp(path) === stamp))
       throw new Error("Review inputs changed during acquisition; retrying");
-    let standalone = 0;
-    for (const unit of allCommitReviews(this.root)) {
-      if (!unit.pending) continue;
-      const owner = reviewTaskOwner(reviewTaskPaths(this.root, unit.revision, unit.parents[0]), tasks.byPath);
-      if (!owner)
-        standalone += reviewRecordCount(unit.changes.filter((change) => !change.approved).map((change) => change.path));
-      else if (owner.metadata.status === "Accepted") tasks.outcomes.add(owner.reference);
-    }
-    return { count: pending.size + standalone + tasks.outcomes.size + Number(compatibility), inputs };
+    return { count: pending.size + standalone + tasks.approvals + tasks.outcomes.size + Number(compatibility), inputs };
   }
 }

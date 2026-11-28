@@ -16,9 +16,20 @@ advisories, authentication errors, unavailable services, or a connection lost du
 Use `workbench pre-commit` or `make pre-commit` for the commit-stage gate alone. Use `workbench pre-push` or
 `make pre-push` for required online checks without repeating offline tests. Pre-push never skips for lack of
 connectivity. Both gates validate project records. Online results always run fresh and include required setup.
+Pre-push also verifies published CI images.
 
-`workbench check --list` displays both plans without probing the network. Its `--json` output contains `preCommit` and
-`prePush` plans. `pre-commit --list` and `pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
+Run `workbench prepare` to acquire locked dependencies. Use `--staged` to select the Git index when the next commit has
+different inputs from the working tree. Preparation runs on a private checkout of the selected Git snapshot.
+Use the same project, path, environment, and toolchain selectors for preparation and checks.
+
+Linux runs ordinary checks and builds with external networking blocked. A private network namespace preserves
+loopback for tests that start their own servers. Linux containers that already have only loopback use that network.
+The combined gate runs live checks separately. macOS permits networking because App Sandbox's TCP permissions also
+cover loopback. Windows runs with its regular network access and whole-project inputs.
+
+`workbench check --list` displays separate **Pre-commit checks** and **Online pre-push checks** sections without
+probing the network. Its `--json` output contains `preCommit` and `prePush` plans. `pre-commit --list` and
+`pre-push --list` inspect individual gates. Explicit `check --stage STAGE` or
 `check --role ROLE` runs only that selection. Repeat `--role` to select a union of roles, and repeat `--exclude-role` to
 omit roles. For example, `workbench check --role lint --role type` runs those roles in configured order with required
 setup once per session. Exclusions alone retain the commit-stage defaults; use `--stage ci` for CI selection. Unknown
@@ -27,11 +38,52 @@ roles, overlapping includes/excludes, and exclusion of required setup fail befor
 Use `--path` or `--project` to focus any gate, and `--verbose` to stream full logs. The matching Make targets support
 the same root and project selectors.
 
+Add `--extended` to run the extended checks configured for the selected roots and platform. Combine it with
+`--list` to preview the selection. Declare an extended check with `extended = true` in project automation or in
+a language suite. It stays outside the ordinary gates unless you also assign regular `stages`. The check's
+`[check.ci]` or `[command.ci]` table restricts the platforms and environments where it can run in the extended
+suite. Online extended checks follow the combined gate's connectivity probe. Extended runs that select these checks
+execute fresh, since an installed service or external guest image can change independently of project source.
+
+Workbench's extended suite includes Miri, mutation and generated-input checks, reproducibility, managed-store
+preparation, and [installed service checks](installations.md#extended-service-checks).
+
+The installed system service coordinates check launches across projects and accounts on Linux, macOS, and Windows.
+It admits native checks individually and treats an isolated environment as one session. Each command runs as the calling
+OS account. The service rotates among projects and delays new launches when available slots, CPU contention, or memory
+require it. Without a running system service, checks report standalone scheduling and use the local allocation.
+
+The service administrator can set `[daemon]` preferences `job_limit`, `worker_slots`, and `memory_reserve_bytes`.
+The first two default to the available logical CPU count. The memory reserve defaults to 5% of host RAM, capped at
+1 GiB. Project and invocation settings can still limit local concurrency. Starting the service is explicit.
+
+On Linux and macOS, compatible GNU Make, Ninja, CMake with Ninja, and Cargo commands share worker slots through the
+GNU jobserver FIFO protocol. Each command receives its implicit slot and can borrow available slots up to its local
+worker limit. Explicit parallel arguments and an inherited jobserver keep their own scheduling. Isolated build
+environments and other commands use command-level admission.
+
+On Linux, the launcher acquires its permit before entering the offline sandbox. A scoped check can borrow worker
+slots through its own FIFO, while the service endpoint stays outside the scope. On macOS, scoped checks use
+command-level admission.
+
+Set `parallel = true` on independent offline `docs`, `format`, `license`, `lint`, `test`, or `type` checks that do not modify
+shared inputs or outputs. Adjacent opted-in checks within a native session may run together while other roots are
+active. Concurrent checks share the local job budget and respect CPU and memory limits. Each completion can admit the
+next opted-in check. Setup and other non-parallel checks wait for the active checks to finish. Verbose runs execute
+each session's commands in sequence.
+Tests and their coverage variants require a private scoped workspace to overlap with other checks. Concurrent commands
+each honor the configured or inherited worker limit.
+
 Setup installs Git's `pre-commit`, `pre-push`, `commit-msg`, and `post-commit` hooks. Commit checks use the staged tree;
 push checks use each distinct outgoing tip tree from Git's ref updates. Deletions require no online checks. Annotated
 tags are checked at their commit; tags pointing to non-commit objects have no project gate. Push checks leave the
 working tree and index untouched and never prompt for human record approval. The command `workbench pre-push` itself
 checks the selected project tree; it neither pushes commits nor installs hooks.
+
+Linux commit checks can mount declared inputs from the private staged checkout when Bubblewrap supports the required
+mounts. Setup writes to a disposable overlay, and scoped commands receive private output directories. Scoped checks
+verify and copy generated inputs that differ from the read-only checkout. Hosts without the required mounts use a
+verified private view. Edit notifications are not used to certify a reusable result.
 
 Declare network-dependent commands with `online = true` in project checks or language automation. They default to the CI
 stage. `workbench pre-push` selects those configured for CI independently of their role. If none are configured, the
@@ -258,7 +310,8 @@ stage. `--project ID` selects a registered scope and its descendant roots; it ca
 override the local selection. Without `--path`, an explicit environment applies to every configured check root.
 
 The Git adapter materializes the complete staged index as a temporary tree, including unchanged tracked files and
-excluding unstaged edits and untracked files. Every commit requires successful complete commit-stage evidence for this
+excluding unstaged edits and untracked files. Workbench verifies that preparation and checks preserve the tracked
+snapshot before retaining success evidence. Every commit requires successful complete commit-stage evidence for this
 tree using its staged launcher. Matching local gate evidence can be reused as described below. Filenames do not select
 which checks are required. Source, dependency, toolchain, and executable configuration changes invalidate code evidence.
 Record changes receive fresh validation without invalidating unrelated code evidence. Tools may also use their own
@@ -344,8 +397,9 @@ result location. CI and explicit role operations always run fresh.
 Every executed gate retains detailed results and logs. `--report PATH` exports machine-readable results without forcing
 fresh execution or preventing successful evidence from being cached. Reused results retain their original timings and
 include `reused.verified`; setup and security checks refreshed during the invocation appear as separate fresh runs.
-Cached success details are retained with their receipt, independently of log age-off. Use `--no-cache` when the report
-must describe fresh execution.
+Workbench reserves the output path in user state before execution. Choose an unused path for each concurrent export. Cached success
+details follow cache retention independently of check logs. Use `--no-cache` when the report must describe fresh
+execution.
 
 Concurrent gates for the same checkout sharing the Workbench user cache wait for the active gate, including working-tree
 checks and Git's staged snapshots. After waiting, each caller validates its selected tree and rereads the check plan and
@@ -353,8 +407,8 @@ inputs. Matching successful evidence can then be reused; changed inputs require 
 supply no new success evidence. `--no-cache` also waits for ownership and then runs fresh. Different checkouts have
 independent queues. A wait that exceeds 30 minutes fails with the lock location for inspection.
 
-The source fingerprint conservatively covers the whole project; it does not infer which files affect each check. The
-source inventory includes tracked files and non-ignored untracked files, with contents and executable modes. Project
+The source fingerprint covers the whole project by default. The source inventory includes tracked files and
+non-ignored untracked files, with contents and executable modes. Project
 records and sidecars, adopted collections, charters, record/source maps, generated `AGENTS.md`, and each registered
 root's `coverage/coverage-summary.json` are excluded by default. Test-owned fixtures remain inputs, as do executable
 files such as `workbench/config.toml`, `projects.toml`, `automation.toml`, and `quality.json`. Record/map validation,
@@ -371,6 +425,65 @@ inputs = [ "workbench/experiments/EXP-00/driver.py" ]
 Entries are literal project-relative file or directory paths; directories include their descendants. Explicit inputs
 also include otherwise ignored files. Missing inputs become part of the inventory when created. Symlinks are not
 permitted in explicit input paths. Staged snapshots use their own files, never unstaged contents in the owning checkout.
+
+Projects can opt in to a narrower cache key by declaring the complete inputs of their reusable checks and required
+setup in `workbench/automation.toml`. A launcher suite can declare its directory and the shared license it reads.
+
+```toml
+[input_groups.shared]
+paths = ["LICENSE"]
+
+[input_groups.launcher]
+paths = ["services/launcher"]
+depends_on = ["shared"]
+
+[[check_suite]]
+language = "go"
+path = "services/launcher"
+input_groups = ["launcher"]
+```
+
+Paths are literal repository-relative names. A directory includes tracked and non-ignored untracked descendants,
+including additions, removals, and renames. A named file or an entry in `checks.inputs` can include ignored material.
+Use `input_groups` on an individual `[[check]]`, or set an override in `check_inputs` on a suite, keyed by the
+check's name in its language automation. Groups may depend on other groups. Workbench includes project configuration
+and `checks.inputs` in every scoped gate. Include any shared fixtures, scripts, and other files the commands read.
+Use `outputs` for generated checkout-relative directories a check must write. Workbench gives each scoped run empty,
+private copies of those directories and rejects overlap with captured files.
+
+A check that needs another command's generated files can list its build checks by name with
+`requires_build = ["Build application"]`. Declare each producer as a `build` check, with its source inputs and
+output directories in `input_groups`. The named builds run ahead of their consumers in the same root and
+environment. An isolated check receives a read-only view of the declared products. A matching retained build
+supplies verified output when available. Missing or damaged output triggers a rebuild.
+
+`workbench check --list` and `--json` show the effective scopes. Native gates with declared inputs can reuse successful
+results independently for checks with different input scopes in the same root and environment. Commands still run in
+their configured order. Put outputs needed by other checks in declared setup so fresh checks can recreate them when
+their neighbors are reused. A fresh scoped check and its subprocesses see the declared source read-only. They have
+private build and temporary directories, and coverage commands can write a separate report. When native isolation or
+the declared inputs cannot be verified, Workbench uses whole-project inputs or runs fresh.
+
+Scoped setup uses the prepared package stores for its selected toolchain. Checks using the standard Ruby runner mount
+verified installed gems read-only and verify the bundle inside the scope. Other installation directories and writable
+package-manager metadata stay private. Package stores that need writes get a private copy-on-write view or copy. Run
+`workbench prepare` for the affected root when locked packages are missing.
+
+Native `workbench prepare` uses the selected Git snapshot's declarations. When every selected setup and acquisition
+command declares complete inputs, Workbench checks out those paths together with project policy and toolchain pins.
+Otherwise it uses the complete snapshot.
+
+When checking Workbench itself, its generated helpers and launcher are refreshed before the gate captures its inputs.
+The gate rebuilds those files using prepared dependencies and then verifies that the selected dependency graph remains
+available to the checks.
+
+Linux isolation requires Bubblewrap (`bwrap`) with working user namespaces. macOS uses a signed App Sandbox launcher.
+On Windows, AppContainer honors existing access grants to app packages, so a file outside the declared scope can still
+be readable. Windows uses whole-project verification with the runner's network access.
+
+The execution report's `cache` field shows which checks ran fresh or reused results, the input scope, and any fallback.
+Fresh security checks can read the whole project. A source change during those scans prevents reuse from satisfying the
+current gate.
 
 The key also covers committed coverage baseline contents, Workbench distribution, resolved command and tool executable
 contents, tool version probes, host identity, effective tool environments and selected configuration files, storage
@@ -431,6 +544,9 @@ Workbench and its TypeScript, JavaScript, and React examples lint source, tests,
 ESLint/Vitest configuration. Strict typed presets are supplemented with correctness rules for comparisons, callbacks,
 throws, and dead assignments. Unused lint suppressions fail. Focused tests are rejected by lint and by Vitest, including
 local runs. Prettier owns layout; lint rule details remain in each project's standalone configuration.
+Workbench's typed lint uses up to four workers, bounded by the assigned CPUs and available memory.
+Workbench retains recent Vitest file timings in build storage to schedule longer tests earlier. A fresh test run
+still executes every selected test.
 
 Select a project and descendants with `make build/service` or `make build PROJECT=service`; the same patterns support
 check, pre-commit, pre-push, test, coverage, release, fmt, lint, clean, and distclean. Select exactly one language root
@@ -439,8 +555,8 @@ with `make build ROOT=examples/languages/rust`. Adding projects or roots require
 sequentially. The direct Workbench CLI remains available without Make; the reference-directory Makefiles are static
 wrappers selecting their own root.
 
-Inspect the same resolved plan with `workbench check --list`: the table lists the selected root, role, environment,
-check, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
+Inspect the same resolved plans with `workbench check --list`. The tables show each check's root, role, environment,
+name, and definition source. `--all` adds excluded checks and their reasons; `--json` also includes commands. Both
 imply `--list` and never execute checks. Selection flags match execution, including `--stage ci` and `--role test`. A
 focused role includes its setup but skips structural validation. `make pre-commit` and `workbench pre-commit` run
 complete commit gates. `make check` and `workbench check` additionally attempt online checks.
@@ -449,7 +565,7 @@ complete commit gates. `make check` and `workbench check` additionally attempt o
 
 Independent check roots run concurrently up to the user's `execution.max_jobs`, bounded by the available CPU count. CPU
 allowances do not reserve capacity for a group. Ancestor roots finish before descendants start unless an applicable
-`check_order` rule permits setup overlap. Environments for the same root and checks within each group run in order.
+`check_order` rule permits setup overlap. Environments for the same root run in order.
 Setup and dependent checks retain a shared shell and build lock. Use `workbench config set execution.max_jobs 1` for
 serial execution; add `--scope local` for this checkout alone. Ordinary checks leave tool parallelism at its default. An
 explicit `execution.cpus_per_job`, `WORKBENCH_CPUS`, or inherited CI budget caps supported tool workers, independently
@@ -512,8 +628,11 @@ writes one JSON document covering both phases of a combined gate. It requires a 
 cache reuse; add `--no-cache` to require fresh execution. An existing file is never replaced. `--json` continues to
 describe the plan without execution and cannot be combined with `--report`.
 
-The external document has `version: 1`, `kind: "workbench-check-report"`, `success`, a bounded `error` message on
-failure, and a `runs` array. Each run has `version: 1`, `kind: "workbench-check-run"`, an ID, start/finish timestamps, a
+The external document has `version: 1`, `kind: "workbench-check-report"`, start and finish timestamps, `success`, a
+bounded `error` message on failure, timed `phases`, and a `runs` array. Phases include structural validation,
+dependency preparation, input planning and revalidation, worker preparation, and cache maintenance when performed.
+Structural validation includes the timings reported for its individual steps. Worker phases identify their root and environment. Each run has `version: 1`,
+`kind: "workbench-check-run"`, an ID, start/finish timestamps, a
 status, its retained `logs` directory when allocated, a bounded `error` message on failure, `checks`, `groups`, and
 `logIssues`. Checks include their name, role, root, environment, status, start/finish timestamps, duration in
 milliseconds when started, a source-specific `log` when retained, a structured error when known, and `details`. Groups
@@ -562,18 +681,19 @@ TypeScript reference keep these settings in `pyproject.toml` and `vitest.config.
 `.config/nextest.toml`. Each value has one authoritative source.
 
 The root coverage runner retains test outcomes, failure diagnostics, and timings in ignored `coverage/tests.json`.
-Detailed merged unit and CLI coverage lives in ignored `coverage/coverage-final.json`; the test report omits its
-duplicate map. Ignored `coverage/timings.json` records elapsed time for workspace preparation, tests, subprocess
-coverage processing, reporting, and cleanup, including raw-report and converted-script counts. The subprocess total
-includes its source-map, report-processing, and conversion phases; do not add it to those phases. These observations
-help distinguish slow tests from expensive coverage processing and do not change acceptance thresholds. Raw report
-parsing and independent script conversion use owned worker threads within CPU and available-memory budgets. Scan workers
-accumulate ranges locally across dynamically assigned batches and return one compact result per worker. Every report is
-validated, exact source attribution is retained, and all measured ranges are merged; a one-CPU budget uses the same
-algorithms serially. Worker failure fails collection and drains the phase before cleanup. Per-phase times also appear in
-the retained coverage-check log, including phases completed before a failure. Each root's normalized
-`coverage/coverage-summary.json` is the only coverage report retained in Git. It uses relative source paths and stable
-formatting. `workbench/quality.json` remains committed check policy.
+The detailed unit and CLI coverage map lives in ignored `coverage/coverage-final.json`. As subprocesses write raw V8
+reports, the runner validates each completed report, merges its ranges in memory, and removes the raw file. The runner
+retries incomplete writes and fails coverage if Node reports a write error or a report is still invalid when the
+suite finishes. Report collection and independent script conversion use bounded worker pools within CPU and available
+memory budgets. Coverage builds retain one full source map per bundle in the runner. Node's reports carry a compact
+bundle reference, including when a test copies the executable. Coverage reports use original source locations. Stack
+traces from these CLI bundles use generated locations.
+
+Ignored `coverage/timings.json` records raw bytes, worker time spent reading and merging reports, and elapsed time
+draining reports after the suite. Use the total duration for the complete run because report processing overlaps test
+execution and workers run concurrently. Git retains each root's `coverage/coverage-summary.json` with measured counts
+by relative source path. Reporting calculates project totals and percentages from those counts. The root runner
+replaces its baseline atomically after the coverage floors pass.
 
 `make coverage` presents totals and per-file changes against the summary committed at `HEAD`, including covered/total
 counts and percentage-point differences. Native CI coverage checks use the pull request base revision, or the previous
@@ -601,8 +721,8 @@ stages = []
 ```
 
 The Workbench examples explicitly select their sample artifact verifier. That verifier is specific to the sample APIs;
-consumers supply their own command. Named release profiles independently declare their `prepare` and `verify` commands
-in project configuration. See the [profile guide](profiles.md).
+consumers supply their own command. Artifact recipes independently declare their `build` and `verify` commands in the
+shared profile catalog. See the [profile guide](profiles.md).
 
 Failed checks print a copyable `workbench logs read PATH` command. The reader accepts the reported logical path even
 after retention compresses it with Zstandard. The terminal shows the failed step once; full group logs and structured

@@ -94,7 +94,8 @@ test("waiting gates reread edited commands and inputs before deciding whether ev
     ).command[3] = "replacement";
     f.save();
     f.release();
-    expect(await first.closed, first.output()).toBe(0);
+    expect(await first.closed, first.output()).toBe(1);
+    expect(first.output()).toContain("source changed during the security");
     expect(await second.closed, second.output()).toBe(0);
     expect(f.count("test")).toBe(1);
     expect(f.count("replacement")).toBe(1);

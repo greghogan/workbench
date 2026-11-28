@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { parse } from "smol-toml";
 import { gitBytes, readGitObjects, readGitTree } from "../git/git-snapshot.js";
+import { withRepositoryReads } from "../git/repository-reads.js";
 import { repositoryStatePath } from "../git/repository-state.js";
 import { validateBranch } from "../git/refs.js";
 import { projectPaths } from "../projects/project-paths.js";
@@ -56,6 +57,9 @@ function restorationPublished(
 
 /** Check every proposed ref together, before project gates or registry requests. */
 export function checkArchivePublication(root: string, input: string, remote: string): string[] {
+  return withRepositoryReads(() => inspectArchivePublication(root, input, remote));
+}
+function inspectArchivePublication(root: string, input: string, remote: string): string[] {
   const updates = pushUpdates(input);
   const archives: string[] = [],
     checked = new Set<string>();
@@ -141,33 +145,43 @@ export function checkArchivePublication(root: string, input: string, remote: str
         .split("\n")
         .filter(Boolean),
     ]);
-    for (const commit of commits) {
-      const tree = readGitTree(root, commit),
-        stateEntry = tree.get(projectPaths.state);
-      if (!stateEntry) continue;
-      const stateBytes = readGitObjects(root, [stateEntry.oid]).get(stateEntry.oid);
-      if (!stateBytes) throw new InvalidInput("Missing outgoing project state");
-      const state = parse(stateBytes.toString()),
-        revision = record(state.archive ?? {}, "Invalid archive state").revision;
-      if (revision === undefined) continue;
-      if (typeof revision !== "string") throw new InvalidInput("Invalid outgoing archive revision");
-      readArchiveTree(root, revision);
-      const configEntry = tree.get(projectPaths.config);
-      const configBytes = configEntry ? readGitObjects(root, [configEntry.oid]).get(configEntry.oid) : undefined;
-      if (!configBytes) throw new InvalidInput("Missing outgoing archive configuration");
-      const config = parse(configBytes.toString()),
-        branch = record(config.records ?? {}, "Invalid records configuration").archive_branch;
-      if (typeof branch !== "string") throw new InvalidInput("Outgoing archive references require an archive branch");
-      validateBranch(root, branch);
-      const identity = `${branch}:${revision}`;
-      if (checked.has(identity)) continue;
-      const archiveRef = `refs/heads/${branch}`,
-        available = destination(archiveRef);
-      if (!available || zero(available) || !ancestor(root, revision, available))
-        throw new InvalidInput(
-          `Publish and verify ${archiveRef} before pushing commits that reference archive ${revision.slice(0, 12)}, or push both branches atomically`,
-        );
-      checked.add(identity);
+    const outgoing = [...commits];
+    for (let offset = 0; offset < outgoing.length; offset += 32) {
+      const batch = outgoing.slice(offset, offset + 32);
+      const states = readGitObjects(
+        root,
+        batch.map((commit) => `${commit}:${projectPaths.state}`),
+      );
+      const pinned = batch.flatMap((commit) => {
+        const state = states.get(`${commit}:${projectPaths.state}`);
+        if (!state) return [];
+        const revision = record(parse(state.toString()).archive ?? {}, "Invalid archive state").revision;
+        if (revision === undefined) return [];
+        if (typeof revision !== "string") throw new InvalidInput("Invalid outgoing archive revision");
+        return [{ commit, revision }];
+      });
+      const configs = readGitObjects(
+        root,
+        pinned.map(({ commit }) => `${commit}:${projectPaths.config}`),
+      );
+      for (const { commit, revision } of pinned) {
+        readArchiveTree(root, revision);
+        const configBytes = configs.get(`${commit}:${projectPaths.config}`);
+        if (!configBytes) throw new InvalidInput("Missing outgoing archive configuration");
+        const config = parse(configBytes.toString()),
+          branch = record(config.records ?? {}, "Invalid records configuration").archive_branch;
+        if (typeof branch !== "string") throw new InvalidInput("Outgoing archive references require an archive branch");
+        validateBranch(root, branch);
+        const identity = `${branch}:${revision}`;
+        if (checked.has(identity)) continue;
+        const archiveRef = `refs/heads/${branch}`,
+          available = destination(archiveRef);
+        if (!available || zero(available) || !ancestor(root, revision, available))
+          throw new InvalidInput(
+            `Publish and verify ${archiveRef} before pushing commits that reference archive ${revision.slice(0, 12)}, or push both branches atomically`,
+          );
+        checked.add(identity);
+      }
     }
   }
   return archives;

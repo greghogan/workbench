@@ -56,6 +56,7 @@ function commitRunners(root: string) {
   mkdirSync(join(root, ".githooks"));
   const hook = join(root, ".githooks/commit-msg");
   copyFileSync(join(distribution, ".githooks/commit-msg"), hook);
+  copyFileSync(join(distribution, ".githooks/verify-staged.mjs"), join(root, ".githooks/verify-staged.mjs"));
   chmodSync(hook, 0o755);
   return [
     (messagePath: string) =>

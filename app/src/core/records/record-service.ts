@@ -66,8 +66,9 @@ export class RecordCatalog {
     collections?: ResolvedCollection[],
     observe?: (path: string) => void,
     committedRecords?: ReadonlySet<string>,
+    readContents?: (record: BrowserRecord) => string,
   ): BrowserRecord[] {
-    return workspaceRecords(this.root, this.metadata, collections, observe, committedRecords);
+    return workspaceRecords(this.root, this.metadata, collections, observe, committedRecords, readContents);
   }
 }
 
@@ -78,6 +79,7 @@ export function workspaceRecords(
   collections = resolveCollections(root),
   observe: (path: string) => void = () => undefined,
   committedRecords?: ReadonlySet<string>,
+  readContents: (record: BrowserRecord) => string = (record) => recordBytes(record).toString("utf8"),
 ): BrowserRecord[] {
   const seen = new Set<string>();
   const records: BrowserRecord[] = [];
@@ -139,7 +141,7 @@ export function workspaceRecords(
       return;
     }
     try {
-      const contents = (captured ?? recordBytes(record)).toString("utf8");
+      const contents = captured?.toString("utf8") ?? readContents(record);
       describeRecord(record, contents);
     } catch (error) {
       record.previewError = (error instanceof Error ? error.message : String(error)).slice(0, 2048);
@@ -230,6 +232,7 @@ export function findRecord(root: string, id: string): BrowserRecord {
 
 export function supportingFiles(
   record: Pick<BrowserRecord, "type" | "path" | "directory" | "archive">,
+  observe?: (path: string) => void,
 ): { path: string; size: number }[] {
   if (record.type === "CHARTER") return [];
   const base = record.path.slice(0, -extname(record.path).length);
@@ -245,6 +248,7 @@ export function supportingFiles(
   const files: { path: string; size: number }[] = [];
   const walk = (path: string) => {
     const absolute = ownedPath(record.directory, path);
+    observe?.(absolute);
     if (!existsSync(absolute)) return;
     if (files.length >= 1000) throw new Error("supporting file list exceeds 1000 entries");
     const stat = lstatSync(absolute);

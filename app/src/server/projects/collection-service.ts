@@ -4,7 +4,6 @@ import type { GitCollectionOptions } from "../../core/collections/collection-git
 import { reconcileCollection, type CollectionReviewPlan } from "../../core/collections/collection-reconcile.js";
 import { StateConflict } from "../../core/runtime/input-errors.js";
 import { acceptCollectionAdoption } from "../../core/collections/initial-collection.js";
-import { contentsDiff } from "../review/diff.js";
 import type { CollectionPreview } from "./protocol.js";
 
 export interface CollectionRequest {
@@ -30,14 +29,7 @@ export function previewCollection(root: string, request: CollectionRequest): Col
     },
   );
   if (!plan) throw new Error("collection preview was not produced");
-  return {
-    ...plan,
-    differences: Object.fromEntries(
-      plan.files
-        .filter((file) => /\/ADR-[0-9A-Z]+\.md$/.test(file.path) && file.before !== null && file.after !== null)
-        .map((file) => [file.path, contentsDiff(file.before ?? "", file.after ?? "", file.path)]),
-    ),
-  };
+  return plan;
 }
 export function applyCollection(root: string, request: CollectionRequest, expected: string): CollectionPin {
   return reconcileCollection(root, request.source, request, request.id, undefined, (plan) => {

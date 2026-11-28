@@ -31,6 +31,15 @@ export function vcpkgTripletName({
     : `${architecture}-workbench-${family}${sanitized ? "-asan" : ""}-${system}`;
 }
 
+export function vcpkgInstallation(directory: string): { revision: string; installation: string } {
+  const revision = readText(join(directory, ".vcpkg-version")).trim();
+  if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error(".vcpkg-version must pin a complete Git commit");
+  return {
+    revision,
+    installation: join(userDirectory("cache"), "toolchains", "vcpkg", revision, `${process.platform}-${process.arch}`),
+  };
+}
+
 /** The checkout pins the bootstrap and recipes; manifests independently pin registry resolution. */
 export function prepareVcpkg(
   directory: string,
@@ -47,8 +56,7 @@ export function prepareVcpkg(
   assertBuildOutput(build);
   if (family === "mvsc" && (process.platform !== "win32" || !process.env.WORKBENCH_MVSC_IDENTITY))
     throw new Error("mvsc dependencies require the selected native Windows SDK environment");
-  const revision = readText(join(directory, ".vcpkg-version")).trim();
-  if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error(".vcpkg-version must pin a complete Git commit");
+  const { revision, installation } = vcpkgInstallation(directory);
   const manifest = JSON.parse(readText(join(directory, "vcpkg.json"))) as { "builtin-baseline"?: string };
   const configuration = join(directory, "vcpkg-configuration.json");
   const registry = existsSync(configuration)
@@ -56,13 +64,6 @@ export function prepareVcpkg(
     : undefined;
   if (!/^[a-f0-9]{40}$/.test(registry?.baseline ?? manifest["builtin-baseline"] ?? ""))
     throw new Error("vcpkg requires an immutable default-registry baseline or builtin-baseline");
-  const installation = join(
-    userDirectory("cache"),
-    "toolchains",
-    "vcpkg",
-    revision,
-    `${process.platform}-${process.arch}`,
-  );
   const executable = join(installation, process.platform === "win32" ? "vcpkg.exe" : "vcpkg");
   const downloads = resolve(process.env.VCPKG_DOWNLOADS ?? join(userDirectory("cache"), "vcpkg", "downloads"));
   mkdirSync(downloads, { recursive: true, mode: 0o700 });
@@ -74,6 +75,8 @@ export function prepareVcpkg(
   };
   delete env.VCPKG_FORCE_DOWNLOADED_BINARIES;
   if (!existsSync(installation)) {
+    if (process.env.WORKBENCH_OFFLINE === "1")
+      throw new Error("The pinned vcpkg installation is missing. Run 'workbench prepare' for this language root.");
     mkdirSync(dirname(installation), { recursive: true, mode: 0o700 });
     const staging = `${installation}.${randomUUID()}.partial`;
     try {

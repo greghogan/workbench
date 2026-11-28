@@ -1,0 +1,223 @@
+---
+status: Approved
+added_at: 2026-11-12T12:39:15.000Z
+---
+
+# TSK-A: Scoped acquisition, builds, and checks
+
+## Review summary
+
+A change in one component can rerun checks and dependency preparation for unrelated components. Let projects declare the
+inputs and outputs of acquisition, builds, and checks so each step can run and be reused independently. Use the same
+planner and runner for the local CLI, commit hooks, CI, and development artifact verification.
+
+| Step    | Uses                                                       | Produces              |
+| ------- | ---------------------------------------------------------- | --------------------- |
+| Acquire | Manifests, locks, resolver settings, toolchain, and target | Verified dependencies |
+| Build   | Source, build settings, and prepared dependencies          | Build outputs         |
+| Check   | Source, fixtures, and any prerequisite outputs             | Verification results  |
+
+Editing source reruns the affected build and checks while reusing dependencies acquired for the same lockfile. Checks
+such as formatting can run independently of a build.
+
+Linux builds and ordinary checks use prepared inputs with external networking blocked and private loopback available. On
+macOS, source scopes are enforced and networking remains available. Windows uses whole-project execution with networking
+available. Live advisories run in a separate connected phase.
+
+Run `workbench prepare` for local acquisition. Use `--staged` to prepare a pending commit. The local gate and commit
+hook consume matching prepared inputs and show how to acquire any that are missing. CI acquires inputs before running
+the selected checks fresh. A matching development artifact supplies the prepared inputs.
+
+Check plans show the effective scope, and execution reports explain reuse or fallback. Record validation, required
+reviews, policy compatibility, and fresh security checks still run independently of reusable code checks.
+
+## Delivery checklist
+
+- [x] Add independent reuse to native check gates with declared inputs.
+- [x] Enforce declared source visibility on Linux and macOS and qualify the whole-project runner on Windows.
+- [x] Reuse verified build products as inputs to dependent scoped checks.
+- [x] Integrate scoped acquisition, builds, and checks across Workbench and its examples, including independent starter
+      verification and test-owned application fixtures.
+- [x] Apply shared preparation and Linux offline defaults to the CLI, hooks, CI, and development artifacts.
+
+## Implementing-agent detail
+
+### Input contract
+
+- Reuse input groups in project automation for acquisition, builds, and checks. Resolve transitive groups and explicit
+  prerequisite outputs. Use literal repository-relative files and directories. Existing `checks.inputs` remains additive
+  for checks, including explicitly named ignored files.
+- Resolve declarations and their source from the same snapshot. Reject invalid names, unsafe paths, and dependency
+  cycles. An uncovered link target or incomplete inventory prevents scoped reuse.
+- Include file identity, contents, modes, and presence in the fingerprint. A declared directory covers additions,
+  removals, and renames beneath it. Keep global detection of unresolved index entries while limiting untracked-file
+  discovery to the selected paths where possible.
+
+### Scoped execution
+
+- Schedule steps through the existing automation roles and their dependencies. Run any installation or linking from
+  prepared caches as setup in the consuming workspace.
+- Acquire into owned storage from the selected snapshot and verify the locked inputs before publishing the result. Bind
+  the result to its recipe, input files, resolver policy, toolchain, and target. Prevent failed or canceled preparation
+  from exposing incomplete results. Leave manifests and locks in the source snapshot unchanged.
+- Give each consumer its declared prerequisite outputs, such as a prepared dependency store or a packaged application.
+  Check presence and identity before reuse. Keep shared outputs read-only and give tools private writable state for
+  setup. Missing or expired acquisition results require preparation again.
+- Build the fingerprint and the source view from the same captured inventory. Expose declared source read-only,
+  including explicitly declared ignored inputs and dependency locks. Supply pinned tools separately. Constrain the
+  command and its children to that view, including when they try absolute paths or follow links.
+- Use Workbench's existing build, dependency, and temporary directory paths for private writable state. For a required
+  checkout-relative output, create its directory in the private workspace and ensure it leaves declared inputs visible
+  and read-only. Tests that modify fixtures work on private copies.
+- Resolve and fingerprint the committed coverage baseline outside the restricted workspace. Supply the baseline data
+  directly and collect the new report through the existing reporting workflow. The captured source and Git index remain
+  unchanged.
+- Create the restricted view only when a step must execute. Reuse the captured snapshot, source views for identical
+  input scopes, and verified toolchains. Include the isolation contract and backend identity in scoped receipts.
+- Use mount namespaces on Linux and the signed App Sandbox launcher on macOS. Run Windows checks on the whole project.
+- Run Linux builds and ordinary checks with external networking blocked and private loopback available. Require that
+  boundary even when source isolation falls back to the whole project. Keep networking available on macOS and Windows.
+  Route live checks through their existing connected CI and pre-push gates.
+- Use the same restricted view for fresh scoped runs, including `--no-cache` and CI on qualified backends. If source
+  isolation is unavailable before launch, report the reason and use whole-project inputs. Fail if required network
+  isolation cannot be established. Only verified restricted success can create scoped evidence. Release owned views and
+  outputs when canceled.
+
+### Workbench integration
+
+- Declare complete inputs and prerequisite outputs across the application and examples. Use test-owned fixtures for
+  application behavior and verify the shipped starters separately. Preserve the required checks, assertions, coverage
+  scope, and floors.
+- Provide a preparation entry point for working and staged snapshots using the same project and environment selection as
+  the gate. Keep toolchain-only images independent of project dependencies. Preserve native, Nix, and Guix pin
+  authorities through the shared preparation and execution paths.
+
+### Reuse and reporting
+
+- Bind reusable evidence to the effective input contract, source fingerprint, prerequisite output identities, Workbench
+  distribution, tooling, network policy, and effective environment. Retain whole-gate reuse for unscoped checks. Share
+  inventory and fingerprint work across groups.
+- Reuse verified acquisition and build outputs independently of check results. If a prerequisite output is missing, a
+  fresh consumer needs the output restored or rebuilt. Save successful check evidence after the full gate passes with
+  stable inputs.
+- Show resolved groups and paths in `workbench check --list` and its JSON output. Run reports identify the execution
+  backend, fresh runs, reuse, and any fallback. Keep file contents and environment values out of diagnostics.
+- Preserve source-stability checks for fresh scans that read beyond the scoped inputs. A source change during those
+  scans must prevent reusable success evidence where the existing gate requires a stable whole-project snapshot. Online
+  and CI checks run fresh. Keep test-runner filtering independent of the Workbench receipt.
+- Record the execution guarantees in the application ADR and align shared artifact and quality gate decisions with
+  explicit preparation and separate live checks.
+
+### Acceptance and verification
+
+- Verify that a source-only edit reuses acquisition, while a lockfile or resolver change invalidates it. A missing
+  prepared result reports the matching preparation command.
+- Verify that a starter-only edit reruns its language and starter checks and reuses application coverage. An application
+  fixture edit reruns application coverage.
+- For the same snapshot, target, and stage, verify that local and CI plans resolve the same steps, prerequisite outputs,
+  and network policy.
+- Verify the full required Linux gate through plain `workbench check`, the hook, and CI. Block external networking for
+  child processes and retain private loopback. Verify the connected gates on macOS and Windows, and run live advisories
+  separately. Exercise the same dependency handoff from a toolchain-only CI image and a development artifact without
+  relying on host caches.
+- Compare end-to-end gate time for whole-gate and independent reuse after the same isolated source edit under the same
+  allocation. Report which groups ran and which reused results.
+- Run real checks in a synthetic multi-root repository. Reuse after an unrelated edit and rerun after a change within
+  the selected root, a transitive dependency, or a declared shared fixture. Include a non-source file read directly by a
+  test and a mode change in shared setup. Exercise a fallback group beside a reusable group. Remove the generated output
+  of a previously successful prerequisite and verify that a fresh dependent still gets that output.
+- Prepare and check different working and staged snapshots, including different locks and declarations. Verify that both
+  source versions stay unchanged, including when a tool would rewrite a lock. Cover additions, deletions, renames,
+  ignored inputs, unsafe links, and incomplete declarations.
+- Exercise cancellation, failure, and explicit fresh execution in a gate with mixed fresh and reused groups. Failed,
+  canceled, and unstable runs supply no new successes.
+- On Linux and macOS, run the CLI and staged hook with representative native toolchains. Verify an omitted required file
+  causes a failure under isolation and leaves no scoped receipt. Cover relative and absolute paths, links, child
+  processes, concurrent runs with distinct source views, read-only input, and writable outputs. Exercise fallback when a
+  backend is unavailable. Confirm that isolated and full-source runs select the same required tests on the same
+  snapshot, so a missing fixture cannot silently reduce the suite.
+- Verify that a fresh scoped coverage run uses the committed baseline and writes its new report separately. Include
+  creation and atomic replacement of files in an output directory.
+- Verify that project-wide validation, review, and compatibility checks still run on reuse. Change an out-of-scope file
+  during a fresh project-wide security check and verify that the gate rejects unstable evidence.
+
+## Implementation account
+
+The selected checks and required setup resolve to an input scope per reusable group. Project configuration and explicit
+additional inputs join that scope. The staged hook inventories the Git tree it captured, while working checks include
+matching untracked files. Uncertain scoped discovery falls back to the whole project and retains declared inputs.
+Workbench's own runtime files also contribute to the key when the checkout supplies the executable.
+
+Check plans show the resolved scope. Run reports distinguish fresh execution, fallback, and reuse. A separate
+whole-project fingerprint checks source stability around fresh security scans without tying reusable results to
+unrelated edits between invocations. If the scanned source changes during the gate, Workbench rejects the result
+regardless of whether other checks reused evidence.
+
+A complete gate can reuse checks with distinct input scopes even within one execution root. Commands retain their
+configured order, with independent checks sharing the gate's concurrency budget across roots. Input verification uses
+bounded concurrent reads and reuses the contents digest of a previously verified tool on qualified local filesystems
+after checking the executable's identity again. A warm gate prepares dependencies only when a fresh check needs setup. A
+test with a private workspace can overlap independent static checks within the session's CPU budget. Available slots
+admit eligible checks until the next serial step. The staged-hook test verifies that narrower results remain reusable
+alongside fresh whole-project checks and that a fresh dependent still gets its setup output.
+
+When the system service is running, Linux checks acquire machine admission before entering the offline sandbox.
+Compatible tools can use their own worker FIFO in a scoped check. The installed-service test exercises offline checks
+competing for admission across accounts.
+
+The check tests cover transitive groups, suite overrides, literal paths, file mode changes, ignored inputs, and
+whole-project fallback. The Git hook test uses staged declarations and files while their working copies differ. A
+synthetic Go gate reused the launcher test after an independent edit and ran the credential scan.
+
+Linux and macOS checks restrict child processes to the captured source and private writable outputs. Coverage uses the
+committed baseline and writes its report in the private workspace. Inputs that cannot be captured safely use
+whole-project verification. Windows uses whole-project verification and the regular network environment. Native runner
+tests covered macOS source visibility and private coverage output, and Windows dependency preparation and archive paths.
+
+Check groups on the same root share observations of tools, configuration, and committed coverage within each
+verification phase. Workers verify the selected source and execution constraints before starting checks. Linux commit
+checks mount verified staged source and matching tool bundles read-only, copying generated inputs that differ. The hooks
+and check gate verify the same tracked staged files before accepting evidence. Other scoped runs verify the captured
+file identities while materializing their views.
+
+Native acquisition uses declared inputs from its selected Git snapshot and falls back to the complete snapshot when the
+acquisition scope is incomplete. Scoped source copies verify files concurrently, and overlapping Linux check views share
+them through read-only mounts. Scoped Ruby checks mount the prepared gem installation for the selected lock and runtime
+and keep Bundler's writable metadata private.
+
+Coverage comparisons derive totals and percentages from retained counts in check reports.
+
+Report reservations live outside the checked source. Dependency launchers refer to the prepared store and work when an
+isolated check cannot see the original checkout. The gate shares input observations across related checks and records
+tool protection for successful results together. The built-in credential scan runs fresh once for the selected snapshot.
+
+Application tests use their own Go implementation fixture. The Go gate also verifies that initialization copies the
+shipped starter. Editing the shipped implementation changes the Go and starter inputs while preserving the application
+coverage key.
+
+The application and reference suites declare their source and setup inputs. Scoped checks use prepared dependencies in a
+private workspace, with shared package contents protected from writes. Check setup and reporting use writable locations
+outside the captured source. Checks requiring the ordinary project registry or persistent build output use whole-project
+verification. Documentation checks build the executables they run, including from an empty build directory. Checks keep
+matching application dependencies in place and retain staged outputs through the last worker.
+
+Source acquisition installs into the configured dependency store from the start. Workbench refreshes its generated
+helpers before capturing check inputs. The setup step verifies the prepared graph without regenerating files while other
+checks use them. Cold package-manager setup preserves machine-readable query output.
+
+Checks can name prerequisite builds. Workbench gives isolated consumers read-only access to the declared products in the
+same execution root. Reuse verifies the saved products and rebuilds when they are missing or damaged. Check results
+record the product identity verified in that run.
+
+Native CI acquires verified package-manager bootstraps and locked dependencies before offline execution. A fresh
+checkout restores its locked dependency graph from the prepared store. Development images carry those inputs alongside
+the toolchain. Verification builds a fresh source snapshot and runs the built programs with networking disabled and
+dependencies supplied by the image. Managed check workers receive the selected local sources, and the managed loopback
+registry serves npm metadata and verified archives. Nix and Guix prepare their required system libraries before offline
+checks. Native consumer integration runs on the host so its fixtures can exercise both acquisition and the offline gate.
+Local online advisories run independently of the pre-push image availability check.
+
+Prepared image profiles declare which roots require dependencies built by their package manager. Containers with a
+different user identity use private writable source and report directories, leaving host ownership intact. Check setup,
+commands, and coverage reporting resolve Workbench paths for the execution workspace. The prepared CI report retains
+each phase's selected checks and outcome under the overall target result.

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { webServers, readWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { git, provider } from "../../fixtures/adoption.mjs";
 import { applyCollection, previewCollection } from "../../../src/server/projects/collection-service.ts";
 import { parseDOM } from "../../fixtures/dom.mjs";
@@ -13,11 +13,16 @@ test("an empty project guides a human through charter creation without staging o
   const staged = git(root, "show", ":workbench/CHARTER.md");
   rmSync(path);
   const web = await servers.start(root);
-  const home = await readWebPage(web, "/");
+  const home = await readReconciledWebPage(web, "/");
+  const landing = parseDOM(home.html).window.document;
+  expect(landing.querySelector("main h1")?.textContent).toBe("Charters");
+  const navigation = landing.querySelector('[aria-label="Main navigation"]');
+  expect(navigation?.querySelector('a[aria-current="page"] > span')?.textContent).toBe("Charters");
+  expect(navigation?.textContent).not.toContain("Overview");
   expect(home.html).toContain("Get started");
   expect(home.html).toContain("Create charter for demo");
   expect(home.html).toContain("workbench init --records-only");
-  const page = await readWebPage(web, "/charter/new?project=demo");
+  const page = await readReconciledWebPage(web, "/charter/new?project=demo");
   const csrf = hiddenValue(page.html, "csrf");
   const text = "# Human fixture charter\n\n<!-- Keep this comment. -->\n\nPreserve local documents.\n";
   const missing = await postWebForm(
@@ -44,15 +49,16 @@ test("an empty project guides a human through charter creation without staging o
   expect(readFileSync(path, "utf8")).toBe(text);
   expect(git(root, "show", ":workbench/CHARTER.md")).toBe(staged);
   expect(existsSync(join(root, ".git/workbench/review.json"))).toBe(false);
-  expect((await readWebPage(web, "/charter/new?project=demo")).response.status).toBe(409);
-  expect((await readWebPage(web, "/records/demo:CHARTER")).html).toContain("Human fixture charter");
+  expect((await readReconciledWebPage(web, "/charter/new?project=demo")).response.status).toBe(409);
+  expect((await readReconciledWebPage(web, "/records/demo:CHARTER")).html).toContain("Human fixture charter");
+  expect((await readReconciledWebPage(web, "/")).html).toContain("Human fixture charter");
 });
 test("concurrent charter creation preserves the external file and the submitted draft", async () => {
   const root = servers.project(),
     path = join(root, "workbench/CHARTER.md");
   rmSync(path);
   const web = await servers.start(root);
-  const page = await readWebPage(web, "/charter/new?project=demo");
+  const page = await readReconciledWebPage(web, "/charter/new?project=demo");
   writeFileSync(path, "# External human charter\n");
   const failed = await postWebForm(
     web,
@@ -76,7 +82,7 @@ test("the unified review queue includes project-owned collection records", async
   applyCollection(root, request, previewCollection(root, request).digest);
   git(root, "add", "workbench");
   const web = await servers.start(root);
-  const page = await readWebPage(web, "/reviews");
+  const page = await readReconciledWebPage(web, "/reviews");
   expect(page.html).toContain('aria-label="Record sources"');
   expect(
     [...parseDOM(page.html).window.document.querySelectorAll("main article.record-row a[data-card-link]")].some(
@@ -87,7 +93,7 @@ test("the unified review queue includes project-owned collection records", async
 test("record pages expose one primary heading and the document body", async () => {
   const root = servers.project(),
     web = await servers.start(root);
-  const page = await readWebPage(web, "/records/demo:ADR-0");
+  const page = await readReconciledWebPage(web, "/records/demo:ADR-0");
   expect(page.html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
   const document = parseDOM(page.html).window.document;
   expect(document.querySelector("main .document")?.textContent).toContain("Keep files authoritative.");

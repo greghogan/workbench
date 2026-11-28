@@ -149,7 +149,7 @@ if (role === "format") {
       Test?: string;
       Elapsed?: number;
     };
-    if (event.Action === "output") {
+    if (event.Action === "output" || event.Action === "build-output") {
       if (typeof event.Output !== "string") throw new Error("Go output event omitted its text");
       process.stdout.write(event.Output);
     }
@@ -167,7 +167,10 @@ if (role === "format") {
       );
     }
   }
-  if (result.error || result.status !== 0) throw new Error(`Go tests failed: ${String(result.error ?? result.stderr)}`);
+  if (result.error || result.status !== 0)
+    throw new Error(
+      `Go tests failed: ${result.error?.message ?? (result.stderr?.trim() ? result.stderr : String(result.status))}`,
+    );
   if (role === "coverage") {
     const report = run("go", ["tool", "cover", "-func=coverage/profile.out"], true);
     console.log(report);

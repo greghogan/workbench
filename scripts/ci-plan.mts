@@ -15,7 +15,10 @@ export function planCI(environment = process.env, root = process.cwd()) {
       }),
     ),
   );
-  const summary = `## CI coverage\n\n${String(matrix.native.include.length)} native platform jobs; ${String(matrix.environments.include.length)} managed environments. Every configured root is checked.\n`;
+  const summary =
+    `## CI coverage\n\n${String(matrix.native.include.length)} native platform jobs, ` +
+    `${String(matrix.environments.include.length)} managed environments, ` +
+    `and ${String(matrix.packages?.include.length ?? 0)} release package groups. Every configured root is checked.\n`;
   console.log(summary);
   if (environment.GITHUB_STEP_SUMMARY) appendFileSync(environment.GITHUB_STEP_SUMMARY, summary);
   if (environment.GITHUB_OUTPUT)

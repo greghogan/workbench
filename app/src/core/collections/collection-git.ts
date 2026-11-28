@@ -16,7 +16,8 @@ import { join, sep } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { git, gitEnvironment } from "../distribution/update-git.js";
 import { compareRecordNumbers, normalizedNumber, relativeRecordPath } from "../records/record-identity.js";
-import { formatByteCount } from "../runtime/byte-size.js";
+import { readGitObjects } from "../git/git-snapshot.js";
+import { required } from "../runtime/invariants.js";
 import { ownedPath, relativePath } from "../runtime/paths.js";
 import { withCacheLockSync } from "../storage/cache-lock.js";
 import { collectionByteLimit, collectionCharterPath, collectionFileLimit } from "./collection-files.js";
@@ -43,7 +44,7 @@ export function collectionRepository(root: string, id: string): string {
   return gitPath(root, `modules/${collectionSubmoduleName(id)}`);
 }
 
-function repositoryGit(repository: string, args: string[], maximum = 1024 * 1024): Buffer {
+function repositoryGit(repository: string, args: string[], maximum = 1024 * 1024, input?: string): Buffer {
   const result = spawnSync(
     "git",
     [
@@ -61,8 +62,9 @@ function repositoryGit(repository: string, args: string[], maximum = 1024 * 1024
       ...args,
     ],
     {
-      env: gitEnvironment(),
+      env: { ...gitEnvironment(), GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" },
       maxBuffer: maximum,
+      ...(input === undefined ? {} : { input }),
     },
   );
   if (result.error || result.status !== 0)
@@ -127,15 +129,6 @@ function fetchCommit(repository: string, source: string, commit: string): void {
   if (/^gpgsig(?:-sha256)? /m.test(header)) repositoryGit(repository, ["verify-commit", commit]);
 }
 
-function readBlob(repository: string, commit: string, path: string): Buffer {
-  relativePath(path, "collection Git path");
-  const object = `${commit}:${path}`;
-  const size = Number(repositoryGit(repository, ["cat-file", "-s", object]).toString("utf8").trim());
-  if (!Number.isSafeInteger(size) || size < 0 || size > collectionFileLimit)
-    throw new Error(`${path}: collection blob exceeds ${formatByteCount(collectionFileLimit)} bytes`);
-  return repositoryGit(repository, ["cat-file", "blob", object], collectionFileLimit + 1);
-}
-
 /** Verify exported files, or derive a collection from the provider's root ADR scope at the exact commit. */
 export function inspectGitCollection(
   repository: string,
@@ -158,25 +151,46 @@ export function inspectGitCollection(
     .filter(Boolean)
     .map((entry) => {
       const match = /^(\d+) (blob|commit) ([0-9a-f]+)\t([\s\S]+)$/.exec(entry);
-      if (!match?.[1] || !match[4]) throw new Error("invalid collection Git tree entry");
-      return { mode: match[1], path: match[4].slice(prefix.length) };
+      if (!match?.[1] || !match[3] || !match[4]) throw new Error("invalid collection Git tree entry");
+      return [match[4].slice(prefix.length), { mode: match[1], oid: match[3] }] as const;
     });
-  const names = new Map(entries.map((entry) => [entry.path, entry.mode]));
-  const read = (name: string) => {
-    if (!["100644", "100755"].includes(names.get(name) ?? ""))
-      throw new Error(`${name}: collection inputs must be regular Git blobs`);
-    return readBlob(repository, commit, `${prefix}${name}`);
+  const names = new Map(entries);
+  const readFiles = (paths: string[]) => {
+    if (paths.length > 4096) throw new Error("collection exceeds acquisition bounds");
+    const selected = paths.map((path) => {
+      relativePath(path, "collection Git path");
+      const entry = names.get(path);
+      if (!entry || !["100644", "100755"].includes(entry.mode))
+        throw new Error(`${path}: collection inputs must be regular Git blobs`);
+      return [path, entry.oid] as const;
+    });
+    const objects = readGitObjects(
+      repository,
+      selected.map(([, oid]) => oid),
+      collectionFileLimit,
+      {
+        requirePresent: true,
+        retainedBytes: collectionByteLimit,
+        readBatch: (args, input) => repositoryGit(repository, args, collectionByteLimit, input),
+      },
+    );
+    const files = new Map(
+      selected.map(([path, oid]) => [path, required(objects.get(oid), `${path}: collection blob is missing`)]),
+    );
+    if ([...files.values()].reduce((total, bytes) => total + bytes.length, 0) > collectionByteLimit)
+      throw new Error("collection exceeds acquisition bounds");
+    return files;
   };
-  if (names.has("workbench/collection.toml")) return inspectCollectionContents(repository, read);
+  const read = (path: string) => required(readFiles([path]).get(path), `${path}: collection file is missing`);
+  if (names.has("workbench/collection.toml")) return inspectCollectionContents(repository, read, undefined, readFiles);
   const registry = parse(read(projectPaths.projects).toString("utf8")) as {
     project?: { id?: string; path?: string }[];
   };
   const owner = registry.project?.find((project) => project.path === ".")?.id;
   if (!owner || !collectionName.test(owner))
     throw new Error("source needs a collection export or an owning root project namespace");
-  const files = new Map<string, Buffer>();
+  const selected: string[] = [];
   const numbers: string[] = [];
-  let total = 0;
   for (const name of names.keys()) {
     if (
       ![collectionCharterPath, "workbench/decision-map.md"].includes(name) &&
@@ -193,11 +207,9 @@ export function inspectGitCollection(
         throw new Error(`${name}: noncanonical record path`);
       numbers.push(number);
     }
-    const bytes = read(name);
-    total += bytes.length;
-    if (files.size >= 4096 || total > collectionByteLimit) throw new Error("collection exceeds acquisition bounds");
-    files.set(name, bytes);
+    selected.push(name);
   }
+  const files = readFiles(selected);
   numbers.sort(compareRecordNumbers);
   const inventory = Object.fromEntries(
     [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([name, bytes]) => [name, digest(bytes)]),

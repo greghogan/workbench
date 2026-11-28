@@ -19,6 +19,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -26,6 +27,59 @@ import { join, resolve } from "node:path";
 import { test } from "vitest";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
+
+test.skipIf(process.platform === "win32")("consumer hooks explain a missing Workbench and keep gates active", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-missing-gates-")));
+  try {
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    git("init", "--quiet", "--template=");
+    mkdirSync(join(root, "workbench"));
+    for (const file of ["config.toml", "projects.toml"])
+      writeFileSync(join(root, "workbench", file), "# consumer fixture\n");
+    git("add", "workbench");
+    git(
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "--quiet",
+      "--no-gpg-sign",
+      "-m",
+      "Fixture",
+    );
+    const tip = git("rev-parse", "HEAD");
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    for (const tool of ["git", "mktemp", "cp", "rm", "mkdir"]) {
+      const location = spawnSync("sh", ["-c", 'command -v "$1"', "locate-tool", tool], { encoding: "utf8" });
+      assert.equal(location.status, 0, location.stderr);
+      symlinkSync(location.stdout.trim(), join(bin, tool));
+    }
+    for (const [hook, args, input] of [
+      ["pre-commit", [], ""],
+      ["commit-msg", [".git/COMMIT_EDITMSG"], ""],
+      ["pre-push", ["origin"], `refs/heads/main ${tip} refs/heads/main ${"0".repeat(tip.length)}\n`],
+      ["post-commit", [], ""],
+    ] as const) {
+      const result = spawnSync("/bin/bash", [join(distribution, ".githooks", hook), ...args], {
+        cwd: root,
+        env: { ...process.env, PATH: bin },
+        encoding: "utf8",
+        input,
+      });
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      assert.match(result.stderr, /docs\/installations\.md/);
+      assert.match(result.stderr, hook === "post-commit" ? /commit saved/ : /requires Workbench on PATH/);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("standalone staged gates retain review receipts and verified local collection links", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workbench-standalone-gate-")));

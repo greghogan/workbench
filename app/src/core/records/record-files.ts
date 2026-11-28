@@ -14,12 +14,22 @@ import { readProjects, selectProject } from "../projects/project-configuration.j
 import { rootOf } from "../projects/project-context.js";
 import { publicationTarget } from "../runtime/file-publication.mjs";
 import type { Project } from "../projects/project-model.js";
+import { observeRecord } from "./record-observation.js";
 export function scan(projectDirectory: string, kind: Kind, committedRecords?: ReadonlySet<string>): RecordFile[] {
   return scanRecordDirectory(ownedPath(projectDirectory, "workbench"), kind, committedRecords);
 }
 
 /** Collections own records directories without acquiring a project charter. */
 export function scanRecordDirectory(base: string, kind: Kind, committedRecords?: ReadonlySet<string>): RecordFile[] {
+  if (committedRecords) return inspectRecordDirectory(base, kind, committedRecords);
+  return observeRecord(
+    `records:${kind}:${base}`,
+    () => inspectRecordDirectory(base, kind),
+    (records) => records.reduce((size, item) => size + item.path.length * 2 + 80, 0),
+  );
+}
+
+function inspectRecordDirectory(base: string, kind: Kind, committedRecords?: ReadonlySet<string>): RecordFile[] {
   const directory = join(base, detail(kind).directory);
   if (!existsSync(directory)) return [];
   const found: RecordFile[] = [];

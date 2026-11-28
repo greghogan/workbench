@@ -12,7 +12,13 @@ import { taskStatuses, terminalTask, type TaskStatus } from "../core/records/rec
 import type { TaskRecord } from "../core/tasks/task-model.js";
 import { readTaskGraph, taskReference, type TaskNode } from "../core/tasks/task-model.js";
 import { inspectTaskQueue, readTaskQueue, TaskReadiness, type QueueChange } from "../core/tasks/task-queue.js";
-import { authorizeProjectReview, changeTaskStatus } from "../core/tasks/task-service.js";
+import { authorizeProjectReview, changeTaskStatus, replanTask } from "../core/tasks/task-service.js";
+import {
+  latestTaskReviews,
+  taskFileChanges,
+  taskPlanFiles,
+  taskReviewedVersion,
+} from "../core/tasks/task-approvals.js";
 import { registerCommand } from "./commands.js";
 
 interface TaskOptions {
@@ -99,16 +105,19 @@ export function registerTaskCommands(program: Command, root: string): void {
   });
   tasks
     .command("show")
-    .description("Read a task or its diff since plan approval")
+    .description("Read a task or its diff since human review")
     .argument("<reference>")
     .option("--json", "Print the record and metadata as JSON")
-    .option("--diff", "Show changes since the retained plan approval")
+    .option("--diff", "Show changes since the most recent approval or acceptance")
     .action((value: string, options: { diff?: boolean }, command: Command) => {
       const task = readTaskGraph(root).require(reference(value, command));
       if (options.diff) {
-        if (!task.approval) throw new InvalidInput("This task has no retained approval snapshot");
-        console.log(createPatch(task.reference, task.approval.contents, task.contents));
-        for (const file of task.approval.files) console.log(`${file.change}: ${file.name}`);
+        const decision = latestTaskReviews(root).get(task.reference);
+        const prior = decision && taskReviewedVersion(root, task, decision);
+        if (!prior) throw new InvalidInput("The previous task review contents are unavailable");
+        console.log(createPatch(task.reference, prior.contents, task.contents));
+        for (const file of taskFileChanges(prior.files, taskPlanFiles(root, task)))
+          console.log(`${file.change}: ${file.name}`);
         return;
       }
       console.log(
@@ -140,21 +149,23 @@ export function registerTaskCommands(program: Command, root: string): void {
     ),
   );
   for (const [name, status, description] of [
-    ["replan", "Planned", "Return a task to planning and revoke local execution evidence"],
+    ["replan", "Planned", "Return a task for plan approval after pausing any active work"],
     ["cancel", "Canceled", "Cancel a task while retaining its record"],
-  ] as const)
-    tasks
+  ] as const) {
+    const command = tasks
       .command(name)
       .description(description)
       .argument("<reference>")
-      .option("--expected <sha256>", "Reject a task changed since inspection")
-      .option("--reason <text>", "Reason for canceling work")
-      .action((value: string, options: { expected?: string; reason?: string }, command: Command) => {
-        const id = reference(value, command);
-        changeTaskStatus(root, id, status, options.expected, false, options.reason);
-        if (command.optsWithGlobals<TaskOptions>().json) console.log(JSON.stringify({ reference: id, status }));
-        else console.log(`${id}: ${status}`);
-      });
+      .option("--expected <sha256>", "Reject a task changed since inspection");
+    if (name === "cancel") command.option("--reason <text>", "Reason for canceling work");
+    command.action((value: string, options: { expected?: string; reason?: string }, command: Command) => {
+      const id = reference(value, command);
+      if (status === "Planned") replanTask(root, id, options.expected);
+      else changeTaskStatus(root, id, status, options.expected, false, options.reason);
+      if (command.optsWithGlobals<TaskOptions>().json) console.log(JSON.stringify({ reference: id, status }));
+      else console.log(`${id}: ${status}`);
+    });
+  }
   tasks
     .command("authorize-review")
     .description("Record the developer's explicit request to queue a scoped project review")

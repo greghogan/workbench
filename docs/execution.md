@@ -16,7 +16,7 @@ user preferences for one checkout. Both files accept:
 Clamp the allocation to the coordinator's available CPUs, then divide available CPUs by the job allocation and round
 down to determine local CI concurrency. The selected target count and optional `max_jobs` further lower the limit. On a
 host exposing 64 CPUs, a standalone check uses 64 workers; a multi-target rehearsal permits up to 16 simultaneous
-four-CPU jobs. A two-CPU hosted runner uses two workers. Memory budgeting is currently omitted.
+four-CPU jobs. A two-CPU hosted runner uses two workers.
 
 ```sh
 workbench config get execution.cpus_per_job
@@ -42,9 +42,13 @@ Ordinary checks leave tool worker controls unset. An explicit `execution.cpus_pe
 `WORKBENCH_CPU_BUDGET` limits supported tool workers; it does not reserve CPUs or reduce the group limit by dividing
 cores by that worker count. The available inherited allocation still bounds the number of active groups.
 
-The group limit counts check sessions, not every internal tool process or thread. Tools can use their normal internal
-parallelism, so it does not establish an aggregate worker limit. Cooperative jobserver integration would be required to
-share such a limit across tools; a command that does not participate cannot be constrained by jobserver tokens.
+The group limit counts local check sessions. When the installed system service is available, it also admits native check
+commands and isolated environment sessions against a machine-wide limit shared by projects and OS accounts. The service
+delays new launches under sustained CPU contention or memory pressure.
+
+Compatible GNU Make, Ninja, CMake with Ninja, and Cargo commands can share the pool's worker slots on Linux and macOS.
+Other commands keep their internal parallelism after admission. See [Checks](checks.md) for administrator settings and
+standalone behavior.
 
 Inspection, execution, and successful-check evidence use the same resolved ordering and optional limits. Selecting one
 root remains self-contained, including its setup. Cache-hit security refreshes derive their own selected dependency

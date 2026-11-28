@@ -24,6 +24,9 @@ import { syncRecordSequences } from "./record-sequences.js";
 import { syncTaskChecklists } from "../tasks/task-checklists.js";
 import { decisionScopes } from "./decisions.js";
 import { withConfigurationSnapshot } from "../configuration/configuration-snapshot.js";
+import { readArtifactCatalog } from "../artifacts/artifact-catalog.js";
+import { withRecordObservation } from "./record-observation.js";
+import { withRepositoryReads } from "../git/repository-reads.js";
 
 function collectMarkdown(directory: string, files: Set<string>): void {
   if (!existsSync(directory) || lstatSync(directory).isSymbolicLink()) return;
@@ -35,13 +38,39 @@ function collectMarkdown(directory: string, files: Set<string>): void {
   }
 }
 
+type ValidationObserver = (phase: {
+  name: string;
+  started: string;
+  durationMs: number;
+  status: "passed" | "failed";
+}) => void;
+
 /** One validation observes one configuration; subsequent invocations acquire fresh values. */
-export function validationReport(root: string): Promise<{ errors: string[]; markdownFiles: number }> {
-  return withConfigurationSnapshot(() => inspectValidation(root));
+export function validationReport(
+  root: string,
+  observe?: ValidationObserver,
+): Promise<{ errors: string[]; markdownFiles: number }> {
+  return withConfigurationSnapshot(() =>
+    withRepositoryReads(() => withRecordObservation(() => inspectValidation(root, observe))),
+  );
 }
 
-async function inspectValidation(root: string): Promise<{ errors: string[]; markdownFiles: number }> {
+async function inspectValidation(
+  root: string,
+  observe?: ValidationObserver,
+): Promise<{ errors: string[]; markdownFiles: number }> {
   const errors: string[] = [];
+  let last = performance.now(),
+    started = new Date().toISOString(),
+    issues = 0;
+  const report = (name: string) => {
+    if (!observe) return;
+    const now = performance.now();
+    observe({ name, started, durationMs: now - last, status: errors.length === issues ? "passed" : "failed" });
+    last = now;
+    started = new Date().toISOString();
+    issues = errors.length;
+  };
   const files = new Set<string>();
   let width: number | undefined;
   try {
@@ -51,6 +80,9 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
   }
   for (const action of [
     () => readChecks(root),
+    () => {
+      if (existsSync(join(root, projectPaths.profiles))) readArtifactCatalog(root);
+    },
     () => {
       validateManagedImageInputs(root);
     },
@@ -68,7 +100,6 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
     },
     () => validateCommitPolicy(root),
     () => citationLibrarySetting(root),
-    () => readProjects(root),
     () => archivedScopeRecords(root),
     () => {
       // Validate declared defaults independently of the shell's active tool profile.
@@ -81,6 +112,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
       errors.push(String(error));
     }
   }
+  report("Validation configuration");
   for (const relative of ["AGENTS.md", projectPaths.config, projectPaths.projects, projectPaths.charter]) {
     const path = join(root, relative);
     if (!existsSync(path) || !lstatSync(path).isFile()) errors.push(`${path}: required file is missing`);
@@ -114,6 +146,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
     } catch (error) {
       errors.push(String(error));
     }
+    report("Validation records and relationships");
     for (const action of [
       () => syncRecordSequences(root, true),
       () => syncTaskChecklists(root, true),
@@ -129,6 +162,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
       }
     }
   }
+  report("Validation generated files");
   if (width && projects.length) {
     try {
       errors.push(...(await formattingErrors(recordPaths(root), width)));
@@ -136,6 +170,7 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
       errors.push(String(error));
     }
   }
+  report("Validation record formatting");
   try {
     for (const scope of decisionScopes(root))
       if (scope.source) {
@@ -146,10 +181,11 @@ async function inspectValidation(root: string): Promise<{ errors: string[]; mark
   } catch (error) {
     errors.push(String(error));
   }
+  report("Validation documentation");
   return { errors, markdownFiles: files.size };
 }
-export async function validate(root: string): Promise<void> {
-  const { errors, markdownFiles } = await validationReport(root);
+export async function validate(root: string, observe?: ValidationObserver): Promise<void> {
+  const { errors, markdownFiles } = await validationReport(root, observe);
   if (errors.length) {
     for (const error of errors) writeDiagnosticText(error);
     throw new Error(`Workbench validation failed (${String(errors.length)} issue(s)).`);

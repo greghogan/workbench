@@ -1,13 +1,13 @@
 import { finished } from "node:stream/promises";
 import { DiagnosticRedactor, secretValues } from "./diagnostics.mjs";
 import { BoundedDiagnosticWriter } from "./diagnostic-writer.mjs";
-import { terminalChannels } from "../storage/logs/terminal-log.js";
+import { terminalChannels, type TerminalChannel } from "../storage/logs/terminal-log.js";
 import type { DiagnosticLog } from "../storage/logs/diagnostic-log.js";
 
 /** Tee service output before it leaves Node. Keep the original streams and their backpressure intact. */
-export function captureTerminal(file: DiagnosticLog) {
+export function captureTerminal(file: DiagnosticLog, selected: readonly TerminalChannel[] = terminalChannels) {
   const secrets = secretValues();
-  const channels = terminalChannels.map((channel) => {
+  const channels = selected.map((channel) => {
     const stream = process[channel],
       original = Object.getOwnPropertyDescriptor(stream, "write"),
       forward = stream.write.bind(stream);

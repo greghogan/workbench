@@ -6,6 +6,7 @@
 - `scripts/check-reproducibility.mts`: Rebuild frozen application source in independent directories, compare bundle and archive bytes, execute rebuilt CLIs, and clean owned temporary source trees.
 - `scripts/check-rust-cache.mts`: Prune recognized artifacts inside owned Rust generations under build/session locks and qualify cleanup against real Cargo output and subsequent build reuse.
 - `scripts/check-consumers.mts`: Provide the independently invocable integration check and fast regressions for its execution and CI selection.
+- `scripts/check-go-starter.mts`: Verify initialization copies the shipped Go implementation.
 - `scripts/ci-plan-contract.mts`: validate and type hosted matrix output and define intentional job skips.
 - `scripts/ci-plan.mts`: validates the complete configured hosted matrix and presents its coverage.
 - `scripts/ci-status.mts`: requires validation and every selected hosted job to succeed.
@@ -20,9 +21,10 @@
 - `scripts/ci-guix-bootstrap.mts`, `scripts/ci-guix-bootstrap.scm`: retain and import signed pinned Guix runtime closures on disposable hosted runners.
 - `scripts/ci-native-prerequisites.mts`: prepares hosted SDK dependencies for native Ruby and PHP runtimes.
 - `scripts/ci-cache-metrics.mts`: records cache footprint and elapsed verification-window evidence.
-- `.github/workflows/publication.yml`: separately prepares, natively verifies, and publishes development images with package write authority.
+- `.github/workflows/publication.yml`, `.github/workflows/publish-image.yml`: schedule each prepared image independently and isolate registry write authority from image builds.
 - `scripts/ci-hosted.mts`: Runs the exact configured targets on a hosted native platform or in its prepared environment.
-- `scripts/prepare-development.mts`: Prepares toolchains, dependency archives and pnpm policy metadata, and verifies fresh offline builds.
+- `scripts/prepare-image-tools.mts`: Installs the pinned tools for native toolchain and development images.
+- `scripts/prepare-development.mts`: Prepares project dependencies and pnpm policy metadata and verifies fresh offline builds.
 - `scripts/managed-input-recipes.mts`, `scripts/refresh-managed-inputs.mts`: Derive standalone Nix/Guix source packages and refresh pinned proof metadata.
 - `scripts/prepare-managed-development.mts`, `scripts/prepare-host-managed-development.mts`, `scripts/prepare-nix-profiles.mts`: Assemble managed images in an installed manager's host store or a Docker fallback, retaining separate per-root profiles through one dependency graph per builder.
 - `scripts/guix-profile-command.mts`: Register persistent host development profiles, replace Guix environment roots transactionally, and release registrations during dependency pruning.
@@ -32,8 +34,11 @@
 - `scripts/prepare-screen-reader.mts`, `scripts/check-screen-reader.mts`, `scripts/screen-reader-assets.json`: Prepare verified platform browsers and Windows NVDA/macOS VoiceOver tools and retain real screen-reader workflow evidence from the disposable demonstration.
 - `scripts/check-workflows.mts`: Validates workflow files and project runner configuration without requiring Git metadata.
 - `scripts/managed-process.mts`: Own preparation child lifetimes, bounded capture, cancellation, safe shutdown despite uncertain ownership, release only after confirmed drainage, and command discovery.
+- `app/src/core/execution/environments/managed/profile-transfer.mts`, `scripts/verify-guix-profile-archive.scm`: Transfer selected profiles with
+  target and root metadata, and verify Guix archive signatures before restoring store objects.
+- `scripts/restore-store-archive.mts`: Restore and pin transferred profiles in the disposable offline verification store.
 - `scripts/managed-files.mts`: Validate source declarations and atomically replace generated metadata after acquisition and generation finish.
-- `scripts/verify-managed-preparation.mts`: Explicitly verifies two tiny host-managed profiles in a real offline Docker image and releases its temporary profile roots and image tags.
+- `scripts/verify-managed-preparation.mts`: Rehearses offline Nix and Guix images with host pins or a disposable managed store, including remount and pruning.
 - `scripts/prepare-guix-profiles.mts`: Realizes independent Guix channel groups, retains per-root profiles and matching runtimes, and passes only realized store paths to image assembly.
 - `scripts/pnpm-metadata.mts`: Retains locked package policy metadata through a disposable importer and the verified package manager.
 - `browser.nix`, `browser.scm`: Package the pinned browser test engine with managed Linux runtime closures and verify its native platform coverage and pairing with the locked Playwright driver.
@@ -43,11 +48,24 @@
 - `scripts/test-failures.mts`: Keep bounded failed-test assertions in retained gate excerpts.
 - `scripts/managed-image-import.mts`: Serialize managed archive imports and remove operation-owned source tags while preserving preexisting tags.
 - `.github/workflows/native-platform.yml`, `.github/actions/ci-cache/action.yml`, `.github/actions/prepare-runtime/action.yml`: Restores source-matched portable bundles and verified inputs before native operations, preserving platform-specific cache boundaries.
+- `scripts/check-linux-service.sh`: Qualifies user and system service installation, restart, and removal with the built
+  candidate on disposable Linux runners.
+- `scripts/check-macos-system-service.sh`: Qualifies installed launchd activation, per-account browser isolation,
+  fresh sign-in after restart, and owned removal on a disposable macOS runner.
+- `scripts/check-windows-service.ps1`, `scripts/windows-service-helper.mts`, `scripts/service-native`: Build the
+  Windows service adapter and qualify a verified release's system and private service operations on a disposable host.
+- `scripts/check-windows-startup.ps1`: Verify automatic Windows service and logon-task startup in a disposable guest.
+- `scripts/check-installed-services.mts`, `scripts/service-check-inputs.mts`: Verify extended-check candidate artifacts
+  and run the native installation scenarios on disposable hosts.
+- `scripts/check-windows-startup-vm.mts`, `scripts/windows-startup-bootstrap.ps1`: Run the Windows startup check
+  in an offline KVM guest overlay and report authenticated listener startup before discarding guest state.
 - `scripts/ci-platform.mts`: Groups configured target phases by operation and profile, rejecting missing or duplicated work.
 - `scripts/ci-candidate.mts`, `scripts/ci-release-ready.mts`: Binds the shared portable candidate to successful complete CI and immutable source identity.
-- `.github/workflows/release.yml`, `scripts/publish-release.mts`: Explicitly promotes the exact tested main candidate to GitHub Releases and verifies downloaded published bytes.
-- `scripts/release-contract.mts`, `scripts/github-release.mts`: Separate release proof validation from authenticated GitHub transport, including exact pending-draft and published-tag lookup, retried read operations, and private complete-download publication.
+- `.github/workflows/release.yml`, `scripts/publish-release.mts`: Promote the exact tested main candidate and native ZIPs to GitHub Releases and verify published bytes.
+- `scripts/release-contract.mts`, `app/src/core/artifacts/github-release.mts`: Validate release proof and share immutable
+  GitHub publication between the CLI and hosted workflows.
 - `scripts/accessibility-criteria.mts`: Maps automated browser results to partial WCAG criterion evidence without claiming full conformance.
+- `docs/tooling.md` lists active toolchain workarounds and their removal tests.
 - `scripts/ci-actions.json`: Own immutable workflow component pins shared by generation, maintenance discovery, derived workflow publication and strict workflow checks.
 - `scripts/ci-acquire.mts`, `scripts/ci-errors.mts`: Apply acquisition policy and actionable annotations and summaries at hosted CI boundaries without replaying tests.
 - `scripts/java-test-reports.mts`: Replace complete Java test report sets with run outcomes and rollback, preserving previous evidence when replacement cannot complete.

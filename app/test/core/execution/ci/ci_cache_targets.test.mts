@@ -4,7 +4,9 @@ import { required } from "../../../../src/core/runtime/invariants.ts";
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
+import { planCICache } from "../../../../src/core/execution/ci/ci-cache-plan.ts";
+import type { CacheInspectionRequest } from "../../../../src/core/execution/ci/ci-cache-inspection.ts";
 import { parse } from "yaml";
 import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
 import { configFromData } from "../../../../src/core/projects/project-configuration.ts";
@@ -15,6 +17,16 @@ import { ciCacheFixtures } from "../../../fixtures/ci-cache.mts";
 const repository = resolve(import.meta.dirname, "../../../../..");
 
 const fixture = ciCacheFixtures();
+afterEach(() => vi.unstubAllEnvs());
+
+function cacheTarget(root: string, checkout: string, target: CacheInspectionRequest["target"]) {
+  const base = join(root, "workbench-ci");
+  const cache = join(base, "cache");
+  vi.stubEnv("WORKBENCH_CACHE_HOME", cache);
+  vi.stubEnv("WORKBENCH_DATA_HOME", join(base, "data"));
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", checkout);
+  return planCICache(checkout, target, cache);
+}
 
 test("CI cache keys isolate runtime targets and exclude oversized installations", () => {
   const root = fixture();
@@ -35,7 +47,7 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
   writeFileSync(assetsPath, JSON.stringify(assets));
   const environment = join(root, "environment");
   const output = join(root, "output");
-  const run = (version: string | undefined, runtime: string | null = "node", paths = ["."]) => {
+  const runCommand = (version: string | undefined) => {
     writeFileSync(environment, "");
     writeFileSync(output, "");
     const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mts")], {
@@ -45,7 +57,7 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
         RUNNER_TEMP: root,
         GITHUB_ENV: environment,
         GITHUB_OUTPUT: output,
-        CACHE_TARGET: JSON.stringify({ runtime, version, paths }),
+        CACHE_TARGET: JSON.stringify({ runtime: "node", version, paths: ["."] }),
       },
       encoding: "utf8",
     });
@@ -63,7 +75,10 @@ test("CI cache keys isolate runtime targets and exclude oversized installations"
     readFileSync(registryPath, "utf8").replace("ci_compatibility = false", `ci_versions = ${JSON.stringify(versions)}`),
   );
   expect(versions).toHaveLength(2);
-  const oldest = run(versions[0]);
+  const run = (version: string | undefined, runtime: string | null = "node", paths = ["."]) =>
+    cacheTarget(root, checkout, { ...(runtime === null ? {} : { runtime }), ...(version ? { version } : {}), paths });
+  const oldest = runCommand(versions[0]);
+  expect(oldest).toEqual(run(versions[0]));
   const newest = run(versions[1]);
   expect(oldest["builds-key"]).not.toBe(newest["builds-key"]);
   expect(oldest["tools-key"]).toBeUndefined();
@@ -149,29 +164,9 @@ test.skipIf(process.platform !== "linux")(
     const config = configFromData(parseTOML(readFileSync(configPath, "utf8")), undefined, configPath);
     required(config.ci, "Expected fixture value: config.ci").cache = { artifacts: { llvm: "cache", clang: "cache" } };
     writeFileSync(configPath, stringifyTOML(config));
-    const environment = join(root, "environment");
-    const output = join(root, "output");
     const keys = [];
     for (const version of ["21.1.8", "22.1.8", "23.1.4"]) {
-      writeFileSync(environment, "");
-      writeFileSync(output, "");
-      const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mts")], {
-        cwd: checkout,
-        env: {
-          ...process.env,
-          RUNNER_TEMP: root,
-          GITHUB_ENV: environment,
-          GITHUB_OUTPUT: output,
-          CACHE_TARGET: JSON.stringify({ runtime: "clang", version, paths: ["examples/languages/c"] }),
-        },
-        encoding: "utf8",
-      });
-      expect(result.status, result.stderr).toBe(0);
-      const fields = Object.fromEntries(
-        [...readFileSync(output, "utf8").matchAll(/^([^\n]+)<<WORKBENCH_CACHE\n([\s\S]*?)\nWORKBENCH_CACHE\n/gm)].map(
-          (match) => [required(match[1], "Output key"), required(match[2], "Output value")] as const,
-        ),
-      );
+      const fields = cacheTarget(root, checkout, { runtime: "clang", version, paths: ["examples/languages/c"] });
       keys.push(fields["llvm-key"]);
       expect(fields["llvm-key"]).toMatch(/^llvm-v3-/);
       expect(fields["llvm-paths"]).toContain(join(root, "workbench-ci", "cache", "toolchains", "llvm"));
@@ -207,27 +202,7 @@ test("CI retains selected Rust versions and the tool versions installed inside D
   const checkout = join(root, "checkout");
   cacheCheckout(repository, checkout);
   writeFileSync(join(checkout, "examples/languages/rust/rust-toolchain.toml"), '[toolchain]\nchannel="1.94.0"\n');
-  const run = (target: { paths: string[]; runtime?: string; version?: string; environment?: string }) => {
-    const output = join(root, "output");
-    writeFileSync(output, "");
-    const result = spawnSync(process.execPath, [join(checkout, "scripts/ci-cache.mts")], {
-      cwd: checkout,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        RUNNER_TEMP: root,
-        GITHUB_ENV: join(root, "environment"),
-        GITHUB_OUTPUT: output,
-        CACHE_TARGET: JSON.stringify(target),
-      },
-    });
-    expect(result.status, result.stderr).toBe(0);
-    return Object.fromEntries(
-      [...readFileSync(output, "utf8").matchAll(/^([^\n]+)<<WORKBENCH_CACHE\n([\s\S]*?)\nWORKBENCH_CACHE\n/gm)].map(
-        (match) => [required(match[1], "Output key"), required(match[2], "Output value")] as const,
-      ),
-    );
-  };
+  const run = (target: CacheInspectionRequest["target"]) => cacheTarget(root, checkout, target);
   const rust = run({ paths: ["examples/languages/rust"] });
   expect(rust["rust-paths"]).toContain(join(root, "workbench-ci/cache/ci/rustup/toolchains/1.94.0-*"));
   expect(rust["rust-paths"]).not.toContain("nightly");

@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { webServers, readWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { provider, distribution, git } from "../../fixtures/adoption.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { installSelectedCollections } from "../../../src/core/collections/collection-install.ts";
@@ -58,11 +58,11 @@ test("a stale compatibility assessment requests agent work without entering the 
   const root = localProject(),
     web = await fixtures.start(root);
   expect(policyCompatibility(root).status).toBe("review-required");
-  const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  const queue = parseDOM((await readReconciledWebPage(web, "/reviews")).html).window.document;
   expect(queue.querySelector("[data-compatibility-item]")).toBeNull();
-  const local = (await readWebPage(web, "/collections")).html;
+  const local = (await readReconciledWebPage(web, "/collections")).html;
   expect(local).toContain("An agent compatibility assessment is needed.");
-  expect((await readWebPage(web, "/review?compatibility=1&id=demo:ADR-0")).response.status).toBe(400);
+  expect((await readReconciledWebPage(web, "/review?compatibility=1&id=demo:ADR-0")).response.status).toBe(400);
 });
 
 test("reported incompatibilities join document reviews; approval records a resolution without changing policy", async () => {
@@ -71,10 +71,10 @@ test("reported incompatibilities join document reviews; approval records a resol
     web = await fixtures.start(root);
   const before = readFileSync(join(root, "workbench/decisions/ADR-00.md"), "utf8"),
     index = git(root, "ls-files", "--stage");
-  const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  const queue = parseDOM((await readReconciledWebPage(web, "/reviews")).html).window.document;
   const links = [...queue.querySelectorAll("main [data-card-link]")];
   expect(links.map((link) => link.textContent)).toEqual(["Resolve policy incompatibilities"]);
-  const page = await readWebPage(web, links[0]?.getAttribute("href") ?? "");
+  const page = await readReconciledWebPage(web, links[0]?.getAttribute("href") ?? "");
   const document = parseDOM(page.html).window.document;
   expect(document.querySelector("main")?.textContent).toContain(proposed.proposed_resolution);
   expect(document.querySelector('a[href*="/records/hostrules:ADR-0"]')).not.toBeNull();
@@ -98,7 +98,7 @@ test("reported incompatibilities join document reviews; approval records a resol
   expect(readFileSync(join(root, "workbench/decisions/ADR-00.md"), "utf8")).toBe(before);
   expect(git(root, "ls-files", "--stage")).toBe(index);
   expect(existsSync(join(root, ".git/workbench/review.json"))).toBe(false);
-  expect((await readWebPage(web, "/reviews")).html).not.toContain("data-compatibility-item");
+  expect((await readReconciledWebPage(web, "/reviews")).html).not.toContain("data-compatibility-item");
   writeFileSync(
     join(root, "workbench/decisions/ADR-00.md"),
     before + "\nCommands may run through the host scheduler.\n",
@@ -136,7 +136,7 @@ test("exact proposal versions reject stale decisions and conflicting repeat subm
   const root = localProject(),
     status = report(root),
     web = await fixtures.start(root);
-  const page = await readWebPage(web, "/review?compatibility=1"),
+  const page = await readReconciledWebPage(web, "/review?compatibility=1"),
     finding = hiddenValue(page.html, "finding");
   const form = {
     csrf: hiddenValue(page.html, "csrf"),
@@ -247,7 +247,7 @@ test("fresh assessments preserve the most recent human resolution after later cl
   expect(policyCompatibility(root).last_resolution).toEqual(resolution);
 });
 
-test("the unified queue advances from a document to compatibility and staged acknowledgments honor findings", async () => {
+test("the review arrows follow approval before acceptance and staged acknowledgments honor findings", async () => {
   const root = localProject(),
     status = report(root),
     web = await fixtures.start(root);
@@ -259,10 +259,13 @@ test("the unified queue advances from a document to compatibility and staged ack
       review.acknowledge(review.status.digest, true);
     }),
   ).rejects.toThrow(/human review/);
-  const page = await readWebPage(web, "/records/demo:ADR-0/review");
+  const page = await readReconciledWebPage(web, "/records/demo:ADR-0/review");
   const navigation = parseDOM(page.html).window.document.querySelector(".record-pane");
-  expect(navigation?.querySelector('button:disabled[aria-label="Previous review"]') ?? null).not.toBeNull();
-  expect(navigation?.querySelector('a[rel="next"]')?.getAttribute("href")).toContain("compatibility=1");
+  const previous = navigation?.querySelector('a[rel="prev"]')?.getAttribute("href");
+  expect(previous).toContain("compatibility=1");
+  expect(navigation?.querySelector('button:disabled[aria-label="Next review"]') ?? null).not.toBeNull();
+  const approval = parseDOM((await readReconciledWebPage(web, previous ?? "")).html).window.document;
+  expect(approval.querySelector('a[rel="next"]')?.getAttribute("href")).toContain("demo:ADR-0");
   const response = await postWebForm(web, "/actions/approve", {
     csrf: hiddenValue(page.html, "csrf"),
     path,

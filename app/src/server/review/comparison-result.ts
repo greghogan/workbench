@@ -15,4 +15,4 @@ export function acquireComparison(read: () => SourceDifference | null): Comparis
 
 export const comparisonChanged = (result: ComparisonResult): boolean =>
   result.state === "unavailable" ||
-  (!!result.difference && (result.difference.before !== result.difference.after || result.difference.patch.length > 0));
+  (!!result.difference && (result.difference.before !== result.difference.after || !!result.difference.patch));

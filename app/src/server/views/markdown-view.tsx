@@ -15,7 +15,7 @@ import { experimentIsResult } from "../../core/experiments/experiment-workflow.j
 import { required } from "../../core/runtime/invariants.js";
 import { markdownHeadingId } from "../../core/records/markdown-links.js";
 import { diagramView, diagramComparisonView } from "./diagram-view.js";
-import { isDocumentationSvg } from "../documents/document-image.js";
+import { isDocumentationSvg, isSvg } from "../documents/document-image.js";
 const documentPrefix = "document-";
 
 /** Raw HTML remains visible text; local links resolve only to registered records or their owned files. */
@@ -24,9 +24,14 @@ export type MarkdownRecord = Pick<BrowserRecord, "directory" | "path"> & {
   scope?: string;
   type?: BrowserRecord["type"];
   history?: { commit: string; paths: ReadonlySet<string>; location?: (path: string) => string };
-  planFiles?: { reference: string; names: readonly string[]; version?: "approved"; base?: string };
+  planFiles?: { reference: string; files: ReadonlyMap<string, string>; version?: "approved"; base?: string };
+  images?: ReadonlyMap<string, string>;
   fileSource?: SourceQuery & { workflow?: "1" };
 };
+function planFilePath(record: NonNullable<MarkdownRecord["planFiles"]>, relative: string): string {
+  const resolved = posix.normalize(posix.join(record.base ?? "", relative));
+  return record.base === undefined ? resolved.replace(/^files\//, "") : resolved;
+}
 export function markdownParser(
   record: MarkdownRecord | undefined,
   records: RecordLookup,
@@ -42,11 +47,54 @@ export function markdownParser(
   const owner = record
     ? (records.path(resolve(record.directory, record.path)) ?? records.owner(resolve(record.directory, record.path)))
     : undefined;
+  const imageLocation = (source: string): { url: string; version: string } | undefined => {
+    if (!record || !source) return;
+    let target: string;
+    try {
+      target = decodeURIComponent(source);
+    } catch {
+      return;
+    }
+    if (/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(target)) return;
+    if (record.planFiles) {
+      const path = planFilePath(record.planFiles, target);
+      const image = record.planFiles.files.get(path);
+      if (image && isSvg(path))
+        return {
+          url: routeURL(Route.PlanFile, {
+            ...record.fileSource,
+            id: record.planFiles.reference,
+            path,
+            image,
+            ...(record.planFiles.version ? { version: record.planFiles.version } : {}),
+          }),
+          version: image,
+        };
+    }
+    if (!owner || record.history) return;
+    const path = relative(owner.directory, resolve(record.directory, dirname(record.path), target)).replaceAll(
+      "\\",
+      "/",
+    );
+    const image = record.images?.get(path);
+    if (image)
+      return { url: routeURL(Route.File, { ...record.fileSource, id: owner.id, path, image }), version: image };
+    if (!owner.archive && !owner.collection && !owner.local && isDocumentationSvg(path))
+      return { url: routeURL(Route.DocumentImage, { path }), version: "live" };
+    return undefined;
+  };
   parser.core.ruler.after("inline", "record-references", (state) => {
     for (const block of state.tokens) {
       if (!block.children) continue;
       let links = 0;
       block.children = block.children.flatMap((token) => {
+        if (token.type === "image") {
+          const location = imageLocation(String(token.attrGet("src") ?? ""));
+          if (location) {
+            token.attrSet("data-image-location", location.url);
+            token.attrSet("data-image-version", location.version);
+          }
+        }
         if (token.type === "link_open") links++;
         if (token.type === "link_close") links--;
         if (token.type !== "text" || links) return [token];
@@ -98,9 +146,8 @@ export function markdownParser(
     }
     const fragment = href.includes("#") ? "#" + documentPrefix + href.slice(href.indexOf("#") + 1) : "";
     if (record.planFiles) {
-      const resolved = posix.normalize(posix.join(record.planFiles.base ?? "", decoded));
-      const name = record.planFiles.base === undefined ? resolved.replace(/^files\//, "") : resolved;
-      if (!record.planFiles.names.includes(name)) return undefined;
+      const name = planFilePath(record.planFiles, decoded);
+      if (!record.planFiles.files.has(name)) return undefined;
       return {
         href:
           routeURL(Route.PlanFile, {
@@ -174,23 +221,10 @@ export function markdownParser(
   parser.renderer.rules.image = (tokens, index) => {
     const token = tokens[index],
       alt = token?.content ?? "",
-      source = String(token?.attrGet("src") ?? "");
-    if (record && owner && !record.history && !owner.archive && !owner.collection && !owner.local && source) {
-      let path = "";
-      try {
-        const target = decodeURIComponent(source);
-        if (!/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(target))
-          path = relative(record.directory, resolve(record.directory, dirname(record.path), target)).replaceAll(
-            "\\",
-            "/",
-          );
-      } catch {
-        // Preserve readable image text for malformed destinations.
-      }
-      if (isDocumentationSvg(path))
-        return renderToString(<img src={routeURL(Route.DocumentImage, { path })} alt={alt} loading="lazy" />);
-    }
-    return renderToString(<span class="muted">[Image: {alt}]</span>);
+      source = token?.attrGet("data-image-location");
+    return source
+      ? renderToString(<img src={String(source)} alt={alt} loading="lazy" />)
+      : renderToString(<span class="muted">[Image: {alt}]</span>);
   };
   const fence = required(parser.renderer.rules.fence, "Markdown code renderer is unavailable");
   parser.renderer.rules.fence = (tokens, index, options, environment, renderer) => {

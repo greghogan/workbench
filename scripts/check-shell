@@ -5,6 +5,9 @@ files=(
     .envrc
     bin/workbench
     scripts/check-shell
+    scripts/check-linux-service.sh
+    scripts/check-macos-service.sh
+    scripts/check-macos-system-service.sh
     .githooks/pre-commit
     .githooks/pre-push
     .githooks/commit-msg

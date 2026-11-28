@@ -23,7 +23,7 @@ const generated = new Set([
 /** Release and rehearsal copies share payload exclusions, including personal state. */
 export function distributionPathIncluded(path: string): boolean {
   path = path.replaceAll("\\", "/");
-  if (path === "bundle/.workbench-build.json") return false;
+  if (path === "bundle/.workbench-build.json" || path === "bundle/.workbench-tooling.json") return false;
   if (publicationTarget(path) !== undefined) return false;
   if (path.startsWith("app/src/") && /\.(?:ts|tsx|mts)$/.test(path) && !nativeSources.has(path)) return false;
   return (

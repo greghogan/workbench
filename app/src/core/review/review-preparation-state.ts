@@ -36,8 +36,10 @@ function state(path: string) {
     () => ({}),
   );
 }
-export function pendingRecordOutputs(root: string): ReadonlySet<string> {
-  return new Set(Object.keys(state(reviewPreparationPath(root)).read()));
+export function pendingRecordOutputs(root: string, observe?: (path: string) => void): ReadonlySet<string> {
+  const path = reviewPreparationPath(root);
+  observe?.(path);
+  return new Set(Object.keys(state(path).read()));
 }
 /** A token prevents an older preparation from clearing a newer operation's pending repair. */
 export class ReviewPreparation {

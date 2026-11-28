@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, posix } from "node:path";
 import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { isRecord } from "../app/src/core/runtime/values.mjs";
 import { bundleEntries, bundles } from "../app/src/core/distribution/bundle-layout.mts";
 
 export const bundleCacheFile = "bundle/.workbench-build.json";
-const roots = ["app/src", "app/test", "scripts", "bin"];
+export const developmentToolingReceipt = "bundle/.workbench-tooling.json";
+const bundleIgnore = ".workbench-build.json\n.workbench-tooling.json\n";
+const roots = ["app/src", "app/test/integration/consumers", "scripts", "bin"];
 const configuration = [
   "package.json",
   "pnpm-lock.yaml",
@@ -15,6 +17,7 @@ const configuration = [
   ".npmrc",
   "tsconfig.json",
   ".node-version",
+  ".prettierrc.json",
   "workbench/config.toml",
 ];
 
@@ -35,7 +38,7 @@ export function bundleInputDigest(root: string): string {
     } else if (metadata.isFile()) files.add(path);
   };
   for (const path of roots) visit(path);
-  const hash = createHash("sha256").update("workbench-portable-bundles-v1\0");
+  const hash = createHash("sha256").update("workbench-portable-bundles-v2\0");
   for (const path of [...files].sort()) {
     hash.update(path + "\0");
     if (existsSync(join(root, path))) {
@@ -68,11 +71,15 @@ export function saveBundleCache(
     outputs: Object.fromEntries(outputs.map((file) => [file.path, digest(file.contents)])),
   };
   writeAtomic(join(root, bundleCacheFile), JSON.stringify(receipt) + "\n");
-  writeAtomic(join(root, "bundle/.npmignore"), ".workbench-build.json\n");
+  writeAtomic(join(root, "bundle/.npmignore"), bundleIgnore);
 }
 
 /** Reuse only complete, intact outputs for identical source and build inputs. */
-export function reuseBundles(source: string, destination = source, receiptFile = bundleCacheFile): boolean {
+export function reuseBundles(
+  source: string,
+  destination = source,
+  { receiptFile = bundleCacheFile, destinationInputs = () => bundleInputDigest(destination) } = {},
+): boolean {
   let value: unknown;
   try {
     const path = join(source, receiptFile);
@@ -133,11 +140,16 @@ export function reuseBundles(source: string, destination = source, receiptFile =
       throw error;
     }
   }
-  if (bundleInputDigest(destination) !== value.inputs) return false;
+  if (destinationInputs() !== value.inputs) return false;
+  const obsolete = bundleEntries.flatMap((name) =>
+    ["br", "gz", "zst"].map((suffix) => `bundle/${name}.cjs.${suffix}`).filter((path) => !Object.hasOwn(outputs, path)),
+  );
+  if (destination === source && obsolete.some((path) => existsSync(join(destination, path)))) return false;
   if (destination !== source) {
     for (const { path, bytes } of files) writeAtomic(join(destination, path), bytes);
+    for (const path of obsolete) rmSync(join(destination, path), { force: true });
     writeAtomic(join(destination, bundleCacheFile), JSON.stringify(value) + "\n");
-    writeAtomic(join(destination, "bundle/.npmignore"), ".workbench-build.json\n");
+    writeAtomic(join(destination, "bundle/.npmignore"), bundleIgnore);
   }
   return true;
 }

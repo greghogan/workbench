@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { Worker } from "node:worker_threads";
+import { mergeProcessCovs } from "@bcoe/v8-coverage";
+import type { Profiler } from "node:inspector";
 import { build } from "esbuild";
 import {
   mkdtempSync,
@@ -19,12 +21,21 @@ import { afterEach, expect, test, vi } from "vitest";
 import { coverageConcurrency, subprocessCoverage } from "../../../../scripts/test-coverage.mjs";
 import { coverageJobs } from "../../../../scripts/coverage-workers.mjs";
 import {
+  collectedScriptCoverage,
   convertCoverageScript,
+  CoverageAccumulator,
   CoverageSources,
   type MeasuredScript,
 } from "../../../../scripts/coverage-processing.mjs";
 import { InvalidNodeCoverageReport } from "../../../../scripts/node-coverage-reports.mjs";
 const temporary: string[] = [];
+function conversionJob(url = "file:///fixture.mjs") {
+  return {
+    kind: "convert" as const,
+    script: { url, code: "", included: new Set<string>(), sourceType: "script" as const },
+    execution: { url, scriptId: "0", functions: [] },
+  };
+}
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
@@ -62,7 +73,7 @@ test("bounded coverage workers preserve serial counters across repeated reports 
   }
   vi.stubEnv("WORKBENCH_CPU_BUDGET", "1");
   const serial = await subprocessCoverage(raw, root);
-  vi.stubEnv("WORKBENCH_CPU_BUDGET", "2");
+  vi.stubEnv("WORKBENCH_CPU_BUDGET", "4");
   const parallel = await subprocessCoverage(raw, root);
   assert.deepEqual(parallel.toJSON(), serial.toJSON());
   const alias = join(root, "project-alias");
@@ -78,11 +89,7 @@ test("bounded coverage workers preserve serial counters across repeated reports 
     expect(counts).toContainEqual({ name: "never", count: 0 });
   }
   writeFileSync(join(raw, "coverage-123-456-7.json"), '{"PRIVATE SOURCE');
-  await expect(
-    coverageJobs([{ kind: "scan", directory: raw, root, candidates: [], files: ["coverage-123-456-7.json"] }], {
-      capacity: 1,
-    }),
-  ).rejects.toMatchObject({
+  await expect(subprocessCoverage(raw, root)).rejects.toMatchObject({
     diagnostic: { file: "coverage-123-456-7.json", bytes: 16, pid: 123, thread: 7, reason: "invalid-json" },
   });
   try {
@@ -110,7 +117,7 @@ test("cancellation drains every coverage worker before rejecting", async () => {
     });
     return worker;
   };
-  const job = { kind: "scan" as const, directory: "unused", root: "unused", candidates: [], files: [] };
+  const job = conversionJob();
   await expect(
     coverageJobs([job, job], { capacity: 2, createWorker: create, signal: controller.signal }),
   ).rejects.toThrow();
@@ -127,8 +134,8 @@ test.each([
   },
   {
     name: "wrong reply kind",
-    code: "port.postMessage({kind:'convert', result:{}})",
-    diagnostic: /returned convert; expected ready/,
+    code: "port.postMessage({kind:'ready'})",
+    diagnostic: /returned ready; expected convert/,
   },
 ])("coverage owns and drains every worker after $name", async ({ code, diagnostic }) => {
   const exits: Promise<unknown>[] = [];
@@ -152,7 +159,7 @@ test.each([
     );
     return worker;
   };
-  const job = { kind: "scan" as const, directory: "unused", root: "unused", candidates: [], files: [] };
+  const job = conversionJob();
   try {
     await expect(coverageJobs([job, job], { capacity: 2, createWorker: create })).rejects.toThrow(diagnostic);
     expect(exited).toBe(2);
@@ -190,21 +197,15 @@ test.each([
       mappings: "AAAA",
       ...(sourceRoot ? { sourceRoot } : {}),
     },
-    executions: [
+  };
+  const execution = {
+    scriptId: "1",
+    url,
+    functions: [
       {
-        result: [
-          {
-            scriptId: "1",
-            url,
-            functions: [
-              {
-                functionName: "",
-                isBlockCoverage: true,
-                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
-              },
-            ],
-          },
-        ],
+        functionName: "",
+        isBlockCoverage: true,
+        ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
       },
     ],
   };
@@ -214,7 +215,7 @@ test.each([
   expect(
     new CoverageSources([candidate]).match(url, { ...map, sourceRoot: "", sources: [pathToFileURL(path).href] }),
   ).toBe(candidate);
-  const result = await convertCoverageScript(bundle);
+  const result = await convertCoverageScript(bundle, execution);
   expect(Object.keys(result)).toEqual([path]);
   expect(Object.values(result[path]?.s ?? {})).toContain(1);
 });
@@ -254,7 +255,7 @@ test("bundled rendering dependencies cannot prevent measuring executed and unuse
   }
   vi.stubEnv("WORKBENCH_CPU_BUDGET", "1");
   const serial = await subprocessCoverage(join(root, "raw"), root);
-  vi.stubEnv("WORKBENCH_CPU_BUDGET", "2");
+  vi.stubEnv("WORKBENCH_CPU_BUDGET", "4");
   const parallel = await subprocessCoverage(join(root, "raw"), root);
   expect(parallel.toJSON()).toEqual(serial.toJSON());
   expect(parallel.files().sort()).toEqual([helper, source].sort());
@@ -265,15 +266,11 @@ test("bundled rendering dependencies cannot prevent measuring executed and unuse
   expect(file.getLineCoverage()).toMatchObject({ 2: 1, 3: 0 });
 });
 
-test.each([1, 2])("ready coverage workers claim batches of %i and release admission leases", async (batchSize) => {
+test("idle coverage workers claim the next job without waiting for earlier jobs", async () => {
   const { EventEmitter } = await import("node:events");
   class ControlledWorker extends EventEmitter {
     requests: unknown[] = [];
     postMessage(request: unknown) {
-      if (request && typeof request === "object" && "kind" in request && request.kind === "initialize") {
-        queueMicrotask(() => this.emit("message", { kind: "ready" }));
-        return;
-      }
       this.requests.push(request);
     }
     terminate() {
@@ -281,64 +278,99 @@ test.each([1, 2])("ready coverage workers claim batches of %i and release admiss
       return Promise.resolve(0);
     }
   }
-  const workers: ControlledWorker[] = [],
-    candidates: import("../../../../scripts/coverage-processing.mjs").CoverageCandidate[] = [];
+  const workers: ControlledWorker[] = [];
   let acquired = 0,
     released = 0;
-  const consume = vi.fn();
-  const groups = ["slow", "fast", "next"].map((name) =>
-    Array.from({ length: batchSize }, (_, index) => `${name}-${String(index)}`),
-  );
-  const result = coverageJobs(
-    groups.flat().map((file) => ({
-      kind: "scan" as const,
-      directory: "/raw",
-      root: "/source",
-      candidates,
-      files: [file],
-    })),
-    {
-      capacity: 2,
-      createWorker: () => {
-        const worker = new ControlledWorker();
-        workers.push(worker);
-        return worker as unknown as Worker;
-      },
-      admission: {
-        acquire: () => {
-          acquired++;
-          return Promise.resolve({
-            release: () => {
-              released++;
-            },
-          });
-        },
-      },
-      consume,
-      scanBatchSize: batchSize,
+  const jobs = ["slow", "fast", "next"].map((name) => conversionJob("file:///" + name + ".mjs"));
+  const result = coverageJobs(jobs, {
+    capacity: 2,
+    createWorker: () => {
+      const worker = new ControlledWorker();
+      workers.push(worker);
+      return worker as unknown as Worker;
     },
-  );
+    admission: {
+      acquire: () => {
+        acquired++;
+        return Promise.resolve({
+          release: () => {
+            released++;
+          },
+        });
+      },
+    },
+  });
   await vi.waitFor(() => {
     expect(acquired).toBe(2);
-    expect(workers[0]?.requests).toHaveLength(1);
-    expect(workers[1]?.requests).toHaveLength(1);
+    expect(workers[0]?.requests).toEqual([jobs[0]]);
+    expect(workers[1]?.requests).toEqual([jobs[1]]);
   });
-  expect(workers[0]?.requests).toHaveLength(1);
-  expect(workers[1]?.requests).toHaveLength(1);
-  expect(workers[0]?.requests[0]).toMatchObject({ files: groups[0] });
-  expect(workers[1]?.requests[0]).toMatchObject({ files: groups[1] });
-  workers[1]?.emit("message", { kind: "scan", result: { bundles: [], helpers: [] } });
+  workers[1]?.emit("message", { kind: "convert", result: {} });
   await vi.waitFor(() => {
-    expect(workers[1]?.requests).toHaveLength(2);
+    expect(workers[1]?.requests).toEqual([jobs[1], jobs[2]]);
   });
-  expect(workers[0]?.requests).toHaveLength(1);
-  expect(workers[1]?.requests[1]).toMatchObject({ files: groups[2] });
-  expect(workers[1]?.requests[1]).not.toHaveProperty("candidates");
-  workers[1]?.emit("message", { kind: "scan", result: { bundles: [], helpers: [] } });
-  workers[0]?.emit("message", { kind: "scan", result: { bundles: [], helpers: [] } });
-  await result;
-  expect(consume).toHaveBeenCalledTimes(3);
+  expect(workers[0]?.requests).toEqual([jobs[0]]);
+  workers[1]?.emit("message", { kind: "convert", result: {} });
+  workers[0]?.emit("message", { kind: "convert", result: {} });
+  await expect(result).resolves.toEqual([{}, {}, {}]);
   expect(released).toBe(3);
+});
+
+test("range aggregation agrees with V8 for repeated, overlapping, and mixed-granularity reports", () => {
+  const root = mkdtempSync(join(tmpdir(), "workbench-coverage-layouts-"));
+  temporary.push(root);
+  mkdirSync(join(root, "scripts"));
+  const helper = join(root, "scripts/helper.mjs");
+  writeFileSync(helper, "export {};");
+  const url = pathToFileURL(helper).href;
+  const fn = (
+    functionName: string,
+    isBlockCoverage: boolean,
+    ranges: [number, number, number][],
+  ): Profiler.FunctionCoverage => ({
+    functionName,
+    isBlockCoverage,
+    ranges: ranges.map(([startOffset, endOffset, count]) => ({ startOffset, endOffset, count })),
+  });
+  const reports = Array.from({ length: 60 }, (_, index) => ({
+    result: [
+      {
+        url,
+        scriptId: "0",
+        functions: [
+          fn("matching", true, [
+            [0, 50, 2],
+            [8, 30, index % 3],
+            [18, 22, 0],
+          ]),
+          fn("unexecuted", true, [[50, 60, 0]]),
+          index % 2
+            ? fn("mixed", false, [[60, 100, 100]])
+            : fn("mixed", true, [
+                [60, 100, 2],
+                [65, 80, 0],
+              ]),
+          fn("overlap", true, [
+            [100, 200, 2],
+            [110 + (index % 12), 130 + (index % 12), 0],
+          ]),
+        ],
+      },
+    ],
+  }));
+  const reference = mergeProcessCovs(structuredClone(reports)).result[0]?.functions;
+  for (const capacity of [1, 4]) {
+    const combined = new CoverageAccumulator(root, []);
+    for (let worker = 0; worker < capacity; worker++) {
+      const local = new CoverageAccumulator(root, []);
+      for (const [index, report] of structuredClone(reports).entries())
+        if (index % capacity === worker) local.add(report);
+      combined.merge(local.result());
+    }
+    const result = combined.result().helpers[0];
+    assert.ok(result);
+    assert.deepEqual(collectedScriptCoverage(result).functions, reference);
+  }
 });
 
 test("coverage capacity respects both available processors and memory without hiding all work", () => {

@@ -16,13 +16,30 @@ export function readConfig(root: string): Config {
 function loadConfig(root: string): Config {
   const path = ownedPath(root, projectPaths.config);
   const automationPath = ownedPath(root, projectPaths.automation);
-  return configFromData(readToml(path), existsSync(automationPath) ? readToml(automationPath) : undefined, path);
+  const profilePath = ownedPath(root, projectPaths.profiles);
+  return configFromData(
+    readToml(path),
+    existsSync(automationPath) ? readToml(automationPath) : undefined,
+    path,
+    existsSync(profilePath) ? readToml(profilePath) : undefined,
+  );
 }
 
 /** Parse declarations identically for live checkouts and read-only Git snapshots. */
-export function configFromData(value: unknown, automation: unknown, path: string): Config {
+export function configFromData(value: unknown, automation: unknown, path: string, profiles?: unknown): Config {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidInput(`${path}: expected a table`);
   const config = { ...value } as Config;
+  if (profiles !== undefined) {
+    if (!profiles || typeof profiles !== "object" || Array.isArray(profiles))
+      throw new InvalidInput(`${projectPaths.profiles}: expected a table`);
+    const definitions = profiles as Record<string, unknown>;
+    for (const key of ["development", "release"]) {
+      if (!Object.hasOwn(definitions, key)) continue;
+      if (Object.hasOwn(config, key))
+        throw new InvalidInput(`${key}: declared in both ${projectPaths.profiles} and config.toml`);
+      config[key] = definitions[key];
+    }
+  }
   const automationPath = path.replace(/config\.toml$/, "automation.toml");
   if (automation !== undefined) {
     if (!automation || typeof automation !== "object" || Array.isArray(automation))

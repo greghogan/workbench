@@ -28,41 +28,34 @@ const results = join(reports, "job-results.json");
 writeRunReport(results, run);
 try {
   if (profile) {
-    writeFileSync(join(reports, "targets.json"), JSON.stringify([target]));
-    const env = {
-      ...operationEnvironment,
-      RUNNER_TEMP: "/reports",
-      WORKBENCH_CI_TARGETS: "/reports/targets.json",
-      WORKBENCH_CPU_BUDGET: shared.WORKBENCH_CPU_BUDGET,
-      ...(shared.WORKBENCH_CPUS === undefined ? {} : { WORKBENCH_CPUS: shared.WORKBENCH_CPUS }),
-    };
+    const selection = join(reports, "targets.json");
+    writeFileSync(selection, JSON.stringify([target]));
     let failure: Error | undefined;
     try {
-      execute(process.execPath, [
-        join(distribution, "bin/workbench.mjs"),
-        "ci-image-exec",
-        profile,
-        "--image",
-        required(image, "Missing worker image"),
-        "--reports",
-        reports,
-        "--env-json",
-        JSON.stringify(env),
-        "--",
-        "node",
-        "{workbench}/scripts/ci-linux/run.mjs",
-      ]);
+      execute(
+        process.execPath,
+        [
+          join(distribution, "bin/workbench.mjs"),
+          "ci-image-job",
+          profile,
+          "--local-image",
+          required(image, "Missing worker image"),
+          "--targets",
+          selection,
+          "--reports",
+          reports,
+          ...(operation === undefined ? [] : ["--operation", operation]),
+        ],
+        { ...process.env, ...shared },
+      );
     } catch (error) {
       failure = errorFrom(error);
     }
-    const returned = parseRunReport(
-      JSON.parse(readFileSync(join(reports, "guest-results.json"), "utf8")),
-      [target.id],
-      reports,
-    );
+    const returned = parseRunReport(JSON.parse(readFileSync(results, "utf8")), [target.id], reports);
     run.targets = returned.targets;
     run.errors = returned.errors;
-    if (failure && runSucceeded(returned)) throw failure;
+    if (failure && (runSucceeded(returned) || returned.targets.some((result) => result.finished === undefined)))
+      throw failure;
   } else if (target.kind === "environment") {
     const env = {
       ...process.env,

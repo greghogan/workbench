@@ -21,7 +21,12 @@ import {
 import { BoundedDiagnosticWriter } from "../../../src/core/diagnostics/diagnostic-writer.mjs";
 import { DiagnosticRedactor, redact } from "../../../src/core/diagnostics/diagnostic-text.mjs";
 import { resolveDiagnosticOptions } from "../../../src/core/diagnostics/diagnostic-options.ts";
-import { readCheckMessage, CheckMessage } from "../../../src/core/execution/checks/check-protocol.ts";
+import {
+  checkAdmissionDigest,
+  readCheckAdmission,
+  readCheckMessage,
+  CheckMessage,
+} from "../../../src/core/execution/checks/check-protocol.ts";
 import { readProcessDiagnostic } from "../../../src/core/diagnostics/diagnostic-contract.mjs";
 import { knownRoute, Route } from "../../../src/server/routes/routes.ts";
 import { relayCollectionDiagnostics } from "../../../src/server/projects/collection-runner.ts";
@@ -148,6 +153,12 @@ test("IPC and process termination codecs reject malformed values and preserve va
   expect(
     readCheckMessage({ type: CheckMessage.Logs, directory: "/run", files: ["step-1.ABCDEF"], errors: [] }),
   ).toMatchObject({ files: ["step-1.ABCDEF"] });
+  const expected = checkAdmissionDigest([]);
+  expect(readCheckAdmission({ type: CheckMessage.Start, isolationGroups: [] }, expected)).toEqual([]);
+  expect(() => readCheckAdmission({ type: CheckMessage.Start }, expected)).toThrow(/does not match/);
+  expect(() => readCheckAdmission({ type: CheckMessage.Start, isolationGroups: [{}] }, expected)).toThrow(
+    /does not match/,
+  );
   expect(readProcessDiagnostic({ operation: "tool", pid: NaN, status: 0, signal: null })).toBeUndefined();
   expect(readProcessDiagnostic({ operation: "tool", pid: 123, status: null, signal: "SIGTERM" })).toMatchObject({
     pid: 123,

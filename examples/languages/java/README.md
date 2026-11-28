@@ -1,5 +1,19 @@
 # Java reference
 
+## Native build and run
+
+Install the JDK and Maven versions declared in `.java-version` and `.tool-versions`. Run Maven from this folder so
+it loads the project's `.mvn` configuration and trusted checksums.
+
+```sh
+mvn compile
+java -cp build/classes org.example.workbench.Count 97 banana
+```
+
+The result is `3`.
+
+## Workbench workflow
+
 A standalone Maven project with strict compiler warnings, Google Java Format through fmt, SpotBugs, JUnit, and JaCoCo.
 This example selects Java 17 as its minimum runtime and API target in the POM; consuming projects choose their own
 target independently of the JDK required to run build tools. Native development uses Temurin 25 LTS. CI uses the

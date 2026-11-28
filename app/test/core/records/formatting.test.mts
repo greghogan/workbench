@@ -15,7 +15,14 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parse } from "yaml";
-import { test } from "vitest";
+import { afterEach, test, vi } from "vitest";
+import { addProject, setupProject } from "../../../src/cli/project-setup.ts";
+import { addRecord } from "../../../src/core/records/records.ts";
+import { formatFiles } from "../../../src/core/records/formatting.ts";
+import { synchronize } from "../../../src/core/records/sync.ts";
+import { validate, validationReport } from "../../../src/core/records/validation.ts";
+
+afterEach(() => vi.unstubAllEnvs());
 import type { SpawnSyncReturns } from "child_process";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
@@ -25,7 +32,8 @@ interface FormattingFixture {
   run: (...args: string[]) => string;
   fail: (...args: string[]) => string;
 }
-function fixture(action: (fixture: FormattingFixture) => void) {
+async function fixture(action: (fixture: FormattingFixture) => Promise<void>) {
+  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
   const root = mkdtempSync(join(tmpdir(), "workbench-format-"));
   const invoke = (args: string[], input?: string) =>
     spawnSync(process.execPath, [join(distribution, "bundle/main.cjs"), ...args], {
@@ -45,42 +53,43 @@ function fixture(action: (fixture: FormattingFixture) => void) {
     return result.stdout + result.stderr;
   };
   try {
-    run("setup-project", root);
+    await setupProject(root, "format");
     copyFileSync(
       resolve(import.meta.dirname, "../../../resources/verification/CHARTER.md"),
       join(root, "workbench/CHARTER.md"),
     );
-    run("sync");
-    action({ root, run, fail, invoke });
+    synchronize(root);
+    await action({ root, run, fail, invoke });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 const metadata = (contents: string): unknown =>
   parse(required(contents.split("---")[1], 'Fixture value contents.split("---")[1]'));
+const validationErrors = async (root: string) => (await validationReport(root)).errors.join("\n");
 
 test("validation checks user documentation in root and subproject docs directories without following links", () => {
-  fixture(({ root, run, fail }) => {
-    run("subproject", "add", "api", "api");
+  return fixture(async ({ root }) => {
+    await addProject(root, "api", "api");
     copyFileSync(join(root, "workbench/CHARTER.md"), join(root, "api/workbench/CHARTER.md"));
-    run("sync");
+    synchronize(root);
     for (const owner of [root, join(root, "api")]) {
       mkdirSync(join(owner, "docs"));
       const guide = join(owner, "docs/start.md");
       writeFileSync(guide, "[Charter](../workbench/CHARTER.md)\n");
-      run("validate");
+      await validate(root);
       writeFileSync(guide, "[Missing](missing.md)\n");
-      assert.match(fail("validate"), /missing link target.*missing\.md/);
+      assert.match(await validationErrors(root), /missing link target.*missing\.md/);
       writeFileSync(guide, "[Charter](../workbench/CHARTER.md)\n");
     }
     const outside = mkdtempSync(join(tmpdir(), "workbench-external-docs-"));
     try {
       writeFileSync(join(outside, "broken.md"), "[Missing](missing.md)\n");
       symlinkSync(outside, join(root, "docs/external"), "junction");
-      run("validate");
+      await validate(root);
       rmSync(join(root, "api/docs"), { recursive: true });
       symlinkSync(outside, join(root, "api/docs"), "junction");
-      run("validate");
+      await validate(root);
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
@@ -88,8 +97,8 @@ test("validation checks user documentation in root and subproject docs directori
 });
 
 test("task creation formats file and stdin bodies and scopes batch formatting", () => {
-  fixture(({ root, run, invoke }) => {
-    run("subproject", "add", "api", "api");
+  return fixture(async ({ root, run, invoke }) => {
+    await addProject(root, "api", "api");
     copyFileSync(join(root, "workbench/CHARTER.md"), join(root, "api/workbench/CHARTER.md"));
     const source = join(root, "draft.md");
     const body =
@@ -106,7 +115,7 @@ test("task creation formats file and stdin bodies and scopes batch formatting", 
     assert.equal(typeof added_at, "string");
     assert.deepEqual(fields, { status: "Planned" });
     assert.equal(readFileSync(source, "utf8"), body);
-    run("format", "--all", "--check");
+    await formatFiles(root, undefined, { all: true, check: true });
     const untouched = ["workbench/CHARTER.md", "api/workbench/CHARTER.md", "AGENTS.md", "workbench/task-map.md"].map(
       (path) => [path, readFileSync(join(root, path), "utf8")] as const,
     );
@@ -115,17 +124,17 @@ test("task creation formats file and stdin bodies and scopes batch formatting", 
     writeFileSync(dependency, "unformatted dependency record");
     for (const path of [rootTask, localTask]) writeFileSync(path, readFileSync(path, "utf8") + "\n\n");
     const original = readFileSync(rootTask, "utf8");
-    run("format", "--all", "--project", "api", "--write");
+    await formatFiles(root, undefined, { all: true, project: "api", write: true });
     assert.equal(readFileSync(rootTask, "utf8"), original);
-    run("format", "--all", "--write");
-    run("format", "--all", "--check");
+    await formatFiles(root, undefined, { all: true, write: true });
+    await formatFiles(root, undefined, { all: true, check: true });
     assert.equal(readFileSync(dependency, "utf8"), "unformatted dependency record");
     for (const [path, contents] of untouched) assert.equal(readFileSync(join(root, path), "utf8"), contents);
   });
 });
 
 test("formatting preserves YAML values, comments, hard breaks, and embedded evidence", () => {
-  fixture(({ root, run }) => {
+  return fixture(async ({ root }) => {
     const path = join(root, "document.md");
     const code = "function evidence(  x ){return  x+1;}\n";
     const before =
@@ -136,58 +145,61 @@ test("formatting preserves YAML values, comments, hard breaks, and embedded evid
       code +
       "```\n";
     writeFileSync(path, before);
-    run("format", path, "--write");
+    await formatFiles(root, path, { write: true });
     const after = readFileSync(path, "utf8");
     assert.deepEqual(metadata(after), metadata(before));
     assert.match(after, /# Preserve metadata comments/);
     assert.ok(after.includes("```js\n" + code + "```"));
     assert.match(after, /First line(?: {2}|\\)\nSecond line/);
-    run("format", path, "--check");
-    run("format", path, "--write");
+    await formatFiles(root, path, { check: true });
+    await formatFiles(root, path, { write: true });
     assert.equal(readFileSync(path, "utf8"), after);
     const yaml = join(root, "document.yaml");
     const values =
       '# Citation comment\nquoted: "001"\nflag: "false"\nsequence: [b,a]\ntext: >-\n  one two\n  three four\n';
     writeFileSync(yaml, values);
-    run("format", yaml, "--write");
+    await formatFiles(root, yaml, { write: true });
     assert.deepEqual(parse(readFileSync(yaml, "utf8")), parse(values));
     assert.match(readFileSync(yaml, "utf8"), /# Citation comment/);
-    run("format", yaml, "--check");
+    await formatFiles(root, yaml, { check: true });
   });
 });
 
 test("draft completeness and formatting are separate and checks never rewrite records", () => {
-  fixture(({ root, run, fail }) => {
-    run("record", "add", "environment", "Unspecified hardware");
-    run("record", "add", "citation", "Unspecified paper");
-    run("format", "--all", "--check");
-    assert.match(fail("validate"), /Hardware configuration|author/);
-    run("record", "add", "task", "Draft task");
+  return fixture(async ({ root }) => {
+    await addRecord(root, "ENV", "Unspecified hardware");
+    await addRecord(root, "CIT", "Unspecified paper");
+    await formatFiles(root, undefined, { all: true, check: true });
+    assert.match(await validationErrors(root), /Hardware configuration|author/);
+    await addRecord(root, "TSK", "Draft task");
     const path = join(root, "workbench/tasks/TSK-00.md");
     const original = readFileSync(path, "utf8");
     writeFileSync(path, original.replace(/^---\n[\s\S]*?\n---/, "---\n{}\n---"));
-    run("format", path, "--write");
-    run("format", "--all", "--check");
-    assert.match(fail("validate"), /'status' must be/);
+    await formatFiles(root, path, { write: true });
+    await formatFiles(root, undefined, { all: true, check: true });
+    assert.match(await validationErrors(root), /'status' must be/);
     writeFileSync(path, original + "\n\n");
     const unformatted = readFileSync(path, "utf8");
-    assert.match(fail("validate"), /formatting differs/);
-    assert.match(fail("format", "--all", "--check"), /formatting differs/);
+    assert.match(await validationErrors(root), /formatting differs/);
+    await assert.rejects(() => formatFiles(root, undefined, { all: true, check: true }), /formatting differs/);
     assert.equal(readFileSync(path, "utf8"), unformatted);
   });
 });
 
 test("malformed batch input and invalid CLI combinations leave files unchanged", () => {
-  fixture(({ root, run, fail }) => {
-    run("record", "add", "task", "Keep unchanged");
+  return fixture(async ({ root, fail }) => {
+    await addRecord(root, "TSK", "Keep unchanged");
     const task = join(root, "workbench/tasks/TSK-00.md");
     writeFileSync(task, readFileSync(task, "utf8") + "\n\n");
     const original = readFileSync(task, "utf8");
-    run("subproject", "add", "api", "api");
+    await addProject(root, "api", "api");
     const citation = join(root, "api/workbench/citations/CIT-00.json");
     mkdirSync(join(root, "api/workbench/citations"), { recursive: true });
     writeFileSync(citation, "[{broken JSON]\n");
-    assert.match(fail("format", "--all", "--write"), /JSON|property name|Expected/i);
+    await assert.rejects(
+      () => formatFiles(root, undefined, { all: true, write: true }),
+      /JSON|property name|Expected/i,
+    );
     assert.equal(readFileSync(task, "utf8"), original);
     assert.match(fail("format", "--all"), /requires --write or --check/);
     assert.match(fail("format", task, "--all", "--write"), /file path or --all/);
@@ -200,19 +212,19 @@ test("malformed batch input and invalid CLI combinations leave files unchanged",
 });
 
 test("prose schemas reject typos and duplicate keys, while folded metadata remains usable", () => {
-  fixture(({ root, run, fail }) => {
-    run("record", "add", "decision", "Metadata policy");
+  return fixture(async ({ root }) => {
+    await addRecord(root, "ADR", "Metadata policy");
     const path = join(root, "workbench/decisions/ADR-00.md");
     const original =
       "---\nsummary: >-\n  A summary spread across\n  source lines.\nagent_instruction: >-\n  Follow this instruction\n  before implementation.\nextensions:\n  owner: research\n---\n\n# ADR-0: Metadata policy\n";
     writeFileSync(path, original);
-    run("format", "--all", "--write");
-    run("sync");
-    run("validate");
+    await formatFiles(root, undefined, { all: true, write: true });
+    synchronize(root);
+    await validate(root);
     // A comment in YAML frontmatter is not a Markdown anchor.
     writeFileSync(path, readFileSync(path, "utf8").replace("summary:", "# Hidden metadata heading\nsummary:"));
     writeFileSync(join(root, "README.md"), "[Hidden](workbench/decisions/ADR-00.md#hidden-metadata-heading)\n");
-    assert.match(fail("validate"), /missing Markdown anchor/);
+    assert.match(await validationErrors(root), /missing Markdown anchor/);
     rmSync(join(root, "README.md"));
     assert.match(readFileSync(join(root, "AGENTS.md"), "utf8"), /Follow this instruction before implementation\./);
     assert.match(
@@ -220,10 +232,10 @@ test("prose schemas reject typos and duplicate keys, while folded metadata remai
       /A summary spread across source lines\./,
     );
     writeFileSync(path, original.replace("summary:", "summray:"));
-    assert.match(fail("validate"), /unknown\s+ADR\s+metadata\s+'summray'/);
+    assert.match(await validationErrors(root), /unknown\s+ADR\s+metadata\s+'summray'/);
     writeFileSync(path, original.replace("summary:", "summary: duplicate\nsummary:"));
-    assert.match(fail("format", path, "--write"), /unique|duplicate/i);
+    await assert.rejects(() => formatFiles(root, path, { write: true }), /unique|duplicate/i);
     writeFileSync(path, original.replace("# ADR-0:", "    # ADR-0:"));
-    assert.match(fail("validate"), /invalid title/);
+    assert.match(await validationErrors(root), /invalid title/);
   });
 });

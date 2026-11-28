@@ -1,6 +1,7 @@
 import { readBoundedFile } from "./file-reads.js";
 import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +19,25 @@ interface ScratchRecord {
   version: 1;
   kind: string;
   token: string;
+}
+
+/** Clean an already-owned tree, including read-only package-manager directories. */
+export function removeOwnedTree(directory: string): void {
+  const options = { recursive: true, force: true, maxRetries: 3, retryDelay: 50 };
+  try {
+    rmSync(directory, options);
+  } catch (error) {
+    if (!["EACCES", "EPERM", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+    const allowRemoval = (path: string) => {
+      const info = lstatSync(path, { throwIfNoEntry: false });
+      if (!info?.isDirectory()) return;
+      if ((info.mode & 0o700) !== 0o700) chmodSync(path, info.mode | 0o700);
+      for (const entry of readdirSync(path, { withFileTypes: true }))
+        if (entry.isDirectory()) allowRemoval(join(path, entry.name));
+    };
+    allowRemoval(directory);
+    rmSync(directory, options);
+  }
 }
 function record(directory: string): ScratchRecord | undefined {
   try {
@@ -71,7 +91,7 @@ export function recoverScratch(parent: string, kind: string): string[] {
     ) {
       throw new Error(`Scratch ownership changed; preserving ${quarantine}`);
     }
-    rmSync(quarantine, { recursive: true });
+    removeOwnedTree(quarantine);
     reclaimed.push(name);
   }
   return reclaimed;
@@ -96,7 +116,7 @@ export function createOwnedScratch(parent: string, kind: string): OwnedScratch {
       if (record(directory)?.token !== token) throw new Error(`Scratch ownership changed; preserving ${directory}`);
       owner.assertIdle();
       for (const name of readdirSync(directory))
-        if (name !== "owner" && name !== marker) rmSync(join(directory, name), { recursive: true, force: true });
+        if (name !== "owner" && name !== marker) removeOwnedTree(join(directory, name));
       owner.release();
       rmSync(directory, { recursive: true });
     },

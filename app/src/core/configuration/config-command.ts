@@ -2,7 +2,7 @@ import { projectPaths } from "../projects/project-paths.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import { projectField, projectOptionKeys, validateConfig } from "./config-schema.js";
+import { projectField, projectOptionDefaults, projectOptionKeys, validateConfig } from "./config-schema.js";
 import { readConfig } from "../projects/project-configuration.js";
 import { readText } from "../runtime/files.js";
 import { writeAtomic } from "../runtime/file-publication.mjs";
@@ -28,7 +28,7 @@ export type ConfigScope = "global" | "project" | "local";
 export const configScopes = ["global", "project", "local"];
 export type ConfigurationInspection =
   | { kind: "value"; value: unknown }
-  | { kind: "table"; values: Map<string, { value: unknown; scope: string }>; sources: string[] };
+  | { kind: "table"; values: Map<string, { value: unknown; scope: string; behavior?: string }>; sources: string[] };
 
 function scopeFor(key: string, requested?: ConfigScope): ConfigScope {
   const scope =
@@ -69,13 +69,23 @@ function projectValues(root: string): Record<string, unknown> {
   return Object.fromEntries(
     projectOptionKeys.map((key) => {
       const [section = "", field = ""] = key.split(".");
+      const fallback = projectOptionDefaults[key];
       return [
         key,
         (config[section] as Record<string, unknown> | undefined)?.[field] ??
-          (key === "bundle.compression" ? "brotli" : undefined),
+          ("value" in fallback ? fallback.value : undefined),
       ];
     }),
   );
+}
+
+function missingBehavior(scope: ConfigScope, key: string): string {
+  if (scope === "local") return "Inherit";
+  if (scope === "project") {
+    const fallback = projectOptionDefaults[key as keyof typeof projectOptionDefaults];
+    if ("behavior" in fallback) return fallback.behavior;
+  }
+  return "Automatic";
 }
 
 export function inspectConfiguration(root: string, scope?: ConfigScope, key?: string): ConfigurationInspection {
@@ -83,12 +93,20 @@ export function inspectConfiguration(root: string, scope?: ConfigScope, key?: st
   const scopes: ConfigScope[] = selected
     ? [selected]
     : ["global", ...(existsSync(join(root, projectPaths.config)) ? (["project", "local"] as const) : [])];
-  const values = new Map<string, { value: unknown; scope: string }>();
+  const values = new Map<string, { value: unknown; scope: string; behavior?: string }>();
   const sources: string[] = [];
   const explicitGlobal = scopes.includes("global") ? readUserConfig() : {};
   for (const current of scopes) {
     const layer: Record<string, unknown> =
-      current === "global" ? userConfigValues() : current === "project" ? projectValues(root) : localValues(root);
+      current === "global"
+        ? userConfigValues(explicitGlobal)
+        : current === "project"
+          ? projectValues(root)
+          : localValues(root);
+    if (current === "global") {
+      layer["diagnostics.server_level"] ??= layer["diagnostics.level"];
+      layer["diagnostics.server_file_level"] ??= layer["diagnostics.file_level"];
+    }
     if (key !== undefined) {
       return { kind: "value", value: scope === undefined ? (localValues(root)[key] ?? layer[key]) : layer[key] };
     }
@@ -96,7 +114,11 @@ export function inspectConfiguration(root: string, scope?: ConfigScope, key?: st
       current === "global"
         ? userConfigPath()
         : join(root, `workbench/${current === "project" ? "config" : "local"}.toml`);
-    const raw = existsSync(path) && current === "project" ? (parse(readText(path)) as Record<string, unknown>) : {};
+    const automation = join(root, projectPaths.automation);
+    const raw =
+      current === "project"
+        ? { ...parse(readText(path)), ...(existsSync(automation) ? parse(readText(automation)) : {}) }
+        : {};
     for (const [name, value] of Object.entries(layer)) {
       if (value === undefined && values.has(name)) continue;
       const [section = "", field = ""] = name.split(".");
@@ -106,7 +128,11 @@ export function inspectConfiguration(root: string, scope?: ConfigScope, key?: st
           : current === "local"
             ? value !== undefined
             : Object.hasOwn((raw[section] as Record<string, unknown> | undefined) ?? {}, field);
-      values.set(name, { value, scope: configured ? current : "default" });
+      values.set(name, {
+        value,
+        scope: configured ? current : "default",
+        ...(value === undefined ? { behavior: missingBehavior(current, name) } : {}),
+      });
     }
     sources.push(`${current}: ${path}${existsSync(path) ? "" : " (not created)"}`);
   }

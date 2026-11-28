@@ -52,12 +52,17 @@ export function readCandidate(directory: string, repository: string, revision: s
   };
 }
 
+export function candidateRevision(root = process.cwd()): string {
+  const revision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  const dirty = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd: root });
+  if (dirty.length) throw new Error("Candidate must be built from a clean selected revision");
+  return revision;
+}
+
 export function recordCandidate(directory: string, environment = process.env): CICandidate {
   const repository = required(environment.GITHUB_REPOSITORY, "Missing candidate repository");
   const revision = required(environment.GITHUB_SHA, "Missing candidate revision");
-  const current = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  const dirty = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
-  if (current !== revision || dirty.length) throw new Error("Candidate must be built from a clean selected revision");
+  if (candidateRevision() !== revision) throw new Error("Candidate must be built from a clean selected revision");
   const metadata = record(JSON.parse(readFileSync("package.json", "utf8")), "Invalid package metadata");
   let bundleBuildSha256: string | undefined;
   if (existsSync(bundleCacheFile)) {
@@ -91,7 +96,7 @@ export function activateCandidate(directory: string, environment = process.env, 
     required(environment.GITHUB_REPOSITORY, "Missing repository"),
     required(environment.GITHUB_SHA, "Missing revision"),
   );
-  if (!candidate.bundleBuildSha256 || !reuseBundles(directory, root, "bundle-build.json"))
+  if (!candidate.bundleBuildSha256 || !reuseBundles(directory, root, { receiptFile: "bundle-build.json" }))
     throw new Error("CI candidate bundles do not match this checkout or are incomplete");
 }
 

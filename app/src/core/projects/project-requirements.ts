@@ -16,6 +16,7 @@ export interface SuccessfulGateEvidence {
   paths?: string[];
   profile?: string;
   browser?: boolean;
+  refreshArtifacts?: boolean;
 }
 
 export function projectRequirements(root: string): ProjectRequirement[] {

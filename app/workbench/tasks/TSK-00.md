@@ -104,8 +104,8 @@ semantic review or grant human approval.
 
 Workbench starts archival only from the configured integration branch. Each checkout reads the archive commit recorded
 in its state file, so later transfers leave older checkouts readable. Workbench looks up live and archived records
-together, reports conflicting copies, and preserves IDs, contents, and file permissions. The CLI and browser can search
-records and open supporting files without restoring them to disk.
+together, compares working copies using Git's checkout conversions where needed, and reports conflicting contents or
+file modes. The CLI and browser can search records and open supporting files without restoring them to disk.
 
 Workbench verifies the destination before removing source copies during archival or restoration. It keeps both commits
 recoverable until the transfer finishes and preserves unrelated edits and reviews of unchanged records. The archive
@@ -115,10 +115,10 @@ The rebase and merge commands check for record conflicts that Git's text merge c
 can update an outdated archive pointer when an existing archive commit contains the required records. The rebase skill
 uses these commands.
 
-Tests covered older archive commits after Git garbage collection, restricted clones, large archives and supporting
-files, interruptions during transfer or push, and concurrent edits. Browser and CLI checks covered search,
-prerequisites, and supporting files. Integration checks covered conflicts, resuming and aborting, and rebasing across
-upstream renames and deletions.
+Independent suites exercise archive transfers, publication, and record access. Tests cover older archive commits after
+Git garbage collection, restricted clones, large supporting files, interruption, and concurrent edits. Browser and CLI
+checks cover search, prerequisites, and supporting files. Integration checks cover conflicts, recovery, and rebases
+across upstream renames and deletions.
 
 ## Implementing-agent detail
 

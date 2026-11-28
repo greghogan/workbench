@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
@@ -16,17 +16,28 @@ afterEach(() => {
   for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("the loopback registry serves only declared metadata and closes its listener", async () => {
+test("the loopback registry serves declared metadata and verified archives and closes its listener", async () => {
   const directory = fixture();
   const metadata = { "@scope/example": { name: "@scope/example", versions: { "1.0.0": {} } } };
   const bytes = brotliCompressSync(Buffer.from(JSON.stringify(metadata)));
   writeFileSync(join(directory, "registry.json.br"), bytes);
+  const archive = Buffer.from("locked package archive");
+  const destination = "npm/scoped-example.tgz";
+  const archiveRoute = "@scope/example/-/example-1.0.0.tgz";
+  mkdirSync(join(directory, "npm"));
+  writeFileSync(join(directory, destination), archive);
   const repository = {
     directory,
     declaration: {
       schema_version: 1,
       source_hashes: { "managed-registry.json.br": createHash("sha256").update(bytes).digest("hex") },
-      inputs: [],
+      inputs: [
+        {
+          url: `https://registry.npmjs.org/${archiveRoute}`,
+          destination,
+          hash: `sha512-${createHash("sha512").update(archive).digest("base64")}`,
+        },
+      ],
     },
   };
   const server = await managedRegistry(repository);
@@ -38,6 +49,14 @@ test("the loopback registry serves only declared metadata and closes its listene
     const head = await fetch(server.url + "@scope%2Fexample", { method: "HEAD" });
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
+    const packageArchive = await fetch(server.url + archiveRoute);
+    expect(packageArchive.status).toBe(200);
+    expect(Buffer.from(await packageArchive.arrayBuffer())).toEqual(archive);
+    expect((await fetch(server.url + "npm/scoped-example.tgz")).status).toBe(404);
+    writeFileSync(join(directory, destination), "altered package archive");
+    const corrupt = await fetch(server.url + archiveRoute);
+    expect(corrupt.status).toBe(500);
+    expect(await corrupt.text()).toBe("Managed package archive failed verification");
     expect((await fetch(server.url + "undeclared")).status).toBe(404);
     expect((await fetch(server.url + "%")).status).toBe(400);
     expect((await fetch(server.url, { method: "POST" })).status).toBe(405);

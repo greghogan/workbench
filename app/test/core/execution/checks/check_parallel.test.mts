@@ -254,6 +254,46 @@ test("max_jobs=1 preserves serial execution", async () => {
   ).toEqual(["a:start", "a:end", "b:start", "b:end"]);
 });
 
+test("parallel checks and dependent roots share the gate's admission slots", async () => {
+  const { root, events } = fixture(3, [".", "a"]);
+  vi.stubEnv("WORKBENCH_CPUS", "2");
+  vi.spyOn(process, "availableMemory").mockReturnValue(16 * 1024 ** 3);
+  const config = readConfig(root);
+  config.check_order = [{ root: "a", after: ".", phase: "setup" }];
+  const selected = required(config.check, "Configured checks");
+  const first = required(
+    selected.find(({ name }) => name === ". test"),
+    "Root test",
+  );
+  first.role = "lint";
+  first.parallel = true;
+  first.command = [process.execPath, join(root, "step.mjs"), root, "first", "lint"];
+  selected.splice(selected.indexOf(first) + 1, 0, {
+    ...first,
+    name: "Second root test",
+    command: [process.execPath, join(root, "step.mjs"), root, "second", "lint"],
+  });
+  writeFileSync(join(root, "workbench/config.toml"), stringify(config));
+  const admitted = ["first", "second", "a"];
+  for (const id of admitted) writeFileSync(join(root, "hold-" + id), "hold");
+  const pending = runChecks(root, { environment: "native" });
+  try {
+    await waitForCondition(
+      () =>
+        admitted.every((id) =>
+          events().some(
+            (event) => event.id === id && event.role === (id === "a" ? "test" : "lint") && event.type === "start",
+          ),
+        ),
+      pending,
+      "two root checks and a dependent check to run together",
+    );
+  } finally {
+    for (const id of admitted) writeFileSync(join(root, "release-" + id), "release");
+    await pending;
+  }
+});
+
 test("failed groups prevent new admission while active work drains", async () => {
   const { root, events } = fixture(1, ["a", "b"]);
   writeFileSync(join(root, "fail-a"), "fail");

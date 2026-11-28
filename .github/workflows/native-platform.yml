@@ -49,6 +49,48 @@ jobs:
       - uses: ./.github/actions/prepare-runtime
         with:
           artifact: ${{ inputs.candidate }}
+      - name: Qualify installed Linux services
+        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ""
+        run: |
+          CHECK_ROOTS='["."]' node scripts/ci-native-prerequisites.mts
+          bash scripts/check-linux-service.sh user "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+          bash scripts/check-linux-service.sh system "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+      - name: Qualify the installed macOS user service
+        if: runner.os == 'macOS' && runner.environment == 'github-hosted'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ""
+        run: bash scripts/check-macos-service.sh "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+      - name: Qualify the installed shared macOS service
+        if: runner.os == 'macOS' && runner.environment == 'github-hosted'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ""
+        run: bash scripts/check-macos-system-service.sh "$RUNNER_TEMP/runtime-candidate/workbench-artifacts"
+      - name: Qualify the installed Windows services
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted' && fromJSON(inputs.platform).architecture == 'x64'
+        timeout-minutes: 12
+        shell: pwsh
+        env:
+          GH_TOKEN: ""
+        run: |
+          $artifacts = Join-Path $env:RUNNER_TEMP runtime-candidate/workbench-artifacts
+          $archive = Join-Path $artifacts workbench.tar.gz
+          $checksum = (Get-Content -LiteralPath (Join-Path $artifacts SHA256SUMS) -Raw).Split(' ')[0]
+          $node = (Get-Command node.exe).Source
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -ResumeWorker -IdleWorkers -Handoff
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -PrivateService
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -Recovery
+          & scripts/check-windows-service.ps1 -Node $node -Archive $archive -Digest $checksum -DesktopTask
+      - name: Qualify offline native toolchain ZIP import
+        if: (runner.os == 'macOS' && fromJSON(inputs.platform).architecture == 'arm64') || (runner.os == 'Windows' && fromJSON(inputs.platform).architecture == 'x64')
+        timeout-minutes: 8
+        env:
+          GH_TOKEN: ""
+        run: node scripts/check-native-archive.mts
       - id: plan
         env:
           CI_MATRIX: ${{ inputs.platform }}
@@ -126,21 +168,21 @@ jobs:
         with:
           arch: ${{ fromJSON(inputs.platform).architecture }}
       - name: Make room for retained images
-        if: needs.prepare.outputs.container == 'true'
+        if: needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
       - name: Authenticate for read-only image acquisition
-        if: needs.prepare.outputs.container == 'true'
+        if: needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.actor }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - id: cache
         uses: ./.github/actions/ci-cache
-        if: needs.prepare.outputs.container != 'true'
+        if: needs.prepare.outputs.container != 'true' || matrix.operation == 'integration'
         with:
           target: ${{ inputs.platform }}
       - name: Restore native SDK host prerequisites
-        if: needs.prepare.outputs.container != 'true'
+        if: needs.prepare.outputs.container != 'true' || matrix.operation == 'integration'
         env:
           CHECK_ROOTS: ${{ toJSON(fromJSON(inputs.platform).paths) }}
         run: node scripts/ci-native-prerequisites.mts
@@ -170,7 +212,7 @@ jobs:
           path: ${{ runner.temp }}/workbench-reports/
           retention-days: 30
       - name: Remove transient registry credentials
-        if: always() && needs.prepare.outputs.container == 'true'
+        if: always() && needs.prepare.outputs.container == 'true' && matrix.operation != 'integration'
         run: docker logout ghcr.io
 
   status:

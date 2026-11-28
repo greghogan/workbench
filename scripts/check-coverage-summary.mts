@@ -1,11 +1,12 @@
 import { isMainScript } from "./script-entry.mjs";
 import { emitCheckDetail } from "../app/src/core/execution/checks/check-detail-data.mjs";
 import { clipped } from "../app/src/core/diagnostics/diagnostic-text.mjs";
-import { required, record, records } from "../app/src/core/runtime/values.mjs";
+import { record, records } from "../app/src/core/runtime/values.mjs";
 import {
   type Summary,
   type FileSummary,
   coverageMetrics,
+  coverageTotals,
   reportSummaryChange,
   readCoverageSummary as parseSummary,
 } from "../app/src/core/execution/checks/coverage-summary.mjs";
@@ -34,12 +35,7 @@ export function readCoverageSummary(root: string, repository = root, freshSince?
       throw new Error(`coverage source outside root: ${path}`);
     return normalized.split(sep).join("/");
   };
-  const metric = (covered: number, total: number) => ({
-    total,
-    covered,
-    skipped: 0,
-    pct: total ? Math.floor((covered / total) * 10000) / 100 : 100,
-  });
+  const metric = (covered: number, total: number) => ({ total, covered });
   const summary: Summary = {};
   const raw = join(root, "coverage/report.json");
   const profile = join(root, "coverage/profile.out");
@@ -66,7 +62,6 @@ export function readCoverageSummary(root: string, repository = root, freshSince?
             ]),
         );
       };
-      summary.total = values(llvm.totals);
       for (const file of records(llvm.files, "Invalid LLVM files")) {
         if (typeof file.filename !== "string") throw new Error("Invalid coverage path");
         summary[source(file.filename)] = values(file.summary);
@@ -79,7 +74,6 @@ export function readCoverageSummary(root: string, repository = root, freshSince?
           branches: metric(count(value.covered_branches), count(value.num_branches)),
         };
       };
-      summary.total = values(data.totals);
       for (const [path, file] of Object.entries(record(data.files, "Invalid Python files")))
         summary[source(path)] = values(record(file, "Invalid Python file").summary);
     } else throw new Error("unsupported coverage/report.json format");
@@ -103,30 +97,15 @@ export function readCoverageSummary(root: string, repository = root, freshSince?
         statements: metric(value.covered + (block.covered ? block.total : 0), value.total + block.total),
       };
     }
-    const values = Object.values(summary).map((file) => required(file.statements, "Missing Go statement coverage"));
-    summary.total = {
-      statements: metric(
-        values.reduce((total, value) => total + value.covered, 0),
-        values.reduce((total, value) => total + value.total, 0),
-      ),
-    };
   } else if (available(vitest)) {
     const data = parseSummary(JSON.parse(readFileSync(vitest, "utf8")));
-    for (const [path, value] of Object.entries(data))
-      summary[path === "total" ? path : source(path)] = Object.fromEntries(
-        coverageMetrics.filter((name) => value[name]).map((name) => [name, value[name]]),
-      );
+    for (const [path, value] of Object.entries(data)) summary[source(path)] = value;
   } else return undefined;
-  if (!summary.total || !Object.values(summary.total).some((value) => value.total > 0))
+  if (!Object.values(coverageTotals(summary)).some((value) => value.total > 0))
     throw new Error("coverage summary has no measured code");
-  return {
-    total: summary.total,
-    ...Object.fromEntries(
-      Object.entries(summary)
-        .filter(([path]) => path !== "total")
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
-    ),
-  };
+  return Object.fromEntries(
+    Object.entries(summary).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+  );
 }
 
 if (isMainScript(import.meta.url)) {

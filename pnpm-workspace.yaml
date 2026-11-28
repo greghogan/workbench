@@ -7,3 +7,6 @@ engineStrict: true
 # Security override for GHSA-g3hv-75wg-m249 until lint dependencies adopt minimatch 11.
 overrides:
   minimatch: 11.0.3
+
+patchedDependencies:
+  ast-v8-to-istanbul@1.0.8: scripts/patches/ast-v8-to-istanbul-1.0.8.patch

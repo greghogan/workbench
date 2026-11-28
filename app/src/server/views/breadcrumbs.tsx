@@ -17,10 +17,10 @@ export function breadcrumbs(context: WorkspaceView, { parents = [], scope }: Pag
   const projects = selected ? context.index.hierarchy.lineage(selected) : context.projects.slice(0, 1);
   const trail: Breadcrumb[] = projects.map((project) => ({
     label: projectName(project),
-    href: routeURL(Route.Overview, { scope: project.id }),
+    href: routeURL(Route.Charters, { scope: project.id }),
   }));
   if (context.selection)
-    trail.push({ label: context.selection, href: routeURL(Route.Overview, { collection: context.selection }) });
+    trail.push({ label: context.selection, href: routeURL(Route.Charters, { collection: context.selection }) });
   trail.push(...parents);
   return (
     <nav class="breadcrumbs" aria-label="Breadcrumb">

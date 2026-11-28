@@ -167,11 +167,13 @@ test("PECL .tgz sources receive bounded gzip decoding", async () => {
 });
 
 test.each([false, true])(
-  "ordinary tar extraction supports Unicode destinations with relative paths=%s",
+  "ordinary tar extraction supports Unicode archive and destination paths with relative paths=%s",
   async (useRelative) => {
     const { extractArchive } = await import("../../../../src/core/toolchains/tool-downloads.ts");
     const bytes = await tarBytes();
-    const { root, archive } = fixture(bytes, ".tar");
+    const { root } = fixture(bytes, ".tar");
+    const archive = join(root, "archive with spaces 雪.tar");
+    writeFileSync(archive, bytes);
     const destination = join(root, "runtime with spaces 雪");
     mkdirSync(destination);
     await extractArchive(
@@ -214,6 +216,38 @@ test
     const { archive, destination } = fixture(zip([{ name: "tool/link", mode: 0o120777, content: "../outside" }]));
     await expect(extractZipArchive(archive, destination, 1, artifactLimits, links)).rejects.toThrow(
       /symbolic link|unsafe|only unencrypted/,
+    );
+  },
+);
+
+test.skipIf(process.platform === "win32")("release ZIP restores relative links within the package", async () => {
+  const { archive, destination } = fixture(
+    zip([
+      { name: "release/bin/tool", mode: 0o100755, content: "packaged tool" },
+      { name: "release/links/tool", mode: 0o120777, content: "../bin/tool" },
+    ]),
+  );
+  const content = await extractZipArchive(archive, destination, 1, artifactLimits, "contained");
+  expect(readFileSync(join(content, "links/tool"), "utf8")).toBe("packaged tool");
+});
+
+test.skipIf(process.platform === "win32")(
+  "release ZIP rejects links that escape or introduce a linked parent",
+  async () => {
+    const prefix = [{ name: "release/bin/tool", content: "packaged tool" }];
+    const escaping = fixture(zip([...prefix, { name: "release/link", mode: 0o120777, content: "../outside" }]));
+    await expect(
+      extractZipArchive(escaping.archive, escaping.destination, 1, artifactLimits, "contained"),
+    ).rejects.toThrow(/escapes the retained root/);
+    const nested = fixture(
+      zip([
+        ...prefix,
+        { name: "release/link", mode: 0o120777, content: "bin" },
+        { name: "release/link/other", mode: 0o120777, content: "../bin/tool" },
+      ]),
+    );
+    await expect(extractZipArchive(nested.archive, nested.destination, 1, artifactLimits, "contained")).rejects.toThrow(
+      /another link as its parent/,
     );
   },
 );

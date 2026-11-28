@@ -57,8 +57,8 @@ Scope charter: [CHARTER.md](CHARTER.md).
   shells, and disposable containers.
 - [workbench:ADR-R: Guix development environments](decisions/ADR-0R.md) — Authenticated channels, package-derived
   development manifests, compiler variants, and working-tree builds.
-- [workbench:ADR-S: Builds and deployment artifacts](decisions/ADR-0S.md) — Development and release profiles, prepared
-  image identities, portability, and artifact verification.
+- [workbench:ADR-S: Builds and deployment artifacts](decisions/ADR-0S.md) — Artifact profiles, separate toolchain and
+  dependency inputs, verified transfer, and retention.
 - [workbench:ADR-T: Dev Container workspaces](decisions/ADR-0T.md) — Standard Linux workspaces, selected tool authority,
   checkout preservation, and independent native evidence.
 - [workbench:ADR-U: Quality gates](decisions/ADR-0U.md) — Configured checks and complete proposed-tree gates.
@@ -93,3 +93,14 @@ Scope charter: [CHARTER.md](CHARTER.md).
 ## Subproject decisions maps
 
 - [workbench-app](../app/workbench/decision-map.md)
+- [workbench-c](../examples/languages/c/workbench/decision-map.md)
+- [workbench-cpp](../examples/languages/cpp/workbench/decision-map.md)
+- [workbench-go](../examples/languages/go/workbench/decision-map.md)
+- [workbench-java](../examples/languages/java/workbench/decision-map.md)
+- [workbench-javascript](../examples/languages/javascript/workbench/decision-map.md)
+- [workbench-php](../examples/languages/php/workbench/decision-map.md)
+- [workbench-python](../examples/languages/python/workbench/decision-map.md)
+- [workbench-react](../examples/frameworks/react/workbench/decision-map.md)
+- [workbench-ruby](../examples/languages/ruby/workbench/decision-map.md)
+- [workbench-rust](../examples/languages/rust/workbench/decision-map.md)
+- [workbench-typescript](../examples/languages/typescript/workbench/decision-map.md)

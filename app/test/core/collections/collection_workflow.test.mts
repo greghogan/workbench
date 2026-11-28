@@ -1,49 +1,18 @@
 import { required } from "../../../src/core/runtime/invariants.ts";
-import { approveReview } from "../../../src/core/review/review-approval.js";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
-import { afterEach, expect, test, vi } from "vitest";
+import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, test, vi } from "vitest";
 import { consumer, provider, distribution, git } from "../../fixtures/adoption.mjs";
-import { setConfiguration } from "../../../src/core/configuration/config-command.ts";
 import { readConfig } from "../../../src/core/projects/project-configuration.ts";
 import { collectionOriginals, collectionRepository } from "../../../src/core/collections/collection-git.ts";
-import { snapshotCIProject } from "../../../src/core/execution/ci/ci-workspace.ts";
+import { collectionWorkflowFixtures } from "../../fixtures/collection-workflow.mjs";
+import { validate } from "../../../src/core/records/validation.ts";
 
-const temporary: string[] = [];
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  for (const root of temporary.splice(0)) rmSync(root, { recursive: true, force: true });
-});
+const { prepare, temporary } = collectionWorkflowFixtures();
 
-test("a consumer adopts, commits, clones offline, fetches, reconciles, and snapshots deinitialized collections", async () => {
-  vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
-  const root = await consumer(),
-    scratch = mkdtempSync(join(tmpdir(), "workbench-collection-workflow-"));
-  temporary.push(root, scratch);
-  setConfiguration(root, "checks.allow_empty", "true");
-  const source = provider(root, "company", "1", ["First rule.\n\nMiddle rule.\n\nLast rule."]);
-  const environment = { ...process.env, PATH: [join(distribution, "bin"), process.env.PATH ?? ""].join(delimiter) };
-  const invoke = (cwd: string, command: string, args: readonly string[]) =>
-    spawnSync(command, args, { cwd, env: environment, encoding: "utf8" });
-  const cli = (cwd: string, ...args: string[]) => {
-    const result = invoke(cwd, process.execPath, [join(distribution, "bin/workbench.mjs"), ...args]);
-    expect(result.status, result.stdout + result.stderr).toBe(0);
-    return result.stdout;
-  };
-  const approve = (cwd: string) => {
-    const digest = /Review digest: ([a-f0-9]{64})/.exec(cli(cwd, "review"))?.[1];
-    expect(digest).toBeTruthy();
-    approveReview(cwd, required(digest, "Fixture value digest"), true);
-  };
-  const gate = (cwd: string) => invoke(cwd, "git", ["hook", "run", "pre-commit"]);
-  cli(root, "init", "--hooks", "--id", "consumer", "--no-workbench-collection");
-  cli(root, "collection", "install", source.directory, "--commit", source.commit, "--sha256", source.pin.sha256);
-  cli(root, "sync");
-  cli(root, "validate");
+test("a consumer adopts, clones offline, fetches, and reconciles a collection", async () => {
+  const { root, scratch, source, cli, approve, gate } = await prepare();
   expect(git(root, "ls-files", "--stage")).toBe("");
   git(root, "add", ".");
   approve(root);
@@ -71,7 +40,7 @@ test("a consumer adopts, commits, clones offline, fetches, reconciles, and snaps
   renameSync(source.directory, hidden);
   try {
     cli(clone, "sync");
-    cli(clone, "validate");
+    await validate(clone);
     expect(readFileSync(join(clone, "AGENTS.md"))).toEqual(context);
     expect(git(clone, "status", "--porcelain")).toBe("");
   } finally {
@@ -88,7 +57,7 @@ test("a consumer adopts, commits, clones offline, fetches, reconciles, and snaps
   expect(readFileSync(policy, "utf8")).toContain("Project first rule.");
   expect(readFileSync(policy, "utf8")).toContain("Updated last rule.");
   cli(clone, "sync");
-  cli(clone, "validate");
+  await validate(clone);
   cli(clone, "collection", "stage", "company");
   git(clone, "add", ".");
   git(clone, "commit", "-qm", "Reconcile collection fixture");
@@ -96,13 +65,6 @@ test("a consumer adopts, commits, clones offline, fetches, reconciles, and snaps
     `160000 commit ${next.commit}\t.workbench/collections/company`,
   );
   expect(readdirSync(join(clone, ".workbench/collections/company"))).toEqual([]);
-  const snapshot = join(scratch, "snapshot");
-  await snapshotCIProject(clone, snapshot);
-  expect(git(snapshot, "ls-files", "--stage", ".workbench/collections/company")).toBe(
-    `160000 ${next.commit} 0\t.workbench/collections/company`,
-  );
-  expect(existsSync(join(snapshot, ".workbench/collections/company/workbench"))).toBe(false);
-  expect(existsSync(collectionRepository(snapshot, "company"))).toBe(false);
 });
 
 test("staging preflights all collections and preserves unrelated index entries on failure", async () => {

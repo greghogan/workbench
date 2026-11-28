@@ -3,6 +3,20 @@ import { dirname, join } from "node:path";
 import { inputStamp } from "../../core/runtime/file-identity.js";
 import { diagnostic, DiagnosticOperation, DiagnosticOutcome, LogLevel } from "../../core/diagnostics/diagnostics.mjs";
 
+/** Share parent discovery among sibling inputs for a single observation. */
+export function existingParentResolver(): (path: string) => string {
+  const parents = new Map<string, string>();
+  return (path) => {
+    const parent = dirname(path);
+    const known = parents.get(parent);
+    if (known !== undefined) return known;
+    let directory = parent;
+    while (!existsSync(directory) && dirname(directory) !== directory) directory = dirname(directory);
+    parents.set(parent, directory);
+    return directory;
+  };
+}
+
 /** Parent watches survive atomic file replacement; reconciliation also covers missed network-filesystem events. */
 export class InputWatch {
   private readonly watchers = new Map<string, { watcher: FSWatcher; identity: string }>();
@@ -16,6 +30,7 @@ export class InputWatch {
     const selected = new Set(paths);
     for (const path of this.stamps.keys()) if (!selected.has(path)) this.stamps.delete(path);
     this.members.clear();
+    const existingParent = existingParentResolver();
     for (const path of selected) {
       if (!this.stamps.has(path)) {
         try {
@@ -25,8 +40,7 @@ export class InputWatch {
           this.failed(dirname(path), error);
         }
       }
-      let directory = dirname(path);
-      while (!existsSync(directory) && dirname(directory) !== directory) directory = dirname(directory);
+      const directory = existingParent(path);
       const members = this.members.get(directory) ?? new Set<string>();
       members.add(path);
       this.members.set(directory, members);
@@ -44,9 +58,10 @@ export class InputWatch {
           const watcher = watch(directory, (_event, name) => {
             const paths = this.members.get(directory);
             if (!paths) return;
-            const selected = name
-              ? [...paths].filter((path) => path === join(directory, name) || dirname(path) !== directory)
-              : [...paths];
+            const changed = name ? join(directory, name) : undefined;
+            const selected = changed
+              ? [...paths].filter((path) => path === changed || dirname(path) !== directory)
+              : paths;
             this.check(selected);
           });
           watcher.on("error", (error) => {

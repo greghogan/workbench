@@ -1,6 +1,13 @@
 import { cancelPlan, deletePlan } from "../../core/tasks/planning/plan-disposition.js";
-import { applyTaskDisposition } from "../../core/tasks/task-disposition.js";
+import {
+  applyTaskDisposition,
+  deleteUnstartedTaskPlan,
+  previewTaskDisposition,
+  taskDispositionKinds,
+} from "../../core/tasks/task-disposition.js";
 import { committedReview } from "../../core/review/review-units.js";
+import { reviewChangeDigest } from "../../core/review/review-snapshot.js";
+import { requestAutomaticFinalization, wakeFinalization } from "../../core/git/finalization-requests.js";
 import { renamePlan } from "../../core/tasks/planning/plan-rename.js";
 import { changeWorkQueue } from "../../core/tasks/planning/plan-transfer.js";
 import { planIdentity, parsePlanReference } from "../../core/tasks/planning/plan-model.js";
@@ -22,7 +29,7 @@ import { decodeCollectionRequest, type CollectionPreview } from "./protocol.js";
 import { Route, actionDefinition, queueOperations, type ActionResult } from "../routes/routes.js";
 import type { ReviewTarget } from "../review/review-request.js";
 import { readTaskQueue, type QueueChange } from "../../core/tasks/task-queue.js";
-import { taskStatuses } from "../../core/records/record-document.js";
+import { replaceRecordStatus, taskStatuses } from "../../core/records/record-document.js";
 import { ReviewVersions } from "../review/review-versions.js";
 
 interface Proposal {
@@ -34,6 +41,7 @@ interface Proposal {
 export class WebActions {
   readonly reviews = new ReviewVersions();
   private readonly operations = new Map<Promise<unknown>, "review" | "collection">();
+  private readonly finalizations = new Set<Promise<void>>();
   private closed = false;
   private readonly applications = new Map<string, CollectionApplication>();
   application(id: string): CollectionApplication | undefined {
@@ -47,6 +55,15 @@ export class WebActions {
     private readonly reviewRunner: typeof runReviewWorker = (request) => runReviewWorker(request, bundle),
     bundle?: string,
   ) {}
+  resumeFinalization = async (root = this.root): Promise<void> => {
+    if (this.closed) return;
+    await wakeFinalization(root, (closed) => {
+      this.finalizations.add(closed);
+      void closed.then(() => {
+        this.finalizations.delete(closed);
+      });
+    });
+  };
   get activeOperations(): number {
     return this.operations.size;
   }
@@ -150,23 +167,34 @@ export class WebActions {
         );
       }
       case Route.TaskDisposition: {
-        const kind = form.get("kind");
-        if (kind !== "delete" && kind !== "revert") throw new WebError(400, "Select deletion or reversion");
+        if (form.get("kind") === "delete-plan") {
+          deleteUnstartedTaskPlan(this.root, form.get("reference") ?? "", form.get("expected") ?? "");
+          return result(Route.Plans);
+        }
+        const kind = taskDispositionKinds.find((item) => item === form.get("kind"));
+        if (!kind) throw new WebError(400, "Select deletion, cancellation, or reversion");
         const reference = form.get("reference") ?? "",
           task = readWorkGraph(this.root).require(reference),
           phase = taskPhase(
             task,
             readTaskQueue(this.root).entries.find((entry) => entry.reference === reference),
           );
+        const reason = form.get("reason") ?? "";
+        const observation =
+          kind === "cancel-remove"
+            ? (await previewTaskDisposition(this.root, reference, kind, reason)).observation
+            : undefined;
         applyTaskDisposition(this.root, {
           reference: form.get("reference") ?? "",
           kind,
-          reason: form.get("reason") ?? "",
+          reason,
           expected: form.get("expected") ?? "",
+          confirmPublished: form.get("confirmPublished") === "1",
+          ...(observation ? { observation } : {}),
         });
         return result(
-          kind === "revert"
-            ? recordURL(reference, { workflow: "1" })
+          kind !== "delete"
+            ? recordURL(reference, kind === "revert" ? { workflow: "1" } : {})
             : phase === TaskPhase.Plans
               ? Route.Plans
               : phase === TaskPhase.Work
@@ -188,7 +216,17 @@ export class WebActions {
           expected = form.get("expected") ?? "";
         if (!expected) throw new WebError(400, "Supply the inspected plan version");
         if (path === Route.PlanSave) savePlanDraft(this.root, identity, form.get("contents") ?? "", { expected });
-        else {
+        else if (form.get("intent") === "revise") {
+          const plan = readPlan(this.root, identity);
+          if (
+            !plan.document ||
+            plan.conflict ||
+            plan.problem ||
+            !["Approved", "Canceled"].includes(plan.document.metadata.status)
+          )
+            throw new WebError(409, "This plan cannot return to planning in its current state");
+          savePlanDraft(this.root, identity, replaceRecordStatus(plan.contents, "Planned"), { expected });
+        } else {
           approvePlanDraft(this.root, identity, expected, true);
           return result(Route.Work);
         }
@@ -212,12 +250,14 @@ export class WebActions {
             reason: form.get("reason") ?? "",
           }),
         );
+        if (state === "Accepted")
+          requestAutomaticFinalization(this.root, { tasks: [reference] }, this.resumeFinalization);
         return result(
           selected === "Approved"
             ? Route.Work
             : selected === "Accepted"
               ? Route.Reviews
-              : recordURL(form.get("reference") ?? ""),
+              : recordURL(reference, state === "Planned" ? { workflow: "1" } : {}),
         );
       }
       case Route.QueueChange: {
@@ -225,10 +265,8 @@ export class WebActions {
           reference = form.get("reference") ?? "",
           target = form.get("target") ?? "";
         let change: QueueChange;
-        if (operation === "add") change = { action: "add", references: [reference] };
-        else if (operation === "move-before") change = { action: "move", reference, before: target };
+        if (operation === "move-before") change = { action: "move", reference, before: target };
         else if (operation === "move-after") change = { action: "move", reference, after: target };
-        else if (operation === "remove") change = { action: "remove", reference };
         else throw new WebError(400, "Unknown queue operation");
         if (!form.get("expected")) throw new WebError(400, "Supply the queue version");
         await changeWorkQueue(this.root, change, form.get("expected") ?? "");
@@ -259,10 +297,7 @@ export class WebActions {
         if (
           commit &&
           !committedReview(this.root, commit).changes.some(
-            (change) =>
-              change.path === presented.version.change.path &&
-              change.after === presented.version.change.after &&
-              change.before === presented.version.change.before,
+            (change) => change.digest === reviewChangeDigest(presented.version.change),
           )
         )
           throw new StateConflict("The selected commit does not contain this reviewed version");
@@ -275,6 +310,7 @@ export class WebActions {
             humanWritten: form.get("human_written") === "yes",
           }),
         );
+        requestAutomaticFinalization(this.root, commit ? { revision: commit } : undefined, this.resumeFinalization);
         if (commit) return result(routeURL(Route.History, { commit }));
         return result(Route.Reviews);
       }
@@ -345,6 +381,7 @@ export class WebActions {
   async close(): Promise<void> {
     this.closed = true;
     await Promise.allSettled([...this.operations.keys()]);
+    await Promise.all(this.finalizations);
     this.reviews.clear();
     this.proposals.clear();
     this.applications.clear();

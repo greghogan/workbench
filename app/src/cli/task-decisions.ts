@@ -9,6 +9,7 @@ import { readWorkGraph } from "../core/tasks/planning/work-plans.js";
 import { prepareTaskReview } from "../core/tasks/task-formatting.js";
 import { readTaskQueue, TaskReadiness } from "../core/tasks/task-queue.js";
 import { changeTaskStatus, taskTransitionProblem } from "../core/tasks/task-service.js";
+import { requestAutomaticFinalization } from "../core/git/finalization-requests.js";
 import { terminalAvailable } from "./terminal/terminal-choice.js";
 
 export function registerTaskDecisionCommands(
@@ -49,7 +50,9 @@ export function registerTaskDecisionCommands(
             if (versions[index] !== undefined && versions[index] !== digest)
               throw new StateConflict(`${id}: changed since inspection; review the current version`);
             if (task.archived) throw new StateConflict(`${id}: restore the archived task before reviewing`);
-            const problem = task.planning ? task.planning.problem : taskTransitionProblem(task, readiness, status);
+            const problem = task.planning
+              ? task.planning.problem
+              : taskTransitionProblem(task, readiness, status)?.message;
             if (task.planning && status === "Accepted")
               throw new InvalidInput(`${id}: accept the implemented task, using its numbered reference`);
             if (problem) throw new StateConflict(`${id}: ${problem}`);
@@ -85,11 +88,14 @@ export function registerTaskDecisionCommands(
             if (task.planning) approvePlanDraft(root, parsePlanReference(id), digest, confirm);
             else changeTaskStatus(root, id, status, digest, confirm);
           } catch (error) {
-            if (applied.length)
+            if (applied.length) {
+              if (status === "Accepted")
+                requestAutomaticFinalization(root, { tasks: applied.map((item) => item.reference) });
               throw new StateConflict(
                 `Decisions recorded for ${applied.map((item) => item.reference).join(", ")}. Stopped at ${id}.`,
                 { cause: error },
               );
+            }
             throw error;
           }
           applied.push({ reference: id, status });
@@ -97,5 +103,6 @@ export function registerTaskDecisionCommands(
         if (command.optsWithGlobals<{ json?: boolean }>().json)
           console.log(JSON.stringify(applied.length === 1 ? applied[0] : applied));
         else for (const item of applied) console.log(`${item.reference}: ${item.status}`);
+        if (status === "Accepted") requestAutomaticFinalization(root, { tasks: applied.map((item) => item.reference) });
       });
 }

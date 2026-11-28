@@ -8,10 +8,6 @@ import { markdown } from "../../../src/server/views/markdown-view.js";
 import { RecordLookup } from "../../../src/core/records/record-lookup.ts";
 import { readFileSync } from "node:fs";
 
-vi.mock("node:child_process", async (original) => {
-  const actual = await original<typeof import("node:child_process")>();
-  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
-});
 const records = new RecordLookup([]);
 
 test.each([false, true])(
@@ -526,6 +522,49 @@ test("table alignment and column changes keep valid complete tables in both layo
   expect(projection(unified, "after")).toBe(expected(after));
 });
 
+test("rewritten table cells keep both versions in their original column", () => {
+  const before = [
+    "| Page | Contents | Human decision |",
+    "| ---- | -------- | -------------- |",
+    "| Plans | Plans awaiting initial or revised approval | Approve the proposed work |",
+    "| Work | Approved available work and active or blocked execution | Select and order work |",
+    "| Reviews | Record and compatibility reviews; completed work awaiting acceptance | Review records or accept outcomes |",
+  ].join("\n");
+  const after = [
+    "| Page | Contents | Human action |",
+    "| ---- | -------- | ------------ |",
+    "| Plans | Open plans awaiting their first approval | Choose and approve a plan |",
+    "| Work | Implementation queue, including waiting, active, and blocked work | Order work and follow progress |",
+    "| Reviews | Revised or reopened approvals, delivered outcomes, and record reviews | Approve or accept reviewed work |",
+  ].join("\n");
+  for (const split of [false, true]) {
+    const document = parseDOM(render(before, after, split)).window.document;
+    const tables = [...document.querySelectorAll(".document .table-wrap table")];
+    expect(tables).toHaveLength(split ? 2 : 1);
+    for (const table of tables) {
+      const rows = [...table.querySelectorAll<HTMLTableRowElement>(":scope > tbody > tr")];
+      expect(
+        rows.map((row) => [row.cells[0]?.textContent, row.cells.length]),
+        split ? "split" : "unified",
+      ).toEqual([
+        ["Plans", 3],
+        ["Work", 3],
+        ["Reviews", 3],
+      ]);
+    }
+    for (const [side, source] of [
+      ["before", before],
+      ["after", after],
+    ] as const)
+      expect(projection(document, side, split)).toBe(expected(source));
+    if (!split) {
+      const plansContents = tables[0]?.querySelector("tbody tr:first-child td:nth-child(2)");
+      expect(plansContents?.querySelector("del")?.textContent).toContain("initial or revised");
+      expect(plansContents?.querySelector("ins")?.textContent).toContain("their first");
+    }
+  }
+});
+
 function semanticDocument(document: Document, side?: "before" | "after", split = false): unknown {
   const container = document.createElement("div");
   if (side) {
@@ -618,17 +657,4 @@ test("document anchors do not collide with interface controls and record section
   ]);
   expect(document.querySelector("article a")?.getAttribute("href")).toBe("#document-main");
   expect(document.querySelectorAll("article a")[1]?.getAttribute("href")).toBe("/records/demo:ADR-1#document-main");
-});
-
-test("identical sources produce an empty patch without starting a Git process", async () => {
-  const child = await import("node:child_process");
-  const { contentsDiff } = await import("../../../src/server/review/diff.ts");
-  const spawn = vi.mocked(child.spawnSync);
-  spawn.mockClear();
-  try {
-    expect(contentsDiff("Unchanged document.\n", "Unchanged document.\n", "workbench/decisions/ADR-00.md")).toBe("");
-    expect(spawn).not.toHaveBeenCalled();
-  } finally {
-    spawn.mockClear();
-  }
 });

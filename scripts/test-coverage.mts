@@ -7,6 +7,7 @@ import { runOwnedChild, processCancellation } from "../app/src/core/runtime/owne
 import { linkDependencies } from "./link-dependencies.mjs";
 import { processFailure } from "../app/src/core/runtime/process-outcome.mjs";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   lstatSync,
@@ -26,7 +27,14 @@ import { build } from "esbuild";
 import { copySourceCheckout } from "../app/src/core/execution/snapshots/source-checkout.mjs";
 import { bundleOptions } from "./bundle-options.mjs";
 import { bundleEntries } from "./bundle-build.mjs";
-import { InvalidNodeCoverageReport, nodeCoverageProducer, type CoverageSourceMap } from "./node-coverage-reports.mjs";
+import {
+  drainNodeCoverageReports,
+  InvalidNodeCoverageReport,
+  nodeCoverageProducer,
+  coverageWriteError,
+  type CoverageCollection,
+  type CoverageSourceMap,
+} from "./node-coverage-reports.mjs";
 import {
   coverageRepository,
   reportCoverageChange,
@@ -37,13 +45,15 @@ import type { CoverageMap, FileCoverageData } from "istanbul-lib-coverage";
 import { required } from "../app/src/core/runtime/values.mjs";
 
 import {
-  mapIdentity,
-  scanCoverageReports,
+  CoverageAccumulator,
+  collectedScriptCoverage,
+  coverageMapReference,
+  coverageMapReferencePrefix,
   convertCoverageScript,
-  recordExecution,
   type MeasuredScript,
+  type ScannedCoverage,
 } from "./coverage-processing.mjs";
-import { coverageJobs } from "./coverage-workers.mjs";
+import { coverageJobs, coverageReaders } from "./coverage-workers.mjs";
 import { cpuBudget } from "../app/src/core/execution/checks/cpu-budget.mjs";
 import { availableParallelism, loadavg } from "node:os";
 
@@ -62,6 +72,7 @@ export interface CoverageTimings {
   version: 1;
   totalMs: number;
   phases: Partial<Record<CoveragePhase, { milliseconds: number; count?: number }>>;
+  collection?: CoverageCollection;
   execution: {
     node: string;
     platform: NodeJS.Platform;
@@ -85,34 +96,60 @@ function phaseTimings(report?: CoverageTiming) {
 
 // Integration tests launch and copy the distribution beside their test sources.
 // Give coverage its own distribution without changing the runnable checkout.
-export async function coverageWorkspace(root: string, temporary: string) {
-  if (!["main", "skills"].every((name) => existsSync(join(root, bundleSource(name))))) return root;
-  const workspace = join(temporary, "project");
-  mkdirSync(workspace);
-  copySourceCheckout(root, workspace);
-  linkDependencies(join(root, "node_modules"), join(workspace, "node_modules"));
-  for (const name of bundleEntries)
-    if (existsSync(join(workspace, bundleSource(name)))) await build(bundleOptions(workspace, name, true));
-  return workspace;
+interface CoverageWorkspace {
+  root: string;
+  maps: ReadonlyMap<string, CoverageSourceMap>;
 }
 
-// Use the same AST-aware conversion as Vitest. Match full map contents before attributing a copied bundle.
+export async function coverageWorkspace(root: string, temporary: string, reuseSource = false) {
+  const maps = new Map<string, CoverageSourceMap>();
+  if (!["main", "skills"].every((name) => existsSync(join(root, bundleSource(name))))) return { root, maps };
+  const workspace = reuseSource ? root : join(temporary, "project");
+  if (!reuseSource) {
+    mkdirSync(workspace);
+    copySourceCheckout(root, workspace);
+    linkDependencies(join(root, "node_modules"), join(workspace, "node_modules"));
+  }
+  mkdirSync(join(workspace, "bundle"), { recursive: true });
+  for (const name of bundleEntries) {
+    if (!existsSync(join(workspace, bundleSource(name)))) continue;
+    const options = bundleOptions(workspace, name, true);
+    const { outputFiles } = await build({ ...options, sourcemap: "external", write: false });
+    const executable = required(
+      outputFiles.find(({ path }) => path.endsWith(".cjs")),
+      "Missing coverage bundle",
+    );
+    const sourceMap = required(
+      outputFiles.find(({ path }) => path === executable.path + ".map"),
+      "Missing source map",
+    );
+    const reference =
+      coverageMapReferencePrefix +
+      createHash("sha256")
+        .update(name)
+        .update("\0")
+        .update(executable.contents)
+        .update("\0")
+        .update(sourceMap.contents)
+        .digest("hex");
+    maps.set(reference, JSON.parse(sourceMap.text) as CoverageSourceMap);
+    // Node repeats an inline map in each report. Keep the full map in the collector and carry only its build identity.
+    const marker = { version: 3, file: reference, sources: [], names: [], mappings: "" };
+    const encoded = Buffer.from(JSON.stringify(marker)).toString("base64");
+    writeFileSync(
+      executable.path,
+      executable.text + "//# sourceMappingURL=data:application/json;base64," + encoded + "\n",
+    );
+  }
+  return { root: workspace, maps };
+}
+
 export function coverageConcurrency(cpus: number, availableBytes: number): number {
   return Math.max(1, Math.min(cpus, Math.floor(availableBytes / (2 * 1024 ** 3))));
 }
 
-export async function subprocessCoverage(
-  directory: string,
-  root: string,
-  reportTiming?: CoverageTiming,
-  signal?: AbortSignal,
-  admission?: WorkAdmission,
-) {
-  const phase = phaseTimings(reportTiming);
-  // Node records canonical file URLs, including macOS's /var -> /private/var temporary roots.
-  root = realpathSync.native(root);
-  const bundles = new Map<string, MeasuredScript[]>();
-  const helpers = new Map<string, MeasuredScript>();
+function coverageScripts(root: string, maps?: CoverageWorkspace["maps"]): MeasuredScript[] {
+  const candidates: MeasuredScript[] = [];
   const sources = (directory: string): string[] => {
     if (!existsSync(directory)) return [];
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -123,15 +160,18 @@ export async function subprocessCoverage(
   };
   for (const path of ["bundle", "scripts", "bin", "app/src"].flatMap((name) => sources(join(root, name)))) {
     const code = readFileSync(path, "utf8");
-    const encoded = /sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,([^\s]+)/.exec(code)?.[1];
+    const encoded = /^\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,([\w+/=]+)$/m.exec(
+      code,
+    )?.[1];
     if (!encoded) {
       if (dirname(path) === join(root, "bundle") && path.endsWith(".cjs"))
         throw new Error(`${path}: bundle needs an inline source map`);
       continue;
     }
-    const map = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as CoverageSourceMap;
+    const inline = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as CoverageSourceMap;
+    const reference = coverageMapReference(inline);
+    const map = reference ? required(maps?.get(reference), `${path}: missing captured coverage map`) : inline;
     const url = pathToFileURL(path).href;
-    const key = mapIdentity(map, url);
     const included = new Set<string>();
     const mapped = {
       ...map,
@@ -150,81 +190,122 @@ export async function subprocessCoverage(
         return relative(dirname(path), sourcePath).split(sep).join("/");
       }),
     };
-    const candidates = bundles.get(key) ?? [];
     candidates.push({
       code,
       map: mapped,
+      ...(reference ? { mapReference: reference } : {}),
       included,
       url,
-      executions: [],
       sourceType: path.endsWith(".cjs") ? "script" : "module",
     });
-    bundles.set(key, candidates);
   }
-  phase(
-    "sourceMaps",
-    [...bundles.values()].reduce((count, candidates) => count + candidates.length, 0),
-  );
+  return candidates;
+}
+
+export async function subprocessCoverage(
+  directory: string,
+  source: string | CoverageWorkspace,
+  reportTiming?: CoverageTiming,
+  signal?: AbortSignal,
+  admission?: WorkAdmission,
+) {
+  const phase = phaseTimings(reportTiming);
+  // Node records canonical file URLs, including macOS's /var -> /private/var temporary roots.
+  const root = realpathSync.native(typeof source === "string" ? source : source.root);
+  const candidates = coverageScripts(root, typeof source === "string" ? undefined : source.maps);
+  phase("sourceMaps", candidates.length);
   const files = readdirSync(directory)
     .filter((name) => name.endsWith(".json"))
     .sort();
-  // AST/source-map processing is memory intensive. Respect CPU capacity and retain memory headroom on small CI hosts.
-  const concurrency = coverageConcurrency(cpuBudget(), process.availableMemory());
-  const candidates = [...bundles.values()].flat();
-  const descriptors = candidates.map(({ url, map }) => ({ url, ...(map ? { map } : {}) }));
-  const byURL = new Map(candidates.map((candidate) => [candidate.url, candidate]));
-  const consume = (scan: ReturnType<typeof scanCoverageReports>) => {
-    for (const result of scan.bundles) {
-      const candidate = required(byURL.get(result.url), "Unknown measured bundle");
-      for (const execution of result.executions)
-        for (const script of execution.result) recordExecution(candidate, script);
-    }
-    for (const helper of scan.helpers) {
-      const previous = helpers.get(helper.url);
-      if (!previous) {
-        const path = fileURLToPath(helper.url);
-        helpers.set(helper.url, {
-          ...helper,
-          code: readFileSync(path, "utf8"),
-          included: new Set([path]),
-          sourceType: path.endsWith(".cjs") ? "script" : "module",
-        });
-      } else
-        for (const execution of helper.executions)
-          for (const script of execution.result) recordExecution(previous, script);
-    }
-  };
-  const workers = Math.min(concurrency, files.length);
-  if (workers > 1)
-    await coverageJobs(
-      files.map((file) => ({ kind: "scan" as const, directory, root, candidates: descriptors, files: [file] })),
-      {
-        capacity: workers,
-        scanBatchSize: 16,
-        accumulate: true,
-        consume,
-        ...(signal ? { signal } : {}),
-        ...(admission ? { admission } : {}),
-      },
-    );
-  else
-    consume(
-      await admittedWork(admission, signal, () =>
-        Promise.resolve(scanCoverageReports(directory, root, descriptors, files)),
-      ),
-    );
+  const readers = await coverageReaders(
+    { directory, root, candidates: scanCandidates(candidates) },
+    {
+      capacity: Math.min(collectionConcurrency(), Math.max(files.length, 1)),
+      ...(signal ? { signal } : {}),
+      ...(admission ? { admission } : {}),
+    },
+  );
+  let collected: ScannedCoverage;
+  try {
+    const drain = drainNodeCoverageReports(directory, readers.readers, {
+      mode: "read-once",
+      ...(signal ? { signal } : {}),
+    });
+    await drain.finish();
+    collected = mergeCollectedCoverage(root, candidates, await readers.finish());
+  } finally {
+    await readers.close();
+  }
   phase("subprocessReports", files.length);
-  const measured = [...candidates, ...helpers.values()]
-    .filter((script) => script.executions.length)
-    .sort((left, right) => right.code.length - left.code.length);
+  return convertSubprocessCoverage(candidates, collected, reportTiming, signal, admission);
+}
+
+function collectionConcurrency() {
+  // Leave CPU and memory headroom for the test producers.
+  return Math.max(
+    1,
+    Math.min(4, Math.floor(cpuBudget() / 2), coverageConcurrency(cpuBudget(), process.availableMemory())),
+  );
+}
+
+function scanCandidates(candidates: MeasuredScript[]) {
+  return candidates.map(({ url, map, mapReference }) => ({
+    url,
+    ...(mapReference ? { mapReference } : map ? { map } : {}),
+  }));
+}
+
+function mergeCollectedCoverage(root: string, candidates: MeasuredScript[], reports: ScannedCoverage[]) {
+  if (reports.length === 1) return required(reports[0], "Missing coverage result");
+  const accumulator = new CoverageAccumulator(root, scanCandidates(candidates));
+  for (const result of reports) accumulator.merge(result);
+  return accumulator.result();
+}
+
+async function convertSubprocessCoverage(
+  candidates: MeasuredScript[],
+  collected: ScannedCoverage,
+  reportTiming?: CoverageTiming,
+  signal?: AbortSignal,
+  admission?: WorkAdmission,
+) {
+  const phase = phaseTimings(reportTiming);
+  const byURL = new Map(candidates.map((candidate) => [candidate.url, candidate]));
+  const measured = collected.bundles.map((entry) => ({
+    script: required(byURL.get(entry.url), "Unknown measured bundle"),
+    entry,
+  }));
+  for (const entry of collected.helpers) {
+    const path = fileURLToPath(entry.url);
+    measured.push({
+      entry,
+      script: {
+        url: entry.url,
+        code: readFileSync(path, "utf8"),
+        included: new Set([path]),
+        sourceType: path.endsWith(".cjs") ? "script" : "module",
+      },
+    });
+  }
+  measured.sort((left, right) => right.script.code.length - left.script.code.length);
+  const jobs = measured.map(({ script, entry }) => ({
+    kind: "convert" as const,
+    script,
+    execution: collectedScriptCoverage(entry),
+  }));
+  // AST/source-map processing is memory intensive. Retain headroom on small CI hosts.
+  const concurrency = coverageConcurrency(cpuBudget(), process.availableMemory());
   const converted =
-    concurrency > 1 && measured.length > 1
-      ? await coverageJobs(
-          measured.map((script) => ({ kind: "convert" as const, script })),
-          { capacity: concurrency, ...(signal ? { signal } : {}), ...(admission ? { admission } : {}) },
-        )
+    concurrency > 1 && jobs.length > 1
+      ? await coverageJobs(jobs, {
+          capacity: concurrency,
+          ...(signal ? { signal } : {}),
+          ...(admission ? { admission } : {}),
+        })
       : await Promise.all(
-          measured.map((script) => admittedWork(admission, signal, () => convertCoverageScript(script))),
+          jobs.map(({ script, execution }) =>
+            admittedWork(admission, signal, () => convertCoverageScript(script, execution)),
+          ),
         );
   const map = coverage.createCoverageMap({});
   for (const result of converted) map.merge(result);
@@ -233,7 +314,7 @@ export async function subprocessCoverage(
 }
 
 export function mergeCoverage(
-  paths: string[],
+  inputs: (string | CoverageMap)[],
   directory: string,
   thresholds: Partial<Record<MetricName, number>>,
   sourceRoot = process.cwd(),
@@ -241,8 +322,11 @@ export function mergeCoverage(
   present?: (map: CoverageMap) => void,
 ) {
   const map = coverage.createCoverageMap({});
-  for (const path of paths) {
-    const data = JSON.parse(readFileSync(path, "utf8")) as Record<string, FileCoverageData>;
+  for (const input of inputs) {
+    const data =
+      typeof input === "string"
+        ? (JSON.parse(readFileSync(input, "utf8")) as Record<string, FileCoverageData>)
+        : Object.fromEntries(input.files().map((file) => [file, input.fileCoverageFor(file).data]));
     const remapped =
       sourceRoot === reportRoot
         ? data
@@ -257,8 +341,7 @@ export function mergeCoverage(
     map.merge(remapped);
   }
   const context = report.createContext({ dir: directory, coverageMap: map });
-  for (const name of ["text", "json-summary", "json"] as const) reports.create(name).execute(context);
-  present?.(map);
+  for (const name of ["text", "json"] as const) reports.create(name).execute(context);
   const summary = map.getCoverageSummary();
   if (!summary.lines.total || !summary.functions.total)
     throw new Error("coverage contains no measured lines or functions");
@@ -268,6 +351,8 @@ export function mergeCoverage(
     if (minimum !== undefined && (typeof percentage !== "number" || percentage < minimum))
       throw new Error(`${metric} coverage ${String(percentage)}% is below ${String(minimum)}%`);
   }
+  if (present) present(map);
+  else reports.create("json-summary").execute(context);
   return map;
 }
 
@@ -312,20 +397,43 @@ export async function runCoverage(
   const cancellation = processCancellation();
   const failures: unknown[] = [];
   let testFailure: Error | undefined;
+  let collectionFailure: Error | undefined;
   let measured: CoverageMap | undefined;
   const raw = join(temporary, "raw");
+  let drain: ReturnType<typeof drainNodeCoverageReports> | undefined;
+  let readers: Awaited<ReturnType<typeof coverageReaders>> | undefined;
   try {
-    const workspace = await coverageWorkspace(resolve(root), temporary);
+    const captured = await coverageWorkspace(
+      resolve(root),
+      temporary,
+      process.env.WORKBENCH_CHECK_SCOPED === "1" && process.env.WORKBENCH_CHECK_PRIVATE_BUNDLE === "1",
+    );
+    const workspace = realpathSync.native(captured.root);
     phase("workspace");
+    const candidates = coverageScripts(workspace, captured.maps);
+    phase("sourceMaps", candidates.length);
+    mkdirSync(raw);
+    readers = await coverageReaders(
+      { directory: raw, root: workspace, candidates: scanCandidates(candidates) },
+      {
+        capacity: collectionConcurrency(),
+        signal: cancellation.signal,
+        ...(options.admission ? { admission: options.admission } : {}),
+      },
+    );
+    drain = drainNodeCoverageReports(raw, readers.readers, { signal: cancellation.signal });
     const source = spawnSync("git", ["rev-parse", "HEAD"], { cwd: coverageRepository(root), encoding: "utf8" });
     const revision = process.env.WORKBENCH_SOURCE_REVISION ?? (source.status === 0 ? source.stdout.trim() : undefined);
     const unit = join(temporary, "unit");
+    let writeFailure: Error | undefined;
     cancellation.signal.throwIfAborted();
     const tests = await runOwnedChild(
       process.execPath,
       [
         "node_modules/vitest/vitest.mjs",
         "run",
+        "--configLoader",
+        "native",
         "--coverage",
         "--coverage.reportsDirectory",
         unit,
@@ -336,6 +444,29 @@ export async function runCoverage(
         cwd: workspace,
         signal: cancellation.signal,
         owner: scratch.owner,
+        output: (stdout, stderr) => {
+          for (const [stream, target] of [
+            [stdout, process.stdout],
+            [stderr, process.stderr],
+          ] as const) {
+            let tail = "";
+            stream.setEncoding("utf8").on("data", (chunk: string) => {
+              if (writeFailure) return;
+              const text = tail + chunk;
+              const newline = text.lastIndexOf("\n");
+              if (newline < 0) {
+                tail = text.slice(-8192);
+                return;
+              }
+              writeFailure = coverageWriteError(raw, text.slice(0, newline + 1));
+              tail = text.slice(newline + 1).slice(-8192);
+            });
+            stream.once("end", () => {
+              writeFailure ??= coverageWriteError(raw, tail);
+            });
+            stream.pipe(target, { end: false });
+          }
+        },
         // Vitest already measures its workers. Their setup enables native V8 capture only for CLI children.
         env: {
           ...process.env,
@@ -347,6 +478,22 @@ export async function runCoverage(
       },
     );
     testFailure = processFailure("tests or coverage collection", tests);
+    try {
+      cancellation.signal.throwIfAborted();
+      const collection = await drain.finish();
+      timings.collection = collection;
+      reportTiming("subprocessReports", collection.readMilliseconds + collection.mergeMilliseconds, collection.count);
+      console.error(
+        "Coverage collected " +
+          String(collection.bytes) +
+          " raw bytes; final drain " +
+          (collection.finalDrainMilliseconds / 1000).toFixed(2) +
+          "s",
+      );
+      if (writeFailure) throw writeFailure;
+    } catch (error) {
+      collectionFailure = error instanceof Error ? error : new Error("Coverage collection failed", { cause: error });
+    }
     const resultsPath = join(workspace, "coverage/tests.json");
     if (existsSync(resultsPath)) {
       const results = JSON.parse(readFileSync(resultsPath, "utf8")) as Record<string, unknown>;
@@ -367,12 +514,18 @@ export async function runCoverage(
       writeFileSync(join(output, "tests.json"), JSON.stringify(remap(results)));
     }
     phase("tests");
+    if (collectionFailure !== undefined) throw collectionFailure;
     cancellation.signal.throwIfAborted();
     if (testFailure) throw testFailure;
-    const cli = join(temporary, "cli.json");
-    writeFileSync(
-      cli,
-      JSON.stringify(await subprocessCoverage(raw, workspace, reportTiming, cancellation.signal, options.admission)),
+    const collected = mergeCollectedCoverage(workspace, candidates, await readers.finish());
+    await readers.close();
+    readers = undefined;
+    const cli = await convertSubprocessCoverage(
+      candidates,
+      collected,
+      reportTiming,
+      cancellation.signal,
+      options.admission,
     );
     phase("subprocess");
     const policy = (
@@ -390,13 +543,15 @@ export async function runCoverage(
     measured = map;
   } catch (error) {
     if (testFailure && error !== testFailure) failures.push(testFailure);
+    if (collectionFailure && collectionFailure !== error) failures.push(collectionFailure);
     failures.push(error);
-    if (error instanceof InvalidNodeCoverageReport) {
+    const invalid = collectionFailure ?? error;
+    if (invalid instanceof InvalidNodeCoverageReport) {
       const diagnostic = join(output, "collection-error.json");
       try {
         writeFileSync(
           diagnostic,
-          JSON.stringify({ ...error.diagnostic, producer: nodeCoverageProducer(raw, error.diagnostic) }, null, 2) +
+          JSON.stringify({ ...invalid.diagnostic, producer: nodeCoverageProducer(raw, invalid.diagnostic) }, null, 2) +
             "\n",
         );
         console.error(`Coverage collection diagnostics: ${diagnostic}`);
@@ -405,8 +560,17 @@ export async function runCoverage(
       }
     }
   } finally {
-    // Raw V8 output contains repeated source maps and can dwarf the final reports.
     const cleanupStarted = performance.now();
+    try {
+      await drain?.stop();
+    } catch (cause) {
+      failures.push(new Error("Coverage collector cleanup failed", { cause }));
+    }
+    try {
+      await readers?.close();
+    } catch (cause) {
+      failures.push(new Error("Coverage workers cleanup failed", { cause }));
+    }
     try {
       scratch.release();
     } catch (cause) {

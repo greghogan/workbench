@@ -15,6 +15,7 @@ import {
   checkConfigurationFiles,
 } from "../../../../src/core/execution/checks/check-environment.ts";
 import { runCommand } from "../../../../src/core/execution/checks/check-command.ts";
+import { checkInvocation } from "../../../../src/core/execution/checks/check-invocation.ts";
 import { checkFingerprint, changedConfigurationFiles } from "../../../../src/core/execution/checks/check-inputs.ts";
 import { withDevelopmentSelection } from "../../../../src/core/execution/environments/environments.ts";
 import { configFromData } from "../../../../src/core/projects/project-configuration.ts";
@@ -74,6 +75,26 @@ function fixture(languages: string[] = [], pass: string[] = []) {
   registerProject(root, "fixture");
   return { base, root };
 }
+
+test.runIf(process.platform === "linux").each(["nix", "guix"] as const)(
+  "offline %s checks use an existing prepared profile and explain how to prepare a missing one",
+  (manager) => {
+    const { root } = fixture();
+    for (const file of ["flake.nix", "flake.lock", "channels.scm", "manifest.scm"]) writeFileSync(join(root, file), "");
+    const profile = join(root, "prepared-profile");
+    vi.stubEnv("WORKBENCH_OFFLINE", "1");
+    vi.stubEnv("WORKBENCH_PREPARED", undefined);
+    vi.stubEnv("WORKBENCH_ENVIRONMENTS", undefined);
+    vi.stubEnv("WORKBENCH_DEVCONTAINER", undefined);
+    const command = () =>
+      checkInvocation(root, manager, ["node", "--version"], root, undefined, undefined, undefined, profile);
+    expect(command).toThrow(`workbench prepare --environment ${manager}`);
+    writeFileSync(profile, "prepared");
+    const invocation = command();
+    expect(invocation).toContain(manager === "guix" ? `--profile=${profile}` : profile);
+    expect(invocation.slice(-3)).toEqual([manager === "guix" ? "--" : "--command", "node", "--version"]);
+  },
+);
 
 test("native tools receive the declared environment rather than the caller environment", () => {
   const { root } = fixture([], ["APPLICATION_MODE"]);
@@ -135,20 +156,22 @@ test("native tool installation preserves literal arguments and explicit executio
 
 test("language settings are scoped to their registered root and generated selections remain authoritative", () => {
   const { root } = fixture(["typescript"]);
+  vi.stubEnv("WORKBENCH_CPUS", undefined);
+  vi.stubEnv("WORKBENCH_CPU_BUDGET", "1");
   vi.stubEnv("NODE_OPTIONS", "--no-warnings");
   vi.stubEnv("RUSTFLAGS", "-C opt-level=2");
   vi.stubEnv("GOFLAGS", "-tags=custom");
   const env = nativeCheckEnvironment(root, root, {}, 2);
   expect(env).not.toHaveProperty("NODE_OPTIONS");
   for (const name of ["RUSTFLAGS", "GOFLAGS", "CARGO_BUILD_JOBS", "GOMAXPROCS"]) expect(env).not.toHaveProperty(name);
-  expect(env.WORKBENCH_CPU_BUDGET).toBe("2");
-  expect(env.UV_THREADPOOL_SIZE).toBe("2");
+  expect(env.WORKBENCH_CPU_BUDGET).toBe("1");
+  expect(env.UV_THREADPOOL_SIZE).toBe("1");
   writeFileSync(
     join(root, "workbench/projects.toml"),
     stringify({ project: [{ id: "fixture", path: "." }], language_root: [{ language: "go", path: "." }] }),
   );
   const go = nativeCheckEnvironment(root, root, {}, 2);
-  expect(go.GOFLAGS).toBe("-p=2");
+  expect(go.GOFLAGS).toBe("-p=1");
   expect(go.GOTOOLCHAIN).toBe("local");
   expect(go.GOENV).toBe("off");
   expect(go).not.toHaveProperty("NODE_OPTIONS");
@@ -253,7 +276,7 @@ test.each([
   },
 );
 
-test("agent compiler selections and terminal include paths produce identical check inputs and child environments", () => {
+test("agent compiler selections and terminal include paths produce identical check inputs and child environments", async () => {
   const { root } = fixture(["c", "cpp"]);
   expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
   const names = ["CC", "CXX", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"];
@@ -261,11 +284,11 @@ test("agent compiler selections and terminal include paths produce identical che
   vi.stubEnv("CC", "agent-cc");
   vi.stubEnv("CXX", "agent-cxx");
   const plan = checkPlan(root, [configuredCheck({ command: [process.execPath, "-e", "process.exit(0)"] })]);
-  const before = checkFingerprint(root, {}, plan);
+  const before = await checkFingerprint(root, {}, plan);
   vi.stubEnv("CC", undefined);
   vi.stubEnv("CXX", undefined);
   for (const name of names.slice(2)) vi.stubEnv(name, "/user/include-or-libraries");
-  expect(checkFingerprint(root, {}, plan)).toEqual(before);
+  expect(await checkFingerprint(root, {}, plan)).toEqual(before);
   const output = join(root, "child.json");
   const command = [
     process.execPath,
@@ -301,13 +324,13 @@ test("unrelated PATH additions and profile symlink spelling do not select a diff
   expect(checkBaseEnvironment(root, root, source)).toEqual(checkBaseEnvironment(root, root));
 });
 
-test("native gates ignore caller Git and shell replacements, including while identifying cached inputs", () => {
+test("native gates ignore caller Git and shell replacements, including while identifying cached inputs", async () => {
   const { base, root } = fixture();
   expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
   expect(spawnSync("git", ["add", "."], { cwd: root }).status).toBe(0);
   const plan = checkPlan(root, [configuredCheck({ command: [process.execPath, "-e", "process.exit(0)"] })]);
   const clean = checkBaseEnvironment(root, root);
-  const before = checkFingerprint(root, {}, plan);
+  const before = await checkFingerprint(root, {}, plan);
   const poison = join(base, "caller-tools");
   mkdirSync(poison);
   for (const name of ["git", "bash", "sh", "env"])
@@ -319,7 +342,7 @@ test("native gates ignore caller Git and shell replacements, including while ide
   expect(actual).toEqual(clean);
   expect(actual.PATH?.split(delimiter)).not.toContain(poison);
   expect(spawnSync("git", ["--version"], { env: actual, encoding: "utf8" }).status).toBe(0);
-  expect(checkFingerprint(root, {}, plan)).toEqual(before);
+  expect(await checkFingerprint(root, {}, plan)).toEqual(before);
 });
 
 test("a project can explicitly forward its caller PATH instead of using pristine host discovery", () => {
@@ -535,7 +558,7 @@ test("Cargo ancestor discovery ignores absent candidates and discovers newly cre
   expect(checkConfigurationFiles(root, root, env)).toEqual(before);
 });
 
-test("user tool configuration bytes invalidate evidence without changing source or printing their contents", () => {
+test("user tool configuration bytes invalidate evidence without changing source or printing their contents", async () => {
   const { base, root } = fixture(["java"]);
   const definition = join(root, "workbench/languages/java");
   mkdirSync(definition, { recursive: true });
@@ -565,16 +588,16 @@ test("user tool configuration bytes invalidate evidence without changing source 
   ]);
   const env = nativeCheckEnvironment(root, root);
   expect(checkConfigurationFiles(root, root, env)).toContain(settings);
-  const before = checkFingerprint(root, {}, plan);
+  const before = await checkFingerprint(root, {}, plan);
   writeFileSync(settings, "changed private settings");
-  const after = checkFingerprint(root, {}, plan);
+  const after = await checkFingerprint(root, {}, plan);
   expect(after.components.source).toBe(before.components.source);
   expect(after.components.environment).not.toBe(before.components.environment);
   expect(changedConfigurationFiles(before, after)).toEqual([settings]);
   expect(JSON.stringify(after)).not.toContain("private settings");
 });
 
-test("staged snapshots reuse environment evidence when checkout paths sort across user configuration", () => {
+test("staged snapshots reuse environment evidence when checkout paths sort across user configuration", async () => {
   const { base, root } = fixture();
   const home = join(base, "home"),
     snapshot = join(base, "a-snapshot"),
@@ -592,11 +615,11 @@ test("staged snapshots reuse environment evidence when checkout paths sort acros
   const checks = [
     configuredCheck({ name: "fixture", role: "test", command: [process.execPath, "-e", "process.exit(0)"] }),
   ];
-  const working = checkFingerprint(root, {}, checkPlan(root, checks));
+  const working = await checkFingerprint(root, {}, checkPlan(root, checks));
   cpSync(root, snapshot, { recursive: true });
   vi.stubEnv("WORKBENCH_LOCAL_CONFIG_ROOT", root);
   vi.stubEnv("WORKBENCH_EPHEMERAL_CHECKOUT", "1");
-  const staged = checkFingerprint(snapshot, {}, checkPlan(snapshot, checks));
+  const staged = await checkFingerprint(snapshot, {}, checkPlan(snapshot, checks));
   expect(staged.components.environment).toBe(working.components.environment);
   expect(staged.configurationFiles).toEqual(working.configurationFiles);
   expect(staged.key).toBe(working.key);

@@ -55,7 +55,7 @@ stages = []
 
 [[command]]
 role = "docs"
-command = [ "node", "{workbench}/bin/workbench.mjs", "docs", "README.md" ]
+command = [ "node", "scripts/check.mjs", "docs", "{workbench}" ]
 
 [[command]]
 role = "release"
@@ -85,7 +85,7 @@ stages = []
 [[command]]
 role = "acquire"
 environment = "native"
-command = [ "node", "{workbench}/bin/workbench.mjs", "native-image-inputs" ]
+command = [ "node", "scripts/check.mjs", "acquire", "{workbench}" ]
 stages = []
 
 [[command]]

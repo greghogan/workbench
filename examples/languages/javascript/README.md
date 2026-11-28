@@ -1,5 +1,19 @@
 # JavaScript reference
 
+## Native build and run
+
+Use the Node version in `.node-version` and the pnpm version declared in `package.json`.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run build
+node --input-type=module -e 'import { countByte } from "./build/src/arithmetic.js"; console.log(countByte(new TextEncoder().encode("banana"), 97));'
+```
+
+The result is `3`.
+
+## Workbench workflow
+
 A standalone Node project with JavaScript sources, strict JSDoc type checking, typed ESLint, Prettier, and Vitest.
 JavaScript has its own shared language definition and example. It uses the same Node support policy and package tools as
 TypeScript, without a TypeScript compilation step. Building copies JavaScript sources; the release package exports only

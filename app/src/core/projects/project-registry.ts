@@ -1,6 +1,7 @@
 import { projectPaths } from "./project-paths.js";
 import { inputStamp } from "../runtime/file-identity.js";
 import { validation, type Validation } from "../runtime/validation.js";
+import { isDeepStrictEqual } from "node:util";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
@@ -136,7 +137,7 @@ const store = new BoundedState<Registry>(path, 16 * 1024 * 1024, decodeProjectRe
 }));
 const transaction = new AsyncLocalStorage<Registry>();
 const read = () => transaction.getStore() ?? store.read();
-function edit(update: (registry: Registry) => void): void {
+function edit(update: (registry: Registry) => boolean): void {
   const active = transaction.getStore();
   if (active) {
     update(active);
@@ -144,8 +145,7 @@ function edit(update: (registry: Registry) => void): void {
   }
   withCacheLockSync(lock(), () => {
     const registry = read();
-    update(registry);
-    store.write(registry);
+    if (update(registry)) store.write(registry);
   });
 }
 /** A cancelled waiter writes nothing. Once admitted, one validated atomic write completes the transaction. */
@@ -212,6 +212,7 @@ export function registerProject(directory: string, name: string): RegisteredProj
     const id = previous?.id ?? randomBytes(12).toString("hex");
     result = { ...previous, id, path: root, name, state: Registration.Registered, updated: new Date().toISOString() };
     registry.projects = [...registry.projects.filter((project) => project.id !== id), result];
+    return true;
   });
   if (!result) throw new Error("Project registration failed");
   return result;
@@ -239,6 +240,7 @@ export function declineProject(directory: string, name: string, expected?: strin
         ...(previous?.queueKey ? { queueKey: previous.queueKey } : {}),
       },
     ];
+    return true;
   });
 }
 export function updateProjectRequirements(
@@ -253,20 +255,29 @@ export function updateProjectRequirements(
       (entry) =>
         projectPathComparison(entry.path) === projectPathComparison(root) && entry.state === Registration.Registered,
     );
-    if (!project) return;
-    project.requirements = requirements;
-    project.requirementError = error;
+    if (!project) return false;
     const key = (entry: ProjectRequirement) => JSON.stringify([entry.root, entry.profile, entry.tool]);
     const declared = new Set(requirements.map(key));
-    if (!error && project.working) project.working = project.working.filter((entry) => declared.has(key(entry)));
+    let verified =
+      !error && project.working ? project.working.filter((entry) => declared.has(key(entry))) : project.working;
     if (working) {
       const replacements = new Set(working.map(key));
-      project.working = [
-        ...(project.working ?? []).filter((entry) => declared.has(key(entry)) && !replacements.has(key(entry))),
+      verified = [
+        ...(verified ?? []).filter((entry) => declared.has(key(entry)) && !replacements.has(key(entry))),
         ...working,
       ];
     }
+    if (
+      (project.requirementError ?? "") === error &&
+      isDeepStrictEqual(project.requirements ?? [], requirements) &&
+      isDeepStrictEqual(project.working ?? [], verified ?? [])
+    )
+      return false;
+    project.requirements = requirements;
+    project.requirementError = error;
+    if (verified !== undefined) project.working = verified;
     project.updated = new Date().toISOString();
+    return true;
   });
 }
 /** Update a moved checkout's location without transferring another live checkout's identity or caches. */
@@ -292,6 +303,7 @@ export function relocateProject(previousDirectory: string, directory: string, na
     project.updated = new Date().toISOString();
     delete project.working;
     project.requirementError = "Requirements must be refreshed after relocation";
+    return true;
   });
 }
 export function keptCacheAssets(): Set<string> {
@@ -300,5 +312,6 @@ export function keptCacheAssets(): Set<string> {
 export function keepCacheAsset(identity: string, keep: boolean): void {
   edit((registry) => {
     registry.kept = [...new Set([...registry.kept.filter((entry) => entry !== identity), ...(keep ? [identity] : [])])];
+    return true;
   });
 }

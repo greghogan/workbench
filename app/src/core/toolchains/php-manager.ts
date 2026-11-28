@@ -7,15 +7,22 @@ import { execute } from "./tool-execution.js";
 import { exactVersion } from "./toolchains.js";
 import { required } from "../runtime/invariants.js";
 
-/** Composer owns package installation; a trusted local plugin checks downloaded archives before extraction. */
-export async function composerBootstrap(directory: string, distribution: string): Promise<string> {
+export function composerArchive(directory: string, distribution: string) {
   let root = directory;
   while (!existsSync(join(root, ".composer-version")) && dirname(root) !== root) root = dirname(root);
   const version = exactVersion(readText(join(root, ".composer-version")).trim(), ".composer-version");
-  const artifact = required(
-    assetFor(distribution, { name: "composer", version, source: ".composer-version" }),
-    "missing verified Composer bootstrap",
-  );
+  return {
+    version,
+    artifact: required(
+      assetFor(distribution, { name: "composer", version, source: ".composer-version" }),
+      "missing verified Composer bootstrap",
+    ),
+  };
+}
+
+/** Composer owns package installation; a trusted local plugin checks downloaded archives before extraction. */
+export async function composerBootstrap(directory: string, distribution: string): Promise<string> {
+  const { version, artifact } = composerArchive(directory, distribution);
   const phar = await download(artifact);
   const actual = execute("php", [phar, "--version", "--no-ansi"], { capture: true }).trim();
   if (!actual.startsWith(`Composer version ${version} `))

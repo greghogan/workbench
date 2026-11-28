@@ -1,5 +1,17 @@
 # PHP reference
 
+## Native build and run
+
+With the PHP version in `.php-version`, run the CLI directly from source:
+
+```sh
+php bin/count 97 banana
+```
+
+The result is `3`. The CLI loads its arithmetic library directly.
+
+## Workbench workflow
+
 A standalone Composer package with a byte-counting CLI and a small arithmetic library. Development uses PHP 8.5.12. The
 application targets PHP 8.2.34. CI uses selected native and managed development runtimes rather than a matrix of every
 maintained PHP line. PHPStan's API and syntax baseline matches the minimum; Composer's platform setting constrains

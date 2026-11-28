@@ -1,5 +1,7 @@
 import {
   chmodSync,
+  copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -9,7 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, test } from "vitest";
 import {
@@ -18,9 +20,12 @@ import {
   sealDistribution,
 } from "../../../src/core/distribution/distribution-manifest.ts";
 import { materializeDistribution } from "../../../src/core/distribution/runtime-distribution.ts";
+import { sourceCheckoutPathIncluded } from "../../../src/core/execution/snapshots/source-checkout.mjs";
+import { readReleaseChecksum, stageReleaseArchive } from "../../../src/core/distribution/release-archive.ts";
 import { prepareWorkbenchPackage } from "../../../src/core/artifacts/package.ts";
 import { distribution } from "../../fixtures/adoption.mjs";
 import { installationFixtures, pin } from "../../fixtures/installations.mjs";
+import { goCountFixture } from "../../fixtures/go-starter.mjs";
 
 const { fixture } = installationFixtures();
 
@@ -99,11 +104,26 @@ test("runtime snapshots and executable packages include hooks and exclude person
 
 test("the executable package verifies independent adoption and includes references without development dependencies", async () => {
   const root = fixture(),
+    source = join(root, "source"),
     output = join(root, "artifacts");
+  const metadata = readFileSync(join(distribution, "package.json"));
+  const files = (JSON.parse(metadata.toString()) as { files: string[] }).files;
+  for (const path of files.filter((path) => path !== "bundle")) {
+    const input = join(distribution, path);
+    cpSync(input, join(source, path), {
+      recursive: true,
+      filter: (candidate) => sourceCheckoutPathIncluded(relative(distribution, candidate)),
+    });
+  }
+  writeFileSync(join(source, "package.json"), metadata);
+  const testSource = join(source, "app/test/core/distribution/installations.test.mts");
+  mkdirSync(join(testSource, ".."), { recursive: true });
+  writeFileSync(testSource, "export const developmentOnly = true;\n");
+  copyFileSync(goCountFixture, join(source, "examples/languages/go/count.go"));
   const generated = readdirSync(join(distribution, "bundle"))
     .filter((name) => !name.startsWith("."))
     .map((name) => ({ path: `bundle/${name}`, contents: readFileSync(join(distribution, "bundle", name)) }));
-  await prepareWorkbenchPackage(distribution, { output, generated });
+  await prepareWorkbenchPackage(source, { output, generated });
   const packaged = join(output, "workbench");
   const manifest = JSON.parse(readFileSync(join(packaged, "package.json"), "utf8")) as Record<string, unknown>;
   expect(
@@ -133,19 +153,18 @@ test("the executable package verifies independent adoption and includes referenc
     );
   // Verification must execute the archive even when the staging directory no longer exists.
   rmSync(packaged, { recursive: true });
-  const verify = () =>
-    spawnSync(process.execPath, [join(distribution, "scripts/check-release.mjs"), output, distribution], {
-      cwd: distribution,
-      env: { ...process.env, WORKBENCH_PROJECT_ROOT: distribution },
-      encoding: "utf8",
-    });
-  const verified = verify();
+  const verified = spawnSync(process.execPath, [join(distribution, "scripts/check-release.mjs"), output, source], {
+    cwd: distribution,
+    env: { ...process.env, WORKBENCH_PROJECT_ROOT: distribution },
+    encoding: "utf8",
+  });
   expect(verified.status, verified.stdout + verified.stderr).toBe(0);
-  const archive = join(output, "workbench-artifacts/workbench.tar.gz");
+  const artifacts = join(output, "workbench-artifacts");
+  const archive = join(artifacts, "workbench.tar.gz");
   writeFileSync(archive, Buffer.concat([readFileSync(archive), Buffer.from("changed archive")]));
-  const changed = verify();
-  expect(changed.status).not.toBe(0);
-  expect(changed.stderr).toContain("release archive checksum mismatch");
+  await expect(stageReleaseArchive(archive, readReleaseChecksum(artifacts), root)).rejects.toThrow(
+    "release archive checksum mismatch",
+  );
 });
 
 test("executable packaging leaves independent providers and local policy outside the distribution", async () => {

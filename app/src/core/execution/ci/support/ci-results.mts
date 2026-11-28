@@ -2,13 +2,16 @@ import { writeDiagnosticText } from "../../../diagnostics/diagnostics.mjs";
 import { appendBrowserTimings } from "./ci-browser-timings.mjs";
 import { describeError } from "../../../diagnostics/diagnostic-errors.mjs";
 import { isRecord as object } from "../../../runtime/values.mjs";
-export interface TargetResult {
-  id: string;
+interface CheckOutcome {
   success: boolean;
   error?: string;
   report: string;
   started?: string;
   finished?: string;
+}
+export interface TargetResult extends CheckOutcome {
+  id: string;
+  partitions?: (CheckOutcome & { network: "offline" | "online"; checks: string[] })[];
 }
 export interface InfrastructureError {
   phase: string;
@@ -51,6 +54,22 @@ export function parseRunReport(value: unknown, ids: string[], reports: string): 
   function invalid(): never {
     throw new Error("Container produced invalid target results");
   }
+  const outcomeKeys = ["success", "error", "report", "started", "finished"];
+  const outcome = (result: Record<string, unknown>): CheckOutcome => {
+    const { success, error, report, started, finished } = result;
+    const timestamp = (value: unknown): value is string => text(value) && Number.isFinite(Date.parse(value));
+    if (typeof success !== "boolean" || !text(report)) invalid();
+    if (success ? error !== undefined || !timestamp(started) || !timestamp(finished) : !text(error)) invalid();
+    if (started !== undefined && !timestamp(started)) invalid();
+    if (finished !== undefined && (started === undefined || !timestamp(finished))) invalid();
+    return {
+      success,
+      report,
+      ...(typeof error === "string" ? { error } : {}),
+      ...(started === undefined ? {} : { started }),
+      ...(finished === undefined ? {} : { finished }),
+    };
+  };
   if (
     !object(value) ||
     !keys(value, ["version", "targets", "errors"]) ||
@@ -64,23 +83,38 @@ export function parseRunReport(value: unknown, ids: string[], reports: string): 
   for (const result of value.targets) {
     if (
       !object(result) ||
-      !keys(result, ["id", "success", "error", "report", "started", "finished"]) ||
+      !keys(result, ["id", "partitions", ...outcomeKeys]) ||
       !text(result.id) ||
       !ids.includes(result.id) ||
-      seen.has(result.id) ||
-      typeof result.success !== "boolean" ||
-      !text(result.report)
+      seen.has(result.id)
     )
       invalid();
-    if (result.success ? result.error !== undefined : !text(result.error)) invalid();
-    if (result.success && (!text(result.started) || !text(result.finished))) invalid();
-    if (result.finished !== undefined && result.started === undefined) invalid();
-    for (const field of ["started", "finished"])
-      if (result[field] !== undefined && (!text(result[field]) || !Number.isFinite(Date.parse(result[field]))))
-        invalid();
-    seen.add(result.id);
-    // Every field has been checked, including the success/error and timestamp relationships.
-    targets.push(result as unknown as TargetResult);
+    const id = result.id;
+    seen.add(id);
+    const target: TargetResult = { id, ...outcome(result), report: reportDirectory(reports, id) };
+    if (result.partitions !== undefined) {
+      if (!Array.isArray(result.partitions) || !result.partitions.length || result.partitions.length > 2) invalid();
+      target.partitions = result.partitions.map((phase: unknown, index) => {
+        const network = index === 0 ? "offline" : "online";
+        if (
+          !object(phase) ||
+          !keys(phase, ["network", "checks", ...outcomeKeys]) ||
+          phase.network !== network ||
+          !Array.isArray(phase.checks) ||
+          !phase.checks.every(text)
+        )
+          invalid();
+        const directory = ids.length === 1 ? target.report : reports;
+        return {
+          ...outcome(phase),
+          network,
+          checks: phase.checks,
+          report: reportDirectory(join(directory, network), id),
+        };
+      });
+      if (target.success && target.partitions.some((phase) => !phase.success)) invalid();
+    }
+    targets.push(target);
   }
   if (seen.size !== ids.length) invalid();
   const errors: InfrastructureError[] = [];
@@ -90,7 +124,7 @@ export function parseRunReport(value: unknown, ids: string[], reports: string): 
   }
   return {
     version: 1,
-    targets: targets.map((result) => ({ ...result, report: reportDirectory(reports, result.id) })),
+    targets,
     errors,
   };
 }

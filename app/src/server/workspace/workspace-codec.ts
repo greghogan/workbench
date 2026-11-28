@@ -38,7 +38,9 @@ function entries(value: unknown, visit: (entry: unknown, key: string) => void): 
 }
 function difference(value: unknown): void {
   if (value === null) return;
-  strings(object(value), ["patch", "before", "after"]);
+  const difference = object(value);
+  strings(difference, ["before", "after"]);
+  check(difference.patch === undefined || text(difference.patch));
 }
 function comparison(value: unknown): void {
   const data = object(value);
@@ -138,6 +140,13 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     );
   });
   const tasks = object(data.tasks);
+  const planFiles = (value: unknown) => {
+    list(value, (item) => {
+      const file = object(item);
+      strings(file, ["name", "oid"]);
+      check(bool(file.executable));
+    });
+  };
   list(tasks.plans, (value) => {
     const plan = object(value);
     strings(plan, ["reference", "scope", "name", "title", "summary", "contents", "digest", "status"]);
@@ -153,11 +162,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     list(plan.dependencies, (value) => {
       check(text(value));
     });
-    list(plan.files, (value) => {
-      const file = object(value);
-      strings(file, ["name", "oid"]);
-      check(bool(file.executable));
-    });
+    planFiles(plan.files);
     list(plan.changedFiles, (value) => {
       const file = object(value);
       check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
@@ -165,6 +170,7 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     if (plan.approval !== undefined) {
       const approval = object(plan.approval);
       check(text(approval.at) && text(approval.contents) && bool(approval.current));
+      planFiles(approval.files);
     }
   });
   check(bool(tasks.decisionsRequired));
@@ -178,6 +184,10 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     strings(task, ["reference", "title", "path", "contents", "digest", "planDigest"]);
     check(task.reviewDigest === undefined || text(task.reviewDigest));
     check(task.acceptanceNeedsReview === undefined || task.acceptanceNeedsReview === true);
+    check(task.previouslyApproved === undefined || task.previouslyApproved === true);
+    check(task.finalized === undefined || task.finalized === true);
+    check(task.committedDelivery === undefined || task.committedDelivery === true);
+    check(task.verificationStale === undefined || task.verificationStale === true);
     if (task.approval !== undefined) {
       const approval = object(task.approval);
       check(text(approval.at) && text(approval.contents) && bool(approval.current));
@@ -202,6 +212,11 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
     strings(document, ["contents", "digest", "error"]);
     reviewBaseline(document.baseline);
     comparison(document.reviewed);
+    if (document.taskFiles !== undefined)
+      list(document.taskFiles, (value) => {
+        const file = object(value);
+        check(text(file.name) && ["added", "changed", "removed"].includes(String(file.change)));
+      });
     list(document.files, (value) => {
       const file = object(value);
       check(text(file.path) && bytes(file.size));
@@ -267,7 +282,6 @@ function assertSnapshot(value: unknown): asserts value is WorkspaceSnapshot {
           );
       });
   });
-  entries(data.upstreamDiffs, difference);
   entries(data.removedReviews, comparison);
   entries(data.inputs, (stamp) => {
     check(text(stamp));

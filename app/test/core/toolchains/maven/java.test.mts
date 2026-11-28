@@ -122,19 +122,13 @@ test("JaCoCo summaries preserve source identities and method coverage without in
     '<counter type="LINE" missed="1" covered="3"/><counter type="BRANCH" missed="0" covered="2"/><counter type="METHOD" missed="0" covered="1"/>';
   const xml = `<?xml version="1.0"?><!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd"><report name="reference"><package name="org/example"><class name="Count">${counters}</class><sourcefile name="Count.java">${counters}</sourcefile></package>${counters}</report>`;
   const summary = javaCoverageSummary(xml);
-  expect(required(summary.total, "Expected fixture value").lines).toEqual({
-    total: 4,
-    covered: 3,
-    skipped: 0,
-    pct: 75,
+  expect(summary).toEqual({
+    "src/main/java/org/example/Count.java": {
+      lines: { total: 4, covered: 3 },
+      branches: { total: 2, covered: 2 },
+      functions: { total: 1, covered: 1 },
+    },
   });
-  expect(
-    required(
-      required(summary["src/main/java/org/example/Count.java"], "Expected fixture value").functions,
-      "Expected fixture value",
-    ).pct,
-  ).toBe(100);
-  expect(required(summary.total, "Expected fixture value").statements).toBeUndefined();
   for (const invalid of [
     "<report/>",
     xml.replace("org/example", "../escape"),

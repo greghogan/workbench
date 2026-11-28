@@ -7,11 +7,24 @@ import { badge } from "./components.js";
 import { recordURL } from "../routes/locations.js";
 import { referenceLink } from "./record-links.js";
 import type { WorkspaceView } from "../workspace/workspace-service.js";
-import { reviewLocation } from "../review/review-navigation.js";
+import { reviewLocation, workflowRecordURL } from "../review/review-navigation.js";
 import { experimentIsResult } from "../../core/experiments/experiment-workflow.js";
-import { taskPhase, TaskPhase } from "../../core/tasks/task-workflow.js";
+import { TaskLifecycle } from "../../core/tasks/task-workflow.js";
 
-export function recordStatus(record: BrowserRecord): JSX.Element | null {
+export function recordStatus(
+  record: Pick<BrowserRecord, "id" | "type" | "status">,
+  context: WorkspaceView,
+): JSX.Element | null {
+  if (record.type === "TSK") {
+    const state = context.taskState(record.id);
+    if (state === TaskLifecycle.AwaitingApproval)
+      return (
+        <a class="badge pending" href={workflowRecordURL(context, record.id)}>
+          {state}
+        </a>
+      );
+    if (state) return badge(state, state === TaskLifecycle.AwaitingAcceptance ? "pending" : undefined);
+  }
   if (!record.status) return null;
   return badge(
     record.type === "EXP" && experimentIsResult(record.status)
@@ -29,15 +42,6 @@ export function timeTag(value: string): JSX.Element {
 export function addedAtTag(value?: string): JSX.Element | null {
   return value ? <span class="badge">Added {timeTag(value)}</span> : null;
 }
-function recordListStatus(record: BrowserRecord, context: WorkspaceView): JSX.Element | null {
-  if (record.type === "TSK") {
-    const task = context.index.taskGraph.byReference.get(record.id);
-    if (task && taskPhase(task, context.index.taskReadiness.entries.get(record.id)) === TaskPhase.Reviews)
-      return badge("Awaiting acceptance", "pending");
-    if (record.status === "Approved" && task?.approval?.current === false) return badge("Needs approval", "pending");
-  }
-  return recordStatus(record);
-}
 export function recordRow(
   record: BrowserRecord,
   context: WorkspaceView,
@@ -50,7 +54,7 @@ export function recordRow(
       {badge(record.id)}
       {record.type === "CHARTER" && record.collection && badge("Collection charter · context")}
       {record.local && badge("Local collection · read only")}
-      {recordListStatus(record, context)}
+      {recordStatus(record, context)}
       {addedAtTag(record.addedAt)}
       {!record.local && context.hasPendingReview(record.path) && (
         <a class="badge pending" aria-label={record.id + ": Needs review"} href={reviewLocation(context, record)}>

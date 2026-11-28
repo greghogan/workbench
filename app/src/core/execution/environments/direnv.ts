@@ -12,9 +12,11 @@ const start = "# >>> Workbench direnv >>>";
 const end = "# <<< Workbench direnv <<<";
 const block = [
   start,
-  "_workbench_exports=$(workbench paths --direnv) || exit",
-  'eval "$_workbench_exports"',
-  "unset _workbench_exports",
+  "if command -v workbench >/dev/null 2>&1; then",
+  "    _workbench_exports=$(workbench paths --direnv) || exit",
+  '    eval "$_workbench_exports"',
+  "    unset _workbench_exports",
+  "fi",
   end,
 ].join("\n");
 const managed = /^# >>> Workbench direnv >>>\r?\n[\s\S]*?^# <<< Workbench direnv <<<\r?$/m;

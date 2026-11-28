@@ -111,9 +111,13 @@ test("local default preserves every configured Linux x64 native, compatibility, 
     },
   ]);
   expect(focused.excluded.some(({ reason }) => reason === "outside selected targets")).toBe(true);
+  expect(focused.packages).toEqual([]);
+  expect(plan.packages.some(({ row }) => row.requirements.abi === "musl")).toBe(true);
+  expect(plan.packages.some(({ row }) => row.builder === "guix")).toBe(true);
   const python = localCIPlan(repository, { path: "examples/languages/python" });
   expect(python.selected.every(({ path }) => path === "examples/languages/python")).toBe(true);
   expect(python.excluded.some(({ reason }) => reason === "outside selected root")).toBe(true);
+  expect(python.packages.map(({ row }) => row.profile).sort()).toEqual(["python-guix-portable", "python-nix-closure"]);
   expect(() => localCIPlan(repository, { target: ["missing"] })).toThrow(/configured CI target/);
   expect(() => localCIPlan(repository, { path: "missing" })).toThrow(/configured CI root/);
   expect(() => localCIPlan(repository, { target: [] })).toThrow(/no configured Linux x64 targets/);
@@ -277,6 +281,24 @@ test("snapshots preserve ordinary nested repositories and supply the independent
   expect(git(dependency, "status", "--porcelain")).toContain("?? pending");
   expect(existsSync(join(destination, ".git/workbench/runtime/bin/workbench.mjs"))).toBe(true);
   expect(git(destination, "ls-files", ".git/workbench/runtime").trim()).toBe("");
+});
+
+test("snapshots can read committed history after the shared object store becomes unavailable", async () => {
+  const original = fixture();
+  initialize(original);
+  const workspace = fixture();
+  git(workspace, "clone", "--quiet", "--shared", original, "checkout");
+  const checkout = join(workspace, "checkout");
+  const snapshot = join(workspace, "snapshot");
+  const head = git(checkout, "rev-parse", "HEAD");
+  writeFileSync(join(checkout, "tracked"), "pending");
+
+  await snapshotCIProject(checkout, snapshot);
+  rmSync(original, { recursive: true });
+
+  expect(git(snapshot, "rev-parse", "HEAD")).toBe(head);
+  expect(git(snapshot, "show", "HEAD:tracked")).toBe("original");
+  expect(git(snapshot, "diff", "--cached", "--name-only", "HEAD")).toBe("tracked\n");
 });
 
 test("named profiles resolve their selected authentication metadata without changing the development pin", () => {

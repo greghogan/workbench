@@ -1,7 +1,7 @@
 import { currentExecutionEnvironment } from "../environments/execution-context.js";
 import { RetainedProcessLogs } from "../../storage/retained-process-logs.js";
 import type { ProcessTermination } from "../../diagnostics/diagnostic-contract.mjs";
-import { CheckMessage, readCheckMessage } from "./check-protocol.js";
+import { checkAdmissionDigest, CheckMessage, readCheckMessage } from "./check-protocol.js";
 import { performance } from "node:perf_hooks";
 import {
   writeDiagnosticText,
@@ -18,7 +18,13 @@ import {
 } from "../../diagnostics/diagnostics.mjs";
 import { startLogRun, finishLogRun, logRetention } from "../../storage/logs/log-storage.js";
 import { processFailure } from "../../runtime/process-outcome.mjs";
-import { CheckReport, writeCheckReport, type CheckRunResult } from "./check-report.js";
+import {
+  CheckReport,
+  writeCheckReport,
+  type CheckCacheReport,
+  type CheckPhaseObserver,
+  type CheckRunResult,
+} from "./check-report.js";
 import { checkDetailPrefix } from "./check-detail-data.mjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -26,32 +32,50 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { relative, join } from "node:path";
 import { checkFailureExcerpt, checkDetailLines } from "./check-output.js";
 import { distributionRoot } from "../../projects/project-context.js";
-import { buildCheckout, buildStorageSettings, prepareCheckLogs, checkLogDirectory } from "../../artifacts/builds.js";
+import {
+  buildCheckout,
+  buildPaths,
+  buildStorageSettings,
+  cleanBuilds,
+  prepareCheckLogs,
+  checkLogDirectory,
+} from "../../artifacts/builds.js";
 import { withCacheLock } from "../../storage/cache-lock.js";
 import { checkExecution } from "./check-resources.js";
-import { CheckControl, checkControlPrefix } from "./check-control.js";
+import { checkExecutionResources } from "../environments/execution-resources.js";
+import { CheckControl, checkControlPrefix, checkBatches } from "./check-control.js";
 import { required } from "../../runtime/invariants.js";
 import { cpuEnvironment } from "./cpu-budget.mjs";
+import { findUnixJobserver } from "./unix-jobserver-client.js";
 import type { CheckCancellation } from "./check-cancellation.js";
 import type { ProcessLock } from "../../storage/process-lock.js";
 import { CheckLines, CheckProgress, checkEventPrefix } from "./check-progress.js";
 import { safeOutput } from "../../diagnostics/terminal-output.js";
-import type { CheckSelection, planChecks } from "./check-plan.js";
-
-type Plan = ReturnType<typeof planChecks>;
+import type { CheckSelection, CheckPlan } from "./check-plan.js";
 
 /** Drain every admitted group before returning, so staged checkouts and shared outputs outlive active work. */
 export async function runCheckGroups(
   root: string,
   options: CheckSelection,
-  plan: Plan,
+  plan: CheckPlan,
   cancellation: CheckCancellation,
   owner: ProcessLock,
   recordReport?: (report: CheckRunResult) => void,
+  cache?: CheckCacheReport,
+  buildProducts?: Map<string, string>,
+  observe?: CheckPhaseObserver,
 ): Promise<CheckRunResult> {
   const total = plan.sessions.reduce((sum, session) => sum + session.checks.length, 0);
   const progress = new CheckProgress(total);
   const allocation = checkExecution(root, plan);
+  const machineJobserver = plan.cleanup
+    ? undefined
+    : process.platform === "win32"
+      ? await (
+          await import("./windows-jobserver-client.js")
+        ).findWindowsJobserver(distributionRoot(root), cancellation.signal)
+      : await findUnixJobserver(cancellation.signal);
+  if (!plan.cleanup && !machineJobserver) writeDiagnosticText("Using standalone check scheduling.");
   const { dependencies, maxJobs: concurrency } = allocation;
   const pending = new Set(plan.sessions.map((_, index) => index));
   const complete = new Set<number>();
@@ -63,10 +87,39 @@ export async function runCheckGroups(
   let notifyChange: (() => void) | undefined;
   let diagnostics = Promise.resolve();
   const verbose = options.verbose ?? currentExecutionEnvironment().WORKBENCH_VERBOSE === "1";
+  const perSessionWidth = Math.min(3, allocation.cpuLimit ?? allocation.availableCpus);
+  const privateChecks = new Map<string, Set<string>>();
+  for (const { directory, group } of plan.isolated ?? []) {
+    const names = privateChecks.get(directory) ?? new Set<string>();
+    for (const check of group.checks) if (group.checks.length === 1) names.add(check);
+    privateChecks.set(directory, names);
+  }
+  const widths = plan.sessions.map(({ checks, environment, directory }) =>
+    verbose || environment !== "native"
+      ? 1
+      : Math.min(
+          perSessionWidth,
+          Math.max(
+            1,
+            ...checkBatches(checks, perSessionWidth, privateChecks.get(directory)).map((batch) => batch.length),
+          ),
+        ),
+  );
+  const parallelSlots = widths.some((width) => width > 1)
+    ? Math.min(
+        checkExecutionResources(
+          root,
+          widths.reduce((total, width) => total + width, 0),
+        ).maxJobs,
+        Math.max(concurrency, Math.floor(process.availableMemory() / (3 * 1024 ** 3))),
+      )
+    : concurrency;
+  let activeSlots = 0;
   const storageRoot = buildStorageSettings(root).root;
   const checkout = currentExecutionEnvironment().WORKBENCH_LOCAL_CONFIG_ROOT ?? buildCheckout(root);
   const run = randomUUID();
   const report = new CheckReport(run, plan);
+  if (cache) report.result.cache = cache;
   const reportState = { finished: false };
   const logs = checkLogDirectory(storageRoot, checkout, ".", run);
   const finishReport = async (owned: boolean, failure?: unknown) => {
@@ -136,7 +189,7 @@ export async function runCheckGroups(
   };
   cancellation.signal.addEventListener("abort", interrupt, { once: true });
 
-  async function execute(index: number): Promise<void> {
+  async function execute(index: number, parallelJobs: number): Promise<void> {
     const session = plan.sessions[index];
     if (!session) throw new Error("missing check session");
     const id = String(index);
@@ -150,9 +203,23 @@ export async function runCheckGroups(
     let error: Error | undefined;
     let child: ReturnType<typeof spawn> | undefined;
     let workerFailure: Error | undefined;
-    let failedCheck: Plan["sessions"][number]["checks"][number] | undefined;
+    let failedCheck: CheckPlan["sessions"][number]["checks"][number] | undefined;
+    let failedStep: number | undefined;
     const token = randomBytes(16).toString("hex");
-    const control = new CheckControl(token, session.checks.length);
+    const control = new CheckControl(
+      token,
+      session.checks.length,
+      checkBatches(session.checks, parallelJobs, privateChecks.get(session.directory)).map((batch) => batch.length),
+      parallelJobs,
+    );
+    const detailForStep = (text: string) => {
+      const tag = /^([1-9][0-9]*)\t/.exec(text.slice(checkDetailPrefix.length));
+      return report.detail(
+        index,
+        tag ? checkDetailPrefix + text.slice(checkDetailPrefix.length + tag[0].length) : text,
+        tag ? Number(tag[1]) : undefined,
+      );
+    };
     const setupStep = session.checks.reduce((last, check, index) => (check.role === "setup" ? index + 1 : last), 0);
     const retained = new RetainedProcessLogs(logPath, errorPath, logFailure);
     const line = (text: string) => {
@@ -167,7 +234,8 @@ export async function runCheckGroups(
             for (const detail of result.details)
               for (const line of checkDetailLines(detail)) progress.message(`  ${line}`);
           if (event.event === "fail") {
-            failedCheck = check;
+            failedCheck ??= check;
+            failedStep ??= event.step;
             admissionFailed = true;
             notifyChange?.();
           } else if (event.event === "pass" && event.step === setupStep) {
@@ -183,7 +251,7 @@ export async function runCheckGroups(
       }
       if (text.startsWith(checkDetailPrefix)) {
         try {
-          const stored = report.detail(index, text);
+          const stored = detailForStep(text);
           if (!verbose && stored?.check.status === CheckState.Failed)
             for (const line of checkDetailLines(stored.detail)) progress.message(`  ${label}: ${line}`);
         } catch (failure) {
@@ -198,7 +266,7 @@ export async function runCheckGroups(
       if (verbose && text.length > 0) progress.message(`[${path}] ${text}`);
     };
     const longLine = (text: string) => {
-      if (text.startsWith(checkDetailPrefix) && Buffer.byteLength(text) > 16384) report.detail(index, text);
+      if (text.startsWith(checkDetailPrefix) && Buffer.byteLength(text) > 16384) detailForStep(text);
       if (verbose) progress.message(`[${path}] ${text}`);
     };
     const stdout = new CheckLines(line, longLine),
@@ -208,6 +276,13 @@ export async function runCheckGroups(
       cancellation.checkpoint();
       const selection: CheckSelection = { ...options };
       selection.checkNames = session.checks.map((check) => check.name);
+      selection.parallelJobs = parallelJobs;
+      const isolationGroups = (plan.isolated ?? [])
+        .filter(({ directory }) => directory === session.directory)
+        .map(({ group }) => group);
+      selection.isolationDigest = checkAdmissionDigest(isolationGroups);
+      const productKeys = new Set(isolationGroups.flatMap(({ build }) => (build ? [build.key] : [])));
+      if (machineJobserver) selection.machineJobserver = machineJobserver;
       delete selection.path;
       delete selection.project;
       delete selection.profile;
@@ -232,6 +307,7 @@ export async function runCheckGroups(
             windowsHide: true,
             env: {
               ...currentExecutionEnvironment(),
+              ...(options.offline && { WORKBENCH_OFFLINE: "1" }),
               ...(cpus === null ? {} : cpuEnvironment(cpus)),
               WORKBENCH_PROJECT_ROOT: root,
               WORKBENCH_CHECK_EVENTS: "1",
@@ -240,8 +316,20 @@ export async function runCheckGroups(
           },
         );
         workers.add(child);
+        const phases = new Set<string>();
         child.on("message", (value: unknown) => {
           const message = readCheckMessage(value);
+          if (message?.type === CheckMessage.Phase) {
+            if (!phases.has(message.phase.name)) {
+              phases.add(message.phase.name);
+              observe?.({ ...message.phase, root: path, environment: session.environment });
+            }
+            return;
+          }
+          if (message?.type === CheckMessage.BuildProducts) {
+            for (const [key, digest] of message.products) if (productKeys.has(key)) buildProducts?.set(key, digest);
+            return;
+          }
           if (message && typeof message === "object" && "type" in message && message.type === CheckMessage.Failure) {
             workerFailure = restoreDiagnosticError("error" in message ? message.error : undefined);
             return;
@@ -285,9 +373,12 @@ export async function runCheckGroups(
             message.type === CheckMessage.Ready &&
             child?.connected
           )
-            child.send({ type: cancellation.cancelled ? CheckMessage.Cancel : CheckMessage.Start }, (failure) => {
-              if (failure && child?.connected) child.disconnect();
-            });
+            child.send(
+              cancellation.cancelled ? { type: CheckMessage.Cancel } : { type: CheckMessage.Start, isolationGroups },
+              (failure) => {
+                if (failure && child?.connected) child.disconnect();
+              },
+            );
         });
         if (child.stdout) {
           child.stdout.on("data", (chunk: Buffer) => {
@@ -351,7 +442,7 @@ export async function runCheckGroups(
         const display = async () => {
           progress.suspend();
           try {
-            const stepLog = report.failureLog(index);
+            const stepLog = report.failureLog(index, failedStep);
             const excerpt = stepLog
               ? `Failed step log: ${stepLog}\nRead full output: workbench logs read '${stepLog.replaceAll("'", "'\\''")}'\n${await checkFailureExcerpt(stepLog, cancellation.signal)}`
               : `stdout:\n${await checkFailureExcerpt(logPath, cancellation.signal)}\nstderr:\n${await checkFailureExcerpt(errorPath, cancellation.signal)}`;
@@ -396,7 +487,8 @@ export async function runCheckGroups(
               });
               if (await cancellation.ready()) {
                 for (const index of pending) {
-                  if (active.size >= concurrency || failures.length || admissionFailed) break;
+                  if (active.size >= concurrency || activeSlots >= parallelSlots || failures.length || admissionFailed)
+                    break;
                   if (
                     dependencies[index]?.some(
                       (dependency) =>
@@ -407,13 +499,19 @@ export async function runCheckGroups(
                     continue;
 
                   pending.delete(index);
+                  const slots = Math.min(
+                    required(widths[index], "Missing check session width"),
+                    parallelSlots - activeSlots,
+                  );
+                  activeSlots += slots;
                   active.set(
                     index,
-                    execute(index)
+                    execute(index, slots)
                       .catch((failure: unknown) => {
                         failures.push(failure instanceof Error ? failure : new Error(String(failure)));
                       })
                       .finally(() => {
+                        activeSlots -= slots;
                         active.delete(index);
                       }),
                   );
@@ -456,6 +554,11 @@ export async function runCheckGroups(
           progress.close(!failures.length && !cancellation.cancelled && !pending.size);
         },
         () => (reportState.finished ? undefined : finishReport(false, runFailure)),
+        () => {
+          if (currentExecutionEnvironment().WORKBENCH_EPHEMERAL_CHECKOUT === "1")
+            for (const directory of new Set(plan.sessions.map((session) => session.directory)))
+              cleanBuilds(buildPaths(root, directory, "native", {}, false), true);
+        },
         restoreDiagnostics,
       ],
       runFailure,

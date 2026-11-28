@@ -1,9 +1,11 @@
 import { canceledContents } from "./planning/plan-disposition.js";
 import { readWorkGraph } from "./planning/work-plans.js";
+import { taskVerification } from "./task-implementations.js";
 import { retainTaskPlanApproval, readTaskPlanApproval, taskPlanFiles, taskReviewVersion } from "./task-approvals.js";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
-import { taskOutcomeDigest } from "./task-snapshot.js";
+import { taskOutcomeDigest, taskOutcomeVerificationApplies, treeTasks } from "./task-snapshot.js";
+import { taskRepositoryDirectory } from "./task-project-state.js";
 import { gitRevision } from "../git/refs.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { readConfig } from "../projects/project-configuration.js";
@@ -16,25 +18,32 @@ import {
   readTaskQueue,
   TaskBlockerKind,
   TaskExecution,
+  taskNeedsPlanApproval,
   TaskReadiness,
   withTaskLock,
 } from "./task-queue.js";
 import { readTaskDecisions, prepareTaskDecisionChange, type TaskDecisionChange } from "./task-decisions.js";
+
+interface TaskTransitionProblem {
+  message: string;
+  acceptance?: { action: "Accept" | "Accept or cancel"; references: string[] };
+}
 
 /** Shared capability rules keep CLI/web controls and the mutation guard in agreement. */
 export function taskTransitionProblem(
   task: TaskRecord,
   readiness: TaskReadiness,
   status: TaskStatus,
-): string | undefined {
+  replanActiveWork = false,
+): TaskTransitionProblem | undefined {
   if (task.metadata.status === status && status !== "Accepted") return undefined;
   if (status === "Canceled" && task.metadata.status === "Accepted")
-    return "Accepted work cannot be canceled; reopen the task or explicitly revert its implementation";
+    return { message: "Accepted work cannot be canceled; reopen the task or explicitly revert its implementation" };
   if (
     (status === "Approved" && !["Planned", "Approved"].includes(task.metadata.status)) ||
     (status === "Accepted" && task.metadata.status !== "Approved" && task.metadata.status !== "Accepted")
   )
-    return `Cannot change ${task.metadata.status} to ${status}; review the current plan before continuing`;
+    return { message: `Cannot change ${task.metadata.status} to ${status}; review the current plan before continuing` };
   const tasks = readiness.graph.tasks,
     entry = readiness.entries.get(task.reference);
   if (status !== "Accepted") {
@@ -42,33 +51,48 @@ export function taskTransitionProblem(
       (dependent) => dependent.metadata.status === "Accepted" && dependent.dependencies.includes(task.reference),
     );
     if (accepted.length)
-      return `Reopen accepted dependent tasks first: ${accepted.map((dependent) => dependent.reference).join(", ")}`;
+      return {
+        message: `Reopen accepted dependent tasks first: ${accepted.map((dependent) => dependent.reference).join(", ")}`,
+      };
   }
-  if ((status === "Planned" || status === "Canceled") && entry?.state === "Active")
-    return "Block or release active work before changing its shared state";
+  if (entry?.state === TaskExecution.Active) {
+    if (status === "Planned" && !replanActiveWork)
+      return { message: "Pause active implementation in the agent session before revising the plan" };
+    if (status === "Canceled") return { message: "Block or release active work before canceling the task" };
+  }
   if (terminalTask.has(status)) {
     const children = (readiness.graph.children.get(task.reference) ?? []).filter(
       (child) => !terminalTask.has(child.metadata.status),
     );
-    if (children.length)
-      return `Accept or cancel child tasks first: ${children.map((child) => child.reference).join(", ")}`;
+    if (children.length) {
+      const references = children.map((child) => child.reference);
+      return {
+        message: `Accept or cancel child tasks first: ${references.join(", ")}`,
+        ...(status === "Accepted" ? { acceptance: { action: "Accept or cancel", references } } : {}),
+      };
+    }
   } else {
     let parent = task.parent;
     while (parent) {
       const ancestor = readiness.graph.require(parent);
-      if (terminalTask.has(ancestor.metadata.status)) return `Reopen parent ${parent} before changing this task`;
+      if (terminalTask.has(ancestor.metadata.status))
+        return { message: `Reopen parent ${parent} before changing this task` };
       parent = ancestor.parent;
     }
   }
   if (status === "Accepted") {
-    if (task.approval && !task.approval.current)
-      return "Review and approve the current plan before accepting its outcome";
+    if (taskNeedsPlanApproval(task))
+      return { message: "Review and approve the current plan before accepting its outcome" };
     const blockers = new TaskReadiness(readiness.graph, { ...readiness.queue, entries: [] }, false)
       .blockers(task)
       .filter((blocker) => blocker.kind === TaskBlockerKind.Dependency || blocker.kind === TaskBlockerKind.Child);
-    if (blockers.length) return blockers.map((blocker) => blocker.message).join("; ");
+    if (blockers.length)
+      return {
+        message: blockers.map((blocker) => blocker.message).join("; "),
+        acceptance: { action: "Accept", references: blockers.flatMap((blocker) => blocker.reference ?? []) },
+      };
     if (entry && (entry.state !== "Implemented" || entry.planDigest !== task.planDigest))
-      return "Verify the current queued implementation before accepting it";
+      return { message: "Verify the current queued implementation before accepting it" };
   }
   return undefined;
 }
@@ -81,22 +105,31 @@ export function changeTaskStatus(
   humanReviewed = false,
   cancellationReason?: string,
 ): void {
-  transitionTask(root, value, status, expected, humanReviewed, cancellationReason);
+  transitionTask(root, value, status, { expected, humanReviewed, cancellationReason });
+}
+
+/** The agent has paused its work before returning the current plan for human review. */
+export function replanTask(root: string, reference: string, expected?: string): void {
+  transitionTask(root, reference, "Planned", { expected, replanActiveWork: true });
 }
 
 export function authorizeProjectReview(root: string, reference: string, expected: string): void {
-  transitionTask(root, reference, "Approved", expected, false, undefined, "developer-requested-review");
+  transitionTask(root, reference, "Approved", { expected, source: "developer-requested-review" });
 }
 
 function transitionTask(
   root: string,
   value: string,
   status: TaskStatus,
-  expected: string | undefined,
-  humanReviewed: boolean,
-  cancellationReason: string | undefined,
-  source?: "developer-requested-review",
+  options: {
+    expected?: string | undefined;
+    humanReviewed?: boolean;
+    cancellationReason?: string | undefined;
+    source?: "developer-requested-review";
+    replanActiveWork?: boolean;
+  },
 ): void {
+  const { expected, humanReviewed = false, cancellationReason, source, replanActiveWork = false } = options;
   withTaskLock(root, () => {
     if (!taskStatuses.includes(status)) throw new InvalidInput("Unknown shared task state");
     const graph = readWorkGraph(root),
@@ -130,8 +163,19 @@ function transitionTask(
       return;
     const queue = readTaskQueue(root),
       entry = queue.entries.find((entry) => entry.reference === task.reference);
-    const problem = taskTransitionProblem(task, new TaskReadiness(graph, queue), status);
-    if (problem) throw new StateConflict(problem);
+    const problem = taskTransitionProblem(task, new TaskReadiness(graph, queue), status, replanActiveWork);
+    if (problem) throw new StateConflict(problem.message);
+    if (status === "Canceled" && taskRepositoryDirectory(root)) {
+      const head = gitRevision(root, "HEAD");
+      const retained = head ? treeTasks(root, head).get(task.reference) : undefined;
+      if (retained?.status === "Approved" || retained?.status === "Accepted")
+        throw new StateConflict("Choose how to undo the committed delivery before canceling this task.");
+    }
+    if (status === "Accepted") {
+      const proof = taskVerification(task, entry);
+      if (proof && !taskOutcomeVerificationApplies(root, task, proof))
+        throw new StateConflict("The delivered source changed. Verify the task again before accepting it.");
+    }
     const originalQueue = structuredClone(queue);
     const contents =
       status === "Canceled"
@@ -147,7 +191,17 @@ function transitionTask(
     }
     if (readFileSync(task.path, "utf8") !== task.contents)
       throw new StateConflict("Task changed during its state transition");
-    if (entry && status !== "Accepted" && status !== "Approved") {
+    if (entry && status === "Planned" && task.metadata.status === "Approved") {
+      if (entry.state === TaskExecution.Implemented || entry.state === TaskExecution.Active) {
+        entry.started = true;
+        entry.state = TaskExecution.Queued;
+        entry.updated = new Date().toISOString();
+        delete entry.planDigest;
+        delete entry.evidence;
+        delete entry.verification;
+        queue.revision++;
+      }
+    } else if (entry && status !== "Accepted" && status !== "Approved") {
       queue.entries = queue.entries.filter((item) => item !== entry);
       queue.revision++;
     }
@@ -165,6 +219,7 @@ function transitionTask(
       entry.updated = new Date().toISOString();
       delete entry.planDigest;
       delete entry.evidence;
+      delete entry.verification;
       queue.revision++;
     }
     let decisions: TaskDecisionChange | undefined;
@@ -175,27 +230,30 @@ function transitionTask(
             (decision.status === "Accepted" && (decision.outcome !== undefined || decision.tree !== undefined)) ||
             (status === "Accepted" && decision.status === "Approved"),
         );
+        if (status === "Planned" || status === "Canceled") {
+          const lastApproval = before
+            .filter((decision) => decision.status === "Approved" && !!decision.snapshot)
+            .at(-1);
+          if (lastApproval) after.push({ ...lastApproval, comparisonOnly: true });
+        }
         if ((enforce || humanReviewed || source) && (status === "Approved" || status === "Accepted")) {
           const updated = new Date().toISOString(),
             reviewed = changes.find((change) => change.path === task.path)?.contents ?? contents,
             files = taskPlanFiles(root, task);
           if (taskOutcomeDigest(task.contents, files) !== (task.reviewDigest ?? task.digest))
             throw new StateConflict("Task supporting files changed during approval; refresh and review again");
-          const snapshot =
-            status === "Approved"
-              ? retainTaskPlanApproval(root, {
-                  reference: task.reference,
-                  at: updated,
-                  contents: reviewed,
-                  files,
-                })
-              : undefined;
+          const snapshot = retainTaskPlanApproval(root, {
+            reference: task.reference,
+            at: updated,
+            contents: reviewed,
+            files,
+          });
           after.push({
             reference: task.reference,
             status,
             digest: taskDigest(reviewed),
             updated,
-            ...(snapshot ? { snapshot } : {}),
+            snapshot,
             ...(status === "Accepted" ? { outcome: taskOutcomeDigest(reviewed, files) } : {}),
             ...(source ? { source } : {}),
           });

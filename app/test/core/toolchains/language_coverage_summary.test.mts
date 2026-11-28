@@ -30,20 +30,11 @@ test("coverage boundaries resolve directory aliases, retain deleted sources, and
       );
     };
     report(realpathSync.native(join(root, "src/count.c")));
-    assert.deepEqual(Object.keys(required(readCoverageSummary(alias), "Expected aliased summary")), [
-      "total",
-      "src/count.c",
-    ]);
+    assert.deepEqual(Object.keys(required(readCoverageSummary(alias), "Expected aliased summary")), ["src/count.c"]);
     report(join(alias, "src/count.c"));
-    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected canonical summary")), [
-      "total",
-      "src/count.c",
-    ]);
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected canonical summary")), ["src/count.c"]);
     rmSync(join(root, "src/count.c"));
-    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected deleted source")), [
-      "total",
-      "src/count.c",
-    ]);
+    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected deleted source")), ["src/count.c"]);
     symlinkSync(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
     report(join(root, "escape/external.c"));
     assert.throws(() => readCoverageSummary(alias), /coverage source outside root/);
@@ -86,82 +77,38 @@ test("language coverage summaries translate native reports without inventing una
       join(output, "report.json"),
       JSON.stringify({ data: [{ totals: llvm, files: [{ filename: "/work/project/src/value.c", summary: llvm }] }] }),
     );
-    let summary = readCoverageSummary(root, repository);
-    assert.deepEqual(Object.keys(required(summary, "Expected fixture value")), ["total", "src/value.c"]);
-    assert.equal(
-      required(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").lines,
-        "Expected fixture value",
-      ).pct,
-      66.66,
-    );
-    assert.equal(
-      required(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").functions,
-        "Expected fixture value",
-      ).covered,
-      1,
-    );
-    assert.equal(
-      required(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").branches,
-        "Expected fixture value",
-      ).covered,
-      3,
-    );
+    assert.deepEqual(readCoverageSummary(root, repository), {
+      "src/value.c": {
+        lines: { total: 3, covered: 2 },
+        functions: { total: 2, covered: 1 },
+        branches: { total: 4, covered: 3 },
+      },
+    });
     const python = { num_statements: 3, covered_lines: 2, num_branches: 4, covered_branches: 3 };
     writeFileSync(
       join(output, "report.json"),
       JSON.stringify({ totals: python, files: { "src/value.py": { summary: python } } }),
     );
-    summary = readCoverageSummary(root);
-    assert.equal(
-      required(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").lines,
-        "Expected fixture value",
-      ).pct,
-      66.66,
-    );
-    assert.equal(
-      required(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value").branches,
-        "Expected fixture value",
-      ).pct,
-      75,
-    );
-    assert.equal(
-      Object.hasOwn(
-        required(required(summary, "Expected fixture value: summary").total, "Expected fixture value"),
-        "functions",
-      ),
-      false,
-    );
+    assert.deepEqual(readCoverageSummary(root), {
+      "src/value.py": { lines: { total: 3, covered: 2 }, branches: { total: 4, covered: 3 } },
+    });
     rmSync(join(output, "report.json"));
     writeFileSync(join(root, "go.mod"), "module example.com/project\n");
     writeFileSync(
       join(output, "profile.out"),
       "mode: atomic\nexample.com/project/value.go:1.1,2.1 2 0\nexample.com/project/value.go:1.1,2.1 2 1\nexample.com/project/value.go:3.1,4.1 1 0\n",
     );
-    summary = readCoverageSummary(root);
-    assert.deepEqual(required(summary, "Expected fixture value: summary").total, {
-      statements: { total: 3, covered: 2, skipped: 0, pct: 66.66 },
-    });
-    assert.deepEqual(
-      required(summary, "Expected fixture value: summary")["value.go"],
-      required(summary, "Expected fixture value: summary").total,
-    );
+    const go = { statements: { total: 3, covered: 2 } };
+    assert.deepEqual(readCoverageSummary(root), { "value.go": go });
     rmSync(join(output, "profile.out"));
     writeFileSync(
       join(output, "coverage-summary.json"),
       JSON.stringify({
-        total: required(summary, "Expected fixture value: summary").total,
-        [join(root, "src/value.ts")]: required(summary, "Expected fixture value: summary").total,
+        total: { statements: { total: 3, covered: 2, skipped: 0, pct: 66.66 } },
+        [join(root, "src/value.ts")]: { statements: { total: 3, covered: 2, skipped: 0, pct: 66.66 } },
       }),
     );
-    assert.deepEqual(Object.keys(required(readCoverageSummary(root), "Expected fixture value")), [
-      "total",
-      "src/value.ts",
-    ]);
+    assert.deepEqual(readCoverageSummary(root), { "src/value.ts": go });
     utimesSync(join(output, "coverage-summary.json"), 1, 1);
     assert.equal(readCoverageSummary(root, root, Date.now()), undefined);
     writeFileSync(join(output, "report.json"), "{}");

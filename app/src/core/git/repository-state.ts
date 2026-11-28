@@ -1,25 +1,32 @@
-import { readPlanOperations } from "../tasks/planning/plan-operation-store.js";
+import { readPlanOperations, type StoredPlanOperation } from "../tasks/planning/plan-operation-store.js";
 import { existsSync } from "node:fs";
 import { readBoundedFile } from "../runtime/file-reads.js";
 import { InvalidInput, StateConflict } from "../runtime/input-errors.js";
 import { record } from "../runtime/values.mjs";
 import { join } from "node:path";
 import { gitBytes } from "./git-snapshot.js";
-import { withCacheLockSync } from "../storage/cache-lock.js";
+import { repositoryLocation, withRepositoryReads } from "./repository-reads.js";
+import {
+  CacheBusy,
+  CacheLockState,
+  inspectCacheMetadataLock,
+  recoverCacheMetadataLock,
+  withCacheLockSync,
+} from "../storage/cache-lock.js";
 
 export function repositoryStatePath(root: string, ...parts: string[]): string {
-  return join(
+  const common = repositoryLocation(root, "--git-common-dir", () =>
     gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).toString().trim(),
-    "workbench",
-    ...parts,
   );
+  return join(common, "workbench", ...parts);
 }
-const operationKinds = ["archive", "integration", "planning", "finalization", "disposition"] as const;
+const operationKinds = ["archive", "integration", "planning", "finalization", "disposition", "signing"] as const;
 export function repositoryOperations(
   root: string,
 ): { kind: (typeof operationKinds)[number]; completed: boolean; checkout?: string }[] {
+  const directory = repositoryStatePath(root);
   return operationKinds.flatMap((kind) => {
-    const path = repositoryStatePath(root, `${kind}-operation.json`);
+    const path = join(directory, `${kind}-operation.json`);
     if (!existsSync(path)) return [];
     const pending = record(
       JSON.parse(readBoundedFile(path, 16 * 1024 * 1024, "repository operation").toString()) as unknown,
@@ -42,28 +49,57 @@ export function repositoryOperations(
 }
 export function withRepositoryOperation<T>(
   root: string,
-  action: () => T,
+  action: (planning?: readonly StoredPlanOperation[]) => T,
   kind:
-    "archive" | "integration" | "acquire" | "planning" | "plan-operation" | "finalization" | "disposition" = "archive",
+    | "archive"
+    | "integration"
+    | "acquire"
+    | "planning"
+    | "plan-operation"
+    | "finalization"
+    | "disposition"
+    | "signing" = "archive",
 ): T {
-  return withCacheLockSync(
-    repositoryStatePath(root, "record-operation"),
-    () => {
-      if (kind !== "plan-operation" && kind !== "acquire") {
-        const pending = readPlanOperations(root).find((entry) => !entry.operation.completed);
-        if (pending)
-          throw new StateConflict(
-            `The planning ${pending.operation.kind} requires recovery in ${pending.operation.checkout}`,
-          );
+  return withRepositoryReads(() => {
+    const path = repositoryStatePath(root, "record-operation");
+    const admission = { entered: false };
+    try {
+      const owner = inspectCacheMetadataLock(path);
+      if (owner.state === CacheLockState.Abandoned) {
+        try {
+          recoverCacheMetadataLock(path, { expected: owner.digest });
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
       }
-      if (kind !== "acquire")
-        for (const pending of repositoryOperations(root))
-          if (pending.kind !== kind && !pending.completed)
+      return withCacheLockSync(
+        path,
+        () => {
+          admission.entered = true;
+          const planning = kind === "plan-operation" || kind === "acquire" ? undefined : readPlanOperations(root);
+          const incomplete = planning?.find((entry) => !entry.operation.completed);
+          if (incomplete)
             throw new StateConflict(
-              `The ${pending.kind} operation requires recovery${pending.checkout ? ` in ${pending.checkout}` : " in this repository"}`,
+              `The planning ${incomplete.operation.kind} requires recovery in ${incomplete.operation.checkout}`,
             );
-      return action();
-    },
-    0,
-  );
+          if (kind !== "acquire")
+            for (const pending of repositoryOperations(root))
+              if (pending.kind !== kind && !pending.completed)
+                throw new StateConflict(
+                  `The ${pending.kind} operation requires recovery${pending.checkout ? ` in ${pending.checkout}` : " in this repository"}`,
+                );
+          return action(planning);
+        },
+        0,
+      );
+    } catch (error) {
+      if (admission.entered || !(error instanceof CacheBusy)) throw error;
+      const { state } = inspectCacheMetadataLock(path);
+      const message =
+        state === CacheLockState.Active || state === CacheLockState.Unlocked
+          ? "Another Workbench history operation is running. Try again in a moment."
+          : "Workbench could not recover the repository history lock. Check diagnostics before retrying.";
+      throw new StateConflict(message, { cause: error });
+    }
+  });
 }

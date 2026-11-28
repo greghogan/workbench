@@ -8,6 +8,7 @@ import type { ConfiguredCheck } from "./check-configuration.js";
 import { toolProfile } from "../../toolchains/tool-profiles.js";
 import { readCheckOrder } from "./check-order.js";
 import { CheckNetwork, readCheckNetwork } from "./check-network.mjs";
+import type { CheckIsolationGroup } from "./check-isolation.js";
 
 export const checkStages = ["commit", "ci"] as const;
 export const manualCheckRoles = [
@@ -29,7 +30,11 @@ export interface CheckSelection {
   excludeRole?: string[];
   report?: string;
   stage?: string;
+  extended?: boolean;
+  offline?: boolean;
   network?: CheckNetwork;
+  /** The online half of a combined gate follows the pre-commit selection. */
+  afterCommit?: boolean;
   path?: string;
   project?: string;
   environment?: string;
@@ -39,7 +44,17 @@ export interface CheckSelection {
   architecture?: string;
   /** Internal worker selection from the coordinator's already validated plan. */
   checkNames?: string[];
+  isolationGroups?: CheckIsolationGroup[] | undefined;
+  isolationDigest?: string;
+  preparedSource?: string;
+  machineJobserver?: string;
+  parallelJobs?: number;
 }
+
+export type CheckPlan = ReturnType<typeof planChecks> & {
+  resourceSessions?: number;
+  isolated?: { directory: string; group: CheckIsolationGroup }[];
+};
 
 export function commandArguments(value: unknown, label: string): asserts value is string[] {
   if (!Array.isArray(value) || !value.length || value.some((part: unknown) => typeof part !== "string" || !part))
@@ -47,12 +62,22 @@ export function commandArguments(value: unknown, label: string): asserts value i
 }
 
 export function checkPolicy(entry: CheckDefinition) {
+  if (entry.extended !== undefined && typeof entry.extended !== "boolean")
+    throw new InvalidInput(`${entry.name}: extended must be Boolean`);
+  if (entry.extended && (entry.role === "setup" || manualCheckRoles.includes(entry.role)))
+    throw new InvalidInput(`${entry.name}: ${entry.role} cannot be an extended check`);
   if (entry.online !== undefined && typeof entry.online !== "boolean")
     throw new InvalidInput(`${entry.name}: online must be Boolean`);
+  if (entry.parallel !== undefined && typeof entry.parallel !== "boolean")
+    throw new InvalidInput(`${entry.name}: parallel must be Boolean`);
+  if (entry.parallel && (entry.online || !["docs", "format", "license", "lint", "test", "type"].includes(entry.role)))
+    throw new InvalidInput(
+      `${entry.name}: parallel requires an offline docs, format, license, lint, test, or type check`,
+    );
   if (entry.requires_setup !== undefined && typeof entry.requires_setup !== "boolean")
     throw new InvalidInput(`${entry.name}: requires_setup must be Boolean`);
   const stages = selectedValues(
-    entry.stages ?? (entry.online ? ["ci"] : [...checkStages]),
+    entry.stages ?? (entry.extended ? [] : entry.online ? ["ci"] : [...checkStages]),
     checkStages,
     `${entry.name}: stages`,
   );
@@ -105,6 +130,8 @@ export function checkPolicy(entry: CheckDefinition) {
     coverage,
     ...(ciTargets === undefined ? {} : { ciTargets }),
     online: entry.online ?? false,
+    ...(entry.parallel ? { parallel: true } : {}),
+    extended: entry.extended ?? false,
     requiresSetup: entry.requires_setup ?? true,
   };
 }
@@ -183,8 +210,14 @@ export function planChecks(
   const instrumented = (check: ConfiguredCheck) =>
     !!check.coverage &&
     (roles.includes("coverage") || (!!stage && includesCoverage(check, override ?? check.environment)));
+  const includeExtended = (check: ConfiguredCheck) => options.extended === true && check.extended;
+  const alreadySelected = (check: ConfiguredCheck) =>
+    options.afterCommit === true && includeExtended(check) && check.stages.includes("commit");
+  const inRegularStage = (check: ConfiguredCheck) => !stage || check.stages.includes(stage);
+  const inStage = (check: ConfiguredCheck) =>
+    !alreadySelected(check) && (inRegularStage(check) || (includeExtended(check) && (!check.online || stage === "ci")));
   const ciExclusion = (check: ConfiguredCheck) =>
-    stage !== "ci"
+    stage !== "ci" && !(includeExtended(check) && (!stage || !inRegularStage(check)))
       ? undefined
       : targetExclusion(check.ciTargets ?? {}, {
           operatingSystem: executionOS(override ?? check.environment),
@@ -195,7 +228,7 @@ export function planChecks(
   const chosen = scoped.filter(
     (check) =>
       ciExclusion(check) === undefined &&
-      (!stage || check.stages.includes(stage)) &&
+      inStage(check) &&
       (options.network !== CheckNetwork.Online || check.online) &&
       (options.network !== CheckNetwork.Offline || !check.online) &&
       (roles.includes("setup") || check.role !== "setup") &&
@@ -207,6 +240,8 @@ export function planChecks(
       !excludedRoles.includes(check.role) &&
       !(excludedRoles.includes("coverage") && instrumented(check)),
   );
+  if (options.extended && stage)
+    chosen.sort((left, right) => Number(right.stages.includes(stage)) - Number(left.stages.includes(stage)));
   const sessions = new Map<string, { directory: string; environment: CheckEnvironment; checks: ConfiguredCheck[] }>();
   for (const check of chosen) {
     const environment = cleanup ? "native" : (override ?? check.environment);
@@ -229,6 +264,14 @@ export function planChecks(
   }
   if (!cleanup) {
     for (const session of sessions.values()) {
+      const buildNames = new Set(session.checks.flatMap((check) => check.requiresBuild ?? []));
+      const builds = checks.filter((check) => buildNames.has(check.name));
+      for (const build of builds) {
+        const exclusion = ciExclusion(build);
+        if (exclusion || excludedRoles.includes("build"))
+          throw new InvalidInput(`Required build '${build.name}' is unavailable: ${exclusion ?? "build is excluded"}`);
+      }
+      if (builds.length) session.checks = [...builds, ...session.checks.filter((check) => !buildNames.has(check.name))];
       const dependent = session.checks.find((check) => check.role !== "setup" && check.requiresSetup);
       if (!dependent) continue;
       // Resolve prerequisites after grouping so an independent first check cannot hide later requirements.
@@ -252,27 +295,31 @@ export function planChecks(
     }
   }
   const selected = new Set([...sessions.values()].flatMap((session) => session.checks.map((check) => check.name)));
+  const exclusionReason = (check: ConfiguredCheck) => {
+    if (!scoped.includes(check)) return "outside selected scope";
+    if (alreadySelected(check)) return "already selected in the pre-commit gate";
+    const target = ciExclusion(check);
+    if (target !== undefined) return target;
+    if (!inStage(check))
+      return check.extended && !options.extended ? "select --extended" : `excluded from ${stage ?? "selected"} stage`;
+    if (options.network === CheckNetwork.Online && !check.online) return "not an online check";
+    if (options.network === CheckNetwork.Offline && check.online) return "requires network access";
+    if (check.role === "setup") return "no selected dependent checks";
+    if (roles.includes("coverage") && check.coverage) return "coverage does not apply to selected target";
+    if (focused)
+      return `outside selected roles${excludedRoles.includes(check.role) ? ` (excluded ${check.role})` : ""}`;
+    return "not selected";
+  };
   const excluded = checks
     .filter((check) => !selected.has(check.name))
-    .map((check) => ({
-      check,
-      reason: !scoped.includes(check)
-        ? "outside selected scope"
-        : ciExclusion(check)
-          ? (ciExclusion(check) ?? "CI target excluded")
-          : stage && !check.stages.includes(stage)
-            ? `excluded from ${stage} stage`
-            : options.network === CheckNetwork.Online && !check.online
-              ? "not an online check"
-              : options.network === CheckNetwork.Offline && check.online
-                ? "requires network access"
-                : check.role === "setup"
-                  ? "no selected dependent checks"
-                  : roles.includes("coverage") && check.coverage
-                    ? "coverage does not apply to selected target"
-                    : focused
-                      ? `outside selected roles${excludedRoles.includes(check.role) ? ` (excluded ${check.role})` : ""}`
-                      : "not selected",
-    }));
-  return { stage, sessions: [...sessions.values()], cleanup, excluded, ordering, automatic: !focused };
+    .map((check) => ({ check, reason: exclusionReason(check) }));
+  return {
+    stage,
+    sessions: [...sessions.values()],
+    cleanup,
+    excluded,
+    ordering,
+    automatic: !focused,
+    offline: !!options.offline,
+  };
 }

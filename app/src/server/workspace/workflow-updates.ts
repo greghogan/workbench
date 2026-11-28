@@ -1,6 +1,6 @@
 import type { BrowserRecord } from "../../core/records/record-service.js";
 import { contentDigest } from "../../core/records/record-service.js";
-import { workflowRecordURL } from "../views/workflow-navigation.js";
+import { workflowRecordURL } from "../review/review-navigation.js";
 import type { WorkspaceView } from "./workspace-service.js";
 
 export interface WorkflowDecision {
@@ -12,6 +12,7 @@ export interface WorkflowDecision {
 
 export function workflowUpdates(context: WorkspaceView, page?: "plans" | "work" | "reviews") {
   const plans = context.workflowPlans,
+    approvals = context.workflowApprovals,
     outcomes = context.workflowOutcomes;
   const describe = (kind: WorkflowDecision["kind"], record: BrowserRecord): WorkflowDecision => ({
     key: `${kind}:${record.id}`,
@@ -20,7 +21,7 @@ export function workflowUpdates(context: WorkspaceView, page?: "plans" | "work" 
     kind,
   });
   const decisions = [
-    ...plans.map((record) => describe("plan", record)),
+    ...approvals.map((record) => describe("plan", record)),
     ...outcomes.map((record) => describe("outcome", record)),
   ];
   if (!page) return { key: "", decisions };
@@ -42,12 +43,12 @@ export function workflowUpdates(context: WorkspaceView, page?: "plans" | "work" 
         task.reference,
         task.title,
         task.parent,
-        context.awaitingReapproval(task.reference),
+        context.taskState(task.reference),
         context.index.taskReadiness.blockers(task),
       ]),
-      context.experimentWorkflow.filter((item) => item.phase === "work").map((item) => state(item.record)),
     ],
     reviews: () => [
+      approvals.map(state),
       outcomes.map((record) => [state(record), context.taskDocumentReviews(record.id)]),
       context.standaloneCommitReviews,
       context.reviewSections.map((section) => [

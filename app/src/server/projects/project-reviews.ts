@@ -139,10 +139,7 @@ export class ProjectReviews {
         value.generation = ++this.sequence;
       }
     }
-    if (!projects.length) {
-      for (const worker of this.workers.keys()) void worker.terminate();
-      this.workers.clear();
-    } else this.dispatch();
+    this.dispatch();
     return this.values;
   }
   /** Open project monitors already own acquisition; their published queue is authoritative. */
@@ -165,6 +162,7 @@ export class ProjectReviews {
     });
     if (previous?.count !== count || previous.problem)
       this.changed(project.id, { count, revision: this.values.get(project.id)?.revision ?? 0 });
+    this.dispatch();
   }
   invalidate(id?: string): void {
     for (const [key, value] of this.values)
@@ -176,10 +174,17 @@ export class ProjectReviews {
   }
   private dispatch(): void {
     if (this.closed) return;
+    const unmonitored = this.projects.filter((project) => !this.values.get(project.id)?.delegated);
+    if (!unmonitored.length) {
+      const workers = [...this.workers.keys()];
+      this.workers.clear();
+      for (const worker of workers) void worker.terminate();
+      return;
+    }
     const active = new Set([...this.workers.values()].flatMap((value) => (value ? [value.id] : [])));
-    const queued = this.projects.filter((project) => {
+    const queued = unmonitored.filter((project) => {
       const value = this.values.get(project.id);
-      return value?.dirty && !value.delegated && !active.has(project.id);
+      return value?.dirty && !active.has(project.id);
     });
     for (const project of queued) {
       let worker = [...this.workers].find(([, value]) => !value)?.[0];

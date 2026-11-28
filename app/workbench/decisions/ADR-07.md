@@ -7,13 +7,15 @@ summary: Shared plan approval, local execution queues, source-bound evidence, an
 Human plan approval and outcome acceptance follow workbench:ADR-7. Queue selection and ordering are personal execution
 choices; neither grants approval. Protected-document acknowledgment remains a separate decision under ADR-6.
 
-Task workflow views distinguish initial and revised approval, approved work and its progress, and outcomes awaiting
-human acceptance. Plans includes numbered tasks awaiting revised approval. These tasks retain their identity, queue
-position, and completed work. Keep record browsing separate from this workflow.
+Plans holds the backlog awaiting first approval. Work shows the local execution queue. Reviews brings revised approvals
+and outcomes awaiting acceptance together, with approvals holding up started work first. A task awaiting renewed
+approval retains its identity, queue position, and completed work. Keep record browsing separate from this workflow.
 
-Present revised approvals for started work ahead of initial approvals. Keep started tasks awaiting approval visible in
-Work. Append newly authorized work, including requested project reviews, to the end of the local queue. Resume eligible
+Append newly authorized work, including requested project reviews, to the end of the local queue. Resume eligible
 started work first and preserve queue order within each priority unless the developer directs independent work.
+
+Show a task as Accepted after human acceptance. Show it as Finalized once Git contains the complete accepted delivery
+and all its commits are finalized.
 
 Present completed tasks with their associated record changes in one review entry. Bind each human decision to the
 version reviewed. Retain the source of developer-requested review authorization separately from plan approval and
@@ -31,9 +33,10 @@ Planning history stays outside implementation ancestry. Only its explicitly conf
 planning-only history without implementation publication gates. Empty planning storage may be pruned only while
 preserving drafts, queued work, unfinished transfers, and checkpoints awaiting manual publication.
 
-Cancellation retains its reason. Deletion protects published history, incoming relationships, and unrelated work;
-reversion preserves the original work and adds an inverse change. Consequential operations provide an inspectable plan
-and recoverable results.
+Cancellation retains the task and its reason. Canceling committed work can remove the local delivery or add an inverse
+commit. Preview the result, preserve incoming relationships and unrelated work, and require explicit confirmation when
+removal affects published history. Retain recoverable originals. Reverting completed work returns it to Work for
+verification and acceptance of the revised outcome.
 
 Local execution queues retain order, active work, and progress. Keep that state separate from tracked task records and
 human decisions, preserving it across cache cleanup and service restarts. CLI and browser operations use the same queue,
@@ -65,9 +68,9 @@ Retain the approved plan and supporting files so revised plans can be compared a
 work. Formatting, implementation accounts, and checklist progress do not by themselves change the approved scope.
 Renaming a future plan preserves its meaning, approval, relationships, and queue position.
 
-Outcome review compares the complete task record with its most recently approved plan, including checklist completion
-and implementation-account updates. Approving a revised plan advances that comparison baseline without accepting the
-outcome.
+Compare task reviews with the most recent human-reviewed version, including its supporting files. First acceptance can
+compare with the approved plan. After acceptance, compare with the accepted outcome until a newer decision. Returning a
+task to planning revokes its authority to proceed and preserves the last reviewed version for comparison.
 
 Reconcile record identities during integration without transferring approval to unrelated work. Preserve mechanical
 renumbering only when meaning and relationships remain unchanged; changed implementation contexts require renewed

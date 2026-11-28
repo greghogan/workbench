@@ -29,7 +29,7 @@ export async function exerciseCIHosting(
   const git = (name: string, args: string[]) => commands.run(`ci-${name}`, ["git", ...args], root, env);
   await scenarios.run("ci-workflows", async () => {
     mkdirSync(root, { recursive: true });
-    await cli("init", ["init", root, "--records-only"]);
+    await cli("init", ["init", root, "--records-only", "--no-workbench-collection"]);
     for (const directory of ["workbench", "bin", language]) mkdirSync(join(root, directory), { recursive: true });
     cpSync(verificationCharterPath(installed.directory), join(root, "workbench/CHARTER.md"));
     writeFileSync(

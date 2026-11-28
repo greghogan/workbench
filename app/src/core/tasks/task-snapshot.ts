@@ -1,17 +1,21 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { readGitObjects, readGitTree, type GitEntry } from "../git/git-snapshot.js";
-import { gitRevision } from "../git/refs.js";
+import { gitAncestor, gitRevision } from "../git/refs.js";
 import { projectsFromData } from "../projects/project-configuration.js";
 import { projectPaths } from "../projects/project-paths.js";
 import { logicalRecordEntries } from "../records/archive-store.js";
 import { parseProseRecord, recordDocument } from "../records/record-document.js";
 import { normalizedNumber, relativeRecordPath } from "../records/record-identity.js";
 import { InvalidInput } from "../runtime/input-errors.js";
+import { retainedBytes } from "../runtime/retained-bytes.js";
 import { WeightedCache } from "../storage/weighted-cache.js";
 import { taskPlanSnapshotLimit, type TaskPlanApproval } from "./task-approval-store.js";
 import type { TaskDecision } from "./task-decisions.js";
+import { taskVerification, taskVerificationApplies, taskVerificationObservation } from "./task-implementations.js";
+import type { TaskRecord } from "./task-model.js";
+import type { TaskQueueEntry } from "./task-queue-state.js";
 import { taskPlanApprovalDigest } from "./task-plan.js";
 
 export const taskDigest = (contents: string): string => createHash("sha256").update(contents).digest("hex");
@@ -43,20 +47,30 @@ function snapshotSupportingFiles(root: string, prefix: string, files: [string, G
 
 interface SnapshotTask {
   path: string;
+  contents: string;
   status: string;
   digest: string;
   workDigest: string;
   mode: string;
+  files: () => TaskPlanApproval["files"];
   planScope: () => string;
   outcome: () => string;
 }
+
+const snapshotScopes = new WeightedCache<ReturnType<typeof projectsFromData>>(2 * 1024 * 1024);
+
 export function treeTasks(root: string, tree: string, reference?: string): Map<string, SnapshotTask> {
   const entries = logicalRecordEntries(root, readGitTree(root, tree));
   const config = entries.get(projectPaths.projects);
   if (!config) return new Map();
   const configuration = readGitObjects(root, [config.oid]).get(config.oid);
   if (!configuration) throw new InvalidInput("Missing committed project scopes");
-  const projects = projectsFromData(parseToml(configuration.toString()), projectPaths.projects);
+  const text = configuration.toString();
+  let projects = snapshotScopes.get(text);
+  if (!projects) {
+    projects = projectsFromData(parseToml(text), projectPaths.projects);
+    snapshotScopes.set(text, projects, text.length * 2 + retainedBytes(projects, 2 * 1024 * 1024));
+  }
   const [scope, number] = reference?.split(":TSK-") ?? [];
   const selected = scope ? projects.filter((project) => project.id === scope) : projects;
   const taskPath = (project: (typeof projects)[number], digits: string) =>
@@ -94,16 +108,75 @@ export function treeTasks(root: string, tree: string, reference?: string): Map<s
       };
       result.set(id, {
         path,
+        contents,
         status: recordDocument("TSK", contents, path).metadata.status,
         digest: taskDigest(contents),
         workDigest,
         mode: entries.get(path)?.mode ?? "",
+        files: supportingFiles,
         planScope: () => taskPlanApprovalDigest(contents, supportingFiles()),
         outcome: () => taskOutcomeDigest(contents, supportingFiles()),
       });
     }
   }
   return result;
+}
+
+export function taskOutcomeVerificationApplies(
+  root: string,
+  task: TaskRecord,
+  proof: NonNullable<TaskQueueEntry["verification"]>,
+  verify = taskVerificationApplies.bind(undefined, root),
+): boolean {
+  const implementation = task.implementation;
+  if (implementation?.tree !== proof.tree) return verify(proof);
+  try {
+    const head = gitRevision(root, "HEAD");
+    if (!head || (head !== implementation.baseline && !gitAncestor(root, implementation.baseline, head))) return false;
+    const outcome = treeTasks(root, proof.tree, task.reference).get(task.reference)?.outcome();
+    if (!outcome || outcome !== (task.reviewDigest ?? task.digest)) return false;
+    // Later work may edit this delivery's source without changing the outcome being reviewed.
+    return (
+      head === implementation.baseline ||
+      treeTasks(root, head, task.reference).get(task.reference)?.outcome() === outcome
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function observeTaskVerifications(
+  root: string,
+  tasks: readonly TaskRecord[],
+  entries: readonly TaskQueueEntry[],
+  observe?: (path: string) => void,
+): void {
+  const queue = new Map(entries.map((entry) => [entry.reference, entry]));
+  const selected = tasks.flatMap((task) => {
+    if (task.metadata.status !== "Approved" && !task.acceptanceNeedsReview) return [];
+    const proof = taskVerification(task, queue.get(task.reference));
+    if (!proof) return [];
+    return [{ task, proof }];
+  });
+  if (observe) {
+    const paths = new Set(selected.flatMap(({ proof }) => proof.paths));
+    const directories = new Set<string>();
+    for (const path of paths) {
+      observe(join(root, path));
+      for (let parent = posix.dirname(path); !directories.has(parent); parent = posix.dirname(parent)) {
+        directories.add(parent);
+        observe(join(root, parent, ".gitattributes"));
+        if (parent === ".") break;
+      }
+    }
+  }
+  const verify = taskVerificationObservation(
+    root,
+    selected.flatMap(({ task, proof }) => (task.implementation?.tree !== proof.tree ? [proof] : [])),
+  );
+  for (const { task, proof } of selected) {
+    if (!taskOutcomeVerificationApplies(root, task, proof, verify)) task.verificationStale = true;
+  }
 }
 
 const legacyOutcomes = new WeightedCache<string>(2 * 1024 * 1024);

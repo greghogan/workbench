@@ -9,6 +9,13 @@ import { validateProjectCollections, type CollectionPin } from "../collections/c
 const protectedKinds: readonly Kind[] = ["ADR", "EXP", "ENV"];
 
 export { gitBytes as recordGit } from "../git/git-snapshot.js";
+function policyObjects(entries: ReadonlyMap<string, GitEntry>): string[] {
+  return [projectPaths.config, projectPaths.projects].flatMap((path) => {
+    const entry = entries.get(path);
+    return entry && ["100644", "100755"].includes(entry.mode) ? [entry.oid] : [];
+  });
+}
+
 /** Immutable blobs and record ownership from a Git tree or a captured list of staged entries. */
 export class RecordTree {
   readonly entries = new Map<string, GitEntry>();
@@ -23,6 +30,7 @@ export class RecordTree {
     if (tree !== undefined && tree !== snapshot.head) throw new Error("record tree must belong to its Git snapshot");
     for (const [path, entry] of logicalRecordEntries(root, tree === undefined ? snapshot.staged : snapshot.committed))
       this.entries.set(path, entry);
+    snapshot.prefetch(policyObjects(this.entries));
     const registry = this.text(projectPaths.projects);
     this.scopes =
       registry !== undefined ? projectsFromData(parse(registry), projectPaths.projects).map((p) => p.path) : [];
@@ -74,6 +82,7 @@ export function stagedRecordTree(root: string): RecordTree {
 
 /** Before and after declarations both protect records during scope or collection removal. */
 export function proposedRecordTrees(root: string, snapshot = new GitSnapshot(root)): RecordTree[] {
+  snapshot.prefetch([...policyObjects(snapshot.staged), ...policyObjects(snapshot.committed)]);
   const staged = new RecordTree(root, undefined, snapshot);
   return snapshot.head ? [staged, new RecordTree(root, snapshot.head, snapshot)] : [staged];
 }

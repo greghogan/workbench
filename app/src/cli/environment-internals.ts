@@ -1,14 +1,19 @@
 import { Command, Option } from "commander";
 import { resolve } from "node:path";
 import { buildEnvironment, buildPaths, cleanBuilds, prepareBuild } from "../core/artifacts/builds.js";
-import { executePreparedProfile } from "../core/artifacts/offline-profiles.js";
+import { imageDigest } from "../core/artifacts/image-contract.js";
 import { CheckNetwork } from "../core/execution/checks/check-network.mjs";
 import { runCIChecks } from "../core/execution/ci/ci-checks.js";
 import { ciDestination } from "../core/execution/ci/ci-destinations.js";
-import { acquireCIImage } from "../core/execution/ci/ci-images.js";
+import { acquireCIImage, restoreCIImage } from "../core/execution/ci/ci-images.js";
+import { executeHostedCISelection, executePreparedCISelection } from "../core/execution/ci/ci-hosted-target.js";
+import { readCITargets } from "../core/execution/ci/support/ci-contract.mjs";
+import { operationPhases, readCIOperation } from "../core/execution/ci/support/ci-operations.mjs";
+import { runSucceeded, writeRunReport } from "../core/execution/ci/support/ci-results.mjs";
 import { direnvWatchPaths } from "../core/execution/environments/direnv.js";
 import { checkEnvironment } from "../core/execution/environments/environments.js";
 import { writeAtomic } from "../core/runtime/file-publication.mjs";
+import { readBoundedFile } from "../core/runtime/file-reads.js";
 import { autoPrune } from "../core/storage/auto-prune.js";
 import { dependencySetup, pnpmStorageConfiguration } from "../core/toolchains/dependencies.js";
 import { quote } from "../core/toolchains/toolchains.js";
@@ -80,36 +85,67 @@ export function registerEnvironmentInternals(program: Command, root: string): vo
     .action((path: string, options: { environment: string; toolchain?: string; network: CheckNetwork }) =>
       runCIChecks(root, path, options.environment, options.network, options.toolchain),
     );
-  registerCommand(program, "ci-image-exec", { hidden: true })
+  registerCommand(program, "ci-image-job", { hidden: true })
     .argument("<profile>")
-    .argument("[command...]")
-    .option("--image <id>")
-    .option("--reports <path>")
-    .option("--env-json <json>")
-    .addOption(new Option("--network <mode>").choices(["host", "none"]).default("host"))
+    .requiredOption("--targets <path>")
+    .requiredOption("--reports <path>")
+    .option("--prepared <path>")
+    .option("--local-image <id>")
+    .option("--operation <operation>")
+    .option("--candidate <path>")
     .action(
       async (
         profile: string,
-        command: string[],
-        options: { image?: string; reports?: string; envJson?: string; network: "host" | "none" },
+        options: {
+          targets: string;
+          reports: string;
+          prepared?: string;
+          localImage?: string;
+          operation?: string;
+          candidate?: string;
+        },
       ) => {
-        if (!command.length) throw new Error("ci-image-exec needs a command");
-        const env: unknown = options.envJson ? JSON.parse(options.envJson) : {};
+        const json = (path: string, bytes: number): unknown =>
+          JSON.parse(readBoundedFile(resolve(path), bytes, "CI operation input").toString("utf8")) as unknown;
+        const targets = readCITargets(json(options.targets, 16 * 1024 * 1024));
+        const operation = options.operation === undefined ? undefined : readCIOperation(options.operation);
         if (
-          !env ||
-          typeof env !== "object" ||
-          Array.isArray(env) ||
-          Object.entries(env).some(
-            ([key, value]) =>
-              !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0"),
+          process.platform !== "linux" ||
+          !targets.length ||
+          new Set(targets.map((target) => target.id)).size !== targets.length ||
+          targets.some(
+            (target) =>
+              target.os !== "linux" ||
+              target.architecture !== process.arch ||
+              (operation !== undefined && !operationPhases(target, operation).length),
           )
         )
-          throw new Error("Invalid container environment");
-        await executePreparedProfile(root, profile, command, {
-          network: options.network,
-          ...(options.image ? { image: options.image } : {}),
-          ...(options.reports ? { reports: resolve(options.reports) } : {}),
-          env: env as Record<string, string>,
+          throw new Error("Select unique, applicable CI targets for this native Linux operation");
+        if (options.localImage !== undefined) {
+          if (
+            options.prepared !== undefined ||
+            options.candidate !== undefined ||
+            !imageDigest.test(options.localImage)
+          )
+            throw new Error("Select a local image by its immutable ID independently of a hosted CI handoff");
+          const reports = resolve(options.reports);
+          const run = await executePreparedCISelection(root, targets, reports, {
+            profile,
+            image: options.localImage,
+            ...(operation === undefined ? {} : { operation }),
+          });
+          writeRunReport(resolve(reports, "job-results.json"), run);
+          if (!runSucceeded(run)) process.exitCode = 1;
+          return;
+        }
+        const image = options.prepared
+          ? await restoreCIImage(root, profile, json(options.prepared, 64 * 1024))
+          : await acquireCIImage(root, profile);
+        await executeHostedCISelection(root, targets, options.reports, {
+          image,
+          profile,
+          ...(operation === undefined ? {} : { operation }),
+          ...(options.candidate === undefined ? {} : { candidate: resolve(options.candidate) }),
         });
       },
     );

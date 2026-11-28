@@ -1,4 +1,14 @@
 import { stageFile, type StagedFile } from "../app/src/core/runtime/file-publication.mjs";
+import { createHash } from "node:crypto";
+
+export const guixBootstrapDockerfile = ".devcontainer/guix/Dockerfile";
+export const guixBootstrapProgram = "scripts/ci-guix-bootstrap.scm";
+
+export function guixBootstrapContract(dockerfile: Buffer, program: Buffer): string {
+  const digest = createHash("sha256");
+  for (const content of [dockerfile, program]) digest.update(createHash("sha256").update(content).digest());
+  return digest.digest("hex");
+}
 
 /** All candidates are complete before the first atomic publication. */
 export function replaceManagedFiles(

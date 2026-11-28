@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync, rmSync, symlinkSync, appendFileSync, readFile
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { webServers, readWebPage } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage } from "../../fixtures/web.mjs";
 import { citationHtml, citationImage, citationPdf } from "../../../src/core/verification/document-fixtures.mjs";
 import { captureCitationHtml } from "../../../src/core/citations/citation-html.ts";
 import { parseDOM } from "../../fixtures/dom.mjs";
@@ -39,7 +39,7 @@ beforeEach(async () => {
 });
 const url = (query = "") => web.url + "/records/demo:CIT-0/document?source=published" + query;
 test("citation pages and lists show local presence separately from recorded acquisition", async () => {
-  const detail = await readWebPage(web, "/records/demo:CIT-0");
+  const detail = await readReconciledWebPage(web, "/records/demo:CIT-0");
   for (const text of [
     "Source documents",
     "File present locally",
@@ -62,9 +62,9 @@ test("citation pages and lists show local presence separately from recorded acqu
   ]);
   for (const link of document.querySelectorAll(".citation-source .actions a:last-child"))
     expect(link.classList.contains("button")).toBe(true);
-  expect((await readWebPage(web, "/records?type=CIT")).html).toContain("1/2 documents present");
+  expect((await readReconciledWebPage(web, "/records?type=CIT")).html).toContain("1/2 documents present");
   rmSync(join(root, "library/citations/CIT-00-published.pdf"));
-  const missing = await readWebPage(web, "/records/demo:CIT-0");
+  const missing = await readReconciledWebPage(web, "/records/demo:CIT-0");
   expect(missing.html).toContain("Acquisition is recorded, but this checkout has no local copy.");
   const absent = parseDOM(missing.html).window.document;
   expect(
@@ -72,7 +72,7 @@ test("citation pages and lists show local presence separately from recorded acqu
       [...actions.querySelectorAll("a")].map((link) => link.textContent),
     ),
   ).toEqual([["Source"], ["Source"]]);
-  expect((await readWebPage(web, "/records?type=CIT")).html).toContain("No local document");
+  expect((await readReconciledWebPage(web, "/records?type=CIT")).html).toContain("No local document");
 });
 test("PDF views, downloads, HEAD, and byte ranges use verified source-specific files", async () => {
   const response = await fetch(url());
@@ -116,7 +116,7 @@ test.skipIf(process.platform === "win32")("symlinked citation PDFs cannot expose
 });
 test("incomplete acquisition metadata remains visible without breaking citation browsing", async () => {
   writeFileSync(join(root, "workbench/citations/CIT-00/acquisition.yaml"), "sources: invalid\n");
-  const page = await readWebPage(web, "/records/demo:CIT-0");
+  const page = await readReconciledWebPage(web, "/records/demo:CIT-0");
   expect(page.response.status).toBe(200);
   expect(page.html).toContain("Document status unavailable");
   expect(page.html).toContain("Retained paper");
@@ -125,7 +125,7 @@ test("external library changes refresh citation presence without acquiring or ed
   const changed = once(web.monitor, "change", { signal: AbortSignal.timeout(5000) });
   writeFileSync(join(root, "library/citations/CIT-00-arxiv.pdf"), pdf);
   await changed;
-  const list = await readWebPage(web, "/records?type=CIT");
+  const list = await readReconciledWebPage(web, "/records?type=CIT");
   expect(list.html).toContain("2/2 documents present");
 });
 
@@ -221,7 +221,7 @@ test("original source viewing blocks automatic connections, preserves explicit l
   const rebased = await fetch(contentUrl);
   expect(rebased.headers.get("etag")).not.toBe(response.headers.get("etag"));
   expect(await rebased.text()).toContain("https://mirror.example.invalid/details");
-  await readWebPage(web, "/records/demo:CIT-0");
+  await readReconciledWebPage(web, "/records/demo:CIT-0");
   writeFileSync(originalPath, brotliCompressSync("Changed source"));
   expect((await fetch(contentUrl)).status).toBe(409);
   rmSync(originalPath);
@@ -242,13 +242,13 @@ test("original-only file changes refresh its availability without changing the m
     raw = join(root, "library/citations/CIT-00-web.original.html.br");
   writeFileSync(reader, captured);
   writeFileSync(raw, brotliCompressSync(original));
-  const before = parseDOM((await readWebPage(web, "/records/demo:CIT-0")).html).window.document;
+  const before = parseDOM((await readReconciledWebPage(web, "/records/demo:CIT-0")).html).window.document;
   expect([...before.querySelectorAll("a")].some((link) => link.textContent === "Original")).toBe(true);
   const untouched = readFileSync(metadata);
   const changed = once(web.monitor, "change", { signal: AbortSignal.timeout(5000) });
   rmSync(raw);
   await changed;
-  const after = parseDOM((await readWebPage(web, "/records/demo:CIT-0")).html).window.document;
+  const after = parseDOM((await readReconciledWebPage(web, "/records/demo:CIT-0")).html).window.document;
   expect([...after.querySelectorAll("a")].some((link) => link.textContent === "Original")).toBe(false);
   expect(readFileSync(metadata)).toEqual(untouched);
   expect(readFileSync(reader)).toEqual(captured);

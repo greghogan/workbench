@@ -5,8 +5,8 @@ import { readToml } from "../runtime/files.js";
 const active = new AsyncLocalStorage<Map<string, unknown>>();
 
 /** A caller owns one immutable configuration view; later operations acquire fresh inputs. */
-export function withConfigurationSnapshot<T>(action: () => T): T {
-  return active.getStore() ? action() : active.run(new Map(), action);
+export function withConfigurationSnapshot<T>(action: () => T, { fresh = false } = {}): T {
+  return !fresh && active.getStore() ? action() : active.run(new Map(), action);
 }
 
 function freeze(value: unknown): void {

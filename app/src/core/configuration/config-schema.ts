@@ -22,6 +22,17 @@ function fail(location: string, expected: string): never {
 const text: Validator = (value, location) => {
   if (typeof value !== "string" || !value.trim()) fail(location, "a nonempty string");
 };
+const inputGroupName: Validator = (value, location) => {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9-]*$/.test(value))
+    fail(location, "an input group name using lowercase letters, digits and hyphens");
+};
+const inputGroupPath: Validator = (value, location) => {
+  text(value, location);
+  const path = value as string;
+  relativePath(path, location);
+  if (path.split("/").some((part) => part.toLowerCase() === ".git") || /\p{Cc}/u.test(path))
+    fail(location, "a project path outside Git metadata");
+};
 export const projectNameField: Validator = (value, location) => {
   text(value, location);
   if (typeof value !== "string" || value !== value.trim() || value.length > 128 || /[\p{Cc}]/u.test(value))
@@ -121,7 +132,7 @@ const commitPrefixes: Validator = (value, location) => {
 };
 
 /** Human-owned project options also drive config browsing, editing, and completion. */
-export const projectFields: Record<string, Record<string, Validator>> = {
+export const projectFields = {
   integration: { branch: ref, remote: ref },
   records: { archive_branch: ref, archive_group_size: integer },
   collections: { sources: validateProjectCollections },
@@ -194,7 +205,7 @@ export const projectFields: Record<string, Record<string, Validator>> = {
     toolchains: array(text),
     images: table({ native: text, nix: text, guix: text }),
   },
-  review: { changes: boolean, tasks: boolean, task_approvals: boolean },
+  review: { changes: boolean, tasks: boolean, task_approvals: boolean, signed_commits: boolean },
   commit: {
     style: choice(...commitStyles),
     prefixes: commitPrefixes,
@@ -213,26 +224,81 @@ export const projectFields: Record<string, Record<string, Validator>> = {
       if ((value as string).split("/").some((part) => part.startsWith("."))) fail(location, "a safe relative path");
     },
   },
-};
+} satisfies Record<string, Record<string, Validator>>;
 
 export function projectField(key: string): Validator | undefined {
   const [section, field, extra] = key.split(".");
   if (!section || !field || extra || !Object.hasOwn(projectFields, section)) return undefined;
-  const fields = projectFields[section];
+  const fields = (projectFields as Record<string, Record<string, Validator>>)[section];
   return fields && Object.hasOwn(fields, field) ? fields[field] : undefined;
 }
 
-export const projectOptionKeys = Object.entries(projectFields).flatMap(([section, fields]) =>
-  Object.keys(fields).map((field) => `${section}.${field}`),
-);
+type ProjectSection = keyof typeof projectFields;
+type ProjectOption = {
+  [Section in ProjectSection]: `${Section}.${Extract<keyof (typeof projectFields)[Section], string>}`;
+}[ProjectSection];
+
+export const defaultReviewPolicy = { changes: false, tasks: false, task_approvals: false, signed_commits: false };
+
+type OptionDefault = { value: unknown } | { behavior: string };
+const value = <const T>(value: T) => ({ value });
+const behavior = (behavior: string) => ({ behavior });
+
+/** Every editable project option declares the behavior of an omitted value. */
+export const projectOptionDefaults = {
+  "integration.branch": behavior("Discover the remote default, main, or master"),
+  "integration.remote": behavior("Use the sole remote, if present"),
+  "records.archive_branch": behavior("Archival disabled"),
+  "records.archive_group_size": value(1296),
+  "collections.sources": value([]),
+  "tool.repository": behavior("Use the running Workbench release"),
+  "tool.revision": behavior("Use the running Workbench release"),
+  "markdown.wrap_width": behavior("Explicit value required"),
+  "compatibility.required": behavior("Explicit value required"),
+  "compatibility.data": value("ask"),
+  "checks.environment": value("native"),
+  "checks.nix_docker_image": behavior("Required for nix-docker"),
+  "checks.allow_empty": value(false),
+  "checks.pass_environment": value([]),
+  "checks.environment_files": value([]),
+  "checks.inputs": value([]),
+  "ci.registry_management": value({}),
+  "ci.destinations": value([]),
+  "ci.cache": value({}),
+  "ci.operating_systems": behavior("Required to enable CI coverage"),
+  "ci.architectures": value({ linux: ["x64"], macos: ["arm64"], windows: ["x64"] }),
+  "ci.environments": value([]),
+  "ci.toolchains": value([]),
+  "ci.images": value({}),
+  "review.changes": value(defaultReviewPolicy.changes),
+  "review.tasks": value(defaultReviewPolicy.tasks),
+  "review.task_approvals": value(defaultReviewPolicy.task_approvals),
+  "review.signed_commits": value(defaultReviewPolicy.signed_commits),
+  "commit.style": value<CommitStyle>("unrestricted"),
+  "commit.prefixes": behavior("Use the commit style's prefix rules"),
+  "commit.subject_width": value(50),
+  "commit.body_width": value(72),
+  "licenses.allow": behavior("Required to bundle dependencies"),
+  "bundle.compression": value("brotli"),
+  "development.default": behavior("Use checks.environment"),
+  "development.profiles": value([]),
+  "toolchains.profiles": value([]),
+  "release.profiles": value([]),
+  "citations.library_dir": behavior("Explicit value required"),
+} satisfies Record<ProjectOption, OptionDefault>;
+
+export const projectOptionKeys = Object.keys(projectOptionDefaults) as ProjectOption[];
 
 const commandFields = {
   name: text,
   role: text,
   command: array(text),
   stages: array(text),
+  extended: boolean,
   online: boolean,
+  parallel: boolean,
   requires_setup: boolean,
+  requires_build: array(text),
   environment: text,
   warn_seconds: positive,
   ci: table({
@@ -284,9 +350,31 @@ const configTable = table({
   documentation: array(
     table({ project: text, source_map: text, source_paths: array(text), source_excludes: array(text) }),
   ),
-  check_suite: array(table({ language: text, path: text })),
+  check_suite: array(
+    table({
+      language: text,
+      path: text,
+      input_groups: array(inputGroupName),
+      check_inputs: (value, location) => {
+        mapping(value, location);
+        for (const [name, groups] of Object.entries(value as Record<string, unknown>))
+          array(inputGroupName)(groups, `${location}.${name}`);
+      },
+    }),
+  ),
+  input_groups: (value, location) => {
+    mapping(value, location);
+    for (const [name, definition] of Object.entries(value as Record<string, unknown>)) {
+      inputGroupName(name, location);
+      table({
+        paths: array(inputGroupPath),
+        outputs: array(inputGroupPath),
+        depends_on: array(inputGroupName),
+      })(definition, `${location}.${name}`);
+    }
+  },
   check_order: array(table({ root: text, after: text, phase: choice("setup", "complete") })),
-  check: array(table({ ...commandFields, project: text, path: text })),
+  check: array(table({ ...commandFields, project: text, path: text, input_groups: array(inputGroupName) })),
 });
 
 export const validateConfig: Validator = (value, location) => {
@@ -333,4 +421,12 @@ export const validateRegistry = table({
   ),
 });
 
-export const automationKeys = new Set(["check", "check_suite", "check_order", "documentation", "review", "extensions"]);
+export const automationKeys = new Set([
+  "check",
+  "check_suite",
+  "check_order",
+  "input_groups",
+  "documentation",
+  "review",
+  "extensions",
+]);

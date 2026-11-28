@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { consumer, distribution, git } from "../fixtures/adoption.mjs";
 import { setConfiguration } from "../../src/core/configuration/config-command.ts";
-import { syncSkills } from "../../src/core/skills/skills.ts";
+import { changeSkillSelection, inspectSkills, syncSkills } from "../../src/core/skills/skills.ts";
 
 const temporary: string[] = [];
 afterEach(() => {
@@ -103,8 +103,6 @@ test("personal skill commands work outside projects, create ignored local links,
 test("one user selection applies inside and outside projects while validation ignores personal links", async () => {
   const { root, outside, run } = await fixture();
   setConfiguration(root, "checks.allow_empty", "true");
-  expect(run(root, "sync").status).toBe(0);
-  expect(run(root, "validate").status).toBe(0);
   expect(run(outside, "skills", "enable", "review-changes").status).toBe(0);
   expect(run(root, "sync").status).toBe(0);
   const selected = (cwd: string) =>
@@ -121,27 +119,32 @@ test("one user selection applies inside and outside projects while validation ig
   expect(existsSync(join(root, "workbench/local.toml"))).toBe(false);
 });
 
-test.each([
-  "fetch-and-rebase-onto",
-  "plan-work",
-  "review-plan",
-  "workbench-review-project",
-  "workbench-task-decisions",
-])("%s starts disabled and enabling exposes its definition to both harnesses", async (name) => {
-  const { root, run } = await fixture();
-  const selected = () =>
-    (JSON.parse(run(root, "skills", "--json").stdout) as SkillFixture[]).find((skill) => skill.name === name);
-  expect(selected()).toMatchObject({ enabled: false, active: false });
-  const enabled = run(root, "skills", "enable", name);
-  expect(enabled.status, enabled.stderr).toBe(0);
-  expect(selected()).toMatchObject({ enabled: true, active: true });
-  for (const harness of [".agents", ".claude"]) {
-    const link = join(root, harness, "skills", name);
-    expect(realpathSync(link)).toBe(join(distribution, "skills/workflows", name));
-    expect(() => git(root, "check-ignore", "--quiet", link)).not.toThrow();
+test("workflow skills start disabled and the selected definitions are linked for both harnesses", async () => {
+  const { root } = await fixture();
+  const names = [
+    "fetch-and-rebase-onto",
+    "plan-work",
+    "review-plan",
+    "workbench-review-project",
+    "workbench-task-decisions",
+  ];
+  const current = () => new Map(inspectSkills(root, distribution).map((skill) => [skill.name, skill]));
+  const before = current();
+  for (const name of names) expect(before.get(name)).toMatchObject({ enabled: false, active: false });
+  changeSkillSelection(() => names);
+  syncSkills(root, distribution);
+  const after = current();
+  for (const name of names) {
+    expect(after.get(name)).toMatchObject({ enabled: true, active: true });
+    for (const harness of [".agents", ".claude"]) {
+      const link = join(root, harness, "skills", name);
+      expect(realpathSync(link)).toBe(join(distribution, "skills/workflows", name));
+      expect(() => git(root, "check-ignore", "--quiet", link)).not.toThrow();
+    }
   }
-  expect(run(root, "skills", "disable", name).status).toBe(0);
-  expect(selected()).toMatchObject({ enabled: false, active: false });
+  changeSkillSelection(() => []);
+  syncSkills(root, distribution);
+  for (const name of names) expect(existsSync(join(root, ".agents/skills", name))).toBe(false);
 });
 
 test("help depends on the owning project, while explicit help remains available outside projects", async () => {

@@ -1,5 +1,9 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { InvalidInput } from "../runtime/input-errors.js";
+import { readBoundedFile } from "../runtime/file-reads.js";
+import { gitRevision } from "./refs.js";
 
 export const provisionalTrailer = "Workbench-Provisional";
 export const provisionalEnvironment = "WORKBENCH_PROVISIONAL_TREE";
@@ -41,6 +45,34 @@ function parsedProvisionalTrailers(trailers: string): boolean {
 
 export function provisionalMessage(root: string, message: string): boolean {
   return parsedProvisionalTrailers(git(root, ["interpret-trailers", "--parse"], message));
+}
+
+/** Preserve the message and other trailers verbatim when removing Workbench's marker. */
+export function removeProvisionalTrailer(root: string, message: string): string {
+  const line = new RegExp(`^${provisionalTrailer}[ \\t]*:[ \\t]*(?:\\r?\\n[ \\t]+)*true[ \\t]*(?:\\r?\\n|$)`, "gim");
+  for (const marker of [...message.matchAll(line)].reverse()) {
+    const before = message.slice(0, marker.index),
+      after = message.slice(marker.index + marker[0].length);
+    const without = (after === "" ? before.replace(/(\r?\n)\r?\n$/, "$1") : before) + after;
+    // A matching line in the message body or patch can coexist with the actual Git trailer.
+    if (!provisionalMessage(root, without)) return without;
+  }
+  throw new InvalidInput(
+    `Cannot remove the reserved ${provisionalTrailer} trailer without changing the commit message`,
+  );
+}
+
+/** Read the second and subsequent parents of an in-progress merge in Git's order. */
+export function pendingMergeParents(root: string): string[] {
+  const location = resolve(root, git(root, ["rev-parse", "--git-path", "MERGE_HEAD"]).trim());
+  if (!existsSync(location)) return [];
+  const parents = readBoundedFile(location, 16 * 1024, "merge parents")
+    .toString()
+    .trim()
+    .split(/\r?\n/);
+  if (parents.length >= 256 || parents.some((parent) => !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(parent)))
+    throw new InvalidInput("Invalid Git merge parents");
+  return parents;
 }
 
 /** A page of history is one Git read, without opening one process per commit. */
@@ -141,15 +173,32 @@ function markedCommits(root: string, revisions: string[]): string[] {
   return entries.filter((entry) => entry.provisional).map((entry) => entry.commit);
 }
 export function provisionalCommits(root: string, tip = "HEAD"): string[] {
-  return markedCommits(root, [git(root, ["rev-parse", "--verify", `${tip}^{commit}`]).trim()]);
+  const head = gitRevision(root, `${tip}^{commit}`);
+  return head ? markedCommits(root, [head]) : [];
 }
+function retainedHeads(root: string, head: string): string[] {
+  const branches = git(root, ["for-each-ref", "--format=%(objectname)", "refs/heads"]).trim().split("\n");
+  return [...new Set([...branches, head].filter(Boolean))];
+}
+
 export function retainedProvisionalCommits(root: string): string[] {
-  const heads = git(root, ["for-each-ref", "--format=%(objectname)", "refs/heads"]).trim().split("\n").filter(Boolean),
-    selected = spawnSync("git", ["-C", root, "rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" });
-  if (selected.error || (selected.status !== 0 && selected.status !== 1))
-    throw new InvalidInput("Cannot inspect retained history");
-  const revisions = [...new Set([...heads, ...(selected.status === 0 ? [selected.stdout.trim()] : [])])];
+  const revisions = retainedHeads(root, gitRevision(root, "HEAD") ?? "");
   return revisions.length ? markedCommits(root, revisions) : [];
+}
+
+/** Present the selected checkout first, then other locally retained commits. */
+export function reviewableProvisionalCommits(root: string, head: string): string[] {
+  return reviewableProvisionalHistory(root, head).revisions;
+}
+
+export function reviewableProvisionalHistory(root: string, head: string) {
+  const revisions = retainedHeads(root, head);
+  const current = head ? markedCommits(root, [head]) : [];
+  return {
+    revisions:
+      revisions.length > (head ? 1 : 0) ? [...new Set([...current, ...markedCommits(root, revisions)])] : current,
+    onHead: new Set(current),
+  };
 }
 
 export function checkProvisionalPush(root: string, tip: string, remote: string): void {
@@ -160,9 +209,11 @@ export function checkProvisionalPush(root: string, tip: string, remote: string):
   );
   if (pending.length)
     throw new InvalidInput(
-      `Cannot push ${String(pending.length)} provisional commit(s): ${pending
+      `Cannot push ${String(pending.length)} provisional ${pending.length === 1 ? "commit" : "commits"}: ${pending
         .slice(0, 10)
         .map((entry) => entry.commit.slice(0, 12))
-        .join(", ")}. Complete human review and consolidate or rewrite all provisional commits before pushing.`,
+        .join(
+          ", ",
+        )}. Complete review and inspect local finalization with 'workbench commit finalize'. Retry the push after those commits have been finalized.`,
     );
 }

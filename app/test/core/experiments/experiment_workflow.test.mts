@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
-import { webServers, readWebPage, postWebForm } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, postWebForm } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { changeExperimentStatus, readExperiment } from "../../../src/core/experiments/experiment-workflow.ts";
@@ -87,27 +87,27 @@ test("execution validates protocol completeness and stale requests cannot overwr
 
 test("agent execution needs no plan approval and the browser only reviews the completed outcome", async () => {
   const web = await servers.start(root);
-  const initial = parseDOM((await readWebPage(web, "/work")).html).window.document;
+  const initial = parseDOM((await readReconciledWebPage(web, "/records?type=EXP")).html).window.document;
   expect(initial.querySelector("main")?.textContent).toContain("Compare parsers");
   expect(
-    parseDOM((await readWebPage(web, "/plans")).html).window.document.querySelector("main")?.textContent,
+    parseDOM((await readReconciledWebPage(web, "/plans")).html).window.document.querySelector("main")?.textContent,
   ).not.toContain("Compare parsers");
-  const page = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
+  const page = parseDOM((await readReconciledWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect(page.querySelector('form[action$="/actions/task-state"]')).toBeNull();
   expect(page.body.textContent).not.toContain("Approve plan");
   changeExperimentStatus(root, "EXP-0", "Running", readExperiment(root, "EXP-0").digest);
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Running");
   writeFileSync(path, readFileSync(path, "utf8") + evidence);
   changeExperimentStatus(root, "EXP-0", "Inconclusive");
-  const outcomes = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  const outcomes = parseDOM((await readReconciledWebPage(web, "/reviews")).html).window.document;
   expect(outcomes.querySelector("[data-review-source]")?.textContent).toContain("Compare parsers");
-  const completedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
+  const completedPage = parseDOM((await readReconciledWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect(completedPage.querySelector('form[action$="/actions/task-state"]')).toBeNull();
   const reviewURL = [...completedPage.querySelectorAll("a")]
     .find((link) => link.textContent === "Review outcome")
     ?.getAttribute("href");
   if (!reviewURL) throw new Error("Missing outcome review link");
-  const review = parseDOM((await readWebPage(web, reviewURL)).html).window.document;
+  const review = parseDOM((await readReconciledWebPage(web, reviewURL)).html).window.document;
   const approval = review.querySelector<HTMLFormElement>("form[data-review]");
   if (!approval) throw new Error("Missing outcome review");
   const fields = Object.fromEntries(
@@ -124,10 +124,10 @@ test("agent execution needs no plan approval and the browser only reviews the co
   expect(await transition.text()).toContain("Expected a task reference");
   expect(readFileSync(path, "utf8")).toBe(completed.contents);
   expect((await postWebForm(web, approval.getAttribute("action") ?? "", fields)).status).toBe(200);
-  const accepted = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+  const accepted = parseDOM((await readReconciledWebPage(web, "/reviews")).html).window.document;
   expect(accepted.querySelector('[data-record-id="demo:EXP-0"]')).toBeNull();
   expect(readExperiment(root, "EXP-0").metadata.status).toBe("Inconclusive");
-  const reviewedPage = parseDOM((await readWebPage(web, "/records/demo:EXP-0")).html).window.document;
+  const reviewedPage = parseDOM((await readReconciledWebPage(web, "/records/demo:EXP-0")).html).window.document;
   expect([...reviewedPage.querySelectorAll("a")].some((link) => link.textContent === "Review outcome")).toBe(false);
   writeFileSync(path, readFileSync(path, "utf8") + "\nAdditional measurement evidence.\n");
   expect(changes()).toHaveLength(1);

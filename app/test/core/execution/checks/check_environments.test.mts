@@ -61,7 +61,7 @@ test.skipIf(process.platform === "win32")(
       script(
         stubs,
         "nix",
-        'while [ "$1" != --command ]; do shift; done\nshift\nexport PATH="$TEST_SELECTED_TOOLS:$PATH"\nrm -f dependency\nexec "$@"',
+        'while [ "$1" != --command ]; do\n  if [ "$1" = --profile ]; then shift; : > "$1"; fi\n  shift\ndone\nshift\nexport PATH="$TEST_SELECTED_TOOLS:$PATH"\nrm -f dependency\nexec "$@"',
       );
       script(stubs, "node", "exit 91");
       script(selected, "node", "echo v24.20.0");
@@ -88,6 +88,7 @@ test.skipIf(process.platform === "win32")(
           `\n[[check]]\nname = "web"\nrole = "test"\npath = "web"\nenvironment = "nix"\ncommand = ["./check", ${JSON.stringify(literal)}]\n`,
       );
       succeeds("sync");
+      if (process.platform === "linux") succeeds("prepare", "--environment", "nix");
       succeeds("pre-commit");
       assert.equal(readFileSync(join(web, "result"), "utf8"), `v24.20.0\n${web}\n${root}\n${literal}\n`);
       assert.equal(existsSync(join(web, "unwanted")), false);
@@ -100,12 +101,14 @@ test.skipIf(process.platform === "win32")(
           '\n[[check]]\nname="native once"\nrole="test"\npath="web"\nenvironment="native"\ncommand=["sh","-c","echo native >> native-executions"]\n' +
           '\n[[check]]\nname="nix once"\nrole="test"\npath="web"\nenvironment="nix"\ncommand=["sh","-c","echo nix >> nix-executions"]\n',
       );
+      if (process.platform === "linux") succeeds("prepare", "--environment", "nix");
       succeeds("pre-commit");
       assert.equal(readFileSync(join(web, "native-executions"), "utf8"), "native\n");
       assert.equal(readFileSync(join(web, "nix-executions"), "utf8"), "nix\n");
       writeFileSync(join(web, ".node-version"), "24.18.0\n");
 
       script(web, "check", "exit 42");
+      if (process.platform === "linux") succeeds("prepare", "--environment", "nix");
       fails("pre-commit");
       rmSync(join(web, "result"));
       script(web, "check", "touch result");

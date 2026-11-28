@@ -32,14 +32,12 @@ export const reviewCollection = (path: string): string =>
 export class ReviewQueue {
   readonly byOwner = new Map<string, ReviewGroup>();
   readonly byId = new Map<string, ReviewGroup>();
-  readonly byDigest = new Map<string, ReviewGroup>();
   readonly byPath: Map<string, WorkspaceSnapshot["review"]["changes"][number]>;
   readonly pendingPaths = new Set<string>();
   readonly groups: ReviewGroup[];
   readonly pending: ReviewGroup[];
   readonly sections: ReviewSection[];
   private readonly scopes: string[];
-  private readonly positions = new Map<string, number>();
   constructor(
     hierarchy: ProjectHierarchy,
     private readonly records: ReadonlyMap<string, BrowserRecord>,
@@ -78,7 +76,6 @@ export class ReviewQueue {
       }
       this.byOwner.set(path, group);
       if (group.id) this.byId.set(group.id, group);
-      this.byDigest.set(change.digest, group);
     }
     const sections = new Map<string, ReviewSection>();
     for (const project of hierarchy.ordered())
@@ -103,28 +100,12 @@ export class ReviewQueue {
       .map((section) => ({ ...section, groups: section.groups.filter((group) => group.pending > 0) }))
       .filter((section) => section.groups.length > 0);
     this.pending = this.sections.flatMap((section) => section.groups);
-    for (const [index, group] of this.pending.entries()) this.positions.set(group.path, index);
   }
   owner(path: string): string {
     return reviewOwner(path, this.scopes, this.sources, (owner) => this.records.has(owner) || this.byPath.has(owner));
   }
   needsReview(change: { path: string; approved: boolean }): boolean {
     return needsReview(change, this.preparation);
-  }
-  navigation(digest: string, compatibility: boolean, pending = this.pending) {
-    const group = this.byDigest.get(digest);
-    const index = group
-      ? pending === this.pending
-        ? (this.positions.get(group.path) ?? -1)
-        : pending.indexOf(group)
-      : -1;
-    return {
-      position: index + 1,
-      total: pending.length + (compatibility ? 1 : 0),
-      previous: index > 0 ? pending[index - 1] : undefined,
-      next:
-        index >= 0 ? (pending[index + 1] ?? (compatibility ? { compatibility: true as const } : undefined)) : undefined,
-    };
   }
   afterAcknowledgment(path: string, compatibility: boolean, groups = this.groups): ReviewItem | undefined {
     const group = this.byOwner.get(this.owner(path));

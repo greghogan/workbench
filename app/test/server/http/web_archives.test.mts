@@ -1,7 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { webServers, readWebPage } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage } from "../../fixtures/web.mjs";
 import { distribution, git } from "../../fixtures/adoption.mjs";
 import { enableArchive, transferArchive } from "../../../src/core/records/archive-workflow.ts";
 import { readTaskGraph } from "../../../src/core/tasks/task-model.ts";
@@ -29,27 +29,27 @@ test("archived records remain searchable, linked, and downloadable without resto
   transferArchive(root);
   expect(readTaskGraph(root).byReference.has("demo:TSK-0")).toBe(true);
   const web = await servers.start(root);
-  const search = await readWebPage(web, "/records?q=ARCHIVE-ONLY&type=TSK&scope=demo");
+  const search = await readReconciledWebPage(web, "/records?q=ARCHIVE-ONLY&type=TSK&scope=demo");
   expect(search.response.status).toBe(200);
   expect(search.html).toContain("Earlier delivery");
-  const record = await readWebPage(web, "/records/demo:TSK-0");
+  const record = await readReconciledWebPage(web, "/records/demo:TSK-0");
   expect(record.response.status).toBe(200);
   expect(record.html).toContain("Archived · read only");
   const document = parseDOM(record.html).window.document;
   expect(document.querySelector('form[action*="task-state"]')).toBeNull();
   expect(record.html).not.toContain("Return to planning");
-  const followup = await readWebPage(web, "/records/demo:TSK-1");
+  const followup = await readReconciledWebPage(web, "/records/demo:TSK-1");
   expect(followup.html).toContain('href="/records/demo:TSK-0"');
   const supportLink = document.querySelector<HTMLAnchorElement>('a.record-row[href*="evidence"]')?.getAttribute("href");
   if (!supportLink) throw new Error("Missing supporting-file navigation");
-  const preview = await readWebPage(web, supportLink);
+  const preview = await readReconciledWebPage(web, supportLink);
   expect(preview.response.status).toBe(200);
   expect(preview.html).toContain("<strong>Formatted</strong>");
   const downloadLink = parseDOM(preview.html)
     .window.document.querySelector<HTMLAnchorElement>('a[href*="download=1"]')
     ?.getAttribute("href");
   if (!downloadLink) throw new Error("Missing download action");
-  const download = await readWebPage(web, downloadLink);
+  const download = await readReconciledWebPage(web, downloadLink);
   expect(download.response.headers.get("content-disposition")).toContain("attachment");
   expect(download.html).toBe("# Preserved evidence\n\n**Formatted** support.\n");
   expect(existsSync(join(root, path))).toBe(false);

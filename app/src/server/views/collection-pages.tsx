@@ -3,7 +3,6 @@ import { routeURL } from "../routes/locations.js";
 import type { LocalCollectionScope } from "../../core/collections/collections.js";
 import type { CollectionRequest } from "../projects/collection-service.js";
 import { badge, submitButton } from "./components.js";
-import { sourceDifference } from "../review/diff.js";
 import { projectPath } from "../routes/project-paths.js";
 import type { CollectionPreview } from "../projects/protocol.js";
 import { mutationForm } from "./action-forms.js";
@@ -169,7 +168,7 @@ export function collectionProposalPage(
                 </summary>
                 {/\/ADR-[0-9A-Z]+\.md$/.test(file.path) && file.before !== null && file.after !== null ? (
                   sourceDiffView(
-                    sourceDifference(file.before, file.after, file.path, plan.differences[file.path] ?? ""),
+                    { before: file.before, after: file.after },
                     { record: { directory: context.root, path: file.path }, records: context.index.references },
                   )
                 ) : (

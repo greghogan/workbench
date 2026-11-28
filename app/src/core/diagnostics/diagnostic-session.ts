@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { diagnosticLogDirectory } from "../storage/storage.js";
 import { LogMaintenance } from "../storage/logs/log-maintenance.js";
 import { DiagnosticLog } from "../storage/logs/diagnostic-log.js";
+import type { TerminalChannel } from "../storage/logs/terminal-log.js";
 import { userConfigValues } from "../configuration/user-config.js";
 
 /** One command owns a persistent diagnostic session; slow sinks report omissions instead of growing memory. */
@@ -26,6 +27,7 @@ export async function startDiagnosticSession(
   level: LogLevel = LogLevel.Info,
   scope: typeof LogScope.Cli | typeof LogScope.Server = LogScope.Cli,
   preferences = userConfigValues(),
+  options: { transcript?: readonly TerminalChannel[] } = {},
 ) {
   const namespace = join(diagnosticLogDirectory(), scope),
     directory = join(namespace, randomUUID());
@@ -66,7 +68,7 @@ export async function startDiagnosticSession(
   const restore = subscribeDiagnostics((event) => {
     writer.write(renderDiagnosticEvent(event, LogFormat.Json));
   }, level);
-  const closeTranscript = scope === LogScope.Server ? captureTerminal(file) : undefined;
+  const closeTranscript = scope === LogScope.Server ? captureTerminal(file, options.transcript) : undefined;
   const record = (event: ReturnType<typeof createDiagnosticEvent>) => {
     if (acceptsLogLevel(event.level, level)) writer.write(renderDiagnosticEvent(event, LogFormat.Json));
   };

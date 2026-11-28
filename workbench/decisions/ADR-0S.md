@@ -1,25 +1,24 @@
 ---
-summary: Development and release profiles, prepared image identities, portability, and artifact verification.
+summary: Artifact profiles, separate toolchain and dependency inputs, verified transfer, and retention.
 ---
 
 # ADR-S: Builds and deployment artifacts
 
-Projects declare named development and release profiles selecting builders, locked inputs, platforms, and formats.
-Development selection does not change release targets. Container profiles use pinned images or local build recipes
-without requiring their selected builder on the host.
+Projects declare named artifact profiles that select builders, project scopes, and supported combinations of artifact
+kind, target, and format. Toolchain artifacts supply verified tools and their runtime libraries. Development artifacts
+also supply the locked project inputs needed to build and check a fresh checkout offline. Release artifacts supply the
+application and its runtime requirements.
 
 ## Prepared environments
 
-Projects may prepare project-wide offline development images. Recipe identity reflects the builder, native architecture,
-image definitions, and locked inputs. Identify each realized image immutably and retain its environment provenance.
-Native operating-system packages follow ADR-A, while Nix and Guix retain their locked environment definitions. Changes
-only to orchestration, cache handling, publication, or verification do not change recipe identity. Local development and
-CI share recipes and identities. Verify offline capability through fresh source builds and execution with networking
-disabled and no host caches before publication.
+Identify the recipe, realized artifact, and verification separately. Recipe identity follows content-producing inputs,
+including builder, target, and relevant pins. Project dependency changes can reuse a matching toolchain artifact. Record
+actual bytes and environment provenance. Match verification to those bytes, relevant source, target, and verifier.
+Verify offline development through fresh source builds and execution with networking disabled and empty host caches.
 
-Build Nix and Guix images entirely from their respective environment definitions and all resulting dependencies,
-including the inputs needed to build and check each included subproject. Preparation stays within declared resource
-limits. Do not populate these images by running project builds or language package managers.
+Native operating-system packages follow ADR-A. Nix and Guix derive toolchains and locked dependency inputs from their
+respective environment definitions. Realize those inputs independently of application builds, within declared resource
+limits.
 
 Managed preparation preserves the selected environment's authority and isolates its effects from unrelated host state.
 Retain realized development profiles against garbage collection until their owning cache is explicitly pruned. Include
@@ -50,9 +49,11 @@ emulation dependencies require human review. Release evidence includes execution
 supported targets, covering promised behavior, runtime dependencies, relocation or container operation, architecture,
 and supported flags.
 
-Preparation creates local artifacts without tagging or publishing. Publication is separately selected with explicit
-credentials and verification of published identity and behavior, including offline claims for prepared images. Routine
-gates never publish releases.
+An explicitly unverified transfer may carry a candidate to its target host. Authenticate the transferred manifest and
+payload before staging them privately. Target verification is required before activation or publication.
+
+Preparation creates local artifacts. An authorized publication operation verifies the published identity and behavior,
+including offline claims for prepared images.
 
 Rationale: Independent profiles and shared preparation inputs support reproducible outputs. Artifact execution verifies
 offline and deployment claims. Explicit runtime requirements separate deployment needs from authoring choices.

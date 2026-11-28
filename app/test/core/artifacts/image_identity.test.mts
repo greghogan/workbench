@@ -1,4 +1,5 @@
 import { readConfig } from "../../../src/core/projects/project-configuration.ts";
+import { projectPaths } from "../../../src/core/projects/project-paths.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,16 +29,27 @@ function fixture(builder: string) {
     offline: required(selected.offline, "Offline configuration"),
   };
   for (const path of new Set([
-    "workbench/config.toml",
-    "workbench/projects.toml",
+    projectPaths.config,
+    projectPaths.projects,
     profile.container_config,
-    ...profile.offline.inputs,
+    ...offlineInputManifest(distribution, profile).files.map(([path]) => path),
   ])) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
-    cpSync(join(distribution, path), join(root, path), { recursive: true });
+    cpSync(join(distribution, path), join(root, path));
   }
   return { root, profile };
 }
+
+test("native toolchain images depend on tool acquisition independently of project dependency preparation", () => {
+  const { root, profile } = fixture("native-toolchain");
+  const before = offlineInputs(root, profile);
+  const preparation = join(root, "scripts/prepare-development.mjs");
+  writeFileSync(preparation, "changed development dependency acquisition\n");
+  expect(offlineInputs(root, profile)).toBe(before);
+  const tools = join(root, "scripts/prepare-image-tools.mjs");
+  writeFileSync(tools, "changed native tool acquisition\n");
+  expect(offlineInputs(root, profile)).not.toBe(before);
+});
 
 test.each(["native", "nix", "guix"])(
   "%s image selection survives package command edits, including regenerated managed metadata",

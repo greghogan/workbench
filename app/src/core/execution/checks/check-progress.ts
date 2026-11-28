@@ -52,7 +52,7 @@ interface ProgressStream {
 interface ActiveCheckGroup {
   label: string;
   started: number;
-  task?: { key: string; label: string; started: number };
+  tasks: Map<string, { label: string; started: number }>;
 }
 
 function runtime(milliseconds: number): string {
@@ -89,7 +89,7 @@ export class CheckProgress {
   }
   startGroup(id: string, label: string): void {
     if (this.closed || this.stopping) return;
-    this.active.set(id, { label, started: this.now() });
+    this.active.set(id, { label, started: this.now(), tasks: new Map() });
     if (!this.interactive) this.message(`Starting ${label}`);
     this.updateRefresh();
     this.draw();
@@ -98,17 +98,17 @@ export class CheckProgress {
     const key = `${id}:${String(step)}`;
     if (this.closed || this.stopping || this.finished.has(key)) return;
     const now = this.now();
-    const group = this.active.get(id) ?? { label, started: now };
+    const group: ActiveCheckGroup = this.active.get(id) ?? { label, started: now, tasks: new Map() };
     this.active.set(id, group);
     if (event === CheckEvent.Start) {
-      group.task = { key, label: task, started: now };
+      group.tasks.set(key, { label: task, started: now });
       if (!this.interactive)
         this.message(`[${String(this.completed)}/${String(this.total)} completed] Running ${label}: ${task}`);
     } else {
-      const elapsed = group.task?.key === key ? now - group.task.started : 0;
+      const elapsed = now - (group.tasks.get(key)?.started ?? now);
       this.finished.add(key);
       if (event === CheckEvent.Fail) this.failures++;
-      delete group.task;
+      group.tasks.delete(key);
       this.message(
         `[${String(this.completed)}/${String(this.total)} completed] ${event === CheckEvent.Pass ? "Passed" : "Failed"} ${label}: ${task} (${runtime(elapsed)})`,
       );
@@ -121,9 +121,10 @@ export class CheckProgress {
     const group = this.active.get(id);
     this.active.delete(id);
     const duration = runtime(this.now() - (group?.started ?? this.now()));
-    if (failed === "cancelled" || (failed && group?.task)) {
+    const task = group?.tasks.values().next().value;
+    if (failed === "cancelled" || (failed && task)) {
       this.message(
-        `${failed === "cancelled" ? "Cancelled" : "Failed"} ${label}${group?.task ? `: ${group.task.label}` : ""} (${duration})`,
+        `${failed === "cancelled" ? "Cancelled" : "Failed"} ${label}${task ? `: ${task.label}` : ""} (${duration})`,
       );
     } else if (!this.interactive) this.message(`${failed ? "Failed" : "Completed"} ${label} (${duration})`);
     this.updateRefresh();
@@ -203,22 +204,20 @@ export class CheckProgress {
     const height = Math.max(0, (rows > 0 ? rows : 24) - 1);
     if (!height) return;
     const now = this.now();
-    const tasks = [...this.active.values()];
+    const tasks = [...this.active.values()].flatMap((group) => {
+      const running = [...group.tasks.values()];
+      return (running.length ? running : [{ label: "preparing / finishing session", started: group.started }]).map(
+        (task) => ({ label: `${group.label}: ${task.label}`, started: task.started }),
+      );
+    });
     const slots = Math.max(0, height - 1 - (tasks.length >= height && height > 1 ? 1 : 0));
     const timed = (text: string, duration: number) => {
       const suffix = ` [${runtime(duration)}]`;
       return `${fit(text, Math.max(0, width - suffix.length))}${fit(suffix, width)}`;
     };
     const lines = [
-      ...tasks
-        .slice(0, slots)
-        .map((group) =>
-          timed(
-            `${group.label}: ${group.task?.label ?? "preparing / finishing session"}`,
-            now - (group.task?.started ?? group.started),
-          ),
-        ),
-      ...(tasks.length > slots && height > 1 ? [fit(`  +${String(tasks.length - slots)} active groups`, width)] : []),
+      ...tasks.slice(0, slots).map((task) => timed(task.label, now - task.started)),
+      ...(tasks.length > slots && height > 1 ? [fit(`  +${String(tasks.length - slots)} more`, width)] : []),
       timed("Elapsed", now - this.started),
     ];
     this.output.write(`${lines.join("\n")}\n`);

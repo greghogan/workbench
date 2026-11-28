@@ -50,9 +50,9 @@ export function decodeCollectionWorkerRequest(value: unknown): { request: Collec
     throw new InvalidInput("invalid collection review digest");
   return { request, ...(typeof data.expected === "string" ? { expected: data.expected } : {}) };
 }
-export type CollectionPreview = CollectionReviewPlan & { differences: Record<string, string> };
+export type CollectionPreview = CollectionReviewPlan;
 export function decodeCollectionPreview(value: unknown): CollectionPreview {
-  const data = collectionTable(value, ["digest", "pin", "files", "differences"], "collection preview");
+  const data = collectionTable(value, ["digest", "pin", "files"], "collection preview");
   const digest = string(data.digest, "collection digest");
   if (!hash.test(digest)) throw new InvalidInput("invalid collection preview digest");
   validateCollectionIdentity(data.pin, "collection preview identity", true);
@@ -83,10 +83,7 @@ export function decodeCollectionPreview(value: unknown): CollectionPreview {
       after_sha256: file.after_sha256 as string | null,
     };
   });
-  const differences = collectionTable(data.differences, [...paths], "collection preview differences");
-  for (const value of Object.values(differences))
-    if (typeof value !== "string") throw new InvalidInput("invalid collection preview difference");
-  return { digest, pin, files, differences: differences as Record<string, string> };
+  return { digest, pin, files };
 }
 
 export function decodeCollectionApplication(value: unknown): CollectionApplication {

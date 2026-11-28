@@ -3,7 +3,17 @@ import { currentExecutionEnvironment } from "../execution/environments/execution
 import { microsoftToolset, resolveMicrosoftSDK, type ResolvedMicrosoftSDK } from "../toolchains/mvsc.js";
 import { guixChannelFile } from "../execution/environments/managed/managed-contract.mjs";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { distributionRoot } from "../projects/project-context.js";
@@ -94,6 +104,7 @@ export interface BuildIdentity {
 }
 
 export type BuildCacheKind = "builds" | "dependencies" | "checks" | "logs";
+export const latestCheckResult = "latest-result";
 const markers: Record<BuildCacheKind, string> = {
   builds: marker,
   dependencies: ".workbench-dependencies.json",
@@ -570,12 +581,9 @@ export function assertBuildUnused(identity: BuildIdentity): void {
   if (blocker) throw new CacheBusy(`${blocker}: a development session or unresolved build user is active`);
 }
 
-/** Register before launch under the cleanup lock. The caller records and drains children before releasing use. */
-export async function withBuildUse<T>(
-  paths: Pick<BuildPaths, "identity">,
-  action: (owner: ProcessLock) => Promise<T>,
-): Promise<T> {
-  const owner = withBuildLock(paths, () => {
+/** Register ongoing use under the cleanup lock. */
+export function acquireBuildUse(paths: Pick<BuildPaths, "identity">): ProcessLock {
+  return withBuildLock(paths, () => {
     const directory = buildUsers(paths.identity);
     if (existsSync(directory))
       for (const name of readdirSync(directory)) {
@@ -587,6 +595,14 @@ export async function withBuildUse<T>(
     if (!owner) throw new CacheBusy(`${path}: build use registration is unavailable`);
     return owner;
   });
+}
+
+/** Register before launch. The caller records and drains children before releasing use. */
+export async function withBuildUse<T>(
+  paths: Pick<BuildPaths, "identity">,
+  action: (owner: ProcessLock) => Promise<T>,
+): Promise<T> {
+  const owner = acquireBuildUse(paths);
   let result: T;
   try {
     result = await action(owner);
@@ -706,4 +722,9 @@ export function assertBuildOutput(directory: string): void {
   if (!existsSync(receipt) && resolve(output) !== join(realpathSync(process.cwd()), "build"))
     throw new Error(`${output}: missing build ownership receipt`);
   ownedPath(output, within.split(sep).join("/"));
+}
+
+export function copyBuildOutputReceipt(output: string, privateOutput: string): void {
+  const receipt = ownedPath(output, marker);
+  if (existsSync(receipt)) copyFileSync(receipt, ownedPath(privateOutput, marker));
 }

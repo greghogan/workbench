@@ -12,11 +12,18 @@ import { compatibilityChecks } from "../../../src/core/execution/checks/compatib
 import { runCompatibilityChecks } from "../../../src/core/execution/ci/ci-runtime.ts";
 import { resolveCheckCommand } from "../../../src/core/toolchains/toolchains.ts";
 import { buildPaths } from "../../../src/core/artifacts/builds.ts";
+import { readConfig } from "../../../src/core/projects/project-configuration.ts";
 import * as downloads from "../../../src/core/toolchains/tool-downloads.ts";
 import * as native from "../../../src/core/toolchains/native/native-tools.ts";
 import * as assets from "../../../src/core/toolchains/native/native-assets.ts";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
+const compatibilityNode = required(
+  readConfig(distribution).toolchains?.profiles?.find(
+    ({ name, tools }) => ["node-22", "node-24"].includes(name) && tools?.node !== process.versions.node,
+  )?.tools?.node,
+  "Missing an alternate Node.js toolchain pin",
+);
 const temporary: string[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
@@ -40,7 +47,7 @@ async function fixture() {
         {
           language: "typescript",
           path: ".",
-          ci_versions: ["22.23.4"],
+          ci_versions: [compatibilityNode],
           ci_platforms: ["linux-x64"],
           ci_environments: [],
         },
@@ -51,10 +58,10 @@ async function fixture() {
     join(root, "workbench/automation.toml"),
     stringify({ check_suite: [{ language: "typescript", path: "." }] }),
   );
-  writeFileSync(join(root, ".node-version"), readFileSync(join(distribution, ".node-version")));
+  writeFileSync(join(root, ".node-version"), `${process.versions.node}\n`);
   writeFileSync(
     join(root, "package.json"),
-    JSON.stringify({ name: "different-widget", type: "module", engines: { node: ">=22.23.4" } }),
+    JSON.stringify({ name: "different-widget", type: "module", engines: { node: `>=${compatibilityNode}` } }),
   );
   const definition = join(root, "workbench/languages/typescript");
   mkdirSync(definition, { recursive: true });
@@ -111,7 +118,7 @@ test("a complete local definition owns ordinary, compatibility, and release exec
     assetFor(root, tool, directory, "linux-x64"),
   );
   vi.spyOn(native, "verifyInstalledTool").mockImplementation(() => undefined);
-  await runCompatibilityChecks(root, ".", "node", "22.23.4");
+  await runCompatibilityChecks(root, ".", "node", compatibilityNode);
   const events = readFileSync(join(root, "events.jsonl"), "utf8")
     .trim()
     .split("\n")
@@ -120,8 +127,8 @@ test("a complete local definition owns ordinary, compatibility, and release exec
     ["ordinary"],
     ["package"],
     ["verify"],
-    ["prepare", "22.23.4"],
-    ["alternate", "node", "22.23.4"],
+    ["prepare", compatibilityNode],
+    ["alternate", "node", compatibilityNode],
   ]);
   expect(existsSync(join(root, "dist/count"))).toBe(false);
   const target = ciTargets(root).find(({ runtime }) => runtime === "node");
@@ -139,9 +146,9 @@ test("a complete local definition owns ordinary, compatibility, and release exec
       required(target, "Expected fixture value: target").checks.at(-1),
       "Expected fixture value: target.checks.at(-1)",
     ).command.at(-1),
-  ).toBe("22.23.4");
-  const first = buildPaths(root, root, "native", {}, true, { name: "node", version: "22.23.4" });
-  const second = buildPaths(root, root, "native", {}, true, { name: "node", version: "24.22.1" });
+  ).toBe(compatibilityNode);
+  const first = buildPaths(root, root, "native", {}, true, { name: "node", version: compatibilityNode });
+  const second = buildPaths(root, root, "native", {}, true, { name: "node", version: process.versions.node });
   expect(first.directory).not.toBe(second.directory);
   expect(first.dependencies).not.toBe(second.dependencies);
 });
@@ -178,6 +185,8 @@ test("a replacement that omits compatibility commands fails before acquisition i
   );
   const install = vi.spyOn(downloads, "installAsset").mockResolvedValue(undefined);
   expect(() => compatibilityChecks(root, ".")).toThrow(/declare compatibility-test/);
-  await expect(runCompatibilityChecks(root, ".", "node", "22.23.4")).rejects.toThrow(/declare compatibility-test/);
+  await expect(runCompatibilityChecks(root, ".", "node", compatibilityNode)).rejects.toThrow(
+    /declare compatibility-test/,
+  );
   expect(install).not.toHaveBeenCalled();
 });

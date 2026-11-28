@@ -33,12 +33,22 @@ export function commandInvocation(command: string, args: string[], env = process
 export function execute(
   command: string,
   args: string[],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv; capture?: boolean; maxBuffer?: number; timeout?: number } = {},
+  options: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    capture?: boolean;
+    stdoutToStderr?: boolean;
+    stdin?: number;
+    maxBuffer?: number;
+    timeout?: number;
+  } = {},
 ): string {
-  const { capture, ...rest } = options;
+  const { capture, stdoutToStderr, stdin, ...rest } = options;
   const invocation = commandInvocation(command, args, rest.env, rest.cwd);
   const result = spawnSync(required(invocation[0], "tool execution needs a command"), invocation.slice(1), {
-    stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
+    stdio: capture
+      ? [stdin ?? "ignore", "pipe", "pipe"]
+      : [stdin ?? "inherit", stdoutToStderr ? 2 : "inherit", "inherit"],
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     ...rest,

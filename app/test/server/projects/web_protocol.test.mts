@@ -27,7 +27,6 @@ const plan = () => ({
       after_sha256: "d".repeat(64),
     },
   ],
-  differences: {},
 });
 
 test("collection requests reject malformed and unexpected fields before invoking acquisition", () => {
@@ -40,7 +39,7 @@ test("collection requests reject malformed and unexpected fields before invoking
   expect(() => decodeCollectionWorkerRequest({ request, expected: "old" })).toThrow(/digest/);
   expect(decodeCollectionWorkerRequest({ request, expected: "e".repeat(64) }).expected).toBe("e".repeat(64));
 });
-test("collection previews validate file ownership paths, identities, digests, and differences", () => {
+test("collection previews validate file ownership paths, identities, digests, and raw contents", () => {
   const valid = plan();
   expect(decodeCollectionPreview(valid)).toEqual(valid);
   expect(() => decodeCollectionPreview({ ...valid, pin: { ...valid.pin, id: "INVALID" } })).toThrow(/identity/);

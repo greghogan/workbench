@@ -48,17 +48,23 @@ export function checkOutputPrelude(total: number, verbose: boolean, run: string,
     `workbench_check_verbose=${verbose ? "1" : "0"}`,
     `workbench_check_events=${events ? "1" : "0"}`,
     `workbench_check_control=${quote(control ?? "")}`,
+    "workbench_check_tag_details=0",
     String.raw`workbench_check_event() {
   if [ -n "$workbench_check_control" ]; then
     printf '\nWORKBENCH_CHECK_CONTROL\t%s\t%s\t%s\n' "$workbench_check_control" "$1" "$workbench_check_step"
   else printf '\nWORKBENCH_CHECK_EVENT\t%s\t%s\n' "$1" "$workbench_check_step"; fi
+}
+workbench_check_show_log() {
+  if [ "$workbench_check_tag_details" = 1 ]; then
+    sed "s/^WORKBENCH_CHECK_DETAIL	/&$workbench_check_step	/"
+  else cat; fi
 }
 workbench_check_failed() {
   workbench_check_status=$?
   exec 1>&3 2>&4
   if [ "$workbench_check_events" = 1 ]; then workbench_check_event fail
   else printf '[%s/%s completed] Failed %s\n' "$((workbench_check_step - 1))" "$workbench_check_total" "$workbench_check_label"; fi
-  if [ "$workbench_check_verbose" = 0 ] && [ "$workbench_check_replay" != 0 ]; then cat "$workbench_check_log"; fi
+  if [ "$workbench_check_verbose" = 0 ] && [ "$workbench_check_replay" != 0 ]; then workbench_check_show_log < "$workbench_check_log"; fi
   exit "$workbench_check_status"
 }
 workbench_check_start() {
@@ -75,10 +81,46 @@ workbench_check_start() {
 workbench_check_done() {
   trap - 0
   if [ "$workbench_check_verbose" = 0 ]; then
-    grep '^WORKBENCH_CHECK_DETAIL' "$workbench_check_log" || :
+    if [ "$workbench_check_tag_details" = 1 ]; then
+      grep '^WORKBENCH_CHECK_DETAIL' "$workbench_check_log" | workbench_check_show_log
+    else grep '^WORKBENCH_CHECK_DETAIL' "$workbench_check_log" || :; fi
   fi
   if [ "$workbench_check_events" = 1 ]; then workbench_check_event pass
   else printf '[%s/%s completed] Passed %s\n' "$workbench_check_step" "$workbench_check_total" "$workbench_check_label"; fi
+}
+# POSIX wait only names a particular child; private completion files identify children ready to reap.
+workbench_check_run_parallel() {
+  local_limit=$1; shift
+  local_done="$workbench_check_build_dir/check-logs/$workbench_check_run"
+  mkdir -p "$local_done"
+  local_running= local_status=0 local_active=0
+  while [ "$#" -gt 0 ] || [ "$local_active" -gt 0 ]; do
+    local_live=
+    for local_job in $local_running; do
+      local_pid=${"$"}{local_job%:*} local_step=${"$"}{local_job#*:}
+      if [ "$#" -eq 0 ] || [ -f "$local_done/parallel-$local_step" ] || ! kill -0 "$local_pid" 2>/dev/null; then
+        wait "$local_pid" || local_status=$?
+        rm -f "$local_done/parallel-$local_step"
+        local_active=$((local_active - 1))
+      else local_live="$local_live $local_job"; fi
+    done
+    local_running=$local_live
+    if [ "$local_status" -ne 0 ]; then shift "$#"; fi
+    while [ "$#" -gt 0 ] && [ "$local_active" -lt "$local_limit" ]; do
+      (
+        set +e
+        (set -e; "workbench_check_parallel_$1")
+        local_result=$?
+        : > "$local_done/parallel-$1"
+        exit "$local_result"
+      ) &
+      local_running="$local_running $!:$1"
+      local_active=$((local_active + 1))
+      shift
+    done
+    if [ "$local_active" -gt 0 ] && [ "$#" -gt 0 ]; then sleep 0.05; fi
+  done
+  return "$local_status"
 }`,
   ];
 }
@@ -97,6 +139,19 @@ export function checkOutput(
     verbose ? body : `{\n${body}\n} >"$workbench_check_log" 2>&1`,
     ...after,
     "workbench_check_done",
+  ];
+}
+
+/** Admit another independent check when a slot opens, then drain the batch at the barrier. */
+export function parallelCheckOutput(commands: string[][], limit = commands.length): string[] {
+  return [
+    ...commands.flatMap((step, index) => [
+      `workbench_check_parallel_${String(index)}() (`,
+      "workbench_check_tag_details=1",
+      ...step,
+      ")",
+    ]),
+    `workbench_check_run_parallel ${String(limit)} ${commands.map((_, index) => String(index)).join(" ")}`,
   ];
 }
 

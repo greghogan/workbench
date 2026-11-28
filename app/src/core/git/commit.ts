@@ -3,7 +3,7 @@ import { textLength } from "../runtime/invariants.js";
 import { readConfig } from "../projects/project-configuration.js";
 import { readFilePrefix } from "../runtime/file-reads.js";
 import { InvalidInput } from "../runtime/input-errors.js";
-import { commitPrefixPattern, type CommitStyle } from "../configuration/config-schema.js";
+import { commitPrefixPattern, projectOptionDefaults, type CommitStyle } from "../configuration/config-schema.js";
 
 const conventionalTypes = [
   "feat",
@@ -30,10 +30,9 @@ export function validateCommitPolicy(root: string): {
   const config = readConfig(root) as {
     commit?: { style?: CommitStyle; prefixes?: string[]; subject_width?: number; body_width?: number };
   };
-  // Configuration reads and edits share the schema; resolve defaults only here.
-  const style = config.commit?.style ?? "unrestricted";
-  const subjectWidth = config.commit?.subject_width ?? 50;
-  const bodyWidth = config.commit?.body_width ?? 72;
+  const style = config.commit?.style ?? projectOptionDefaults["commit.style"].value;
+  const subjectWidth = config.commit?.subject_width ?? projectOptionDefaults["commit.subject_width"].value;
+  const bodyWidth = config.commit?.body_width ?? projectOptionDefaults["commit.body_width"].value;
   const prefixes = config.commit?.prefixes ?? (style === "conventional" ? [...conventionalTypes] : undefined);
   return { style, subjectWidth, bodyWidth, prefixes };
 }

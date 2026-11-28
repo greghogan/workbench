@@ -7,7 +7,8 @@ import { processFailure } from "../../../src/core/runtime/process-outcome.mjs";
 import { describeError, settleCleanup, combineFailures } from "../../../src/core/diagnostics/diagnostic-errors.mjs";
 import { isolateFixtureGit } from "../../fixtures/git-environment.mjs";
 import { BrowserScenario, webBrowserScenarios } from "./web-browser-scenarios.mjs";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { captureBrowserService } from "./service-output.mts";
+import { chromium, type Browser, type BrowserContextOptions, type Page } from "playwright-core";
 import { spawnSync } from "node:child_process";
 import { readdirSync, mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync, copyFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -152,6 +153,7 @@ export async function runBrowserIntegration(repo: string, script: string): Promi
   const scratch = createOwnedScratch(tmpdir(), "workbench-browser");
   const workspace = scratch.directory;
   let primary: unknown;
+  let serviceOutput: ReturnType<typeof captureBrowserService> | undefined;
   try {
     const root = join(workspace, "project");
     const env: NodeJS.ProcessEnv = {
@@ -161,6 +163,7 @@ export async function runBrowserIntegration(repo: string, script: string): Promi
       WORKBENCH_STORAGE_ROOT: join(workspace, "cache"),
       WORKBENCH_STORAGE_EXTERNAL: "true",
       WORKBENCH_LOCAL_CONFIG_ROOT: root,
+      WORKBENCH_SYSTEM_RUNTIME_DIRECTORY: join(workspace, "system-runtime"),
       WORKBENCH_EPHEMERAL_CHECKOUT: "0",
       XDG_DATA_DIRS: join(workspace, "system"),
       RUSTUP_HOME: join(workspace, "rustup"),
@@ -447,47 +450,42 @@ artifacts:
     }
     const cancellation = processCancellation();
     const service = new AbortController();
-    let output = "";
-    let ready: ((origin: string) => void) | undefined;
-    const startup = new Promise<string>((resolve) => {
-      ready = resolve;
-    });
+    const captured = (serviceOutput = captureBrowserService(service));
     const closed = runOwnedChild(node, [join(repo, "bundle/main.cjs"), "serve", "--port", "0"], {
       cwd: root,
       env,
       owner: scratch.owner,
       signal: AbortSignal.any([cancellation.signal, service.signal]),
       stopDescendantsOnExit: true,
-      output: (stdout, stderr) => {
-        for (const stream of [stdout, stderr])
-          stream.on("data", (chunk: Buffer) => {
-            output = (output + chunk.toString()).slice(-65536);
-            const match = /http:\/\/127\.0\.0\.1:\d+/.exec(output);
-            if (match) ready?.(match[0]);
-          });
-      },
+      output: captured.capture,
     });
     let browser: Browser | undefined, page: Page | undefined;
     const failures: unknown[] = [];
     let evidence: Record<string, unknown> | undefined;
     try {
-      const origin = await Promise.race([
-        startup,
+      const { httpCredentials } = await Promise.race([
+        captured.startup,
         closed.then((outcome) => {
           throw (
-            processFailure("Fixture server", outcome) ?? new Error(`Fixture server exited before listening: ${output}`)
+            processFailure("Fixture server", outcome) ?? new Error("Fixture server exited before sign-in was available")
           );
         }),
       ]);
-      browser = await chromium.launch({ executablePath: browserPath, headless: true });
-      page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+      const origin = httpCredentials.origin;
+      const opened = (browser = await chromium.launch({ executablePath: browserPath, headless: true }));
+      const newContext = (options: BrowserContextOptions = {}) => opened.newContext({ ...options, httpCredentials });
+      page = await (await newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(String(e)));
       page.on("dialog", async (d) => {
         if (d.type() !== "beforeunload") errors.push(`Unexpected ${d.type()} dialog`);
         await d.accept();
       });
-      await page.goto(origin + "/projects");
+      assert.equal(
+        (await page.goto(origin + "/projects"))?.status(),
+        200,
+        "Browser sign-in must open the projects page",
+      );
       const destination = await page.getByRole("link", { name: "demo", exact: true }).getAttribute("href");
       assert(destination, "The registered project has a dashboard link");
       const base = new URL(destination, origin).href.replace(/\/$/, "");
@@ -495,7 +493,8 @@ artifacts:
       for (const scenario of webBrowserScenarios({
         distribution: repo,
         page,
-        browser,
+        browserVersion: opened.version(),
+        newContext,
         root,
         provider,
         commit,
@@ -518,7 +517,7 @@ artifacts:
         passed: true,
         base,
         root,
-        browser: browser.version(),
+        browser: opened.version(),
         node: process.versions.node,
         platform: process.platform,
         screenshots: readdirSync(directory).filter((name) => name.endsWith(".png")).length,
@@ -530,19 +529,6 @@ artifacts:
           writeFileSync(join(directory, "failure-page.html"), await page.content());
           await page.screenshot({ path: join(directory, "failure-page.png"), fullPage: true });
         }
-      } catch (diagnostic) {
-        failures.push(diagnostic);
-      }
-      try {
-        writeFileSync(
-          join(directory, "failure.txt"),
-          String(error) +
-            (error instanceof Error && error.cause
-              ? `\nCause: ${error.cause instanceof Error ? (error.cause.stack ?? error.cause.message) : "unavailable"}`
-              : "") +
-            "\n" +
-            output,
-        );
       } catch (diagnostic) {
         failures.push(diagnostic);
       }
@@ -566,13 +552,6 @@ artifacts:
         failures.push(cleanup);
       }
       cancellation.close();
-    }
-    if (failures.length) {
-      try {
-        writeFileSync(join(directory, "failure.txt"), failures.map(describeError).join("\n") + "\n" + output);
-      } catch (diagnostic) {
-        failures.push(diagnostic);
-      }
     }
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1)
@@ -614,7 +593,10 @@ artifacts:
           finalErrors.push(error);
         }
         if (finalErrors.length) {
-          writeFileSync(join(directory, "failure.txt"), finalErrors.map(describeError).join("\n"));
+          writeFileSync(
+            join(directory, "failure.txt"),
+            finalErrors.map(describeError).join("\n") + "\n" + (serviceOutput?.diagnostics() ?? ""),
+          );
           writeFileSync(
             join(directory, "result.json"),
             JSON.stringify({ passed: false, errors: finalErrors.map(describeError) }, null, 2),

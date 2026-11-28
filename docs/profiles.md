@@ -1,8 +1,155 @@
-# Development and release profiles
+# Artifact and development profiles
 
-Profiles are project-owned declarations in [workbench/config.toml](../workbench/config.toml). They select an execution
-workspace or a release recipe. Shared language definitions remain independently replaceable; profile declarations do not
-merge with another project's declarations.
+Artifact profiles live in [workbench/profiles.toml](../workbench/profiles.toml). Select a profile and output kind each time
+you build. The profile determines which projects, targets, formats, and recipes are available.
+
+Run `workbench artifact` to build from a saved profile, build from a custom selection, or manage profiles. A custom
+selection starts with an existing profile's recipes and defaults to the local target. Choose which outputs to make
+available, then optionally save the selection under a new name. Choose the kinds to build and where to keep the outputs.
+The menu offers publication when the selected outputs have a compatible destination.
+
+```sh
+workbench artifact list
+workbench artifact build native --kind development --kind release --plan
+workbench artifact build --all --kind release --plan
+workbench artifact build native --kind release --format archive --export /path/to/transfers
+```
+
+`--all` selects matching outputs across the catalog for the chosen target or the local host. When you name a profile
+explicitly, it must offer every requested kind for that selection.
+
+Interrupting a build batch preserves completed outputs and reports the selections that did not start.
+
+`artifact list` shows the state of retained outputs and the host requirements for building them. An outdated output
+belongs to earlier profile inputs. Use `--sizes` for sizes and measurement times, or `--registry` to check configured
+registries for the current image references. Registry results distinguish a missing image from an unavailable registry.
+Sizes describe output bytes. Shared Docker layers can contribute to more than one image's size.
+A matching image built in a different checkout is available for `artifact verify` without rebuilding it.
+
+Toolchain images contain the selected tools and runtime libraries. Development images include locked project
+dependencies for building a separate checkout offline. Release files carry the product and its runtime requirements.
+Linux archive recipes produce a `.tar.gz` file. Archive recipes for macOS and Windows use ZIP.
+For a directory-based release, give the recipe `package = {}` and have its build write files to `{output}`. Workbench
+packs that directory and extracts the result for the verifier. POSIX release archives preserve contained symbolic links
+and executable files. Windows ZIP recipes should produce ordinary files and directories.
+Use `--export DIRECTORY` to choose a local destination for any supported format. Workbench creates the directory if needed.
+
+For a file transfer, carry the exported directory and send its manifest SHA-256 through a trusted channel. On the
+receiving host, select the matching profile, kind, target, and format with `workbench artifact import` and supply
+`--sha256`. The receiver checks the manifest and the bytes and runs the recipe verifier before retaining the import.
+Use `--unverified` explicitly when transferring a candidate before target verification.
+A unique retained artifact with matching inputs is selected automatically, including a verified import. Verified
+outputs take precedence over candidates awaiting verification. If several matching outputs contain different bytes,
+`artifact inspect` lists the generation IDs. Use the ID shown at import or inspection with `--generation ID` to
+inspect, verify, export, or publish exact bytes. Before publication, verify the release on its target from a clean
+checkout of the tagged source revision.
+
+For offline OCI transfer, use `workbench artifact export native DIRECTORY --kind development --format oci`, or
+add `--export DIRECTORY` when building the image. Carry the resulting directory and send the manifest SHA-256
+through a trusted channel. Import the matching selection with `artifact import` and `--sha256` on a host with Docker,
+the pinned Dev Container CLI, and the project checkout. Workbench verifies the image with networking disabled before
+selecting it for the profile. For a build that needs qualification on the destination, add `--unverified` when
+exporting. The receiver follows the same import procedure.
+
+A native toolchain or development archive recipe declares `owner` and `native_profile`. Linux recipes also need a
+digest-pinned `bootstrap_image` loaded on each host. It supplies OS prerequisites and the Workbench startup runtime.
+macOS and Windows ZIP recipes use the matching host's system tools and runtime prerequisites.
+
+Workbench acquires pinned distributions in a private cache and packages the original downloads and upstream proof
+files. Development archives also carry supported package caches. The embedded `workbench-installation.json` records the
+target, profile inputs, prerequisites, and a SHA-256 inventory of the payload. Import checks the outer archive digest
+before extraction and verifies the inventory in private staging. The regular native installer authenticates the original
+distributions again and runs the profile verifier from a separate checkout.
+
+To transfer just the archive, obtain the SHA-256 of that file from a trusted channel. If using the full export directory,
+supply the SHA-256 of its transfer manifest instead. The same import command accepts either source.
+
+```sh
+workbench artifact import portable-go /path/to/artifact.zip --kind toolchain --format archive --sha256 EXPECTED_SHA256
+```
+
+Use an imported native archive with `workbench shell --artifact PROFILE`. Workbench restores its inputs into a
+separate reusable cache and installs the pinned tools on the host. The host must provide the runtime prerequisites
+declared by the target. A shell uses the current verified development archive by default. Pass `--generation ID`
+for an exact import, `--kind toolchain` for a toolchain archive, or `--path ROOT` to select a covered language root.
+Checks started in that shell inherit its cache and Workbench's offline setting.
+
+```sh
+workbench shell --artifact java -- workbench check --path examples/languages/java --role build --role smoke
+```
+
+For a manager-native export, declare a recipe with `owner`, `store_profile`, and `bootstrap_image`. Select an existing
+managed preparation profile with the same kind and builder. Use `nix-export` or `guix-export` on the matching Linux
+host. Workbench prepares the selected profiles and transfers their store dependencies through the file manifest
+workflow. Load a digest-pinned bootstrap image with Node.js and the package manager before qualification. For Guix,
+the exporting daemon needs a signing key, and the receiving bootstrap must authorize its public key.
+Workbench restores the archive into a disposable container, pins its profiles, and runs the selected profile's
+offline checks as an unprivileged user with fresh caches and networking disabled. The bootstrap must be free of the
+selected profiles.
+[Guix archive documentation](https://guix.gnu.org/manual/en/guix.pdf)
+
+`workbench shell --artifact PROFILE` also accepts verified Nix and Guix exports with a pinned bootstrap. It restores
+the store in a disposable container with networking disabled. The live checkout is mounted at the same path, and
+the shell runs with the host user's numeric identity. Commands can edit the checkout, including linked Git worktrees.
+
+A project with its own verifier can supply `verify` in place of `bootstrap_image`. It receives the authenticated
+archive and a fresh checkout through the `{artifact}` and `{root}` arguments. Its verification must restore the archive
+into an isolated store and exercise the project with networking disabled.
+
+In the catalog, `targets` declare platforms and optional runtime, ABI, and CPU requirements. A profile names its
+projects, builder, workspace, and supported target, kind, format, and recipe combinations. File recipes declare inputs
+and literal build and verification arguments. The build writes `{artifact}`; the verifier receives a copy in its own
+working directory. Use `verify_inputs` for project-relative scripts, fixtures, or other files used by the verifier.
+Changes to those files invalidate verification. Files that also affect the build belong in `inputs` as well.
+Use `{tag}` in release recipe arguments when the version affects the build or verification. Untagged builds supply
+an empty argument. Pass `--tag TAG` to build, verify, or transfer the tagged variant. Its tag becomes part of its
+artifact identity.
+Release variants participate in CI packaging by default. For a variant verified separately, specify a nonempty
+`ci_skip_reason`. The exclusion applies to routine CI packaging and leaves the variant available for explicit builds
+and tagged releases.
+Image recipes select a prepared development configuration. Use `artifact add`, `edit`, or `remove`
+to preview a change, then `--apply` to save it. Existing declarations retain their comments.
+
+With `cache.auto_prune` enabled, a verified local artifact build can retire older local builds of the same recipe
+under `cache.max_generations` and `cache.max_age_days`. Active generations, explicitly retained assets, and verified
+transfers remain available. Export files to a directory outside the managed artifact cache for permanent retention.
+
+Run `artifact publish` to send a verified image to an OCI registry or verified release files to a configured GitHub or
+GitLab release. `release publish` publishes the exact tagged source and writes a release record using the verified
+published files. Select a destination declared with `kind = "github"` and its `repository`, or `kind = "gitlab"` and its
+`host` and `project`. The hosted tag must already point to the reviewed source.
+Build from a clean checkout to bind a release file to its Git revision for publication.
+
+Add `--publish` to an `artifact build` command to publish all selected outputs after their builds and verification
+succeed. For OCI images, this uses the profile registries unless you name a destination. For release files, supply
+`--publish DESTINATION --tag TAG`. The verified outputs stay available locally if delivery fails. Rerunning an export
+into the same directory reuses an existing transfer when its manifest and bytes still match.
+
+To assemble a release across hosts, build, verify, and export each file from its target. Obtain each export's manifest
+checksum directly from the trusted builder. From a clean checkout of the same source, run `artifact import` with the
+appropriate `--target`, `--sha256`, and `--verified-on-target` to carry that verification to the publishing host. Pass
+all the resulting IDs as repeated `--generation` values to `release publish`. The publisher matches each ID to a recipe
+in the selected profiles and checks the digest and tagged source before delivering the release. Asset names and release
+record entries identify the profile, target, and format so multiple builds for the same platform can ship together.
+
+Generated CI workflows publish only when you configure `publication.branch` or `publication.tag`. Each rule selects
+`refs` (exact names or a prefix ending in `*`), `profiles`, and a `destination`. A branch rule selects one `target`
+and a `kind` of `toolchain` or `development` for OCI delivery. The workflow retains the source revision and every
+verified registry digest, including successful deliveries when a later image fails to publish. A preparation job
+exports verified images. The publishing job authenticates and imports them before logging into the delivery registry.
+The runner and repository need space for the image exports.
+
+On GitLab, use a delivery registry outside the source project's registry, with no write access for the source
+pipeline's job token. Scope `WORKBENCH_PUBLISH_REGISTRY_USER` and `WORKBENCH_PUBLISH_REGISTRY_PASSWORD` to the
+`workbench-publication-<destination>` environment and restrict that environment to authorized publishers. The
+server's job artifact limit must accommodate the compressed image handoff. Use explicit `artifact publish` for images
+that exceed the limit. [GitLab environment scopes](https://docs.gitlab.com/ci/environments/#limit-the-environment-scope-of-a-cicd-variable)
+[GitLab artifact limits](https://docs.gitlab.com/ci/jobs/job_artifacts/)
+
+A tag rule selects one `target` or a list such as `targets = ["linux-x64", "linux-arm64"]`. After the configured
+checks pass, the target jobs stage verified package exports from the checks. A package without matching evidence is
+built and verified on its target. One publishing job imports every required export from the same CI run, publishes the
+release, and retains its release record.
 
 ## Development selection
 
@@ -114,23 +261,15 @@ Workbench preserves active work when an existing container no longer matches the
 ## Release preparation
 
 ```sh
-workbench release profiles                         # List configured recipes
-workbench release prepare --plan                    # Inspect the default selection without building
-workbench release prepare                           # Prepare all configured release profiles
-workbench release prepare --all                     # Explicit equivalent
-workbench release prepare go-native                 # One profile
-workbench release prepare go-nix-portable go-guix-portable
+workbench artifact list
+workbench artifact build go-native --kind release --plan
+workbench artifact build go-native --kind release --export /path/to/transfers
+workbench artifact build go-nix-portable go-guix-portable --kind release
 ```
 
-Preparation executes project-owned argument arrays. It defaults to all configured profiles without a selection prompt.
-It never changes the development preference. Existing check-role packaging remains available through `make release`;
-named multi-format packaging uses `workbench release prepare`.
-
-These commands list configured recipes, not every format a builder could produce. Development profiles select a working
-environment; release profiles select an artifact recipe. `workbench tools profiles` lists compatibility toolchain
-selections, independently of either. Bare `workbench development` also lists its profiles. Release tables group recipes
-by language root and show the target platform; matching the host platform does not establish that its builder is
-installed.
+The shared catalog associates each recipe with its owning project. A profile selects target variants and formats.
+`workbench tools profiles` lists compiler and runtime choices independently. `make release` runs the language's
+local release check roles.
 
 The example profiles target Linux x64, with an additional ARM64 Rust musl profile. A foreign platform fails before
 building; preparation does not automatically emulate another architecture. Use a builder native to the declared
@@ -138,7 +277,7 @@ platform. The provided reference recipes are:
 
 | Builder | Formats                                                                                                  | Verification                                                               |
 | ------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Native  | Go executable directory; explicit Rust musl executable directories                                       | Copied executable; musl linkage checks and offline Ubuntu/Alpine execution |
+| Native  | Go, Java, and Rust musl archives                                       | Copied executable; musl linkage checks and offline Ubuntu/Alpine execution |
 | Nix     | Exported closure, portable static tarball, Docker archive                                                | Fresh store import or offline container execution                          |
 | Guix    | Relocatable (`-R`) and really relocatable (`-RR`) tarballs, Docker archive, Squashfs, Apptainer workflow | Offline container execution without the application's builder store        |
 
@@ -146,8 +285,8 @@ All eleven examples provide a Nix closure and a really relocatable Guix tarball,
 definition used by their development environment. Go additionally demonstrates the other formats above. For example:
 
 ```sh
-workbench release prepare cpp-nix-closure cpp-guix-portable
-workbench release prepare react-nix-closure react-guix-portable
+workbench artifact build cpp-nix-closure cpp-guix-portable --kind release
+workbench artifact build react-nix-closure react-guix-portable --kind release
 ```
 
 Rust also provides `rust-linux-x64-musl` and `rust-linux-arm64-musl`. Select the profile matching the native Linux
@@ -164,34 +303,27 @@ host Guix daemon and authenticated `channels.scm`. Preparation may fetch verifie
 verification runs offline after its runtime is acquired. Application release images contain runtime closures;
 development images contain tools and are separate artifacts.
 
-Guix's Apptainer workflow consumes its Squashfs pack directly. The existing Nix lock supplies Apptainer because the
-example's pinned Guix channel has no Apptainer package. The verifier extracts Squashfs with `--unsquash`, so FUSE device
-access is unnecessary. Nested Apptainer uses user namespaces and explicit Docker seccomp and system-path exceptions;
-these settings belong to the disposable, offline verification container. They are not CPU emulation.
+The Go example's `go-guix-squashfs` profile produces a SquashFS pack that Apptainer can run directly. The existing
+Nix lock supplies Apptainer because the example's pinned Guix channel has no Apptainer package. The verifier extracts
+the pack using `--unsquash` and needs no FUSE device. Nested Apptainer uses user namespaces and explicit Docker seccomp
+and system-path exceptions inside the disposable offline verification container.
 
 ### Recipe contract and output
 
-Each `release.profiles` entry declares `name`, registered language `path`, `builder`, `format`, target `platform`, and
-nonempty `prepare` and `verify` argument arrays. The coordinator validates combinations and locked builder inputs; the
-recipe invokes the actual native, Nix, or Guix packager. Unsupported recipes fail visibly.
+A file recipe can write its payload directly to `{artifact}`. To keep a packager that produces a directory, declare
+`package = {}`. The build receives a private `{output}` directory through the `WORKBENCH_RELEASE_OUTPUT` environment
+variable. On Linux, Workbench archives that directory and reconstructs it for the verifier in private storage.
+Use `package = { file = "count.squashfs" }` when the builder supplies a single file in its final format. Workbench
+retains those bytes and presents them under the declared name to the verifier.
 
-Preparation receives `WORKBENCH_RELEASE_OUTPUT`, `WORKBENCH_RELEASE_BUILDER`, `WORKBENCH_RELEASE_FORMAT`, and
-`WORKBENCH_RELEASE_PLATFORM`. Literal argument placeholders are `{source}`, `{output}`, `{artifact}`, `{workbench}`, and
-`{nix_image}`. They are substituted as argument text, without shell evaluation. The preparation command runs from the
-registered source directory; verification runs from a private directory under the system temporary directory with
-`{artifact}` pointing to an independent artifact copy. Its verifier must exercise the artifact's promised behavior and
-runtime dependencies; it must not rebuild it.
+Build and verify are literal argument arrays. Recipes can use `{source}` for the owning project, `{workbench}` for the
+active distribution, and `{nix_image}` for the configured pinned Nix runtime. Build runs from the language root,
+while verification runs outside the checkout against a staged copy. It exercises the packaged program and runtime
+dependencies.
 
-Outputs are accepted by an atomic directory rename into `dist/releases/NAME`, under the checkout root's external build
-generation when external storage is enabled, only after verification and unchanged artifact/source checks pass. Failed
-staging and verification copies are removed. Existing accepted outputs are preserved; move them explicitly before
-rebuilding a profile. Independent selected profiles can finish even when another fails, with an aggregate failure
-reported.
-
-`workbench-release.json` is reserved for the verification receipt. It records profile configuration, source file
-identities and Git revision/dirty state, locked builder inputs, platform, artifact sizes and SHA-256 identities, and
-verification/emulation results. This is local preparation evidence. It does not create a `REL` record, a Git tag, or a
-registry publication. Publishing and testing GitHub Container Registry remain separate reviewed work.
+The command reports the retained artifact generation, and `--export DIRECTORY` copies the payload and its manifest.
+The manifest identifies the payload bytes, selected recipe, source revision when clean, and verification.
+Publication is a separate step using the verified generation.
 
 Workbench's executable bundles are tool distribution artifacts, separate from these project release outputs.
 `make release` prepares the runnable `workbench/` directory and `workbench-artifacts/workbench.tar.gz`, with
@@ -248,36 +380,55 @@ workspace. Install Docker and the locked Dev Container CLI:
 
 ```sh
 workbench tools install --devcontainer
-workbench development prepare native
+workbench artifact build native --kind development --format oci
 workbench development use native --workspace devcontainer
 workbench shell --path examples/languages/go -- go test ./...
 ```
 
 Preparation reuses a matching local image or tries the configured registry before building the configured recipe.
 Registry retrieval failures are reported before a local build; required base images and dependencies must still be
-available. `development prepare PROFILE --build` skips image reuse. Successful local verification can be reused when its
-immutable image, complete frozen source and Workbench distribution, verification command, Docker host, and effective
-execution environment match. `development prepare PROFILE --fresh` forces verification; CI, explicit verification, and
-publication retries can reuse matching evidence no older than 30 minutes. Missing or uncertain evidence also runs fresh.
-Verification mounts a separate source snapshot into the immutable image with `--network=none`. Verification has no host
-dependency-cache mounts or installed project outputs; it compiles and tests current source. Native installation uses
-Workbench's verified installer. Nix and Guix assemble images directly from their declared development closures,
-including locked check dependencies. Nix submits subproject environments to one builder graph. Guix groups them by
-effective channel declaration and evaluates each group with its matching Guix, then assembles the realized profiles
-without re-evaluating manifests. Both retain separate profiles for each root; Guix also retains each group's runtime.
-Image preparation does not run project builds or language package managers. Native images retain verified tools and
-dependency downloads. Advisory checks requiring live services remain online operations; an offline build does not claim
-fresh vulnerability information.
+available. `artifact build --force` skips image reuse. To build a Nix or Guix image locally, select that
+manager's store in personal configuration. For example, use `workbench config set preparation.guix_store system` for the
+host daemon or `workbench config set preparation.nix_store managed` for Docker. Each defaults to `disabled`. Pulling or
+verifying a prepared image requires no store selection.
+
+Managed stores live under `managed-stores/nix` or `managed-stores/guix` in the Workbench cache. Projects can reuse
+packages when they use the same Docker engine, bootstrap closures, and store trust configuration. Builds for different
+target architectures can share the host bootstrap and architecture-independent inputs. Each target retains its own
+profile roots, so retiring one target lets the manager reclaim its unused objects while preserving the other target
+and their shared inputs. Ordinary Docker volume cleanup removes the mounts and the next preparation recreates them
+from the retained cache directories.
+
+The Builders section of `workbench cache` shows shared store sizes, eligible profile roots, and pending work. If
+assembly stops after creating managed store roots, cache inventory keeps those roots protected and shows the command to
+retry the preparation. A successful retry with the same inputs reuses their store and records the roots with the image.
+`workbench cache prune --checkout builders` previews cleanup or prompts for confirmation in a terminal. Cleanup releases
+verified staging archives and superseded profiles, then lets the store's package manager reclaim unreachable packages.
+Other projects' pins and explicitly retained profiles remain live. Workbench releases its own system-store profiles
+through dependency pruning. The system administrator controls garbage collection for those stores.
+
+Successful local verification can be reused when its immutable image, complete frozen source and Workbench distribution,
+verification command, Docker host, and effective execution environment match. `development prepare PROFILE --fresh`
+forces verification; CI, explicit verification, and publication retries can reuse matching evidence no older than 30
+minutes. Missing or uncertain evidence also runs fresh. Verification mounts a separate source snapshot into the
+immutable image with `--network=none`. Verification has no host dependency-cache mounts or installed project outputs; it
+compiles and tests current source. Native installation uses Workbench's verified installer. Nix and Guix assemble images
+directly from their declared development closures, including locked check dependencies. Nix submits subproject
+environments to one builder graph. Guix groups them by effective channel declaration and evaluates each group with its
+matching Guix, then assembles the realized profiles without re-evaluating manifests. Both retain separate profiles for
+each root; Guix also retains each group's runtime. Image preparation does not run project builds or language package
+managers. Native images retain verified tools and dependency downloads. Advisory checks requiring live services remain
+online operations; an offline build does not claim fresh vulnerability information.
 
 Waiters observe busy preparation locks without mutating their metadata. Inspect profile, managed-builder, and BuildKit
 ownership with `workbench development locks PROFILE`. To recover a demonstrably abandoned lock, select its returned
 digest with `workbench development recover PROFILE --lock profile --expect DIGEST` (or `--lock builder` /
-`--lock buildkit`). Recovery rechecks the exact owner, local child-process scope, and container activity. Active owners,
-foreign hosts, incomplete launch evidence, and uncertain engine state are preserved. An activity scope left by an
-interrupted preparation also remains uncertain: dead direct children alone cannot prove that detached descendants have
-finished. Recovery requires a normally released activity scope. Drain and stop Workbench containers and builders before
-recovery; the command does not terminate them. Older locks without child-process ownership evidence require operator
-investigation.
+`--lock buildkit`). Use `--lock store` for a managed store lock. Use the same `--architecture` on both commands for an
+emulated build. Recovery rechecks the exact owner, local child-process scope, and container activity. Active owners,
+foreign hosts, incomplete launch evidence, and uncertain engine state are preserved. Managed store recovery verifies the
+store's Docker engine and checks for surviving processes and containers that still mount the store. For other
+preparation locks, release the activity scope and drain Workbench containers and builders before recovery. Older locks
+without child-process ownership evidence require operator investigation.
 
 Inspect availability without downloading image layers:
 
@@ -314,35 +465,33 @@ the previous receipt.
 
 An optional `prepare` command array builds the image instead of the Dev Container Dockerfile. It runs from a project
 snapshot on the host; `{image}` names the local output image and `{workbench}` identifies its pinned distribution. The
-reference managed recipes use the installed Nix or Guix and its host store when available, including for emulated
-targets, then assemble the final image with Nix dockerTools or Guix pack. Host preparation registers the per-root
-development profiles against garbage collection. Each target architecture has separate profile identities; Guix also
-retains the native pinned channel manager and target runtime. Missing managers use native bootstrap containers with
-persistent, builder-specific Docker store volumes. Foreign package builders execute through the enabled binfmt handler.
-Durable private-store roots are registered even when automatic pruning is disabled. Those volumes retain successful
-package work after a later failure and appear in Workbench cache reporting and explicit pruning. A failed installed
-manager is an error, not a fallback. The Linux assembly helper requires Docker, Bash, and tar on the host. Import
-streams directly to Docker; Nix and Guix use uncompressed local import archives to avoid repeated compression. Docker
-handles registry layer compression when publishing. Both image layouts expose the platform loader through `/lib` and
-`/lib64` for prebuilt development tools. Prepared Guix commands also expose the selected profile's library directories;
-mutable caches remain outside the immutable store.
+reference recipes use the selected preparation backend, then assemble the final image with Nix dockerTools or Guix pack.
+Each target architecture has separate profile identities. Guix also retains the native pinned channel manager and target
+runtime. Docker-backed preparation runs the manager in a native bootstrap container. Foreign package builders execute
+through the enabled binfmt handler. Profiles stay rooted even when automatic pruning is disabled. The Linux assembly
+helper requires Docker, Bash, and tar on the host. Import streams directly to Docker; Nix and Guix use uncompressed
+local import archives to avoid repeated compression. Docker handles registry layer compression when publishing. Both
+image layouts expose the platform loader through `/lib` and `/lib64` for prebuilt development tools. Prepared Guix
+commands also expose the selected profile's library directories; mutable caches remain outside the immutable store.
 
-`workbench cache --checkout builders` reports fallback Docker stores; `cache prune --checkout builders` selects paired
-store/state volumes together. Attached containers and active preparation protect them. Volumes without a matching
-Workbench ownership receipt are reported but retained; a subsequent preparation registers reused volumes. Pruning
-builder stores leaves prepared images intact. Host profiles are part of the owning project's dependency cache and are
-released with `cache prune --dependencies`. Host shared-store GC remains the host administrator’s policy; Workbench
-retires only its owned roots. Guix check replacements keep the previous environment rooted until the replacement
-succeeds and its stable root is registered. An interrupted publication retains a registered pending root until retry or
-explicit dependency pruning. Nix profile generations likewise remain protected with their owning dependency cache.
+Managed Guix reuses a compatible standard bootstrap across projects with the same recipe and channel pins. Run
+`workbench development prepare PROFILE --refresh-bootstrap` to rebuild locally with a fresh bootstrap. `--fresh` repeats
+offline verification.
 
-To rehearse managed image assembly with two tiny profiles, run `node scripts/verify-managed-preparation.mjs guix` or
-`node scripts/verify-managed-preparation.mjs nix` from a prepared Workbench checkout. This explicit integration check
-requires the selected manager installed on Linux and Docker. It uses temporary project caches, executes both profiles
-with networking disabled, and removes its profile roots and newly imported image tags. Store outputs remain eligible for
-the manager's ordinary garbage collection. Add `--subproject-pin` to the Guix rehearsal to exercise a separate
-subproject declaration at the existing pinned revision. Routine tests exercise the script entry points with isolated
-tool fixtures.
+Guix host checks keep the previous environment rooted until the replacement succeeds and its stable root is registered.
+An interrupted publication retains a pending root until retry or explicit dependency pruning.
+
+From a prepared Workbench checkout, run `pnpm run tooling:maintainers`, then
+`node scripts/verify-managed-preparation.mjs guix` or `node scripts/verify-managed-preparation.mjs nix` to rehearse
+managed image assembly with two tiny profiles. This explicit integration check requires the selected manager installed
+on Linux and Docker. It uses temporary project caches, executes both profiles with networking disabled, and removes its
+profile roots and newly imported image tags. Store outputs remain eligible for the manager's ordinary garbage
+collection. Add `--subproject-pin` to the Guix rehearsal to exercise a separate subproject declaration at the existing
+pinned revision. Routine tests exercise the script entry points with isolated tool fixtures.
+
+Pass `--store managed` with either manager to qualify its Docker-backed store. The script prepares two independent
+projects in a disposable Workbench cache, checks pin reuse through Docker volume recreation, and prunes an obsolete
+profile. Successful qualification removes the disposable store and image tags.
 
 Metadata refresh collects and verifies all requested sources before replacing project files. Generated declarations and
 recipes likewise finish generation first; each file replacement is atomic.
@@ -370,15 +519,15 @@ the host architecture. To prepare the other architecture, explicitly select it t
 
 ```sh
 # On Linux x64 with an ARM64 emulator registered:
-workbench development prepare native --architecture arm64
-workbench development publish native --architecture arm64
+workbench artifact build native --kind development --target linux-arm64 --format oci
+workbench artifact publish native --kind development --target linux-arm64 --format oci
 workbench development images native --architecture arm64 --require
 ```
 
-Use `--architecture x64` on Linux ARM64 for the reverse direction. The same commands support `nix` and `guix`.
-Preparation already verifies fresh source offline; use `development verify PROFILE --architecture TARGET` to request
-verification independently. Verification and publication can reuse matching evidence within their documented freshness
-window. No gate silently switches architectures or enables emulation.
+Use `--target linux-x64` for build and publication on Linux ARM64 for the reverse direction. The same commands support
+`nix` and `guix`. Preparation verifies fresh source offline. Use `artifact verify` with the same selection to verify
+independently. Verification and publication can reuse matching evidence within their documented freshness window. Foreign
+execution requires explicit target selection and prior emulator setup.
 
 The Docker host must already have an enabled binfmt_misc interpreter with the `F` flag for the target. That registration
 allows static QEMU to run inside container and package-manager namespaces and must be restored after a host restart.
@@ -387,12 +536,11 @@ Review the emulator dependency before an administrator installs it; Workbench do
 the kernel and interpreter requirements. Emulation shares the host kernel and can be substantially slower for
 source-heavy builds.
 
-Docker selects the target platform; managed foreign builds use a target-architecture container with its own Nix/Guix
-daemon and store. Architecture-specific builder identities keep those stores separate. Before verification, Workbench
-checks both image metadata and the running container's architecture. Receipts identify the verification host, target,
-and native or binfmt method. Each architecture has its own receipt, while a shared profile lock coordinates both
-variants. Emulated offline verification is sufficient for explicit development-image publication; it does not establish
-native platform support. Complete the native CI matrix before publishing a Workbench release.
+Docker selects the target platform for native images. Nix and Guix run their managers on the host architecture and
+realize the requested target in the configured store. Before verification, Workbench checks both the image metadata and
+the running container's architecture. Each target has its own receipt identifying the verification host, target, and
+native or binfmt method. Emulated offline verification is sufficient for explicit development-image publication;
+complete the native CI matrix to verify platform support for a Workbench release.
 
 `--assemble-only` stops before verification and cannot activate or publish an unverified image. An assembled image can
 be transferred with Docker save/load, then independently accepted with
@@ -425,10 +573,12 @@ workbench development publish native --image ghcr.io/OWNER/PROJECT-dev:TAG
 ```
 
 Use lowercase owner and repository names. The command first establishes local offline verification (or reuses matching
-evidence from the last 30 minutes), pushes the selected image, pulls its registry digest, and checks that its image
-identity matches the locally verified image. It prints and records the immutable `ghcr.io/...@sha256:...` reference.
-Authentication is external; Workbench neither stores nor prints registry tokens. Existing local destination tags are
-preserved by rejecting their reuse. A failed post-push verification cannot retract a registry upload; the command
+evidence from the last 30 minutes), pushes the selected image, and resolves the tag at the registry. It pulls that
+digest and checks the image identity against the verified local image. An existing input-derived tag is reused if it
+serves the verified image. Conflicting bytes are preserved and reported. Workbench records the immutable
+`ghcr.io/...@sha256:...` reference after verification.
+Authentication is external; Workbench neither stores nor prints registry tokens. A local destination tag pointing to
+another image blocks the upload. A failed post-push verification cannot retract a registry upload; the command
 reports failure and does not record the image as verified publication. Tags can be updated by the registry; consumers
 should pin the returned digest.
 
@@ -437,7 +587,9 @@ A consumer can use that digest as the `image` in its standard Dev Container JSON
 command, without requiring the builder on its host. Live GHCR credentials and permissions require hosted verification;
 local tests exercise publication ordering and failures without uploading images.
 
-The explicit `publication.yml` workflow prepares and publishes only the native, Nix, and Guix development images, on x64
-and ARM64. It verifies fresh source offline before each publication and retains receipts. It can run before Checks,
-which needs these images to exist. The separate `release.yml` workflow publishes the exact Workbench archive from a
-successful complete Checks run; see [release publication](contributing.md#hosted-ci-operations-and-publication).
+The explicit `publication.yml` workflow builds and publishes native, Nix, and Guix images on x64 and ARM64. Choose
+`toolchain` or `development` when dispatching it. Each build verifies the selected image offline and transfers it to a
+separate publishing job. That job authenticates and qualifies the transferred bytes before signing in to the registry.
+The workflow retains receipts and can run before Checks, which needs its configured images to exist. The separate
+`release.yml` workflow publishes the exact Workbench archive from a successful complete Checks run.
+See [release publication](contributing.md#hosted-ci-operations-and-publication).

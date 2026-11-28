@@ -42,7 +42,7 @@ const signature = (token: Token): string =>
   JSON.stringify([
     token.type,
     token.tag,
-    token.attrs,
+    token.type === "image" ? token.attrs?.filter(([name]) => name !== "data-image-location") : token.attrs,
     token.info,
     token.type === "paragraph_open" || token.type === "paragraph_close" ? false : token.hidden,
   ]);
@@ -247,13 +247,18 @@ export function compareDocuments(
   before: string,
   after: string,
   pageTitle?: string,
-  options: { budget?: ComparisonBudget; parser?: MarkdownParser; work?: ComparisonWork } = {},
+  options: {
+    budget?: ComparisonBudget;
+    parser?: MarkdownParser;
+    previousParser?: MarkdownParser;
+    work?: ComparisonWork;
+  } = {},
 ) {
   const work = options.work ?? new ComparisonWork(options.budget),
     parser = options.parser ?? new MarkdownIt({ html: false });
   const leftEnvironment: Record<string, unknown> = {},
     rightEnvironment: Record<string, unknown> = {};
-  const left = parser.parse(before, leftEnvironment),
+  const left = (options.previousParser ?? parser).parse(before, leftEnvironment),
     right = parser.parse(after, rightEnvironment);
   const sharedTitle = left[1]?.content === right[1]?.content && right[1]?.content === pageTitle;
   for (const document of [left, right]) {
@@ -322,6 +327,8 @@ export function compareDocuments(
   const similarity = (old: Node, next: Node): number | undefined => {
     if (old.structure !== next.structure) return undefined;
     if (old.key === next.key) return 1;
+    const rowLabel = old.token.tag === "tr" ? old.children[0] : undefined;
+    if (rowLabel && rowLabel.key === next.children[0]?.key && plainText(rowLabel).trim()) return 1;
     const a = profile(old),
       b = profile(next);
     if (!a || !b || !a.count || !b.count) return undefined;
@@ -404,7 +411,11 @@ export function compareDocuments(
         if (compared) return compared;
         flags.coarse = true;
       } else if (old.close && next.close) {
-        const children = compare(old.children, next.children);
+        // Columns in a compatible table are positional, regardless of how much a cell changes.
+        const children =
+          old.token.tag === "tr"
+            ? next.children.map((cell, index) => pair(old.children[index], cell))
+            : compare(old.children, next.children);
         const wrap = (side: "unified" | "previous" | "current") => {
           const source = side === "previous" ? old : next;
           return [clone(source.token), ...children.flatMap((row) => row[side]), clone(source.close ?? source.token)];

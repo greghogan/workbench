@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { webFixture } from "../../fixtures/web.mjs";
+import { git } from "../../fixtures/adoption.mjs";
 import { readTaskGraph } from "../../../src/core/tasks/task-model.ts";
-import { changeTaskStatus } from "../../../src/core/tasks/task-service.ts";
+import { changeTaskStatus, replanTask } from "../../../src/core/tasks/task-service.ts";
 import { readTaskDecisions } from "../../../src/core/tasks/task-decisions.ts";
 import {
   changeTaskQueue,
@@ -17,6 +18,12 @@ import { renderMap } from "../../../src/core/records/maps.ts";
 import { readProjects } from "../../../src/core/projects/project-configuration.ts";
 import { required } from "../../../src/core/runtime/invariants.ts";
 import { validateRelationships } from "../../../src/core/records/records.ts";
+import {
+  recordTaskImplementation,
+  taskVerificationApplies,
+  taskVerificationObservation,
+} from "../../../src/core/tasks/task-implementations.ts";
+import { workingReviewTree } from "../../../src/core/git/git-snapshot.ts";
 
 let root: string;
 beforeEach(() => {
@@ -43,7 +50,7 @@ function task(
 }
 const queue = (action: Parameters<typeof changeTaskQueue>[1]) => changeTaskQueue(root, action);
 
-test("human approval appends ready work even without a Git checkout", () => {
+test("task approval, execution, acceptance, and cancellation work without a Git checkout", () => {
   vi.stubEnv("WORKBENCH_STATE_HOME", join(root, "private-state"));
   task(0, "Planned");
   const config = join(root, "workbench/config.toml");
@@ -55,6 +62,13 @@ test("human approval appends ready work even without a Git checkout", () => {
   expect(readTaskQueue(root).entries.map((entry) => [entry.reference, entry.state])).toEqual([
     ["demo:TSK-0", "Queued"],
   ]);
+  queue({ action: "start", reference: "TSK-0" });
+  queue({ action: "implemented", reference: "TSK-0", detail: "Verified the result in a non-Git project." });
+  changeTaskStatus(root, "TSK-0", "Accepted", undefined, true);
+  expect(readTaskGraph(root).require("demo:TSK-0").metadata.status).toBe("Accepted");
+  task(1, "Planned");
+  changeTaskStatus(root, "TSK-1", "Canceled");
+  expect(readTaskGraph(root).require("demo:TSK-1").metadata.status).toBe("Canceled");
 });
 
 test("queue selection, ordering and execution survive restart without changing task files", () => {
@@ -183,7 +197,141 @@ test("acceptance rejects an implementation changed since its verification", () =
   expect(inspectTaskQueue(root).entries[0]?.blockers.join(" ")).toMatch(/changed after verification/);
   changeTaskStatus(root, "TSK-0", "Planned");
   expect(readTaskQueue(root).entries[0]?.evidence).toBeUndefined();
-  expect(readTaskQueue(root).entries).toEqual([]);
+  expect(readTaskQueue(root).entries).toMatchObject([{ reference: "demo:TSK-0", state: "Queued", started: true }]);
+  expect(inspectTaskQueue(root).ready).toEqual([]);
+});
+
+test("a verified committed outcome remains acceptable while later work changes shared files", () => {
+  const record = task(0);
+  const source = join(root, "shared.ts");
+  queue({ action: "add", references: ["TSK-0"] });
+  queue({ action: "start", reference: "TSK-0" });
+  writeFileSync(source, "export const value = 1;\n");
+  git(root, "add", record, source);
+  git(root, "commit", "-qm", "Deliver first task\n\nWorkbench-Provisional: true");
+  queue({ action: "implemented", reference: "TSK-0", detail: "Verified the retained delivery." });
+
+  const next = task(1);
+  writeFileSync(source, "export const value = 2;\n");
+  expect(inspectTaskQueue(root).entries[0]?.blockers).toEqual(["Awaiting developer acceptance"]);
+  git(root, "add", next, source);
+  git(root, "commit", "-qm", "Deliver later work\n\nWorkbench-Provisional: true");
+  writeFileSync(source, "export const value = 3;\n");
+  git(root, "add", source);
+  writeFileSync(source, "export const value = 4;\n");
+
+  expect(inspectTaskQueue(root).entries[0]?.blockers).toEqual(["Awaiting developer acceptance"]);
+  changeTaskStatus(root, "TSK-0", "Accepted", undefined, true);
+  expect(readTaskGraph(root).require("demo:TSK-0").metadata.status).toBe("Accepted");
+  expect(git(root, "show", ":shared.ts")).toBe("export const value = 3;");
+  expect(readFileSync(source, "utf8")).toBe("export const value = 4;\n");
+});
+
+test("a new delivery for the same task needs its own verification", () => {
+  const record = task(0);
+  const source = join(root, "first-output.ts");
+  queue({ action: "add", references: ["TSK-0"] });
+  queue({ action: "start", reference: "TSK-0" });
+  writeFileSync(source, "export const first = true;\n");
+  git(root, "add", record, source);
+  git(root, "commit", "-qm", "First task delivery\n\nWorkbench-Provisional: true");
+  queue({ action: "implemented", reference: "TSK-0", detail: "Verified the first delivery." });
+  const approvedPlan = readTaskGraph(root).require("demo:TSK-0").planDigest;
+
+  const additional = join(root, "additional-output.ts");
+  writeFileSync(additional, "export const additional = true;\n");
+  writeFileSync(record, readFileSync(record, "utf8") + "\n## Implementation account\n\nAdded the additional output.\n");
+  git(root, "add", record, additional);
+  git(root, "commit", "-qm", "Extend the same task delivery\n\nWorkbench-Provisional: true");
+
+  expect(readTaskGraph(root).require("demo:TSK-0").planDigest).toBe(approvedPlan);
+  expect(inspectTaskQueue(root).entries[0]?.blockers).toContain("The delivered source changed; release and reverify");
+  expect(() => {
+    changeTaskStatus(root, "TSK-0", "Accepted", undefined, true);
+  }).toThrow(/Verify the task again/);
+});
+
+test("retained verification tolerates generated reports and numbering while protecting archive state and source", () => {
+  const state = "workbench/state.toml";
+  const report = "coverage/coverage-summary.json";
+  const source = "delivered.ts";
+  mkdirSync(join(root, "coverage"));
+  const writeState = (next: string, archive: string) => {
+    writeFileSync(join(root, state), `[next]\nTSK = "${next}"\n[archive]\nrevision = "${archive}"\n`);
+  };
+  writeState("1", "old");
+  writeFileSync(join(root, report), "{}");
+  writeFileSync(join(root, source), "export const version = 1;\n");
+  const proof = { tree: workingReviewTree(root), paths: [state, report, source] };
+
+  writeState("2", "old");
+  writeFileSync(join(root, report), '{"total": {}}');
+  expect(taskVerificationApplies(root, proof)).toBe(true);
+  writeState("2", "new");
+  expect(taskVerificationApplies(root, proof)).toBe(false);
+  writeState("2", "old");
+  writeFileSync(join(root, source), "export const version = 2;\n");
+  expect(taskVerificationApplies(root, proof)).toBe(false);
+});
+
+test("shared verification compares each task with its own delivered contents", () => {
+  const source = "delivery.txt",
+    independent = "other-delivery.txt";
+  writeFileSync(join(root, source), "first delivery\n");
+  writeFileSync(join(root, independent), "independent delivery\n");
+  const first = { tree: workingReviewTree(root), paths: [source] };
+  writeFileSync(join(root, source), "later delivery\n");
+  const second = { tree: workingReviewTree(root), paths: [source, independent] };
+
+  const verify = taskVerificationObservation(root, [first, second]);
+  expect([verify(first), verify(second)]).toEqual([false, true]);
+  writeFileSync(join(root, source), "first delivery\n");
+  const refreshed = taskVerificationObservation(root, [first, second]);
+  expect([refreshed(first), refreshed(second)]).toEqual([true, false]);
+});
+
+test("reverification refreshes the retained delivery without claiming edits from another task", () => {
+  task(0);
+  const owner = join(root, "delivered.ts");
+  writeFileSync(owner, "export const value = 1;\n");
+  queue({ action: "add", references: ["TSK-0"] });
+  queue({ action: "start", reference: "TSK-0" });
+  queue({ action: "implemented", reference: "TSK-0", detail: "Initial verified delivery." });
+  writeFileSync(owner, "export const value = 2;\n");
+  writeFileSync(join(root, "separate-work.ts"), "export const unrelated = true;\n");
+  expect(inspectTaskQueue(root).entries[0]?.blockers).toContain("The delivered source changed; release and reverify");
+  queue({ action: "implemented", reference: "TSK-0", detail: "Reverified the changed delivery." });
+  expect(inspectTaskQueue(root).entries[0]?.blockers).toEqual(["Awaiting developer acceptance"]);
+  expect(readTaskQueue(root).entries[0]?.verification?.paths).toEqual(["delivered.ts"]);
+});
+
+test("renewing acceptance uses retained delivery paths even if a prior receipt captured unrelated edits", () => {
+  const record = task(0, "Accepted");
+  const baseline = git(root, "rev-parse", "HEAD");
+  const source = "delivered.ts";
+  const unrelated = "other-task.ts";
+  writeFileSync(join(root, source), "export const delivered = true;\n");
+  git(root, "add", record, source);
+  git(root, "commit", "-qm", "Deliver verified behavior");
+  writeFileSync(join(root, unrelated), "export const draft = true;\n");
+  const oldProof = { tree: workingReviewTree(root), paths: [source, unrelated] };
+  const retainedTask = readTaskGraph(root).require("demo:TSK-0");
+  const proof = required(
+    recordTaskImplementation(
+      root,
+      { ...retainedTask, acceptanceNeedsReview: true },
+      "Reverified the retained task.",
+      baseline,
+      oldProof,
+    ),
+    "retained verification",
+  );
+
+  writeFileSync(join(root, unrelated), "export const draft = false;\n");
+  expect(proof.paths).toEqual([source]);
+  expect(taskVerificationApplies(root, proof)).toBe(true);
+  writeFileSync(join(root, source), "export const delivered = false;\n");
+  expect(taskVerificationApplies(root, proof)).toBe(false);
 });
 
 test("parents aggregate children without inventing execution dependencies or flattening maps", () => {
@@ -256,7 +404,7 @@ test("linked child acceptance does not stale a parent's verified result", () => 
   expect(readTaskGraph(root).tasks.map((task) => task.metadata.status)).toEqual(["Accepted", "Accepted"]);
 });
 
-test("shared transitions retain CRLF body bytes and active work must be released before replanning", () => {
+test("shared transitions retain CRLF body bytes and preserve independent blockers through approval", () => {
   const path = task(0, "Planned"),
     original = readFileSync(path, "utf8").replaceAll("\n", "\r\n");
   writeFileSync(path, original);
@@ -266,10 +414,35 @@ test("shared transitions retain CRLF body bytes and active work must be released
   queue({ action: "start", reference: "TSK-0" });
   expect(() => {
     changeTaskStatus(root, "TSK-0", "Planned");
-  }).toThrow(/Block or release/);
-  queue({ action: "block", reference: "TSK-0", detail: "Plan needs revision." });
+  }).toThrow(/Pause active implementation/);
+  queue({ action: "block", reference: "TSK-0", detail: "Required test host is down." });
   changeTaskStatus(root, "TSK-0", "Planned");
-  expect(readTaskQueue(root).entries).toEqual([]);
+  changeTaskStatus(root, "TSK-0", "Approved", undefined, true);
+  expect(inspectTaskQueue(root).entries).toMatchObject([
+    { reference: "demo:TSK-0", state: "Blocked", ready: false, blockers: ["Required test host is down."] },
+  ]);
+});
+
+test("replanning paused work returns it to its queue position when the revised plan is approved", () => {
+  task(0);
+  const path = task(1, "Planned");
+  queue({ action: "add", references: ["TSK-0"] });
+  changeTaskStatus(root, "TSK-1", "Approved", undefined, true);
+  queue({ action: "start", reference: "TSK-1" });
+  replanTask(root, "TSK-1");
+  expect(inspectTaskQueue(root).entries).toMatchObject([
+    { reference: "demo:TSK-0", position: 1, ready: true },
+    { reference: "demo:TSK-1", position: 2, status: "Planned", state: "Queued", started: true, ready: false },
+  ]);
+  writeFileSync(path, readFileSync(path, "utf8").replace("A useful outcome.", "A revised outcome."));
+  changeTaskStatus(root, "TSK-1", "Approved", undefined, true);
+  expect(inspectTaskQueue(root)).toMatchObject({
+    ready: ["demo:TSK-1", "demo:TSK-0"],
+    entries: [
+      { reference: "demo:TSK-0", position: 1, ready: true },
+      { reference: "demo:TSK-1", position: 2, status: "Approved", state: "Queued", ready: true },
+    ],
+  });
 });
 
 test("acceptance validates CRLF checklists and synchronization retains their original line endings", () => {
@@ -337,7 +510,7 @@ test("a failed map publication preserves queue evidence and is recovered before 
   rmSync(map, { recursive: true });
   withTaskLock(root, () => undefined);
   expect(readTaskGraph(root).tasks[0]?.metadata.status).toBe("Planned");
-  expect(readTaskQueue(root).entries).toEqual([]);
+  expect(readTaskQueue(root).entries).toMatchObject([{ reference: "demo:TSK-0", state: "Queued", started: true }]);
   expect(readTaskQueue(root).entries[0]?.evidence).toBeUndefined();
   expect(existsSync(taskQueuePath(root) + ".transition.json")).toBe(false);
 });

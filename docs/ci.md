@@ -11,8 +11,18 @@ for setup, runner requirements, capabilities, and multiple destinations. Release
 separate GitHub adapter. The provider-independent policy is defined in [ADR-Y](../workbench/decisions/ADR-0Y.md).
 
 Use `workbench ci` for the complete configured Linux x64 rehearsal, including CI-stage advisories, tool profiles,
-managed images, and release verification. A passing commit gate or prepared image's offline verification does not
-establish that this complete CI gate passes.
+managed images, and release verification. Native release jobs run the configured verifier on a fresh extraction of
+the archive that CI retains. Linux jobs retain tarballs, and macOS and Windows jobs retain ZIP files. A passing commit
+gate or prepared image's offline verification does not establish that this complete CI gate passes.
+
+Local rehearsal, the reference workflow, and generated workflows schedule configured release packages on their target
+platforms. Aliases to one recipe share a packaging run. Distinct recipes and formats retain their own results.
+The reference workflow groups packages by project, builder, and target, and runs Guix packages with the Ubuntu 24.04
+daemon and the project's pinned channels. Keep each recipe's builder and verification prerequisites available on its
+runner. `workbench ci --plan --json` lists local packages and exclusions.
+
+The reference workflow verifies the portable Workbench archive from the same run on each declared target. The packaging
+recipe checks its repository, clean source revision, and checksum before reusing those bytes.
 
 Run `workbench pre-push` for the separate online checks, including dependency advisories. It uses fresh results and does
 not repeat the offline test gate. CI includes these checks automatically; the complete Linux rehearsal remains
@@ -40,12 +50,13 @@ Pinned third-party actions retain their own transport retry behavior.
 The reference workflow runs all language and framework examples on Linux x64, Linux ARM64, macOS ARM64, and Windows x64.
 Each native platform job includes Workbench's supported Node profiles. Linux also exercises the selected GCC profile;
 Clang remains the default and LLVM supplies formatting and analysis in both cases. Examples otherwise use their selected
-development release and static minimum API targets. Nix and Guix each run Workbench and every example in a prepared
-Linux x64 environment.
+development release and static minimum API targets. Nix and Guix each run Workbench and every example in prepared
+Linux x64 and ARM64 environments on their corresponding native runners.
 
 Two additional native Linux jobs prepare the explicit Rust musl profiles, one on x64 and one on ARM64. They run target
 tests and verify each static artifact in offline Ubuntu and Alpine containers. The same
-`workbench release prepare rust-linux-ARCH-musl` command rehearses this check locally on its matching architecture.
+`workbench artifact build rust-linux-ARCH-musl --kind release` command rehearses this check locally on its matching
+architecture.
 
 Every push, pull request, and manual run checks all configured roots. There are no changed-path filters. Coverage
 replaces the ordinary suite only where configured, and reports its difference from the recorded summary. Native release
@@ -131,22 +142,33 @@ reusable within a job. LLVM and GCC default to downloading authenticated, filter
 glibc 2.28 or newer. Rust and costly source builds can be retained. Package download stores are cached; installed
 project dependencies are recreated. Explicit Miri checks install their separate nightly only when requested.
 
-Linux CI can use the same prepared images as offline development:
+Linux CI can select prepared toolchain images independently of local development:
 
 ```toml
 [ci.images]
-native = "native"
-nix = "nix"
-guix = "guix"
+native = "native-toolchain"
+nix = "nix-toolchain"
+guix = "guix-toolchain"
 ```
 
-Each value names a configured development profile with a `container_config` and an `offline` declaration. Its local
-workspace may remain `host`; CI selects the prepared container independently. Omit `ci.images.native` to exercise native
-installation and cache execution on Linux. macOS and Windows always use native host execution. Nix and Guix CI require
-published prepared images; their host shells remain available for local development. Hosted CI pulls the matching Nix or
-Guix image from the configured registry and fails if it cannot retrieve it. Build, verify, and publish these images
-before pushing a recipe or dependency-pin change, using local preparation or the explicit native preparation workflow.
-Routine check jobs never build them. The pre-push gate checks registry manifests for every prepared image required by
+Each value names a prepared profile with a `container_config` and an `offline` declaration. Once the artifact catalog
+declares OCI recipes, the image must appear there with its declared kind for every Linux architecture CI exercises.
+Its prepared roots must cover all the language roots selected for that builder. Qualify and publish toolchain-only
+images for each required architecture before selecting them in `ci.images`. CI restores locked inputs for the
+operation's selected roots and toolchains separately. The offline and online check partitions reuse that acquisition.
+Set `offline.managed_profiles` on a Nix or Guix toolchain image for roots that need the manager to build their
+project dependencies. Workbench uses this for its C and C++ examples to match the selected compiler and runtime.
+The resulting profiles are available for the lifetime of the CI operation. Other locked downloads are restored
+from the root's verified dependency declaration when present.
+Each CI target has one overall result. Prepared Linux reports also retain the offline and online results with the
+checks selected for each phase.
+
+The local workspace can remain `host`. Omit `ci.images.native` to use verified tools and caches directly on Linux.
+Native consumer integration runs on the runner so its fixture projects can acquire dependencies and exercise the Linux
+network boundary. macOS and Windows always use native host execution. Nix and Guix CI pull prepared toolchain images
+from the configured registry. Their host shells remain available for local development. Build, verify, and publish
+required images before pushing a change that affects them, using local preparation or the native preparation workflow.
+The pre-push gate checks registry manifests for every prepared image required by
 the outgoing revision's CI targets, including other Linux architectures. It does not pull layers, build images, or
 accept a local-only image as proof of publication. Missing images and registry access failures block the push with the
 affected profiles and references. Combined checks perform the same availability check in their online phase. Registry
@@ -218,22 +240,22 @@ optional.
 provided GitHub workflow authenticates to GHCR. Architecture and input hash supply the tag:
 
 ```sh
-workbench development prepare native
-workbench development publish native
+workbench artifact build native --kind development --format oci
+workbench artifact publish native --kind development --format oci
 workbench shell --profile native --workspace devcontainer
 ```
 
 On a Linux x64 host with an ARM64 F-flag binfmt interpreter enabled, prepare and publish the ARM64 variant with:
 
 ```sh
-workbench development prepare native --architecture arm64
-workbench development publish native --architecture arm64
+workbench artifact build native --kind development --target linux-arm64 --format oci
+workbench artifact publish native --kind development --target linux-arm64 --format oci
 ```
 
-Use `--architecture x64` on Linux ARM64 hosts for the reverse direction. The same selection applies to `nix` and `guix`
-profiles. Preparation already verifies offline; `development verify PROFILE --architecture TARGET` explicitly repeats
-verification when needed. `--assemble-only` stops before verification and cannot establish an accepted image for
-publication. Each architecture retains its own receipt and operation lock, so different architectures can prepare
+Use `--target linux-x64` on Linux ARM64 hosts for the reverse direction. The same selection applies to `nix` and `guix`
+profiles. Select `--kind toolchain` when CI acquires the project dependencies separately. `artifact verify` accepts the
+same profile, kind, target, and format to check an existing output. For transfer before qualification, pair
+`--unverified` with `--export DIRECTORY`. Each architecture retains its own receipt and lock, so targets can prepare
 concurrently. Shared maintenance and builder-store locks protect retention and shared package-manager state. Enable
 binfmt on the Docker host before foreign execution. Its F flag keeps the emulator usable inside container and manager
 namespaces; the registration must be restored after a host restart. Emulator dependencies require human review.
@@ -276,10 +298,12 @@ explicit; registry-pruning commands support GHCR versions and configured GitLab 
 selects its own configuration hash and can rebuild a missing image locally. These images are internal to the project;
 other projects prepare images from their own declarations.
 
-The separate explicit `publication.yml` workflow prepares and publishes the six development images on native x64 and
-ARM64 GitHub runners. It runs offline build and execution verification before publishing, then verifies the registry
-digest. It does not wait for Checks: Checks needs these images first. Local preparation and offline verification may
-instead use explicitly selected binfmt emulation in either direction. Go example containers are built and executed
+The separate `publication.yml` workflow prepares and publishes native, Nix, and Guix artifact images on GitHub's native
+x64 and ARM64 runners. Select `toolchain` for a toolchain-only image or `development` for an offline development image.
+Each image builds and passes offline verification in a job with read-only permissions. A separate job authenticates
+and qualifies the transferred image, signs in to the registry, publishes, and verifies the published digest. The
+workflow can run independently of Checks, which requires the configured images to exist. Local preparation and offline
+verification may instead use explicitly selected binfmt emulation in either direction. Go example containers are built and executed
 locally without publishing disposable registry packages; the actual development images verify registry push/pull
 behavior. Check jobs have read-only registry access and never publish. Workbench release archives use `release.yml`,
 which requires successful Checks for the exact source revision. Credentials are supplied at invocation and never

@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,7 +62,14 @@ public static class WorkbenchProcessJob {
     public IntPtr process, thread;
     public uint pid, tid;
   }
-  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr CreateJobObject(IntPtr security, string name);
+  [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes {
+    public uint bytes;
+    public IntPtr descriptor;
+    public int inherit;
+  }
+  [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)] static extern IntPtr CreateJobObjectW(IntPtr security, string name);
+  [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr pointer);
+  [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)] static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(string sddl, uint revision, out IntPtr descriptor, IntPtr bytes);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetInformationJobObject(IntPtr job, int kind, ref ExtendedLimits limits, uint size);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool QueryInformationJobObject(IntPtr job, int kind, out Accounting info, uint size, IntPtr returned);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool TerminateJobObject(IntPtr job, uint status);
@@ -97,7 +105,35 @@ public static class WorkbenchProcessJob {
     }
     return true;
   }
-  public static WorkbenchProcessResult Run(string executable, string command, string cwd, string environment, string pipeName, string token, bool stopOnExit, bool hide) {
+  static IntPtr CreateOwnedJob(string id) {
+    if (String.IsNullOrEmpty(id)) {
+      IntPtr anonymous = CreateJobObjectW(IntPtr.Zero, null);
+      Require(anonymous != IntPtr.Zero, "Cannot create owned Windows job");
+      return anonymous;
+    }
+    if (id.Length != 32 || !System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[a-f0-9]{32}\z"))
+      throw new ArgumentException("Invalid machine job identifier");
+    string owner;
+    using (WindowsIdentity identity = WindowsIdentity.GetCurrent()) owner = identity.User.Value;
+    IntPtr descriptor;
+    Require(ConvertStringSecurityDescriptorToSecurityDescriptorW("O:" + owner + "D:P(A;;GA;;;SY)(A;;GA;;;" + owner + ")", 1, out descriptor, IntPtr.Zero), "Cannot protect the named Windows job");
+    IntPtr attributes = IntPtr.Zero;
+    try {
+      attributes = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SecurityAttributes)));
+      Marshal.StructureToPtr(new SecurityAttributes { bytes = (uint)Marshal.SizeOf(typeof(SecurityAttributes)), descriptor = descriptor }, attributes, false);
+      IntPtr named = CreateJobObjectW(attributes, "Global\\Workbench-Check-" + id);
+      Require(named != IntPtr.Zero, "Cannot create machine-owned Windows job");
+      if (Marshal.GetLastWin32Error() == 183) {
+        CloseHandle(named);
+        throw new IOException("The machine job identifier already exists");
+      }
+      return named;
+    } finally {
+      if (attributes != IntPtr.Zero) Marshal.FreeHGlobal(attributes);
+      LocalFree(descriptor);
+    }
+  }
+  public static WorkbenchProcessResult Run(string executable, string command, string cwd, string environment, string pipeName, string token, string machineJobId, bool stopOnExit, bool hide) {
     var result = new WorkbenchProcessResult();
     IntPtr job = IntPtr.Zero, attributes = IntPtr.Zero, jobs = IntPtr.Zero, handles = IntPtr.Zero, env = IntPtr.Zero;
     IntPtr[] inherited = new IntPtr[3];
@@ -105,8 +141,7 @@ public static class WorkbenchProcessJob {
     bool initialized = false, created = false;
     NamedPipeClientStream control = null;
     try {
-      job = CreateJobObject(IntPtr.Zero, null);
-      Require(job != IntPtr.Zero, "Cannot create owned Windows job");
+      job = CreateOwnedJob(machineJobId);
       var limits = new ExtendedLimits();
       limits.basic.flags = 0x2000; // KILL_ON_JOB_CLOSE; neither breakaway flag is enabled.
       Require(SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits))), "Cannot protect owned Windows job");
@@ -203,9 +238,16 @@ public static class WorkbenchProcessJob {
   }
 }
 '@
-$result = [WorkbenchProcessJob]::Run($request.executable, $request.commandLine, $request.cwd, [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($request.environment)), $request.pipe, $request.token, $request.stopOnExit, $request.hide)
-$result | Add-Member -NotePropertyName token -NotePropertyValue $request.token
-[System.IO.File]::WriteAllText($request.result, (ConvertTo-Json -InputObject $result -Compress))
+$result = [WorkbenchProcessJob]::Run($request.executable, $request.commandLine, $request.cwd, [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($request.environment)), $request.pipe, $request.token, [string]$request.machineJobId, $request.stopOnExit, $request.hide)
+$proof = @{
+  version = [int]$result.version
+  token = [string]$request.token
+  pid = [uint32]$result.pid
+  status = if ($null -eq $result.status) { $null } else { [int64]$result.status }
+  jobEmpty = [bool]$result.jobEmpty
+  error = if ($null -eq $result.error) { $null } else { [string]$result.error }
+}
+[System.IO.File]::WriteAllText($request.result, (ConvertTo-Json -InputObject $proof -Compress))
 if ($null -ne $result.error) { exit 1 }
 exit 0
 `;

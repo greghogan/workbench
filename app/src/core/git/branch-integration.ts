@@ -15,7 +15,14 @@ import { projectPaths } from "../projects/project-paths.js";
 import { archivedScopeRecords, logicalRecordEntries, readArchiveIndex } from "../records/archive-store.js";
 import { projectedRecordMaps } from "../records/record-projection.js";
 import { validateRelationships } from "../records/records.js";
-import { gitBytes, readGitObjects, readGitTree, updatedReviewTree, writeReviewBlobs } from "./git-snapshot.js";
+import {
+  gitBytes,
+  gitPaths,
+  readGitObjects,
+  readGitTree,
+  updatedReviewTree,
+  writeReviewBlobs,
+} from "./git-snapshot.js";
 import { repositoryStatePath, withRepositoryOperation } from "./repository-state.js";
 import { integrationTarget } from "./integration-target.js";
 import { provisionalMessage, provisionalTrailer } from "./commit-history.js";
@@ -113,13 +120,17 @@ function store(root: string) {
   );
 }
 export const branchIntegration = (root: string): BranchIntegration | undefined => store(root).read();
-function gitPath(root: string, path: string): string {
-  return gitBytes(root, ["rev-parse", "--path-format=absolute", "--git-path", path]).toString().trim();
-}
 function activeGitOperation(root: string): IntegrationKind | "other" | undefined {
-  if (existsSync(gitPath(root, "rebase-merge")) || existsSync(gitPath(root, "rebase-apply"))) return "rebase";
-  if (existsSync(gitPath(root, "MERGE_HEAD"))) return "merge";
-  if (["CHERRY_PICK_HEAD", "REVERT_HEAD"].some((path) => existsSync(gitPath(root, path)))) return "other";
+  const [rebaseMerge, rebaseApply, merge, cherryPick, revert] = gitPaths(root, [
+    "rebase-merge",
+    "rebase-apply",
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+  ]).map((path) => existsSync(path));
+  if (rebaseMerge || rebaseApply) return "rebase";
+  if (merge) return "merge";
+  if (cherryPick || revert) return "other";
   return undefined;
 }
 function clean(root: string): void {
@@ -258,11 +269,15 @@ function reconcile(root: string, operation: BranchIntegration): void {
   if (errors.length) throw new InvalidInput(errors.join("\n"));
 }
 function runGit(root: string, kind: IntegrationKind, args: string[]): void {
-  const result = spawnSync("git", ["-C", root, "-c", "rerere.autoupdate=false", kind, ...args], {
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    env: { ...process.env, GIT_EDITOR: "true" },
-  });
+  const result = spawnSync(
+    "git",
+    ["-C", root, "-c", "rerere.autoupdate=false", "-c", "commit.gpgSign=false", kind, ...args],
+    {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, GIT_EDITOR: "true" },
+    },
+  );
   if (result.error || result.status !== 0)
     throw new StateConflict(
       `${kind} stopped. Resolve conflicts and run 'workbench ${kind} --continue', or use --abort.\n${result.stderr || result.stdout}`,

@@ -1,8 +1,9 @@
 import { captureOwnedChild, processCancellation } from "../runtime/owned-child.mjs";
 import { processFailure } from "../runtime/process-outcome.mjs";
+import type { ProcessLock } from "../storage/process-lock.js";
 
 /** The caller owns cancellation; subprocess groups drain before their worker can exit. */
-export async function dockerQuery(args: string[], signal?: AbortSignal): Promise<string> {
+export async function dockerQuery(args: string[], signal?: AbortSignal, operation?: ProcessLock): Promise<string> {
   const owner = signal ? undefined : processCancellation();
   const active = signal ?? owner?.signal;
   try {
@@ -10,7 +11,7 @@ export async function dockerQuery(args: string[], signal?: AbortSignal): Promise
     const result = await captureOwnedChild(
       "docker",
       args,
-      { cwd: process.cwd(), env: process.env, signal: active },
+      { cwd: process.cwd(), env: process.env, signal: active, ...(operation ? { owner: operation } : {}) },
       16 * 1024 * 1024,
     );
     active.throwIfAborted();

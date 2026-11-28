@@ -61,28 +61,32 @@ function fixture() {
 }
 
 test("global configuration inspects defaults without initialization and round-trips validated changes", () => {
-  const { config, directory, run, ok } = fixture();
+  const { config, directory, ok, set, get } = fixture();
   expect(ok("config", "get", "storage.external")).toBe("false");
   expect(ok("config")).toMatch(/\| OPTION\s+\| VALUE/);
   expect(existsSync(config)).toBe(false);
   ok("config", "set", "storage.external", "true");
   const root = join(directory, "fast disk");
-  ok("config", "set", "storage.root", root);
-  expect(ok("config", "get", "storage.external")).toBe("true");
-  expect(ok("config", "get", "storage.root")).toBe(root);
+  set("storage.root", root);
+  expect(get("storage.external")).toBe("true");
+  expect(get("storage.root")).toBe(root);
   const before = readFileSync(config, "utf8");
-  for (const args of [
+  for (const [key, value] of [
     ["storage.external", "yes"],
     ["storage.root", "relative"],
     ["storage.unknown", "true"],
   ] as const)
-    expect(run("config", "set", ...args).status).not.toBe(0);
+    expect(() => {
+      set(key, value);
+    }).toThrow();
   expect(readFileSync(config, "utf8")).toBe(before);
   ok("config", "unset", "storage.external");
-  expect(ok("config", "get", "storage.external")).toBe("false");
-  expect(ok("config", "get", "storage.root")).toBe(root);
+  expect(get("storage.external")).toBe("false");
+  expect(get("storage.root")).toBe(root);
   writeFileSync(config, "[storage]\nunknown=true\n");
-  expect(run("config", "set", "storage.external", "true").status).not.toBe(0);
+  expect(() => {
+    set("storage.external", "true");
+  }).toThrow();
   expect(readFileSync(config, "utf8")).toContain("unknown=true");
 });
 
@@ -100,8 +104,24 @@ test("global updates retain comments without creating empty option groups", () =
   expect(parse(readFileSync(config, "utf8"))).toEqual({ storage: { external: true } });
 });
 
+test("managed image stores are independently enabled in personal settings", () => {
+  const { config, ok, get, set } = fixture();
+  expect(get("preparation.nix_store")).toBe("disabled");
+  expect(get("preparation.guix_store")).toBe("disabled");
+  set("preparation.nix_store", "managed", "global");
+  set("preparation.guix_store", "system", "global");
+  expect(parse(readFileSync(config, "utf8"))).toEqual({ preparation: { nix_store: "managed", guix_store: "system" } });
+  expect(() => {
+    set("preparation.nix_store", "auto");
+  }).toThrow();
+  expect(() => {
+    set("preparation.nix_store", "managed", "local");
+  }).toThrow();
+  expect(ok("complete", "--", "config", "set", "preparation.nix_store", "")).toBe("disabled\nmanaged\nsystem");
+});
+
 test("plain preference round-trips globally and flags and environment override presentation without writing preferences", () => {
-  const { config, env, run, ok } = fixture();
+  const { config, env, ok, set } = fixture();
   delete env.WORKBENCH_PLAIN;
   expect(ok("config", "get", "terminal.plain")).toBe("false");
   ok("config", "set", "terminal.plain", "true");
@@ -115,9 +135,15 @@ test("plain preference round-trips globally and flags and environment override p
   expect(ok("--plain", "config", "--scope", "global")).toContain("OPTION: terminal.plain");
   expect(ok("config", "--scope", "global", "--plain")).toContain("OPTION: terminal.plain");
   expect(readFileSync(config, "utf8")).toBe(saved);
-  expect(run("config", "set", "terminal.plain", "true", "--scope", "local").status).not.toBe(0);
-  expect(run("config", "set", "terminal.plain", "true", "--scope", "project").status).not.toBe(0);
-  expect(run("config", "set", "terminal.plain", "maybe").status).not.toBe(0);
+  expect(() => {
+    set("terminal.plain", "true", "local");
+  }).toThrow();
+  expect(() => {
+    set("terminal.plain", "true", "project");
+  }).toThrow();
+  expect(() => {
+    set("terminal.plain", "maybe");
+  }).toThrow();
   expect(ok("complete", "--", "config", "set", "terminal.plain", "")).toBe("false\ntrue");
   ok("config", "unset", "terminal.plain");
   expect(ok("config", "get", "terminal.plain")).toBe("false");
@@ -164,6 +190,27 @@ test("configuration overview reports one effective value and its overriding scop
   unset("execution.cpus_per_job", "local");
   expect(get()).toMatch(/execution\.cpus_per_job\s*\|\s*8\s*\|\s*global/);
 });
+
+test("configuration reports built-in defaults and describes omitted contextual options", () => {
+  const { env, ok, get, set, unset } = fixture();
+  ok("setup-project", env.WORKBENCH_PROJECT_ROOT);
+  expect(ok("config", "get", "review.signed_commits")).toBe("false");
+  expect(get("checks.allow_empty")).toBe("false");
+  expect(get("checks.inputs")).toBe("[]");
+  expect(get("records.archive_group_size")).toBe("1296");
+  expect(get("commit.body_width")).toBe("72");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*false\s*\|\s*default/);
+  expect(get()).toContain("Archival disabled");
+  expect(get()).not.toContain("<unset>");
+
+  set("diagnostics.level", "warn");
+  expect(get("diagnostics.server_level")).toBe("warn");
+  set("review.signed_commits", "true");
+  expect(get()).toMatch(/review\.signed_commits\s*\|\s*true\s*\|\s*project/);
+  unset("review.signed_commits");
+  expect(get("review.signed_commits")).toBe("false");
+});
+
 test("configuration shows complete nested values and uses the terminal width before wrapping", () => {
   const { env, ok, set, get } = fixture();
   ok("setup-project", env.WORKBENCH_PROJECT_ROOT);

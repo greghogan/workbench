@@ -1,5 +1,51 @@
-import { isRecord, records } from "../../../runtime/values.mjs";
+import { isRecord, isStringArray, records } from "../../../runtime/values.mjs";
 import type { ManagedSystem } from "./managed-system.mjs";
+export const PreparationStore = {
+  Disabled: "disabled",
+  System: "system",
+  Managed: "managed",
+} as const;
+export type PreparationStore = (typeof PreparationStore)[keyof typeof PreparationStore];
+
+export type StoreManager = "nix" | "guix";
+export interface ManagedStorePin {
+  builder: StoreManager;
+  key: string;
+  roots: string[];
+  archive: string;
+}
+
+export function storePrefix(builder: StoreManager): string {
+  return builder === "guix" ? "/gnu/store" : "/nix/store";
+}
+
+export function storeTarget(builder: StoreManager, path: unknown): path is string {
+  const prefix = `${storePrefix(builder)}/`;
+  return (
+    typeof path === "string" &&
+    path.startsWith(prefix) &&
+    /^[a-z0-9]{32}-[A-Za-z0-9+._?=-]+$/.test(path.slice(prefix.length))
+  );
+}
+
+export function managedStorePin(value: unknown): ManagedStorePin {
+  if (!isRecord(value) || (value.builder !== "nix" && value.builder !== "guix"))
+    throw new Error("Invalid managed store pin");
+  const builder = value.builder;
+  if (
+    typeof value.key !== "string" ||
+    !/^[a-f0-9]{24}$/.test(value.key) ||
+    !isStringArray(value.roots) ||
+    !value.roots.length ||
+    !storeTarget(builder, value.archive) ||
+    !value.roots.every((path) => storeTarget(builder, path)) ||
+    new Set(value.roots).size !== value.roots.length ||
+    value.roots.includes(value.archive)
+  )
+    throw new Error("Invalid managed store pin");
+  return { builder, key: value.key, roots: value.roots, archive: value.archive };
+}
+
 export interface ManagedPreparationPlan {
   builder: "guix" | "nix";
   system: ManagedSystem;
@@ -34,22 +80,23 @@ export function guixChannelGroups(project: string, roots: { path: string }[]): {
   return [...groups.values()];
 }
 export const builderOwner = (checkout: BinaryLike) => createHash("sha256").update(checkout).digest("hex");
+export const managedProfileOwner = (checkout: string, profile: string) =>
+  builderOwner(JSON.stringify([checkout, profile]));
+export const partialManagedStorePin = (inputs: string) => `.partial-${inputs}`;
+export function managedStoreDirectory(cacheRoot: string, builder: string): string {
+  if (builder !== "nix" && builder !== "guix") throw new Error("Invalid preparation store manager");
+  return join(cacheRoot, "managed-stores", builder);
+}
+export const managedStoreCleanupLabel = "org.workbench.store-cleanup";
+export const managedStoreCleanupActivity = (cacheRoot: string, builder: StoreManager) =>
+  `${managedStoreDirectory(cacheRoot, builder)}.cleanup`;
+/** Docker reads --mount fields as a CSV record. */
+export function mountFields(...fields: string[]): string {
+  return fields.map((field) => (/[",\r\n]/.test(field) ? `"${field.replaceAll('"', '""')}"` : field)).join(",");
+}
 export function builderDirectory(cacheRoot: string, checkout: string, builder: string): string {
   if (!["native", "guix", "nix"].includes(builder)) throw new Error("Invalid managed builder");
   return join(cacheRoot, "offline-builders", builderOwner(checkout), builder);
-}
-export function builderVolumes(builder: string, key: string): { name: string; destination: string }[] {
-  if (!["guix", "nix"].includes(builder) || !/^[a-f0-9]{24}$/.test(key))
-    throw new Error("Invalid builder volume identity");
-  return (
-    builder === "guix" ? [["store", "/gnu"] as const, ["state", "/var/guix"] as const] : [["store", "/nix"] as const]
-  ).map(([role, destination]) => ({ name: `workbench-${builder}-${key}-${role}`, destination }));
-}
-export function builderCacheKey(owner: string, builder: string, architecture: string, image: string): string {
-  return createHash("sha256")
-    .update(JSON.stringify([owner, builder, architecture, image]))
-    .digest("hex")
-    .slice(0, 24);
 }
 function assertManagedPlan(plan: unknown): asserts plan is ManagedPreparationPlan {
   const absolute = (value: unknown): value is string => typeof value === "string" && isAbsolute(value);

@@ -79,8 +79,9 @@ test("cold and open review counts follow task outcomes, revised approval and sup
   mkdirSync(join(directory, "TSK-00/details"));
   await compare(1);
   writeFileSync(join(directory, "TSK-00/details/requirement.md"), "Preserve pending work.\n");
-  await compare(0);
+  await compare(1);
   approve();
+  await compare(0);
   changeTaskQueue(root, { action: "start", reference: "TSK-0" });
   changeTaskQueue(root, { action: "implemented", reference: "TSK-0", detail: "Supporting requirement verified." });
   await compare(1);
@@ -143,6 +144,19 @@ test("a stalled summary does not block the queue, superseded results cannot publ
     reviews.read([]);
     expect(fast.terminate).toHaveBeenCalledOnce();
     expect(reviews.read([]).size).toBe(0);
+    const root = fixtures.project();
+    const project = { id: "e".repeat(24), path: root };
+    const index = new WorkspaceIndex(new WorkspaceCollector(root).collect());
+    reviews.read([project]);
+    const summary = workers.at(-1);
+    expect(summary?.requests.at(-1)?.id).toBe(project.id);
+    reviews.observe(project, index);
+    expect(summary?.terminate).toHaveBeenCalledOnce();
+    expect(reviews.read([project]).get(project.id)?.count).toBe(0);
+    const started = workers.length;
+    reviews.observe(project);
+    reviews.invalidate(project.id);
+    expect(workers).toHaveLength(started + 1);
   } finally {
     await reviews.close();
   }

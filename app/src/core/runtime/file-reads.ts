@@ -1,4 +1,4 @@
-import { open, lstat } from "node:fs/promises";
+import { open, lstat, type FileHandle } from "node:fs/promises";
 import { constants, lstatSync, openSync, fstatSync, readSync, closeSync, writeFileSync, type Stats } from "node:fs";
 import { InvalidInput } from "./input-errors.js";
 import { createHash } from "node:crypto";
@@ -7,6 +7,22 @@ import { combineFailures } from "../diagnostics/diagnostic-errors.mjs";
 export class FileChanged extends InvalidInput {}
 
 const readFlags = constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK);
+
+/** Bound open files and drain outstanding operations before reporting a failure. */
+export async function mapFileIO<Input, Output>(
+  entries: readonly Input[],
+  read: (entry: Input) => Promise<Output>,
+  concurrency = 16,
+): Promise<Output[]> {
+  const results: Output[] = [];
+  for (let offset = 0; offset < entries.length; offset += concurrency) {
+    for (const entry of await Promise.allSettled(entries.slice(offset, offset + concurrency).map(read))) {
+      if (entry.status === "rejected") throw entry.reason;
+      results.push(entry.value);
+    }
+  }
+  return results;
+}
 
 function validateLimit(maximum: number): void {
   if (!Number.isSafeInteger(maximum) || maximum < 0) throw new Error("Invalid file byte limit");
@@ -111,8 +127,8 @@ export function hashFile(
 }
 
 /** Copy a stable regular file into a caller-owned candidate without retaining the payload in memory. */
-export function copyFileToDescriptor(path: string, output: number): void {
-  withReadDescriptor(path, (descriptor, leaf) => {
+export function copyFileToDescriptor(path: string, output: number, observe?: (bytes: Uint8Array) => void): Stats {
+  return withReadDescriptor(path, (descriptor, leaf) => {
     const before = fstatSync(descriptor);
     validateFile(path, before, Number.MAX_SAFE_INTEGER, "copy source", leaf);
     const block = Buffer.alloc(64 * 1024);
@@ -120,10 +136,13 @@ export function copyFileToDescriptor(path: string, output: number): void {
     for (;;) {
       const count = readSync(descriptor, block, 0, block.length, null);
       if (!count) break;
-      writeFileSync(output, block.subarray(0, count));
+      const bytes = block.subarray(0, count);
+      writeFileSync(output, bytes);
+      observe?.(bytes);
       length += count;
     }
     validateRead(path, "copy source", before, fstatSync(descriptor), length);
+    return before;
   });
 }
 
@@ -162,12 +181,7 @@ export function readFilePrefix(path: string, maximum: number, stopAt?: (prefix: 
 /** Async counterpart for cache inventories; allocation and validation use the opened regular file. */
 export async function readBoundedFileAsync(path: string, maximum: number, kind = "file"): Promise<Buffer> {
   validateLimit(maximum);
-  // codeql[js/insecure-temporary-file] These numeric flags are read-only, without O_CREAT, and reject symlinks on POSIX.
-  const leaf = process.platform === "win32" ? await lstat(path) : undefined;
-  if (leaf?.isSymbolicLink()) throw new InvalidInput(`${path}: symlinks are not supported`);
-  const file = await open(path, readFlags);
-  let value: Buffer;
-  try {
+  return withReadFile(path, async (file, leaf) => {
     const before = await file.stat();
     validateFile(path, before, maximum, kind, leaf);
     const buffer = Buffer.alloc(before.size + 1);
@@ -177,9 +191,59 @@ export async function readBoundedFileAsync(path: string, maximum: number, kind =
       if (!bytesRead) break;
       length += bytesRead;
     }
-    const after = await file.stat();
-    validateRead(path, kind, before, after, length);
-    value = buffer.subarray(0, length);
+    validateRead(path, kind, before, await file.stat(), length);
+    return buffer.subarray(0, length);
+  });
+}
+
+/** Stream one verified file without following a replacement symlink. */
+export function hashFileAsync(path: string): Promise<string> {
+  return streamFileDigest(path).then(({ digest }) => digest);
+}
+
+/** Copy into an exclusive candidate while checking the source and hashing the copied bytes. */
+export async function copyFileDigest(path: string, target: string): Promise<{ digest: string; mode: number }> {
+  const output = await open(target, "wx", 0o600);
+  try {
+    const copied = await streamFileDigest(path, output);
+    if (process.platform !== "win32") await output.chmod(copied.mode & 0o111 ? 0o755 : 0o644);
+    return copied;
+  } finally {
+    await output.close();
+  }
+}
+
+function streamFileDigest(path: string, output?: FileHandle) {
+  return withReadFile(path, async (file, leaf) => {
+    const before = await file.stat();
+    validateFile(path, before, Number.MAX_SAFE_INTEGER, "file", leaf);
+    const hash = createHash("sha256");
+    const block = Buffer.alloc(64 * 1024);
+    let length = 0;
+    for (;;) {
+      const { bytesRead } = await file.read(block, 0, block.length, null);
+      if (!bytesRead) break;
+      length += bytesRead;
+      const bytes = block.subarray(0, bytesRead);
+      if (output) await output.writeFile(bytes);
+      hash.update(bytes);
+    }
+    validateRead(path, "file", before, await file.stat(), length);
+    return { digest: hash.digest("hex"), mode: before.mode };
+  });
+}
+
+async function withReadFile<T>(
+  path: string,
+  read: (file: FileHandle, leaf: Stats | undefined) => Promise<T>,
+): Promise<T> {
+  // codeql[js/insecure-temporary-file] These numeric flags are read-only, without O_CREAT, and reject symlinks on POSIX.
+  const leaf = process.platform === "win32" ? await lstat(path) : undefined;
+  if (leaf?.isSymbolicLink()) throw new InvalidInput(`${path}: symlinks are not supported`);
+  const file = await open(path, readFlags);
+  let value: T;
+  try {
+    value = await read(file, leaf);
   } catch (failure) {
     try {
       await file.close();

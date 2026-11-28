@@ -1,15 +1,11 @@
 import type { FileSummary, Summary } from "../app/src/core/execution/checks/coverage-summary.mjs";
 import { record, required } from "../app/src/core/runtime/values.mjs";
-import { writeFileSync } from "node:fs";
+import { writeAtomic } from "../app/src/core/runtime/file-publication.mjs";
 import { isAbsolute, join, relative } from "node:path";
 
 const metric = (values: number[]) => ({
   total: values.length,
   covered: values.filter((hits: number) => hits > 0).length,
-  skipped: 0,
-  pct: values.length
-    ? Math.floor((values.filter((hits: number) => hits > 0).length / values.length) * 10000) / 100
-    : 100,
 });
 
 export function rubyCoverageSummary(report: unknown, root: string): Summary {
@@ -20,8 +16,6 @@ export function rubyCoverageSummary(report: unknown, root: string): Summary {
     "Missing SimpleCov coverage",
   );
   const files: Record<string, FileSummary> = {};
-  const lines: number[] = [],
-    branches: number[] = [];
   for (const [absolute, value] of Object.entries(coverage)) {
     const counters = record(value, "Invalid SimpleCov file counters");
     const path = relative(root, absolute).replaceAll("\\", "/");
@@ -38,18 +32,14 @@ export function rubyCoverageSummary(report: unknown, root: string): Summary {
       Object.values(record(branch, "Invalid Ruby branch counters")).map(counter),
     );
     files[path] = { lines: metric(fileLines), branches: metric(fileBranches) };
-    lines.push(...fileLines);
-    branches.push(...fileBranches);
   }
-  if (!Object.keys(files).length || !lines.length) throw new Error("Ruby coverage has no production files");
-  return {
-    total: { lines: metric(lines), branches: metric(branches) },
-    ...Object.fromEntries(Object.entries(files).sort()),
-  };
+  if (!Object.values(files).some(({ lines }) => lines && lines.total > 0))
+    throw new Error("Ruby coverage has no production files");
+  return Object.fromEntries(Object.entries(files).sort());
 }
 
 export function writeRubyCoverage(report: unknown, root: string) {
-  writeFileSync(
+  writeAtomic(
     join(root, "coverage/coverage-summary.json"),
     JSON.stringify(rubyCoverageSummary(report, root), null, 2) + "\n",
   );

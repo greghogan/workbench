@@ -3,9 +3,11 @@ import { addBytes, totalBytes } from "../runtime/byte-size.js";
 import { imageDisplayTag, filterPreparedImages } from "../artifacts/image-contract.js";
 import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { readBoundedFile } from "../runtime/file-reads.js";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   buildCheckout,
+  latestCheckResult,
   buildOwnerKey,
   buildStorageSettings,
   buildStorageRoots,
@@ -89,6 +91,24 @@ function directories(root: string, pattern?: RegExp): string[] {
     });
 }
 
+/** Discover the directory groups without measuring or opening their generation receipts. */
+export function buildCacheGroups(storageRoot: string, checkout?: string) {
+  const selected = checkout ? buildStorageRoots(storageRoot, { checkout, root: "." }) : undefined;
+  return (["builds", "dependencies", "checks"] as const).flatMap((kind) => {
+    const base = ownedPath(storageRoot, kind === "checks" ? "check-results" : kind);
+    const checkouts = selected
+      ? [
+          dirname(
+            kind === "builds" ? selected.roots : kind === "checks" ? selected.checkRoots : selected.dependencyRoots,
+          ),
+        ]
+      : directories(base, /^[0-9a-z]{19}$/);
+    return checkouts.flatMap((namespace) =>
+      directories(namespace, /^[0-9a-z]{19}$/).map((directory) => ({ kind, directory })),
+    );
+  });
+}
+
 /** Inspect existing receipts only: no registry, missing-checkout probes, setup, or cache creation. */
 export function inspectBuildCache(
   root?: string,
@@ -108,46 +128,34 @@ export function inspectBuildCache(
   const storageRoot = storage ?? buildStorageSettings(root).root;
   const entries: CacheEntry[] = [];
   const operations: CacheOperation[] = [];
-  const selectedRoots = selected ? buildStorageRoots(storageRoot, { checkout: selected, root: "." }) : undefined;
-  for (const kind of ["builds", "dependencies", "checks"] as const) {
-    const base = ownedPath(storageRoot, kind === "checks" ? "check-results" : kind);
-    const checkouts = selectedRoots
-      ? [
-          dirname(
-            kind === "builds"
-              ? selectedRoots.roots
-              : kind === "checks"
-                ? selectedRoots.checkRoots
-                : selectedRoots.dependencyRoots,
-          ),
-        ]
-      : directories(base, /^[0-9a-z]{19}$/);
-    for (const namespace of checkouts) {
-      for (const languageRoot of directories(namespace, /^[0-9a-z]{19}$/)) {
-        operations.push(...inspectCacheOperations(languageRoot));
-        for (const leaf of directoryEntries(languageRoot).sort((a, b) => a.name.localeCompare(b.name))) {
-          if (leaf.name === cacheOperationsDirectory || leaf.name.endsWith(".lock")) continue;
-          const directory = join(languageRoot, leaf.name);
-          if (!leaf.isDirectory() || leaf.isSymbolicLink()) {
-            const uncertain = inspectUnownedCache(directory, "Cache entry is not an ordinary owned directory");
-            if (uncertain) operations.push(uncertain);
-            continue;
-          }
-          if (
-            kind === "checks" &&
-            existsSync(`${directory}.lock`) &&
-            !existsSync(join(directory, ".workbench-check-result.json"))
-          )
-            continue;
-          try {
-            const identity = readBuildGeneration(storageRoot, directory, kind);
-            if (!selected || identity.checkout === selected)
-              entries.push(cacheEntry(storageRoot, kind, directory, identity));
-          } catch (error) {
-            const uncertain = inspectUnownedCache(directory, error instanceof Error ? error.message : String(error));
-            if (uncertain) operations.push(uncertain);
-          }
-        }
+  for (const { kind, directory: languageRoot } of buildCacheGroups(storageRoot, selected)) {
+    operations.push(...inspectCacheOperations(languageRoot));
+    for (const leaf of directoryEntries(languageRoot).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (
+        leaf.name === cacheOperationsDirectory ||
+        leaf.name.endsWith(".lock") ||
+        (kind === "checks" && leaf.name === latestCheckResult && leaf.isFile())
+      )
+        continue;
+      const directory = join(languageRoot, leaf.name);
+      if (!leaf.isDirectory() || leaf.isSymbolicLink()) {
+        const uncertain = inspectUnownedCache(directory, "Cache entry is not an ordinary owned directory");
+        if (uncertain) operations.push(uncertain);
+        continue;
+      }
+      if (
+        kind === "checks" &&
+        existsSync(`${directory}.lock`) &&
+        !existsSync(join(directory, ".workbench-check-result.json"))
+      )
+        continue;
+      try {
+        const identity = readBuildGeneration(storageRoot, directory, kind);
+        if (!selected || identity.checkout === selected)
+          entries.push(cacheEntry(storageRoot, kind, directory, identity));
+      } catch (error) {
+        const uncertain = inspectUnownedCache(directory, error instanceof Error ? error.message : String(error));
+        if (uncertain) operations.push(uncertain);
       }
     }
   }
@@ -163,6 +171,33 @@ export function inspectBuildCache(
   for (const entry of entries)
     if (kept.has(entry.directory) && !entry.blockedBy) entry.blockedBy = "explicitly retained";
   return { storageRoot, checkout: selected ?? null, entries, operations };
+}
+
+/** Automatic retention already has an ownership index. Inspect the named candidates directly. */
+export function inspectReferencedBuilds(
+  references: readonly {
+    storageRoot: string;
+    directory: string;
+    kind: BuildCacheKind;
+    identity: BuildIdentity;
+  }[],
+): CacheReport[] {
+  const reports = new Map<string, CacheReport>();
+  for (const { storageRoot, directory, kind, identity } of references) {
+    try {
+      readBuildGeneration(storageRoot, directory, kind, identity);
+    } catch (error) {
+      if (!existsSync(directory)) continue;
+      throw error;
+    }
+    let report = reports.get(storageRoot);
+    if (!report) {
+      report = { storageRoot, checkout: identity.checkout, entries: [], operations: [] };
+      reports.set(storageRoot, report);
+    }
+    report.entries.push(cacheEntry(storageRoot, kind, directory, identity));
+  }
+  return [...reports.values()];
 }
 
 function cacheEntry(storageRoot: string, kind: BuildCacheKind, directory: string, identity: BuildIdentity): CacheEntry {
@@ -223,6 +258,7 @@ export function pruneBuildCache({
         ...new Set(
           selected.flatMap((entry) => [
             ...(entry.kind !== "builds" ? [entry.directory] : []),
+            ...(entry.kind === "checks" ? [ownedPath(dirname(entry.directory), latestCheckResult)] : []),
             ...managedDependencyDirectories(report.storageRoot, entry.identity),
           ]),
         ),
@@ -254,6 +290,14 @@ export function pruneBuildCache({
           `${basename(entry.identity.checkout)} / ${entry.identity.root} / ${entry.kind}`,
           async () => {
             if (entry.kind === "dependencies") releaseGuixProfiles(entry.directory);
+            if (entry.kind === "checks") {
+              const latest = ownedPath(dirname(entry.directory), latestCheckResult);
+              if (
+                existsSync(latest) &&
+                readBoundedFile(latest, 64, "latest check result").toString("utf8") === basename(entry.directory)
+              )
+                await rm(latest);
+            }
             if (entry.kind === "logs") await rm(entry.directory, { recursive: true });
             else await removeOwnedCache(entry.directory);
           },
@@ -348,12 +392,12 @@ export function groupCacheReport(report: CacheReport): CacheProject[] {
       checkout: "Builders",
       count: report.builders.entries.length,
       builds: 0,
-      dependencies: totalBytes(report.builders.entries.map((entry) => entry.bytes)),
+      dependencies: totalBytes(report.builders.entries.filter((entry) => !entry.cleanup).map((entry) => entry.bytes)),
       checks: 0,
       tools: 0,
       rows: report.builders.entries.map((entry) => ({
-        root: entry.key,
-        target: "Docker volumes",
+        root: entry.label ?? entry.key,
+        target: entry.blockedBy ?? entry.status ?? "Docker volumes",
         builds: 0,
         dependencies: entry.bytes,
         checks: 0,

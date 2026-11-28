@@ -107,7 +107,11 @@ async function cargoRepository(repository: ManagedInputRepository): Promise<stri
 export async function managedInputEnvironment(directory: string): Promise<NodeJS.ProcessEnv> {
   const repository = managedInputRepository(directory);
   if (!repository) return { ...process.env };
-  const env = { ...process.env, WORKBENCH_CHECK_INPUT_ROOT: process.env.WORKBENCH_CHECK_INPUT_ROOT ?? directory };
+  const env = {
+    ...process.env,
+    WORKBENCH_CHECK_INPUTS: repository.directory,
+    WORKBENCH_CHECK_INPUT_ROOT: process.env.WORKBENCH_CHECK_INPUT_ROOT ?? directory,
+  };
   const has = (prefix: string) => repository.declaration.inputs.some((entry) => entry.destination.startsWith(prefix));
   if (has("npm/")) Object.assign(env, { PNPM_CONFIG_OFFLINE: "true", npm_config_offline: "true" });
   if (has("python/"))

@@ -2,14 +2,17 @@
 set -euo pipefail
 
 message_file=${1:?commit message path is required}
-message_file=$(node -p 'require("node:path").resolve(process.argv[1])' "$message_file")
 repository_root=$(git rev-parse --show-toplevel)
 repository_git_dir=$(git rev-parse --absolute-git-dir)
 review_tree=$(git write-tree)
-staged_snapshot=$(mktemp -d)
-trap 'rm -rf -- "$staged_snapshot"' EXIT
+snapshot_owner=$(mktemp -d)
+staged_snapshot="$snapshot_owner/source"
+snapshot_index="$snapshot_owner/index"
+trap 'rm -rf -- "$snapshot_owner"' EXIT
+mkdir -- "$staged_snapshot"
 
-git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
+GIT_INDEX_FILE="$snapshot_index" git -C "$repository_root" read-tree --no-sparse-checkout "$review_tree"
+GIT_INDEX_FILE="$snapshot_index" git -c core.symlinks=true -C "$repository_root" checkout-index --all --prefix="$staged_snapshot/"
 
 for required_path in workbench/config.toml workbench/projects.toml; do
     if [[ ! -f "$staged_snapshot/$required_path" ]]; then
@@ -17,14 +20,35 @@ for required_path in workbench/config.toml workbench/projects.toml; do
         exit 1
     fi
 done
+if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
+    snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
+elif command -v workbench >/dev/null 2>&1; then
+    snapshot_launcher=(workbench)
+else
+    printf '%s\n' 'workbench: commit-msg requires Workbench on PATH.' \
+        '  Follow the project README or see:' \
+        "  https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+    exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'workbench: commit-msg requires Node.js on PATH.' \
+        "  See https://github.com/greghogan/workbench/blob/main/docs/installations.md" >&2
+    exit 1
+fi
+verify_staged=./verify-staged.mjs
+if [[ "${BASH_SOURCE[0]}" == */* ]]; then
+    verify_staged="${BASH_SOURCE[0]%/*}/verify-staged.mjs"
+fi
+if [[ -f "$staged_snapshot/.githooks/verify-staged.mjs" ]]; then
+    verify_staged="$staged_snapshot/.githooks/verify-staged.mjs"
+fi
+cp -- "$verify_staged" "$snapshot_owner/verify-staged.mjs"
 if [[ -f "$staged_snapshot/scripts/setup-development.mjs" ]]; then
     bash "$staged_snapshot/.githooks/prepare-source" "$repository_root" "$staged_snapshot"
 fi
-if [[ -f "$staged_snapshot/bin/workbench.mjs" ]]; then
-    snapshot_launcher=(node "$staged_snapshot/bin/workbench.mjs")
-else
-    snapshot_launcher=(workbench)
-fi
+node "$snapshot_owner/verify-staged.mjs" "$repository_root" "$staged_snapshot" "$snapshot_index" "$review_tree"
+
+message_file=$(node -p 'require("node:path").resolve(process.argv[1])' "$message_file")
 
 # Match pre-commit's proposed tree while retaining checkout-owned policy receipts
 # and Git message settings such as core.commentChar and core.commentString.

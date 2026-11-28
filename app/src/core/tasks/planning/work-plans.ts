@@ -1,3 +1,4 @@
+import { withRepositoryReads } from "../../git/repository-reads.js";
 import { taskRepositoryDirectory } from "../task-project-state.js";
 import { readTaskGraph, taskDigest, TaskGraph, taskReference, type TaskRecord } from "../task-model.js";
 import { taskPlanDigest } from "../task-plan.js";
@@ -40,6 +41,7 @@ export function workGraph(tasks: TaskRecord[], plans: PlanningRecord[]): TaskGra
       ...(plan.parent ? { parent: mapped(plan.parent) } : {}),
       dependencies: plan.dependencies.map(mapped),
       digest: plan.digest,
+      ...(plan.approval ? { previouslyApproved: true } : {}),
       planDigest: plan.problem ? taskDigest(plan.contents) : taskPlanDigest(plan.contents),
       planning: {
         name: plan.name,
@@ -84,5 +86,7 @@ export function workGraph(tasks: TaskRecord[], plans: PlanningRecord[]): TaskGra
   return new TaskGraph([...tasks, ...planned]);
 }
 export function readWorkGraph(root: string): TaskGraph {
-  return workGraph(readTaskGraph(root).tasks, taskRepositoryDirectory(root) ? readPlanningRecords(root) : []);
+  return withRepositoryReads(() =>
+    workGraph(readTaskGraph(root).tasks, taskRepositoryDirectory(root) ? readPlanningRecords(root) : []),
+  );
 }

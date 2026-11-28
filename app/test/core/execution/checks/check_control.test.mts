@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CheckControl, checkControlPrefix } from "../../../../src/core/execution/checks/check-control.ts";
+import { CheckControl, checkControlPrefix, checkBatches } from "../../../../src/core/execution/checks/check-control.ts";
 import { required } from "../../../../src/core/runtime/invariants.ts";
 
 const token = "a".repeat(32);
@@ -45,4 +45,15 @@ test("failed and incomplete control sequences never count as successful completi
   expect(control.accept(event("fail", 1))).toEqual({ event: "fail", step: 1 });
   expect(control.complete).toBe(false);
   expect(() => new CheckControl("invalid", 1)).toThrow(/token/);
+});
+
+test("coverage overlaps static checks only with a private workspace and an available slot", () => {
+  const setup = { name: "setup", role: "setup" };
+  const coverage = { name: "coverage", role: "coverage", parallel: true };
+  const lint = { name: "lint", role: "lint", parallel: true };
+  const checks = [setup, coverage, lint];
+  const isolated = new Set([coverage.name]);
+  expect(checkBatches(checks, 2, isolated)).toEqual([[setup], [coverage, lint]]);
+  expect(checkBatches(checks, 2)).toEqual([[setup], [coverage], [lint]]);
+  expect(checkBatches(checks, 1, isolated)).toEqual([[setup], [coverage], [lint]]);
 });

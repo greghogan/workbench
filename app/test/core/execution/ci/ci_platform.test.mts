@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { expect, test } from "vitest";
 import { nativeCIJobs, CIOperation } from "../../../../src/core/execution/ci/support/ci-operations.mjs";
 import { readCITargets } from "../../../../src/core/execution/ci/support/ci-contract.mjs";
@@ -39,7 +39,7 @@ test.each([CIOperation.Integration, CIOperation.Release])(
 const [command]=process.argv.slice(2);
 if(command==='project') {}
 else if(command==='check') console.log(readFileSync('targets.json','utf8'));
-else if(command==='config') console.log('<unset>');
+else if(command==='config') console.log(process.env.FIXTURE_CI_IMAGES ?? '<unset>');
 else throw new Error('Unexpected CLI operation');`,
       );
       writeFileSync(
@@ -63,6 +63,9 @@ if(phase!=='native-install' && process.env.WORKBENCH_CI_TARGET==='.' && process.
         WORKBENCH_CI_CANDIDATE: candidate,
         GITHUB_REPOSITORY: "owner/project",
         GITHUB_SHA: revision,
+        ...(process.platform === "linux" && operation === CIOperation.Integration
+          ? { FIXTURE_CI_IMAGES: JSON.stringify({ native: "native-toolchain" }) }
+          : {}),
         FAIL_TARGET: "1",
       };
       const run = (extra: NodeJS.ProcessEnv = {}) =>
@@ -116,7 +119,7 @@ function writeCandidate(candidate: string, revision: string) {
 }
 
 test.skipIf(process.platform !== "linux")(
-  "a prepared-image worker establishes its host runtime after a fresh job handoff",
+  "a prepared-image worker delegates its exact selected operation and immutable handoff once",
   () => {
     const root = mkdtempSync(join(tmpdir(), "workbench-ci-image-handoff-"));
     try {
@@ -157,35 +160,28 @@ test.skipIf(process.platform !== "linux")(
       writeFileSync(
         join(root, "bin/workbench.mjs"),
         `
-import {existsSync,readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 const args=process.argv.slice(2);
 if(args[0]==='project') {}
 else if(args[0]==='check') console.log(readFileSync('targets.json','utf8'));
 else if(args[0]==='config') console.log(JSON.stringify({native:'fixture'}));
-else if(args[0]==='tools' && args.includes('--devcontainer')) writeFileSync('host-runtime','verified');
-else if(args[0]==='ci-image-exec') {
- if(!existsSync('host-runtime')) throw Error('Worker has no verified host container runtime');
- writeFileSync('executed.json',args[args.indexOf('--env-json')+1]);
+else if(args[0]==='ci-image-job') {
+ const option = (name) => args[args.indexOf(name)+1];
+ writeFileSync('executed.json',JSON.stringify({
+   profile: args[1], operation: option('--operation'), candidate: option('--candidate'),
+   image: JSON.parse(readFileSync(option('--prepared'),'utf8')).image,
+   targets: JSON.parse(readFileSync(option('--targets'),'utf8')),
+ }), { flag: 'wx' });
 } else throw Error('Unexpected CLI operation');
 `,
       );
-      const docker = join(root, "bin/docker");
-      writeFileSync(
-        docker,
-        `#!/usr/bin/env node
-if(process.argv[2]==='image' && process.argv[3]==='inspect') console.log(${JSON.stringify(image)});
-else if(process.argv[2]!=='pull') throw Error('Unexpected Docker operation');
-`,
-      );
-      chmodSync(docker, 0o755);
-      const job = nativeCIJobs(targets, "linux", process.arch).find((job) => job.operation === CIOperation.Integration);
-      if (!job) throw Error("Missing integration operation");
+      const job = nativeCIJobs(targets, "linux", process.arch).find((job) => job.operation === CIOperation.Release);
+      if (!job) throw Error("Missing release operation");
       const result = spawnSync(process.execPath, [join(repository, "scripts/ci-platform.mts"), "run"], {
         cwd: root,
         encoding: "utf8",
         env: {
           ...process.env,
-          PATH: [join(root, "bin"), dirname(process.execPath), process.env.PATH].join(":"),
           CI_MATRIX: JSON.stringify({ os: "linux", architecture: process.arch }),
           CI_OPERATION: job.artifact,
           RUNNER_TEMP: temporary,
@@ -196,8 +192,7 @@ else if(process.argv[2]!=='pull') throw Error('Unexpected Docker operation');
       });
       expect(result.status, result.stdout + result.stderr).toBe(0);
       const executed = JSON.parse(readFileSync(join(root, "executed.json"), "utf8")) as Record<string, string>;
-      expect(executed.WORKBENCH_CI_OPERATION).toBe(CIOperation.Integration);
-      expect(readFileSync(join(root, "host-runtime"), "utf8")).toBe("verified");
+      expect(executed).toEqual({ profile: "fixture", operation: CIOperation.Release, image, candidate, targets });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

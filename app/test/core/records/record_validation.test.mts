@@ -14,10 +14,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test, vi } from "vitest";
 import { recordDocument } from "../../../src/core/records/record-document.ts";
-import { validateRelationships } from "../../../src/core/records/records.ts";
 import { scan } from "../../../src/core/records/record-files.ts";
 import { collectionWorkingFiles } from "../../../src/core/collections/collection-files.ts";
 import { stageFile } from "../../../src/core/runtime/file-publication.mjs";
+import { setupProject } from "../../../src/cli/project-setup.ts";
+import { addRecord, createExperiment, validateRelationships } from "../../../src/core/records/records.ts";
+import { formatFiles } from "../../../src/core/records/formatting.ts";
+import { synchronize } from "../../../src/core/records/sync.ts";
+import { validationReport } from "../../../src/core/records/validation.ts";
 
 const distribution = resolve(import.meta.dirname, "../../../..");
 const executable = join(distribution, "bundle/main.cjs");
@@ -60,19 +64,21 @@ function run(root: string, expected: boolean, ...arguments_: string[]) {
   return `${result.stdout}${result.stderr}`;
 }
 
-test("task hierarchy and duplicate dependencies are validated", () => {
+test("task hierarchy and duplicate dependencies are validated", async () => {
   const directory = mkdtempSync(join(tmpdir(), "workbench-relationships-"));
   const root = join(directory, "demo");
   mkdirSync(root);
   try {
-    run(root, true, "setup-project", root);
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    await setupProject(root, "demo");
     copyFileSync(
       resolve(import.meta.dirname, "../../../resources/verification/CHARTER.md"),
       join(root, "workbench/CHARTER.md"),
     );
-    run(root, true, "record", "add", "task", "Parent");
-    run(root, true, "record", "add", "task", "Child", "--parent", "demo:TSK-0");
-    run(root, true, "validate");
+    await addRecord(root, "TSK", "Parent");
+    await addRecord(root, "TSK", "Child", undefined, "demo:TSK-0");
+    synchronize(root);
+    assert.deepEqual((await validationReport(root)).errors, []);
     const parent = join(root, "workbench/tasks/TSK-00.md");
     const child = join(root, "workbench/tasks/TSK-01.md");
     const parentMetadata = recordDocument("TSK", readFileSync(parent, "utf8"), parent).metadata;
@@ -85,7 +91,8 @@ test("task hierarchy and duplicate dependencies are validated", () => {
       status: "Planned",
       parent: "demo:TSK-0",
     });
-    run(root, true, "record", "add", "task", "Dependent", "--depends-on", "demo:TSK-1");
+    await addRecord(root, "TSK", "Dependent", undefined, undefined, ["demo:TSK-1"]);
+    synchronize(root);
     const dependent = join(root, "workbench/tasks/TSK-02.md");
     const dependentMetadata = recordDocument("TSK", readFileSync(dependent, "utf8"), dependent).metadata;
     assert.equal(typeof dependentMetadata.added_at, "string");
@@ -94,16 +101,16 @@ test("task hierarchy and duplicate dependencies are validated", () => {
       status: "Planned",
       depends_on: ["demo:TSK-1"],
     });
-    run(root, true, "validate");
+    assert.deepEqual((await validationReport(root)).errors, []);
     writeFileSync(parent, readFileSync(parent, "utf8").replace("status: Planned", "status: Accepted"));
-    assert.match(run(root, false, "validate"), /unfinished child demo:TSK-1/);
+    assert.match((await validationReport(root)).errors.join("\n"), /unfinished child demo:TSK-1/);
     writeFileSync(
       parent,
       readFileSync(parent, "utf8")
         .replace("status: Accepted", "status: Planned")
         .replace("status: Planned\n", "status: Planned\nparent: demo:TSK-1\n"),
     );
-    assert.match(run(root, false, "validate"), /parent cycle/);
+    assert.match((await validationReport(root)).errors.join("\n"), /parent cycle/);
     writeFileSync(parent, readFileSync(parent, "utf8").replace("parent: demo:TSK-1\n", ""));
     writeFileSync(
       child,
@@ -112,8 +119,9 @@ test("task hierarchy and duplicate dependencies are validated", () => {
         "status: Planned\ndepends_on: [demo:TSK-0, demo:TSK-00]\n",
       ),
     );
-    assert.match(run(root, false, "validate"), /duplicate\s+'depends_on'\s+reference/);
+    assert.match((await validationReport(root)).errors.join("\n"), /duplicate\s+'depends_on'\s+reference/);
   } finally {
+    vi.unstubAllEnvs();
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -203,17 +211,18 @@ test("reciprocal contextual task citations do not create dependency cycles", () 
   }
 });
 
-test("family environment profiles support different instance sizes and experiment software histories", () => {
+test("family environment profiles support different instance sizes and experiment software histories", async () => {
   const directory = mkdtempSync(join(tmpdir(), "workbench-environment-profiles-"));
   const root = join(directory, "demo");
   mkdirSync(root);
   try {
-    run(root, true, "setup-project", root);
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    await setupProject(root, "demo");
     copyFileSync(
       resolve(import.meta.dirname, "../../../resources/verification/CHARTER.md"),
       join(root, "workbench/CHARTER.md"),
     );
-    run(root, true, "record", "add", "environment", "AWS r8a family");
+    await addRecord(root, "ENV", "AWS r8a family");
     const environment = join(root, "workbench/environments/ENV-00.md");
     let contents = readFileSync(environment, "utf8");
     contents = contents.replace(
@@ -221,9 +230,9 @@ test("family environment profiles support different instance sizes and experimen
       "## Hardware configuration\n\nPublic hardware family with optional instance captures.\n",
     );
     writeFileSync(environment, contents);
-    run(root, true, "format", "--all", "--write");
-    run(root, true, "sync");
-    run(root, true, "validate");
+    await formatFiles(root, undefined, { all: true, write: true });
+    synchronize(root);
+    assert.deepEqual((await validationReport(root)).errors, []);
     contents += "\n## Configuration profiles\n";
     const captures = new Map<string, Buffer>();
     const profileLinks = [];
@@ -263,7 +272,7 @@ test("family environment profiles support different instance sizes and experimen
       [1, "r8a.4xlarge", 1],
       [2, "r8a.2xlarge", 2],
     ] as const) {
-      run(root, true, "record", "add", "experiment", `Parser comparison ${String(id)}`, "--protocol", protocol);
+      await createExperiment(root, `Parser comparison ${String(id)}`, protocol);
       const path = join(root, `workbench/experiments/EXP-0${String(id)}.md`);
       assert.equal(recordDocument("EXP", readFileSync(path, "utf8"), path).metadata.environment, "demo:ENV-0");
       writeFileSync(
@@ -280,37 +289,44 @@ test("family environment profiles support different instance sizes and experimen
           .replace("## Decision\n", "## Decision\n\nInconclusive: no measurements were collected.\n"),
       );
     }
-    run(root, true, "format", "--all", "--write");
-    run(root, true, "sync");
-    run(root, true, "validate");
+    await formatFiles(root, undefined, { all: true, write: true });
+    synchronize(root);
+    assert.deepEqual((await validationReport(root)).errors, []);
     assert.deepEqual(readdirSync(join(root, "workbench/environments")).sort(), ["ENV-00", "ENV-00.md"]);
     assert.match(readFileSync(join(root, "workbench/environment-map.md"), "utf8"), /AWS r8a family/);
     for (const [path, data] of captures) assert.deepEqual(readFileSync(path), data);
   } finally {
+    vi.unstubAllEnvs();
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("ADR instruction metadata and citation library config are validated", () => {
+test("ADR instruction metadata and citation library config are validated", async () => {
   const directory = mkdtempSync(join(tmpdir(), "workbench-validation-"));
   const root = join(directory, "demo");
   mkdirSync(root);
   try {
-    run(root, true, "setup-project", root);
+    vi.stubEnv("WORKBENCH_DISTRIBUTION_ROOT", distribution);
+    await setupProject(root, "demo");
     copyFileSync(
       resolve(import.meta.dirname, "../../../resources/verification/CHARTER.md"),
       join(root, "workbench/CHARTER.md"),
     );
-    run(root, true, "record", "add", "decision", "Rule");
+    await addRecord(root, "ADR", "Rule");
+    synchronize(root);
     const decision = join(root, "workbench/decisions/ADR-00.md");
     const original = readFileSync(decision, "utf8");
     writeFileSync(decision, original.replace("---\n", "---\nagent_instruction: |\n  Do this.\n  Adjacent prose.\n"));
-    assert.match(run(root, false, "validate"), /'agent_instruction' must be one nonempty logical line/);
+    assert.match(
+      (await validationReport(root)).errors.join("\n"),
+      /'agent_instruction' must be one nonempty logical line/,
+    );
     writeFileSync(decision, original);
     const config = join(root, "workbench/config.toml");
     writeFileSync(config, readFileSync(config, "utf8").replace("library/citations", "../outside"));
-    assert.match(run(root, false, "validate").replace(/\s+/gu, ""), /citations\.library_dir/);
+    assert.match((await validationReport(root)).errors.join("\n").replace(/\s+/gu, ""), /citations\.library_dir/);
   } finally {
+    vi.unstubAllEnvs();
     rmSync(directory, { recursive: true, force: true });
   }
 });

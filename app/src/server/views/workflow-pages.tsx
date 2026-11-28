@@ -1,18 +1,16 @@
 import type { JSX } from "preact";
 import type { BrowserRecord } from "../../core/records/record-service.js";
-import { TaskBlockerKind, TaskExecution, taskStarted } from "../../core/tasks/task-queue.js";
-import { WebError } from "../http/errors.js";
-import { recordWindowLimit } from "../routes/record-window.js";
+import { TaskBlockerKind, taskStarted } from "../../core/tasks/task-queue.js";
 import { workflowWindows, type WorkflowPhase, type WorkflowRoute } from "../routes/workflow-window.js";
 import { Route, type WorkflowQuery, type QueueOperation } from "../routes/routes.js";
 import type { ViewContext } from "../workspace/view-context.js";
-import { workflowRecordURL } from "./workflow-navigation.js";
+import { workflowRecordURL } from "../review/review-navigation.js";
 import { shell } from "./page-frame.js";
 import { recordList } from "./record-content.js";
 import { taskList } from "./task-pages.js";
 import { referenceLink } from "./record-links.js";
 import { mutationForm } from "./action-forms.js";
-import { submitButton, badge } from "./components.js";
+import { badge } from "./components.js";
 import { workflowUpdates } from "../workspace/workflow-updates.js";
 import { normalizedNumber } from "../../core/records/record-identity.js";
 
@@ -30,13 +28,6 @@ function blockerText(context: ViewContext, message: string, scope?: string) {
     offset = match.index + value.length;
   }
   return [...parts, message.slice(offset)];
-}
-
-function showWorkBlocker(kind: TaskBlockerKind, awaitingApproval: boolean): boolean {
-  return (
-    kind !== TaskBlockerKind.Active &&
-    (!awaitingApproval || (kind !== TaskBlockerKind.State && kind !== TaskBlockerKind.Verification))
-  );
 }
 
 export function workflowWindow(context: ViewContext, parameters: WorkflowQuery, route: WorkflowRoute) {
@@ -111,17 +102,8 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
   const window = workflowWindow(context, parameters, Route.Work),
     queue = context.taskQueue;
   const workIds = new Set(context.workflowWork.map((task) => task.reference));
-  const work = queue.entries.filter(
-    (entry) => workIds.has(entry.reference) || !context.index.taskGraph.byReference.has(entry.reference),
-  );
-  const selected = new Set(queue.entries.map((entry) => entry.reference));
-  const available = context.workflowWork.filter((task) => !selected.has(task.reference));
-  const experiments = context.experimentWorkflow.filter((item) => item.phase === "work").map((item) => item.record);
-  const workWindow = window("work", work, (entry) => entry.reference),
-    availableWindow = window("available", available, (task) => task.reference),
-    experimentWindow = window("experiments", experiments, (record) => record.id);
-  if (workWindow.visible.length + availableWindow.visible.length + experimentWindow.visible.length > recordWindowLimit)
-    throw new WebError(400, "Workflow window exceeds its limit; open the next page");
+  const work = queue.entries.filter((entry) => workIds.has(entry.reference));
+  const workWindow = window("work", work, (entry) => entry.reference);
   const queueForm = (operation: QueueOperation, reference: string, children: JSX.Element, target = "") =>
     mutationForm({
       action: Route.QueueChange,
@@ -130,20 +112,7 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
       fields: { operation, reference, target, expected: queue.digest },
       children: () => children,
     });
-  const action = (operation: QueueOperation, reference: string, label: string, target = "") =>
-    queueForm(
-      operation,
-      reference,
-      submitButton(label, { secondary: true, id: `queue-${operation}-${reference}` }),
-      target,
-    );
-  const orderControls = (
-    reference: string,
-    title: string,
-    before: string | undefined,
-    after: string | undefined,
-    removable: boolean,
-  ) => {
+  const orderControls = (reference: string, title: string, before: string | undefined, after: string | undefined) => {
     const control = (operation: QueueOperation, glyph: string, label: string, disabled: boolean, target = "") =>
       queueForm(
         operation,
@@ -164,7 +133,6 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
       <fieldset class="task-queue-controls">
         <legend class="sr-only">Queue controls: {title}</legend>
         {control("move-before", "↑", "Move up", !before, before)}
-        {control("remove", "×", "Remove from queue", !removable)}
         {control("move-after", "↓", "Move down", !after, after)}
       </fieldset>
     );
@@ -188,14 +156,11 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
             <ol class="task-queue" data-task-items="">
               {workWindow.visible.map((entry) => {
                 const index = work.findIndex((item) => item.reference === entry.reference);
-                const task = context.index.taskGraph.byReference.get(entry.reference),
-                  awaitingApproval = context.awaitingReapproval(entry.reference),
-                  blockers = task
-                    ? context.index.taskReadiness
-                        .blockers(task)
-                        .filter((blocker) => showWorkBlocker(blocker.kind, awaitingApproval))
-                        .map((blocker) => blocker.message)
-                    : entry.blockers;
+                const task = context.index.taskGraph.require(entry.reference);
+                const blockers = context.index.taskReadiness
+                  .blockers(task)
+                  .filter((blocker) => blocker.kind !== TaskBlockerKind.Active);
+                const status = context.taskState(entry.reference);
                 return (
                   <li key={entry.reference} data-task-node={entry.reference} class="task-queue-row">
                     {orderControls(
@@ -203,7 +168,6 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
                       entry.title,
                       work[index - 1]?.reference,
                       work[index + 1]?.reference,
-                      entry.state !== TaskExecution.Active,
                     )}
                     <div class="task-queue-content">
                       {badge(entry.reference)}
@@ -211,20 +175,15 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
                         <a href={workflowRecordURL(context, entry.reference)}>{entry.title}</a>
                       </h3>
                       <p>
-                        {awaitingApproval ? (
-                          <a href={workflowRecordURL(context, entry.reference)}>Review revised plan</a>
-                        ) : (
-                          badge(entry.status ?? "Missing")
-                        )}{" "}
-                        {(!awaitingApproval || entry.state === TaskExecution.Blocked) &&
-                          badge(entry.state === TaskExecution.Implemented ? "Verification required" : entry.state)}{" "}
+                        {status && badge(status)}{" "}
+                        {blockers.some((blocker) => blocker.kind !== TaskBlockerKind.Verification) && badge("Blocked")}{" "}
                         {queue.ready.includes(entry.reference) &&
                           badge(taskStarted(entry) ? "Ready to resume" : "Ready")}
                       </p>
                       {blockers.length > 0 && (
                         <ul>
                           {blockers.map((reason) => (
-                            <li>{blockerText(context, reason, entry.reference.split(":")[0])}</li>
+                            <li>{blockerText(context, reason.message, entry.reference.split(":")[0])}</li>
                           ))}
                         </ul>
                       )}
@@ -235,61 +194,6 @@ export function workPage(context: ViewContext, parameters: WorkflowQuery = {}): 
             </ol>
             {workWindow.loader}
           </div>
-        </section>
-      )}
-      {available.length > 0 && (
-        <section aria-label="Available work">
-          <h2>Available work</h2>
-          <div
-            data-task-window={availableWindow.key}
-            data-task-through={availableWindow.through}
-            data-list-revision={availableWindow.revision}
-          >
-            {availableWindow.previous}
-            {taskList(
-              context,
-              availableWindow.visible.flatMap((task) => {
-                const record = context.index.byId.get(task.reference);
-                return record ? [record] : [];
-              }),
-              (record) => {
-                const task = context.index.taskGraph.byReference.get(record.id);
-                if (!task) return null;
-                const awaitingApproval = context.awaitingReapproval(task.reference),
-                  blockers = context.index.taskReadiness
-                    .blockers(task)
-                    .filter((blocker) => showWorkBlocker(blocker.kind, awaitingApproval));
-                return (
-                  <article key={task.reference}>
-                    {badge(record.id)}
-                    <h3>{referenceLink(record, record.title, workflowRecordURL(context, record.id))}</h3>
-                    {awaitingApproval ? (
-                      <p>
-                        <a href={workflowRecordURL(context, task.reference)}>Review revised plan</a>
-                      </p>
-                    ) : (
-                      badge(blockers.length ? "Waiting on prerequisites" : "Ready")
-                    )}
-                    {blockers.length > 0 && (
-                      <ul>
-                        {blockers.map((blocker) => (
-                          <li>{blockerText(context, blocker.message, record.scope)}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {!awaitingApproval && action("add", task.reference, "Add to local queue")}
-                  </article>
-                );
-              },
-            )}
-            {availableWindow.loader}
-          </div>
-        </section>
-      )}
-      {experiments.length > 0 && (
-        <section aria-label="Experiments">
-          <h2>Experiments</h2>
-          {windowList(context, experimentWindow, [...experimentWindow.visible])}
         </section>
       )}
       <output id="task-loading-status" class="sr-only"></output>

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseDOM } from "../../fixtures/dom.mjs";
-import { webServers, readWebPage } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage } from "../../fixtures/web.mjs";
 import { git } from "../../fixtures/adoption.mjs";
 import { approveReviewFiles, reviewStatus, ReviewSource } from "../../../src/core/review/review-service.ts";
 
@@ -43,8 +43,8 @@ test.each(records)("$path reviews the last acknowledged version in both shared d
   approveReviewFiles(root, [change], change.charter, ReviewSource.Working);
   writeFileSync(join(root, record.path), contents("Current"));
   const web = await fixture.start(root);
-  const page = parseDOM((await readWebPage(web, `/review?path=${encodeURIComponent(record.path)}`)).html).window
-    .document;
+  const page = parseDOM((await readReconciledWebPage(web, `/review?path=${encodeURIComponent(record.path)}`)).html)
+    .window.document;
   const diff = page.querySelector(".document-diff");
   expect(diff).not.toBeNull();
   expect(diff?.textContent).toContain("Unchanged document context.");
@@ -60,7 +60,7 @@ test.each(records)("$path reviews the last acknowledged version in both shared d
   expect(layouts.map((link) => link.textContent)).toEqual(["Unified", "Side-by-side"]);
   const splitURL = layouts.find((link) => link.textContent === "Side-by-side")?.getAttribute("href");
   if (!splitURL) throw new Error("Missing side-by-side navigation");
-  const split = parseDOM((await readWebPage(web, splitURL)).html).window.document;
+  const split = parseDOM((await readReconciledWebPage(web, splitURL)).html).window.document;
   expect(split.querySelector(".document-diff.split")).not.toBeNull();
   const previous = [...split.querySelectorAll('[data-diff-side="before"]')].map((node) => node.textContent).join(" ");
   expect(previous).toContain("Reviewed wording.");

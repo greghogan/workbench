@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
-import { webServers, readWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
+import { webServers, readReconciledWebPage, postWebForm, hiddenValue } from "../../fixtures/web.mjs";
 import { parseDOM } from "../../fixtures/dom.mjs";
 import { formatPendingReviews, ReviewFormatter } from "../../../src/core/review/review-formatting.ts";
 import { formatDocument } from "../../../src/core/records/formatting.ts";
@@ -93,11 +93,12 @@ test.each([false, true])(
   "web review formats before display and confirmation preserves later edits (%s)",
   async (changed) => {
     const web = await servers.start(root);
-    const queue = parseDOM((await readWebPage(web, "/reviews")).html).window.document;
+    const queue = parseDOM((await readReconciledWebPage(web, "/reviews")).html).window.document;
     expect(queue.querySelector("h1")?.textContent).toBe("Reviews");
     expect(readFileSync(charter, "utf8")).toBe(original);
-    const pending = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md&layout=split")).html).window
-      .document;
+    const pending = parseDOM(
+      (await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md&layout=split")).html,
+    ).window.document;
     const preparation = pending.querySelector<HTMLFormElement>("form[data-review-prepare]");
     if (!preparation) throw new Error("Missing review preparation");
     expect(pending.querySelector("form[data-review]")).toBeNull();
@@ -115,7 +116,7 @@ test.each([false, true])(
     const result = (await response.json()) as { redirect: string };
     expect(result.redirect).toContain("layout=split");
     expect(readFileSync(charter, "utf8")).toBe(formatted);
-    const initial = parseDOM((await readWebPage(web, result.redirect)).html).window.document;
+    const initial = parseDOM((await readReconciledWebPage(web, result.redirect)).html).window.document;
     const form = initial.querySelector<HTMLFormElement>("form[data-review]");
     if (!form) throw new Error("Missing record review");
     const fields = Object.fromEntries(
@@ -245,7 +246,7 @@ test("preparing a scoped environment repairs its map without synchronizing unrel
 
 test("invalid preparation targets are rejected before admitting a worker or writing files", async () => {
   const web = await servers.start(root);
-  const page = await readWebPage(web, "/review?path=workbench%2FCHARTER.md");
+  const page = await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md");
   const csrf = hiddenValue(page.html, "csrf");
   const run = vi.spyOn(WebActions.prototype, "run");
   try {
@@ -292,7 +293,7 @@ test("a new browser snapshot keeps output repair pending after formatting succee
   const checked = await checkReviewFormatting(snapshot, new ReviewFormatter());
   expect(checked.reviewPreparation.files.get("workbench/CHARTER.md")).toEqual({ state: PreparationState.Required });
   const web = await servers.start(root);
-  const page = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
+  const page = parseDOM((await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
   const form = page.querySelector<HTMLFormElement>("form[data-review-prepare]");
   if (!form) throw new Error("Missing repair action after refresh");
   expect(page.querySelector("form[data-review]")).toBeNull();
@@ -302,7 +303,7 @@ test("a new browser snapshot keeps output repair pending after formatting succee
   );
   const response = await postWebForm(web, form.getAttribute("action") ?? "", fields);
   expect(response.status).toBe(200);
-  const next = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
+  const next = parseDOM((await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
   expect(next.querySelector("form[data-review-prepare]")).toBeNull();
   expect(next.querySelector("form[data-review]")).not.toBeNull();
   expect(readFileSync(charter, "utf8")).toBe(formatted);
@@ -312,7 +313,8 @@ test("pending repair for a newer file does not revoke an already presented revie
   await formatPendingReviews(root, charter);
   const shown = readFileSync(charter, "utf8"),
     web = await servers.start(root);
-  const document = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
+  const document = parseDOM((await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window
+    .document;
   const form = document.querySelector<HTMLFormElement>("form[data-review]");
   if (!form) throw new Error("Missing presented review");
   const fields = Object.fromEntries(
@@ -326,6 +328,7 @@ test("pending repair for a newer file does not revoke an already presented revie
   expect((await postWebForm(web, form.getAttribute("action") ?? "", fields)).status).toBe(200);
   expect(reviewedBaselines(root).get("workbench/CHARTER.md")?.contents).toBe(shown);
   expect(reviewStatus(root, ReviewSource.Working).changes.find((change) => change.charter)?.approved).toBe(false);
-  const refreshed = parseDOM((await readWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window.document;
+  const refreshed = parseDOM((await readReconciledWebPage(web, "/review?path=workbench%2FCHARTER.md")).html).window
+    .document;
   expect(refreshed.querySelector("form[data-review-prepare]")).not.toBeNull();
 });

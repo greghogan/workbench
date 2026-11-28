@@ -1,4 +1,5 @@
-import { CheckMessage, readCheckMessage } from "./check-protocol.js";
+import { CheckMessage, readCheckMessage, readCheckAdmission } from "./check-protocol.js";
+import type { CheckIsolationGroup } from "./check-isolation.js";
 import { spawn, spawnSync } from "node:child_process";
 import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
 import type { ProcessLock } from "../../storage/process-lock.js";
@@ -20,7 +21,10 @@ export class CheckCancellation {
   private readonly message = (message: unknown) => {
     if (readCheckMessage(message)?.type === CheckMessage.Cancel) this.interrupt();
   };
-  constructor(private readonly subject = "Checks") {
+  constructor(
+    private readonly subject = "Checks",
+    private readonly output: NodeJS.WriteStream = process.stdout,
+  ) {
     process.on("SIGINT", this.interrupt);
     process.on("SIGTERM", this.interrupt);
     process.on("message", this.message);
@@ -43,27 +47,43 @@ export class CheckCancellation {
     return !this.cancelled;
   }
   /** A worker cannot launch commands until the coordinator has recorded its ownership. */
-  async waitForStart(): Promise<void> {
-    if (!process.send) return;
+  async waitForStart(expected: string | undefined): Promise<CheckIsolationGroup[] | undefined> {
+    if (!process.send) {
+      if (expected) throw new Error("Check worker isolation requires coordinator admission");
+      return;
+    }
     if (!process.connected) this.cancel();
     this.checkpoint();
-    await new Promise<void>((resolve) => {
-      const finish = () => {
+    const groups = await new Promise<CheckIsolationGroup[] | undefined>((resolve, reject) => {
+      const cleanup = () => {
         process.removeListener("message", message);
-        this.signal.removeEventListener("abort", finish);
-        resolve();
+        this.signal.removeEventListener("abort", aborted);
+      };
+      const finish = (groups?: CheckIsolationGroup[]) => {
+        cleanup();
+        resolve(groups);
+      };
+      const aborted = () => {
+        finish();
       };
       const message = (value: unknown) => {
-        if (readCheckMessage(value)?.type === CheckMessage.Start) finish();
+        try {
+          const admission = readCheckAdmission(value, expected);
+          if (admission) finish(admission);
+        } catch (error) {
+          cleanup();
+          reject(error instanceof Error ? error : new Error("Check admission failed", { cause: error }));
+        }
       };
       process.on("message", message);
-      this.signal.addEventListener("abort", finish, { once: true });
+      this.signal.addEventListener("abort", aborted, { once: true });
       process.send?.({ type: CheckMessage.Ready }, (error) => {
         if (error) this.cancel();
       });
       if (this.cancelled) finish();
     });
     this.checkpoint();
+    return groups;
   }
   close(): void {
     process.removeListener("SIGINT", this.interrupt);
@@ -83,13 +103,22 @@ export class CheckCancellation {
     this.checkpoint();
     const [command, ...args] = invocation;
     if (!command) throw new Error("Command requires an executable");
+    const redirected = this.output !== process.stdout;
     if (process.platform === "win32") {
       const outcome = await runOwnedChild(command, args, {
         cwd: directory,
         env,
         signal: this.signal,
         inheritInput,
-        inheritOutput: inheritInput,
+        inheritOutput: inheritInput && !redirected,
+        ...(redirected
+          ? {
+              output: (stdout: NodeJS.ReadableStream, stderr: NodeJS.ReadableStream) => {
+                stdout.pipe(this.output, { end: false });
+                stderr.pipe(process.stderr, { end: false });
+              },
+            }
+          : {}),
         stopDescendantsOnExit: true,
         ...(owner ? { owner } : {}),
       });
@@ -112,7 +141,7 @@ export class CheckCancellation {
         detached: !foreground,
         windowsHide: true,
         // A redirected stdin does not make stdout/stderr noninteractive.
-        stdio: inheritInput ? "inherit" : ["ignore", "pipe", "pipe"],
+        stdio: inheritInput ? ["inherit", this.output, process.stderr] : ["ignore", "pipe", "pipe"],
       });
       let failure: Error | undefined;
       let completed: (() => void) | undefined;
@@ -159,7 +188,7 @@ export class CheckCancellation {
           }, 10000),
         );
       };
-      child.stdout?.pipe(process.stdout, { end: false });
+      child.stdout?.pipe(this.output, { end: false });
       child.stderr?.pipe(process.stderr, { end: false });
       child.once("error", (error) => {
         failure ??= error;
